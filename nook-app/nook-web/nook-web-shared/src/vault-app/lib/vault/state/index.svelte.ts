@@ -85,27 +85,16 @@ const providerKeys = [
   "recordExistingVaultRecovery",
   "clearExistingVaultRecoverySummary",
   "addProviderOpen",
-  "storageMode",
-  "githubPat",
-  "githubRepo",
-  "oauthFileDraft",
-  "configureOauthFile",
-  "clearOauthFile",
-  "localFolderDraft",
-  "configureLocalFolder",
-  "clearLocalFolder",
-  "s3Draft",
-  "s3Configuration",
-  "configureS3",
-  "clearS3",
+  "providerDraft",
+  "stageProviderDraft",
+  "useThisBrowser",
+  "forgetDraftCredentials",
+  "localVaultPresence",
   "localFolderBackupSupported",
   "vaultArchitecture",
   "draftDeviceMode",
   "draftVaultType",
   "draftReplicationType",
-  "oauthSetupSelection",
-  "selectOauthSetupPreset",
-  "clearOauthSetupPreset",
   "clearIdentityProviderSession",
   "googleOAuthBusy",
   "icloudOAuthPreparing",
@@ -129,7 +118,7 @@ const sessionKeys = [
   "vaultMembers",
   "enrollSecretsKey",
   "enrollMembersKey",
-  "sharedJoinerIdentity",
+  "sharedJoinerSelection",
   "joinEnrollmentPrompt",
   "awaitingJoinApproval",
   "loginPasswordPrompt",
@@ -264,27 +253,16 @@ class VaultStateSlicesImplementation {
   declare recordExistingVaultRecovery: VaultProviderState["recordExistingVaultRecovery"];
   declare clearExistingVaultRecoverySummary: VaultProviderState["clearExistingVaultRecoverySummary"];
   declare addProviderOpen: VaultProviderState["addProviderOpen"];
-  declare storageMode: VaultProviderState["storageMode"];
-  declare githubPat: VaultProviderState["githubPat"];
-  declare githubRepo: VaultProviderState["githubRepo"];
-  declare readonly oauthFileDraft: VaultProviderState["oauthFileDraft"];
-  declare configureOauthFile: VaultProviderState["configureOauthFile"];
-  declare clearOauthFile: VaultProviderState["clearOauthFile"];
-  declare readonly localFolderDraft: VaultProviderState["localFolderDraft"];
-  declare configureLocalFolder: VaultProviderState["configureLocalFolder"];
-  declare clearLocalFolder: VaultProviderState["clearLocalFolder"];
-  declare readonly s3Draft: VaultProviderState["s3Draft"];
-  declare readonly s3Configuration: VaultProviderState["s3Configuration"];
-  declare configureS3: VaultProviderState["configureS3"];
-  declare clearS3: VaultProviderState["clearS3"];
+  declare readonly providerDraft: VaultProviderState["providerDraft"];
+  declare stageProviderDraft: VaultProviderState["stageProviderDraft"];
+  declare useThisBrowser: VaultProviderState["useThisBrowser"];
+  declare forgetDraftCredentials: VaultProviderState["forgetDraftCredentials"];
+  declare readonly localVaultPresence: VaultProviderState["localVaultPresence"];
   declare localFolderBackupSupported: VaultProviderState["localFolderBackupSupported"];
   declare vaultArchitecture: VaultProviderState["vaultArchitecture"];
   declare draftDeviceMode: VaultProviderState["draftDeviceMode"];
   declare draftVaultType: VaultProviderState["draftVaultType"];
   declare draftReplicationType: VaultProviderState["draftReplicationType"];
-  declare readonly oauthSetupSelection: VaultProviderState["oauthSetupSelection"];
-  declare selectOauthSetupPreset: VaultProviderState["selectOauthSetupPreset"];
-  declare clearOauthSetupPreset: VaultProviderState["clearOauthSetupPreset"];
   declare clearIdentityProviderSession: VaultProviderState["clearIdentityProviderSession"];
   declare googleOAuthBusy: VaultProviderState["googleOAuthBusy"];
   declare icloudOAuthPreparing: VaultProviderState["icloudOAuthPreparing"];
@@ -306,7 +284,7 @@ class VaultStateSlicesImplementation {
   declare vaultMembers: VaultSessionState["vaultMembers"];
   declare enrollSecretsKey: VaultSessionState["enrollSecretsKey"];
   declare enrollMembersKey: VaultSessionState["enrollMembersKey"];
-  declare sharedJoinerIdentity: VaultSessionState["sharedJoinerIdentity"];
+  declare sharedJoinerSelection: VaultSessionState["sharedJoinerSelection"];
   declare joinEnrollmentPrompt: VaultSessionState["joinEnrollmentPrompt"];
   declare awaitingJoinApproval: VaultSessionState["awaitingJoinApproval"];
   declare loginPasswordPrompt: VaultSessionState["loginPasswordPrompt"];

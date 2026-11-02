@@ -1,15 +1,5 @@
-import { I18N_KEYS, type I18nKey } from "../../../generated/i18n-keys";
-import {
-  GITHUB_PROVIDER_TYPE,
-  GOOGLE_DRIVE_OAUTH_FILE_PRESET,
-  ICLOUD_OAUTH_FILE_PRESET,
-  LOCAL_FOLDER_PROVIDER_TYPE,
-  LOCAL_PROVIDER_TYPE,
-  OAUTH_FILE_PROVIDER_TYPE,
-  S3_PROVIDER_TYPE,
-  type OAuthFilePreset,
-  type StorageProviderType,
-} from "$lib/auth/providers";
+import type { I18nKey } from "../../../generated/i18n-keys";
+import { provider_setup_name_key } from "$app-wasm";
 import type { VaultState } from "$lib/vault.svelte";
 import {
   LoginSetupKind,
@@ -20,12 +10,12 @@ import {
 export type ProviderSetupNameRequest = {
   readonly vault: VaultState;
   readonly setup: LoginSetup;
-  readonly oauthPreset: OAuthFilePreset;
   /** What the host calls keeping the vault in this browser only. */
   readonly localWords: I18nKey;
 };
 
-/** The name the hosts of the setup wizards give the provider being set up. */
+/** The name the hosts of the setup wizards give the provider being set up;
+ * Rust picks the key for the setup's provider kind. */
 export class ProviderSetupName {
   constructor(private readonly request: ProviderSetupNameRequest) {}
 
@@ -34,32 +24,13 @@ export class ProviderSetupName {
     switch (setup.kind) {
       case LoginSetupKind.Inactive:
         return vault.t(localWords);
-      case LoginSetupKind.Active:
-        return vault.t(this.providerKey(setup.providerType));
-    }
-  }
-
-  private providerKey(type: StorageProviderType): I18nKey {
-    switch (type) {
-      case GITHUB_PROVIDER_TYPE:
-        return I18N_KEYS.AuthStorageGithub;
-      case OAUTH_FILE_PROVIDER_TYPE:
-        return this.oauthPresetKey();
-      case LOCAL_FOLDER_PROVIDER_TYPE:
-        return I18N_KEYS.ProviderPickerLocalFolder;
-      case S3_PROVIDER_TYPE:
-        return I18N_KEYS.ProviderPickerS3;
-      case LOCAL_PROVIDER_TYPE:
-        return this.request.localWords;
-    }
-  }
-
-  private oauthPresetKey(): I18nKey {
-    switch (this.request.oauthPreset) {
-      case ICLOUD_OAUTH_FILE_PRESET:
-        return I18N_KEYS.ProviderPickerIcloud;
-      case GOOGLE_DRIVE_OAUTH_FILE_PRESET:
-        return I18N_KEYS.ProviderPickerGoogleDrive;
+      case LoginSetupKind.Active: {
+        const nameRequest: Parameters<typeof provider_setup_name_key>[0] = {
+          kind: setup.providerKind,
+          thisBrowserKey: localWords,
+        };
+        return vault.t(provider_setup_name_key(nameRequest));
+      }
     }
   }
 }

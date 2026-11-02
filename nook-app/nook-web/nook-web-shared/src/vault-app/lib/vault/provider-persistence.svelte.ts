@@ -6,6 +6,7 @@
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 import {
   NativeVaultStorageFailure,
+  ProviderDraftIncompleteFailure,
   VaultStorageFailure as StorageOperationFailure,
   VaultStorageFailureKind as StorageOperationFailureKind,
 } from "$lib/runtime/storage-failure";
@@ -17,13 +18,7 @@ import type {
 import { generate_id, isoTimestamp } from "$lib/nook";
 import {
   activeVaultScope,
-  configuredLocalFolder,
-  configuredOAuthFile,
-  decodeStoredOAuthFileConfiguration,
-  localFolderConfigurationNotApplicable,
-  oauthConfigurationNotApplicable,
   scopedProviderVault,
-  StoredOAuthFileConfigurationDecodeKind,
   unscopedProviderVault,
   unselectedVaultScope,
 } from "$lib/auth/providers";
@@ -33,17 +28,16 @@ import {
   new_provider_save_setup,
   NookProviderSaveOutcomeState,
   type AuthProvidersSnapshot,
+  type DuplicateProviderHandling,
+  type NookProviderSaveOutcome,
   type ProviderSaveRequest,
   type ProviderSaveSetup,
   type ProviderVaultScope,
 } from "$app-wasm";
 import {
   ActiveVaultKind,
-  LocalFolderDraftKind,
   LoginSetupKind,
   LoginVaultSelectionKind,
-  OAuthFileDraftKind,
-  OAuthSetupPresetKind,
 } from "$lib/vault/state/provider.svelte";
 import type { ProviderPersistenceOptions } from "$lib/vault/providers.svelte";
 
@@ -54,7 +48,7 @@ function providerSaveSetup(
 ): ProviderSaveSetup {
   switch (loginSetup.kind) {
     case LoginSetupKind.Active:
-      return new_provider_save_setup(loginSetup.providerType);
+      return new_provider_save_setup();
     case LoginSetupKind.Inactive:
       return existing_provider_save_setup();
   }
@@ -69,8 +63,20 @@ export enum ProviderSaveOutcome {
 type ProviderSaveTarget = {
   readonly snapshot: AuthProvidersSnapshot;
   readonly providerStoreId: ProviderVaultScope;
-  readonly explicitAdd: boolean;
+  readonly duplicates: DuplicateProviderHandling;
 };
+
+/** An explicit add refuses a duplicate; any other save keeps the saved row. */
+class DuplicateHandling {
+  static of(explicitAdd: boolean): DuplicateProviderHandling {
+    switch (explicitAdd) {
+      case true:
+        return "reject";
+      case false:
+        return "keepExisting";
+    }
+  }
+}
 
 export class ProviderPersistenceActions {
   constructor(private readonly state: ProviderSaveContext) {}
@@ -110,32 +116,12 @@ export class ProviderPersistenceActions {
   /** The save of the provider being set up, onto the rows it joins. */
   private saveRequest(target: ProviderSaveTarget): ProviderSaveRequest {
     const state = this.state;
-    const oauthFile =
-      state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-        ? configuredOAuthFile($state.snapshot(state.oauthFileDraft.config))
-        : oauthConfigurationNotApplicable();
-    const localFolder =
-      state.localFolderDraft.kind === LocalFolderDraftKind.Configured
-        ? configuredLocalFolder($state.snapshot(state.localFolderDraft.config))
-        : localFolderConfigurationNotApplicable();
-    const oauthPreset =
-      state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-        ? state.oauthFileDraft.config.preset
-        : state.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
-          ? state.oauthSetupSelection.preset
-          : "google-drive";
     return {
       snapshot: target.snapshot,
       providerStoreId: target.providerStoreId,
-      storageMode: state.storageMode,
       setup: providerSaveSetup(state.loginSetup),
-      explicitAdd: target.explicitAdd,
-      githubPat: state.githubPat,
-      githubRepo: state.githubRepo,
-      oauthFile,
-      oauthPreset,
-      localFolder,
-      s3: state.s3Configuration,
+      duplicates: target.duplicates,
+      draft: state.providerDraft,
       newProviderId: generate_id(),
       createdAt: isoTimestamp(),
     };
@@ -143,9 +129,9 @@ export class ProviderPersistenceActions {
 
   /** The saved outcome, or the failure of a save Rust's policy refused. */
   private savedOutcome(
-    state: NookProviderSaveOutcomeState,
+    outcome: NookProviderSaveOutcome,
   ): Result<ProviderSaveOutcome, StorageOperationFailure> {
-    switch (state) {
+    switch (outcome.state) {
       case NookProviderSaveOutcomeState.Saved:
         return storageOk(ProviderSaveOutcome.Saved);
       case NookProviderSaveOutcomeState.Duplicate:
@@ -154,18 +140,8 @@ export class ProviderPersistenceActions {
             StorageOperationFailureKind.DuplicateProvider,
           ),
         );
-      case NookProviderSaveOutcomeState.LocalFolderRequired:
-        return storageErr(
-          new StorageOperationFailure(
-            StorageOperationFailureKind.LocalFolderRequired,
-          ),
-        );
-      case NookProviderSaveOutcomeState.S3ConfigurationRequired:
-        return storageErr(
-          new StorageOperationFailure(
-            StorageOperationFailureKind.S3ConfigurationRequired,
-          ),
-        );
+      case NookProviderSaveOutcomeState.Incomplete:
+        return storageErr(new ProviderDraftIncompleteFailure(outcome.gap));
     }
   }
 
@@ -179,11 +155,11 @@ export class ProviderPersistenceActions {
     const target: ProviderSaveTarget = {
       snapshot: { providers: [], activeVaultStoreId: unselectedVaultScope() },
       providerStoreId: unscopedProviderVault(),
-      explicitAdd: true,
+      duplicates: DuplicateHandling.of(true),
     };
     const outcome = apply_provider_save_policy(this.saveRequest(target));
     try {
-      const admitted = this.savedOutcome(outcome.state);
+      const admitted = this.savedOutcome(outcome);
       if (admitted.isErr()) return storageErr(admitted.error);
       const snapshot = outcome.snapshot;
       return await state.enqueueStorage(async () => {
@@ -219,14 +195,15 @@ export class ProviderPersistenceActions {
             : unselectedVaultScope(),
       },
       providerStoreId: scope.value,
-      explicitAdd:
+      duplicates: DuplicateHandling.of(
         state.addProviderOpen ||
-        (state.isAuthenticated &&
-          state.loginSetup.kind === LoginSetupKind.Active),
+          (state.isAuthenticated &&
+            state.loginSetup.kind === LoginSetupKind.Active),
+      ),
     };
     const outcome = apply_provider_save_policy(this.saveRequest(target));
     try {
-      const admitted = this.savedOutcome(outcome.state);
+      const admitted = this.savedOutcome(outcome);
       if (admitted.isErr()) return storageErr(admitted.error);
       const persistenceOptions: ProviderPersistenceOptions = {
         replace: false,
@@ -236,15 +213,7 @@ export class ProviderPersistenceActions {
       if (persistence.isErr()) {
         return storageErr(persistence.error);
       }
-      const oauthFileConfiguration = decodeStoredOAuthFileConfiguration(
-        outcome.oauthFile,
-      );
-      if (
-        oauthFileConfiguration.kind ===
-        StoredOAuthFileConfigurationDecodeKind.Configured
-      ) {
-        state.configureOauthFile(oauthFileConfiguration.config);
-      }
+      state.stageProviderDraft(outcome.draft);
       state.clearLoginSetup();
       state.loginRequiresExistingVault = false;
       state.addProviderOpen = false;

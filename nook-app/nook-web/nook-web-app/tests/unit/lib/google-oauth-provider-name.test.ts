@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { err, ok } from 'neverthrow'
+import { NookDriveRootOrigin } from '$app-wasm'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import {
   GoogleAccountIdentityKind,
@@ -9,28 +10,20 @@ import {
   googleOAuthSession,
 } from '$lib/auth/google/oauth'
 import { OAuthFailure, OAuthFailureKind } from '$lib/auth/oauth-failure'
-import {
-  DEFAULT_DRIVE_BACKUP_NAME,
-  OAUTH_FILE_PROVIDER_TYPE,
-  defaultOAuthFileConfig,
-  storedOAuthRemoteFileName,
-} from '$lib/auth/providers'
+import type { GoogleDriveProvider } from '$lib/auth/providers'
 import {
   ProviderPersistenceActions,
   ProviderPersistenceOutcome,
   ProviderSaveOutcome,
   VaultProviderActions,
 } from '$lib/vault/providers.svelte'
-import {
-  GoogleVaultFolderOrigin,
-  OAuthOperationOutcome,
-  VaultOAuthActions,
-} from '$lib/vault/oauth'
+import { OAuthOperationOutcome, VaultOAuthActions } from '$lib/vault/oauth'
+import { ProviderSetupKinds } from '$lib/vault/provider-setup-kinds'
 import {
   LoginSetupKind,
-  OAuthFileDraftKind,
   StagedRemoteStorageKind,
 } from '$lib/vault/state/provider.svelte'
+import type { VaultState } from '$lib/vault.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 const wasm = vi.hoisted(() => ({
@@ -45,7 +38,7 @@ vi.mock('$app-wasm', async (importOriginal) => ({
 }))
 
 const GOOGLE_TOKENS = {
-  accessToken: 'test-google-access-token',
+  accessToken: 'TEST-ONLY-google-access-token',
   expiresAt: '2030-01-01T00:00:00.000Z',
 }
 
@@ -62,32 +55,37 @@ function mockGoogleTokenApplication() {
   return tokenRequest
 }
 
-function signedInDriveSetup() {
+function signedInDriveSetup(): VaultState {
   const state = VaultStateTestFixture.create()
   new VaultProviderActions(state).beginProviderSetup({
-    request: { type: OAUTH_FILE_PROVIDER_TYPE, oauthPreset: 'google-drive' },
+    kind: ProviderSetupKinds.GOOGLE_DRIVE,
   })
   return state
 }
 
-describe('Google OAuth provider name persistence', () => {
+/** Saves through the real save policy with persistence kept in memory. */
+async function saveInMemory(state: VaultState): Promise<void> {
+  vi.spyOn(state, 'persistProviders').mockImplementation(async (opts) => {
+    state.providers = [...opts.providers]
+    return ok(ProviderPersistenceOutcome.Persisted)
+  })
+  await expect(
+    new ProviderPersistenceActions(state).ensureProviderSaved(),
+  ).resolves.toEqual(ok(ProviderSaveOutcome.Saved))
+}
+
+describe('Google Drive sign-in and its vault folder', () => {
   afterEach(() => vi.restoreAllMocks())
 
-  test('connects the fixed Nook root and keeps the default backup name', async () => {
+  test('signs in, connects the fixed Nook root and saves the folder row', async () => {
     const tokenRequest = mockGoogleTokenApplication()
     wasm.connectGoogleDriveVaultFolder.mockResolvedValue({
       id: 'vault-folder',
       name: 'Nook',
-      existed: false,
+      origin: NookDriveRootOrigin.Created,
     })
-    const state = VaultStateTestFixture.create()
+    const state = signedInDriveSetup()
     const providerActions = new VaultProviderActions(state)
-    providerActions.beginProviderSetup({
-      request: {
-        type: OAUTH_FILE_PROVIDER_TYPE,
-        oauthPreset: 'google-drive',
-      },
-    })
     const oauthActions = new VaultOAuthActions(state)
     await oauthActions.signInWithGoogle()
 
@@ -102,12 +100,14 @@ describe('Google OAuth provider name persistence', () => {
     )
     expect(state.loginSetup).toEqual({
       kind: LoginSetupKind.Active,
-      providerType: OAUTH_FILE_PROVIDER_TYPE,
+      providerKind: ProviderSetupKinds.GOOGLE_DRIVE,
     })
-    expect(state.oauthFileDraft).toMatchObject({
-      kind: OAuthFileDraftKind.Configured,
-      config: {
-        fileName: storedOAuthRemoteFileName(DEFAULT_DRIVE_BACKUP_NAME),
+    expect(state.providerDraft).toMatchObject({
+      type: 'oauth-file',
+      preset: 'google-drive',
+      signIn: {
+        state: 'signedIn',
+        value: { account: { state: 'email', email: 'e2e-user@example.com' } },
       },
     })
     // Signed in, but no vault folder yet: nothing to connect to.
@@ -116,7 +116,7 @@ describe('Google OAuth provider name persistence', () => {
     )
 
     await expect(oauthActions.connectGoogleVaultFolder()).resolves.toEqual(
-      ok({ name: 'Nook', origin: GoogleVaultFolderOrigin.Created }),
+      ok({ name: 'Nook', origin: NookDriveRootOrigin.Created }),
     )
     // Only the token: every account's root has the same fixed name.
     expect(wasm.connectGoogleDriveVaultFolder).toHaveBeenCalledWith(
@@ -129,27 +129,16 @@ describe('Google OAuth provider name persistence', () => {
         mode: 'google-drive',
         token: GOOGLE_TOKENS.accessToken,
         folderId: 'vault-folder',
-        fileName: DEFAULT_DRIVE_BACKUP_NAME,
       })
     }
 
-    vi.spyOn(state, 'persistProviders').mockImplementation(async (opts) => {
-      if (opts.providers) state.providers = opts.providers
-      return ok(ProviderPersistenceOutcome.Persisted)
-    })
-    await expect(
-      new ProviderPersistenceActions(state).ensureProviderSaved(),
-    ).resolves.toEqual(ok(ProviderSaveOutcome.Saved))
-
+    await saveInMemory(state)
     const savedProvider = state.providers.find(
-      (provider) => provider.type === OAUTH_FILE_PROVIDER_TYPE,
+      (provider) => provider.provider.type === 'oauth-file',
     )
-    expect(savedProvider?.oauthFile).toMatchObject({
-      state: 'configured',
-      config: {
-        fileName: storedOAuthRemoteFileName(DEFAULT_DRIVE_BACKUP_NAME),
-        folderId: { state: 'folderId', value: 'vault-folder' },
-      },
+    expect(savedProvider?.provider).toMatchObject({
+      preset: 'google-drive',
+      folderId: 'vault-folder',
     })
   })
 
@@ -158,18 +147,17 @@ describe('Google OAuth provider name persistence', () => {
     wasm.connectGoogleDriveVaultFolder.mockResolvedValue({
       id: 'existing-folder',
       name: 'Nook',
-      existed: true,
+      origin: NookDriveRootOrigin.Existing,
     })
     const state = signedInDriveSetup()
     const oauthActions = new VaultOAuthActions(state)
     await oauthActions.signInWithGoogle()
 
     await expect(oauthActions.connectGoogleVaultFolder()).resolves.toEqual(
-      ok({ name: 'Nook', origin: GoogleVaultFolderOrigin.Existing }),
+      ok({ name: 'Nook', origin: NookDriveRootOrigin.Existing }),
     )
-    expect(state.oauthFileDraft).toMatchObject({
-      kind: OAuthFileDraftKind.Configured,
-      config: { folderId: { state: 'folderId', value: 'existing-folder' } },
+    expect(state.providerDraft).toMatchObject({
+      folder: { state: 'connected', value: 'existing-folder' },
     })
   })
 
@@ -189,9 +177,19 @@ describe('Google OAuth provider name persistence', () => {
       new OAuthFailure(OAuthFailureKind.GoogleVaultFolderAmbiguous)
         .translationKey,
     ).toBe(I18N_KEYS.ErrorsValidationGoogleDriveVaultFolderAmbiguous)
-    expect(state.oauthFileDraft).toMatchObject({
-      config: { folderId: { state: 'root' } },
+    expect(state.providerDraft).toMatchObject({
+      folder: { state: 'notConnected' },
     })
+  })
+
+  test('a Drive draft awaiting its sign-in cannot connect a folder', async () => {
+    const state = signedInDriveSetup()
+    await expect(
+      new VaultOAuthActions(state).connectGoogleVaultFolder(),
+    ).resolves.toEqual(
+      err(new OAuthFailure(OAuthFailureKind.GoogleSharedSignInRequired)),
+    )
+    expect(wasm.connectGoogleDriveVaultFolder).not.toHaveBeenCalled()
   })
 
   test('lists the Nook root with the token and the open vault, failing visibly', async () => {
@@ -224,34 +222,34 @@ describe('Google OAuth provider name persistence', () => {
     )
   })
 
-  test('keeps the wider grant from authorizing an account on the saved provider', async () => {
+  test('keeps the wider grant from authorizing an account on the saved rows', async () => {
     mockGoogleTokenApplication()
     wasm.connectGoogleDriveVaultFolder.mockResolvedValue({
       id: 'vault-folder',
       name: 'Nook',
-      existed: false,
+      origin: NookDriveRootOrigin.Created,
     })
     const state = signedInDriveSetup()
     const oauthActions = new VaultOAuthActions(state)
     await oauthActions.signInWithGoogle()
     await oauthActions.connectGoogleVaultFolder()
-    vi.spyOn(state, 'persistProviders').mockImplementation(async (opts) => {
-      if (opts.providers) state.providers = opts.providers
-      return ok(ProviderPersistenceOutcome.Persisted)
-    })
-    await new ProviderPersistenceActions(state).ensureProviderSaved()
+    await saveInMemory(state)
     const saved = state.providers.find(
-      (provider) => provider.type === OAUTH_FILE_PROVIDER_TYPE,
+      (provider) => provider.provider.type === 'oauth-file',
     )
-    if (saved?.oauthFile.state !== 'configured')
+    if (
+      saved?.provider.type !== 'oauth-file' ||
+      saved.provider.preset !== 'google-drive'
+    )
       throw new Error('expected a saved Drive provider')
+    const drive: GoogleDriveProvider = saved.provider
 
     const adoption: Parameters<
       VaultOAuthActions['adoptGoogleProviderTokens']
     >[0] = {
-      config: saved.oauthFile.config,
+      drive,
       tokens: {
-        accessToken: 'shared-token',
+        accessToken: 'TEST-ONLY-shared-token',
         expiresAt: GOOGLE_TOKENS.expiresAt,
       },
     }
@@ -259,36 +257,11 @@ describe('Google OAuth provider name persistence', () => {
       oauthActions.adoptGoogleProviderTokens(adoption),
     ).resolves.toEqual(ok(OAuthOperationOutcome.GoogleTokensApplied))
 
-    const sharedToken = { state: 'accessToken', value: 'shared-token' }
     expect(
-      state.providers.find((provider) => provider.id === saved.id)?.oauthFile,
-    ).toMatchObject({ config: { accessToken: sharedToken } })
-    expect(state.oauthFileDraft).toMatchObject({
-      config: { accessToken: sharedToken },
+      state.providers.find((provider) => provider.id === saved.id)?.provider,
+    ).toMatchObject({
+      authorization: { accessToken: 'TEST-ONLY-shared-token' },
+      account: { state: 'email', email: 'e2e-user@example.com' },
     })
-  })
-
-  test('keeps a saved backup name and the folder field when OAuth tokens are refreshed', async () => {
-    mockGoogleTokenApplication()
-    const state = VaultStateTestFixture.create()
-    state.storageMode = OAUTH_FILE_PROVIDER_TYPE
-    const configuredName = 'persisted-drive-backup'
-    const configured = {
-      ...defaultOAuthFileConfig({
-        preset: 'google-drive',
-        fileName: configuredName,
-      }),
-      accessToken: { state: 'accessToken' as const, value: 'old-access-token' },
-    }
-    state.configureOauthFile(configured)
-    state.githubRepo = DEFAULT_DRIVE_BACKUP_NAME
-
-    await new VaultOAuthActions(state).signInWithGoogle()
-
-    expect(state.oauthFileDraft).toMatchObject({
-      kind: OAuthFileDraftKind.Configured,
-      config: { fileName: storedOAuthRemoteFileName(configuredName) },
-    })
-    expect(state.githubRepo).toBe(DEFAULT_DRIVE_BACKUP_NAME)
   })
 })

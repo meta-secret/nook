@@ -1,24 +1,21 @@
 import type { NookStorageConnection } from "$app-wasm";
 import {
+  begin_provider_draft,
   is_local_folder_backup_supported,
+  LocalVaultPresence,
+  provider_draft_kind,
   type NookLocalVaultEntry,
+  type FilingIdentity,
   type ProviderVaultSummary,
   type StoreId,
   type VaultRecoverySummary,
 } from "$app-wasm";
-import {
-  configuredS3,
-  DEFAULT_GITHUB_REPO,
-  LOCAL_PROVIDER_TYPE,
-  s3ConfigurationNotApplicable,
-  type LocalFolderConfig,
-  type OAuthFileConfig,
-  type OAuthFilePreset,
-  type S3Connection,
-  type StorageProvider,
-  type StorageProviderType,
-  type StoredS3Configuration,
+import type {
+  ProviderDraft,
+  ProviderKind,
+  StorageProvider,
 } from "$lib/auth/providers";
+import { ProviderSetupKinds } from "$lib/vault/provider-setup-kinds";
 import {
   default_vault_architecture,
   DeviceMode,
@@ -50,7 +47,7 @@ export enum LoginSetupKind {
 
 export type LoginSetup =
   | { kind: LoginSetupKind.Inactive }
-  | { kind: LoginSetupKind.Active; providerType: StorageProviderType };
+  | { kind: LoginSetupKind.Active; providerKind: ProviderKind };
 
 export enum StagedRemoteStorageKind {
   Unavailable = "unavailable",
@@ -88,40 +85,27 @@ export enum RecoveryDiscoveryKind {
 export type RecoveryDiscovery =
   | { kind: RecoveryDiscoveryKind.NotFound }
   | { kind: RecoveryDiscoveryKind.Found; summary: VaultRecoverySummary };
-export enum OAuthFileDraftKind {
-  NotConfigured = "not-configured",
-  Configured = "configured",
+/** What a provider being imported offers when it holds several vaults. */
+export type RemoteVaultChoiceList = {
+  readonly vaults: readonly ProviderVaultSummary[];
+  readonly identities: readonly FilingIdentity[];
+};
+
+const NO_REMOTE_VAULT_CHOICES: RemoteVaultChoiceList = {
+  vaults: [],
+  identities: [],
+};
+
+export class RemoteVaultChoices {
+  static readonly NONE = new RemoteVaultChoices(NO_REMOTE_VAULT_CHOICES);
+  readonly vaults: readonly ProviderVaultSummary[];
+  readonly identities: readonly FilingIdentity[];
+  constructor({ vaults, identities }: RemoteVaultChoiceList) {
+    this.vaults = vaults;
+    this.identities = identities;
+  }
 }
 
-export type OAuthFileDraft =
-  | { kind: OAuthFileDraftKind.NotConfigured }
-  | { kind: OAuthFileDraftKind.Configured; config: OAuthFileConfig };
-export enum LocalFolderDraftKind {
-  NotConfigured = "not-configured",
-  Configured = "configured",
-}
-
-export type LocalFolderDraft =
-  | { kind: LocalFolderDraftKind.NotConfigured }
-  | { kind: LocalFolderDraftKind.Configured; config: LocalFolderConfig };
-export enum S3DraftKind {
-  NotConfigured = "not-configured",
-  Configured = "configured",
-}
-
-/** The S3 connection being set up or in use: a configuration Rust validated,
- * its secret access key included, held in memory only. */
-export type S3Draft =
-  | { kind: S3DraftKind.NotConfigured }
-  | { kind: S3DraftKind.Configured; config: S3Connection };
-export enum OAuthSetupPresetKind {
-  NotSelected = "not-selected",
-  Selected = "selected",
-}
-
-export type OAuthSetupPreset =
-  | { kind: OAuthSetupPresetKind.NotSelected }
-  | { kind: OAuthSetupPresetKind.Selected; preset: OAuthFilePreset };
 export class VaultProviderState {
   providers = $state.raw<StorageProvider[]>([]);
   providersLoaded = $state(false);
@@ -184,15 +168,16 @@ export class VaultProviderState {
   get loginSetup(): LoginSetup {
     return this.loginSetupState;
   }
-  activateLoginSetup(value: StorageProviderType): void {
-    this.loginSetupState = { kind: LoginSetupKind.Active, providerType: value };
+  activateLoginSetup(value: ProviderKind): void {
+    this.loginSetupState = { kind: LoginSetupKind.Active, providerKind: value };
   }
   clearLoginSetup(): void {
     this.loginSetupState = { kind: LoginSetupKind.Inactive };
   }
   loginRequiresExistingVault = $state(false);
-  /** Vaults the provider being imported holds when it holds several. */
-  remoteVaultChoices = $state<readonly ProviderVaultSummary[]>([]);
+  /** The vaults and identities the provider being imported holds when it
+   * holds several. */
+  remoteVaultChoices = $state.raw<RemoteVaultChoices>(RemoteVaultChoices.NONE);
   private recoverySummaryState = $state<RecoveryDiscovery>({
     kind: RecoveryDiscoveryKind.NotFound,
   });
@@ -210,63 +195,36 @@ export class VaultProviderState {
   }
   addProviderOpen = $state(false);
 
-  storageMode = $state<StorageProviderType>(LOCAL_PROVIDER_TYPE);
-  githubPat = $state("");
-  githubRepo = $state(DEFAULT_GITHUB_REPO);
-  private oauthFileState = $state.raw<OAuthFileDraft>({
-    kind: OAuthFileDraftKind.NotConfigured,
-  });
-  get oauthFileDraft(): OAuthFileDraft {
-    return this.oauthFileState;
+  /** The provider being set up or in use: the one Rust-owned draft. Its
+   * credentials stay in memory only, and every transition replaces it. */
+  private draftState = $state.raw<ProviderDraft>(
+    begin_provider_draft(ProviderSetupKinds.THIS_BROWSER),
+  );
+  get providerDraft(): ProviderDraft {
+    return this.draftState;
   }
-  configureOauthFile(value: OAuthFileConfig): void {
-    this.oauthFileState = {
-      kind: OAuthFileDraftKind.Configured,
-      config: value,
-    };
+  /** Adopt a draft a Rust constructor or transition returned. */
+  stageProviderDraft(draft: ProviderDraft): void {
+    this.draftState = draft;
   }
-  clearOauthFile(): void {
-    if (this.oauthFileState.kind === OAuthFileDraftKind.NotConfigured) return;
-    this.oauthFileState = { kind: OAuthFileDraftKind.NotConfigured };
+  /** This browser's own store: no provider and no credential. */
+  useThisBrowser(): void {
+    this.draftState = begin_provider_draft(ProviderSetupKinds.THIS_BROWSER);
   }
-  private localFolderState = $state.raw<LocalFolderDraft>({
-    kind: LocalFolderDraftKind.NotConfigured,
-  });
-  get localFolderDraft(): LocalFolderDraft {
-    return this.localFolderState;
+  /** Lock: the draft keeps which provider it is and nothing it gathered. */
+  forgetDraftCredentials(): void {
+    this.draftState = begin_provider_draft(
+      provider_draft_kind(this.draftState),
+    );
   }
-  configureLocalFolder(value: LocalFolderConfig): void {
-    this.localFolderState = {
-      kind: LocalFolderDraftKind.Configured,
-      config: value,
-    };
-  }
-  clearLocalFolder(): void {
-    if (this.localFolderState.kind === LocalFolderDraftKind.NotConfigured)
-      return;
-    this.localFolderState = { kind: LocalFolderDraftKind.NotConfigured };
-  }
-  private s3State = $state.raw<S3Draft>({ kind: S3DraftKind.NotConfigured });
-  get s3Draft(): S3Draft {
-    return this.s3State;
-  }
-  /** The S3 block a save, a staged label, or the credential projection
-   * reads from the draft. */
-  get s3Configuration(): StoredS3Configuration {
-    const draft = this.s3State;
-    switch (draft.kind) {
-      case S3DraftKind.Configured:
-        return configuredS3(draft.config);
-      case S3DraftKind.NotConfigured:
-        return s3ConfigurationNotApplicable();
+  /** Whether this browser holds the active vault, as Rust requests take it. */
+  get localVaultPresence(): LocalVaultPresence {
+    switch (this.localVaultPresent) {
+      case true:
+        return LocalVaultPresence.Present;
+      case false:
+        return LocalVaultPresence.Absent;
     }
-  }
-  configureS3(value: S3Connection): void {
-    this.s3State = { kind: S3DraftKind.Configured, config: value };
-  }
-  clearS3(): void {
-    if (this.s3State.kind === S3DraftKind.NotConfigured) return;
-    this.s3State = { kind: S3DraftKind.NotConfigured };
   }
   localFolderBackupSupported = $state(
     "window" in globalThis && is_local_folder_backup_supported(),
@@ -275,21 +233,6 @@ export class VaultProviderState {
   draftDeviceMode = $state<DeviceMode>(DeviceMode.Standard);
   draftVaultType = $state(VaultType.Simple);
   draftReplicationType = $state<ReplicationType>(ReplicationType.Personal);
-  private oauthSetupPresetState = $state<OAuthSetupPreset>({
-    kind: OAuthSetupPresetKind.NotSelected,
-  });
-  get oauthSetupSelection(): OAuthSetupPreset {
-    return this.oauthSetupPresetState;
-  }
-  selectOauthSetupPreset(value: OAuthFilePreset): void {
-    this.oauthSetupPresetState = {
-      kind: OAuthSetupPresetKind.Selected,
-      preset: value,
-    };
-  }
-  clearOauthSetupPreset(): void {
-    this.oauthSetupPresetState = { kind: OAuthSetupPresetKind.NotSelected };
-  }
   clearIdentityProviderSession(): void {
     this.providers = [];
     this.providersLoaded = false;
@@ -298,16 +241,10 @@ export class VaultProviderState {
     this.localLoginPreparation = LocalLoginPreparationState.Idle;
     this.clearLoginSetup();
     this.loginRequiresExistingVault = false;
-    this.remoteVaultChoices = [];
+    this.remoteVaultChoices = RemoteVaultChoices.NONE;
     this.clearExistingVaultRecoverySummary();
     this.addProviderOpen = false;
-    this.storageMode = LOCAL_PROVIDER_TYPE;
-    this.githubPat = "";
-    this.githubRepo = DEFAULT_GITHUB_REPO;
-    this.clearOauthFile();
-    this.clearLocalFolder();
-    this.clearS3();
-    this.clearOauthSetupPreset();
+    this.useThisBrowser();
     this.googleOAuthBusy = false;
     this.icloudOAuthPreparing = false;
     this.icloudOAuthReady = false;

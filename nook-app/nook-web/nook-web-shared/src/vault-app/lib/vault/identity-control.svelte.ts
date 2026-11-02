@@ -3,7 +3,6 @@ import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import {
   NativeVaultStorageFailure,
   VaultStorageFailure,
-  VaultStorageFailureKind,
 } from "$lib/runtime/storage-failure";
 import {
   generate_password,
@@ -17,13 +16,12 @@ import {
   type PasswordGenerationOptions,
   type StorageProvider,
 } from "$app-wasm";
-import {
-  LocalFolderHandleKind,
-  LocalFolderPresentation,
-  LocalFolderProviderConfigurationKind,
-  StorageProviderPresentation,
-  unselectedVaultScope,
-} from "$lib/auth/providers";
+import { unselectedVaultScope } from "$lib/auth/providers";
+
+/** A removed vault's files are gone from one mount. */
+enum MountDeletion {
+  Deleted = "deleted",
+}
 
 /** Named values required by `IdentityControl.deleteAtMount`. */
 type MountVaultDeletion = {
@@ -228,44 +226,34 @@ export class IdentityControlModel {
     return this.loadSnapshot();
   }
 
-  /** The folder handle of a local-folder mount. A folder this browser
-   * cannot open fails rather than being skipped. */
-  private localFolderHandleId(
-    provider: StorageProvider,
-  ): Result<string, VaultStorageFailure> {
-    const unavailable = new VaultStorageFailure(
-      VaultStorageFailureKind.LocalFolderUnavailable,
-    );
-    const configuration = new StorageProviderPresentation(
-      provider,
-    ).localFolderProviderConfiguration();
-    if (configuration.kind === LocalFolderProviderConfigurationKind.Missing) {
-      return err(unavailable);
-    }
-    const handle = new LocalFolderPresentation(
-      configuration.config,
-    ).localFolderHandle();
-    return handle.kind === LocalFolderHandleKind.Selected
-      ? ok(handle.handleId)
-      : err(unavailable);
-  }
-
-  /** Delete a removed vault's files at one identity mount. */
+  /** Delete a removed vault's files at one identity mount: a local folder
+   * through its own handle, any other provider through its connection. */
   private async deleteAtMount({
     storeId,
     provider,
-  }: MountVaultDeletion): Promise<Result<boolean, VaultStorageFailure>> {
-    if (provider.type === "local-folder") {
-      const handleId = this.localFolderHandleId(provider);
-      if (handleId.isErr()) return err(handleId.error);
-      return this.withManager((manager) =>
-        manager.delete_removed_vault_at_local_folder(storeId, handleId.value),
-      );
+  }: MountVaultDeletion): Promise<Result<MountDeletion, VaultStorageFailure>> {
+    const stored = provider.provider;
+    switch (stored.type) {
+      case "local-folder": {
+        const deleted = await this.withManager((manager) =>
+          manager.delete_removed_vault_at_local_folder(
+            storeId,
+            stored.handleId,
+          ),
+        );
+        return deleted.map(() => MountDeletion.Deleted);
+      }
+      case "local":
+      case "github":
+      case "oauth-file":
+      case "s3": {
+        const args = this.vault.providerWasmArgs(provider);
+        const deleted = await this.withManager((manager) =>
+          manager.delete_removed_vault_at_provider(storeId, args),
+        );
+        return deleted.map(() => MountDeletion.Deleted);
+      }
     }
-    const args = this.vault.providerWasmArgs(provider);
-    return this.withManager((manager) =>
-      manager.delete_removed_vault_at_provider(storeId, args),
-    );
   }
 
   /** Union the identity log with one mount: a local folder through its own
@@ -273,11 +261,10 @@ export class IdentityControlModel {
   private async syncOneMount(
     provider: StorageProvider,
   ): Promise<Result<IdentityActionOutcome, VaultStorageFailure>> {
-    if (provider.type === "local-folder") {
-      const handleId = this.localFolderHandleId(provider);
-      if (handleId.isErr()) return err(handleId.error);
+    const stored = provider.provider;
+    if (stored.type === "local-folder") {
       const synced = await this.withManager((manager) =>
-        manager.sync_identity_log_with_local_folder(handleId.value),
+        manager.sync_identity_log_with_local_folder(stored.handleId),
       );
       return synced.map(() => IdentityActionOutcome.Completed);
     }

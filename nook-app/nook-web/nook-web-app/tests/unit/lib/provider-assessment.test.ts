@@ -1,14 +1,16 @@
 import {
-  draft_github_storage_args,
-  draft_s3_storage_args,
+  draft_storage_args,
   NookVaultManager,
+  s3_provider_draft,
+  type ProviderDraft,
+  type StorageConnection,
 } from '$app-wasm'
-import { GITHUB_PROVIDER_TYPE, S3_PROVIDER_TYPE } from '$lib/auth/providers'
 import {
   NativeVaultStorageFailure,
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
 import { S3ConnectionFixture } from '../s3-connection-fixture'
+import { ProviderDraftFixture } from '../provider-fixtures'
 import { VaultProviderActions } from '$lib/vault/providers.svelte'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
@@ -26,6 +28,17 @@ vi.mock('$lib/runtime/log', () => ({
     createLogger: () => mockLogger,
   },
 }))
+
+/** The connection a complete draft hands the manager. */
+function readyArgs(draft: ProviderDraft): StorageConnection {
+  const staged = draft_storage_args(draft)
+  switch (staged.state) {
+    case 'ready':
+      return staged.connection
+    case 'incomplete':
+      throw new Error(`expected a complete draft, missing ${staged.gap}`)
+  }
+}
 
 describe('GitHub provider assessment failure', () => {
   afterEach(() => {
@@ -45,10 +58,7 @@ describe('GitHub provider assessment failure', () => {
     )
     vi.spyOn(manager, 'assess_vault_connect').mockRejectedValue(nativeFailure)
 
-    const args = draft_github_storage_args(
-      'synthetic-invalid-token',
-      'owner/vault',
-    )
+    const args = readyArgs(ProviderDraftFixture.githubEntered())
     const assessment = await new VaultProviderActions(
       state,
     ).assessVaultConnectStatus({
@@ -58,7 +68,7 @@ describe('GitHub provider assessment failure', () => {
     expect(assessment.isErr()).toBe(true)
     if (assessment.isErr()) {
       expect(assessment.error.kind).toBe(
-        VaultStorageFailureKind.GitHubTokenRejected,
+        VaultStorageFailureKind.OperationFailed,
       )
       expect(assessment.error.translationKey).toBe(
         I18N_KEYS.AuthStorageGithubTokenRejected,
@@ -70,11 +80,10 @@ describe('GitHub provider assessment failure', () => {
     const [logContext] = logContextCall
     expect(logContext.message).toBe('provider vault assessment failed')
     expect(JSON.parse(logContext.serializedContext)).toEqual({
-      provider_type: GITHUB_PROVIDER_TYPE,
-      failure_kind: VaultStorageFailureKind.GitHubTokenRejected,
+      provider_type: 'github',
+      failure_kind: VaultStorageFailureKind.OperationFailed,
       // Rust reads the rejection's translation key as an unauthorized answer.
       cause: 'unauthorized',
-      http_status: 401,
     })
     expect(JSON.stringify(logContext)).not.toContain(sentinel)
 
@@ -97,7 +106,9 @@ describe('S3 provider assessment failure', () => {
     // Rust rejects a refused S3 key with this message and no code.
     const refusal = new Error(I18N_KEYS.ErrorsS3KeyAccessDenied)
     vi.spyOn(manager, 'assess_vault_connect').mockRejectedValue(refusal)
-    const args = draft_s3_storage_args(S3ConnectionFixture.configuration())
+    const args = readyArgs(
+      s3_provider_draft(S3ConnectionFixture.configuration()),
+    )
 
     const assessment = await new VaultProviderActions(
       state,
@@ -106,7 +117,7 @@ describe('S3 provider assessment failure', () => {
     expect(assessment.isErr()).toBe(true)
     if (assessment.isErr()) {
       expect(assessment.error.kind).toBe(
-        VaultStorageFailureKind.S3KeyAccessDenied,
+        VaultStorageFailureKind.OperationFailed,
       )
       expect(assessment.error.translationKey).toBe(
         I18N_KEYS.ErrorsS3KeyAccessDenied,
@@ -116,10 +127,9 @@ describe('S3 provider assessment failure', () => {
     if (!logContextCall) throw new Error('expected a logged warning context')
     const [logContext] = logContextCall
     expect(JSON.parse(logContext.serializedContext)).toEqual({
-      provider_type: S3_PROVIDER_TYPE,
-      failure_kind: VaultStorageFailureKind.S3KeyAccessDenied,
+      provider_type: 's3',
+      failure_kind: VaultStorageFailureKind.OperationFailed,
       cause: 'forbidden',
-      http_status: 403,
     })
     expect(JSON.stringify(logContext)).not.toContain(S3ConnectionFixture.SECRET)
 
@@ -132,11 +142,11 @@ describe('S3 provider assessment failure', () => {
       new Error(I18N_KEYS.ErrorsS3KeyAccessDenied),
     )
 
-    expect(failure.kind).toBe(VaultStorageFailureKind.S3KeyAccessDenied)
+    expect(failure.translationKey).toBe(I18N_KEYS.ErrorsS3KeyAccessDenied)
     expect(
       new NativeVaultStorageFailure(
         new Error('S3 request failed with status 503'),
-      ).kind,
-    ).toBe(VaultStorageFailureKind.OperationFailed)
+      ).translationKey,
+    ).toBe(I18N_KEYS.AuthStorageSyncFailed)
   })
 })

@@ -28,13 +28,7 @@ import {
   ProviderSyncVisibility,
   read_local_vault_yaml,
 } from "$app-wasm";
-import {
-  LocalFolderPresentation,
-  LocalFolderHandleKind,
-  StorageProviderPresentation,
-  LocalFolderProviderConfigurationKind,
-  type StorageProvider,
-} from "$lib/auth/providers";
+import type { StorageProvider } from "$lib/auth/providers";
 
 const log = browserLogRuntime.createLogger("vault-sync");
 
@@ -125,20 +119,6 @@ export class ProviderSyncActions {
     Result<LocalFolderProviderSyncOutcome, VaultStorageFailure>
   > {
     const state = this.state;
-    const configuration = new StorageProviderPresentation(
-      provider,
-    ).localFolderProviderConfiguration();
-    if (configuration.kind === LocalFolderProviderConfigurationKind.Missing)
-      return err(
-        new VaultStorageFailure(VaultStorageFailureKind.LocalFolderUnavailable),
-      );
-    const handle = new LocalFolderPresentation(
-      configuration.config,
-    ).localFolderHandle();
-    if (handle.kind === LocalFolderHandleKind.Unselected)
-      return err(
-        new VaultStorageFailure(VaultStorageFailureKind.LocalFolderUnavailable),
-      );
     const localYaml = await state.enqueueStorage(async () => {
       const admitted = state.admitManager();
       if (admitted.isErr()) return err(admitted.error);
@@ -179,7 +159,7 @@ export class ProviderSyncActions {
     const state = this.state;
     const failureRequest: Parameters<typeof ProviderFailureLogContext.from>[0] =
       {
-        provider_type: provider.type,
+        provider_type: provider.provider.type,
         failure_kind: failure.kind,
         cause: failure.cause,
       };
@@ -225,7 +205,7 @@ export class ProviderSyncActions {
             }
           } else if (
             issue.isMultipleStores &&
-            provider.type === "local-folder"
+            provider.provider.type === "local-folder"
           ) {
             let health: NookLocalFolderHealth;
             const message = state.t(failure.translationKey);
@@ -276,7 +256,7 @@ export class ProviderSyncActions {
     if (state.syncBlocked || state.isPasswordBusy || state.isSaving)
       return ok(ProviderSyncOutcome.Skipped);
     const provider = state.providers.find((entry) => entry.id === providerId);
-    if (!provider || provider.type === "local")
+    if (!provider || provider.provider.type === "local")
       return ok(ProviderSyncOutcome.Skipped);
     if (
       state.manualProviderSync.state === NookManualProviderSyncState.Running &&
@@ -286,7 +266,7 @@ export class ProviderSyncActions {
     state.beginManualProviderSync(providerId);
     if (visibility === ProviderSyncVisibility.Visible) state.errorMsg = "";
     try {
-      if (provider.type === "local-folder") {
+      if (provider.provider.type === "local-folder") {
         const localSync: Parameters<typeof this.syncLocalFolderProvider>[0] = {
           provider,
         };

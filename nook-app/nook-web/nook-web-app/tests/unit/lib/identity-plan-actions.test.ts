@@ -38,8 +38,8 @@ afterEach(() => vi.restoreAllMocks())
 
 const IDENTITY = 'idn_familyident'
 const SOURCE: NookProviderSource = {
-  kind: 'googleDrive',
-  accessToken: 'drive-token',
+  kind: 'remote',
+  source: { kind: 'googleDrive', accessToken: 'drive-token' },
 }
 /** The identity has no known name: it is called by its three words. */
 const LABEL = 'ripple-canvas-orbit'
@@ -138,7 +138,7 @@ describe('asking to join from an identity plan', () => {
     )
 
     expect(ran._unsafeUnwrap().kind).toBe(IdentityPlanOutcomeKind.Applied)
-    expect(session.requested).toEqual([`googleDrive:${IDENTITY}`])
+    expect(session.requested).toEqual([`remote:${IDENTITY}`])
     expect(session.vault.successMsg).toBe(
       session.vault.t(I18N_KEYS.AccessCheckJoinRequested),
     )
@@ -171,7 +171,7 @@ describe('asking to join from an identity plan', () => {
     const resumed = await new IdentityJoinActions(session.vault).resume(wait)
 
     expect(resumed._unsafeUnwrap()).toBe(IdentityJoinAsked.Requested)
-    expect(session.requested).toEqual([`googleDrive:${IDENTITY}`])
+    expect(session.requested).toEqual([`remote:${IDENTITY}`])
     expect(session.vault.identityJoin.kind).toBe(IdentityJoinWaitKind.Idle)
   })
 

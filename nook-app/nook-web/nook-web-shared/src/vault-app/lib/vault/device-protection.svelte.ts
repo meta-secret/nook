@@ -18,11 +18,7 @@ import {
   setupDeviceProtection as createPasskeyProtection,
   unlockDeviceProtection as authorizePasskeyProtection,
 } from "$lib/auth/passkey-device-protection";
-import {
-  activeVaultScope,
-  LOCAL_PROVIDER_TYPE,
-  unselectedVaultScope,
-} from "$lib/auth/providers";
+import { activeVaultScope, unselectedVaultScope } from "$lib/auth/providers";
 import { browserLogRuntime } from "$lib/runtime/log";
 import { browserDataLifecycle } from "$lib/runtime/browser-data";
 import type { DeviceMode } from "$lib/vault/architecture-model";
@@ -89,14 +85,11 @@ type DeviceProtectionRecoveryState = Pick<
   | "devicePublicKey"
   | "providers"
   | "providersLoaded"
-  | "githubPat"
-  | "storageMode"
+  | "forgetDraftCredentials"
+  | "useThisBrowser"
   | "enqueueExclusiveStorage"
   | "adoptLocalDataStorageGeneration"
   | "clearUnlockedSession"
-  | "clearOauthFile"
-  | "clearLocalFolder"
-  | "clearS3"
   | "dismissSuccess"
   | "showSuccess"
   | "t"
@@ -167,11 +160,8 @@ export class DeviceProtectionActions {
     state.deviceAuthorizationInProgress = false;
     state.deviceId = "";
     state.devicePublicKey = "";
-    state.githubPat = "";
-    state.clearOauthFile();
-    state.clearLocalFolder();
-    state.clearS3();
-    if (state.localVaultPresent) state.storageMode = LOCAL_PROVIDER_TYPE;
+    state.forgetDraftCredentials();
+    if (state.localVaultPresent) state.useThisBrowser();
 
     // Dispose native authority synchronously, before any queued or asynchronous work.
     let locked: Result<DeviceProtectionLockOutcome, StorageOperationFailure> =
@@ -745,11 +735,7 @@ export class DeviceProtectionRecoveryActions {
     state.devicePublicKey = "";
     state.providers = [];
     state.providersLoaded = false;
-    state.githubPat = "";
-    state.clearOauthFile();
-    state.clearLocalFolder();
-    state.clearS3();
-    state.storageMode = LOCAL_PROVIDER_TYPE;
+    state.useThisBrowser();
   }
 
   private applyPersistedProtectionStatus({

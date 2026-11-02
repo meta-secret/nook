@@ -29,37 +29,27 @@
     type ProviderSetupNameRequest,
   } from '$lib/components/provider-setup-name'
   import { ProviderConnectionProgress } from '$lib/vault/provider-connection-progress'
-  import type {
-    OAuthFileConfig,
-    ProviderSetupRequest,
-    StorageProvider,
-    StorageProviderType,
-  } from '$lib/auth/providers'
+  import type { ProviderKind, StorageProvider } from '$lib/auth/providers'
   import {
-    DEFAULT_GITHUB_REPO,
-    decodeStoredOAuthFileConfiguration,
-    GITHUB_PROVIDER_TYPE,
-    OAuthFilePresentation,
-    StoredOAuthFileConfigurationDecodeKind,
-    LocalFolderPresentation,
-    LocalFolderHandleKind,
     localizedProviderStorageDetail,
     localizeProviderLabel,
-    oauth_access_token,
-    OAUTH_FILE_PROVIDER_TYPE,
-    S3_PROVIDER_TYPE,
   } from '$lib/auth/providers'
+  import {
+    SharedProviderAccountsKind,
+    SharedProviderAccountsOf,
+  } from '$lib/components/shared-provider-accounts'
+  import { SharedJoinerSelections } from '$lib/vault/shared-joiner-selection'
+  import { ConnectQuestions } from '$lib/components/connect-button-state'
+  import { PickerRow } from '$lib/components/provider-picker-state'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     providerCapabilityLabelKey,
     provider_supports_replication,
+    ReplicationSupport,
   } from '$lib/vault/architecture-model'
   import { ProviderSyncStatusView } from '$lib/auth/provider-sync-status'
   import {
-    LocalFolderDraftKind,
     LoginSetupKind,
-    OAuthFileDraftKind,
-    OAuthSetupPresetKind,
     type LoginSetup,
   } from '$lib/vault/state/provider.svelte'
 
@@ -73,8 +63,6 @@
     embedded = false,
     hostBack = false,
     loginSetup,
-    githubPat = $bindable(''),
-    githubRepo = $bindable(DEFAULT_GITHUB_REPO),
     onReconnect,
     onSyncProvider,
     onBeginAddProvider,
@@ -94,13 +82,11 @@
      * page): no second Back or heading here. */
     hostBack?: boolean
     loginSetup: LoginSetup
-    githubPat: string
-    githubRepo: string
     onReconnect: () => void | Promise<void>
     onSyncProvider?: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
-    onBeginSetup: (request: ProviderSetupRequest) => void
+    onBeginSetup: (kind: ProviderKind) => void
     onCancelSetup: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>
   } = $props()
@@ -111,21 +97,6 @@
       t: vault.t,
     }
     return localizeProviderLabel(labelRequest)
-  }
-
-  /** A saved Drive or iCloud provider with its shared target, whose
-   * accounts can be managed. */
-  function sharedProviderConfig(
-    provider: StorageProvider,
-  ): OAuthFileConfig | false {
-    const decoded = decodeStoredOAuthFileConfiguration(provider.oauthFile)
-    if (decoded.kind !== StoredOAuthFileConfigurationDecodeKind.Configured)
-      return false
-    const presentation = new OAuthFilePresentation(decoded.config)
-    return presentation.hasGoogleDriveFolder() ||
-      presentation.hasICloudShareTarget()
-      ? decoded.config
-      : false
   }
 
   function confirmRemoveProvider(provider: StorageProvider) {
@@ -162,36 +133,16 @@
   )
   const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active)
   const addingProvider = $derived(addProviderOpen || showSetup)
-  function setupIs(type: StorageProviderType): boolean {
+  function setupIs(type: ProviderKind['type']): boolean {
     return (
       loginSetup.kind === LoginSetupKind.Active &&
-      loginSetup.providerType === type
+      loginSetup.providerKind.type === type
     )
   }
-  const setupCanConnect = $derived(
-    setupIs('local') ||
-      (setupIs('local-folder') &&
-        vault.localFolderDraft.kind === LocalFolderDraftKind.Configured &&
-        new LocalFolderPresentation(
-          vault.localFolderDraft.config,
-        ).localFolderHandle().kind === LocalFolderHandleKind.Selected) ||
-      (setupIs('oauth-file') &&
-        vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
-        oauth_access_token(vault.oauthFileDraft.config).kind === 'available') ||
-      (setupIs('github') && Boolean(githubPat.trim())),
-  )
-  const oauthPreset = $derived(
-    vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-      ? vault.oauthFileDraft.config.preset
-      : vault.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
-        ? vault.oauthSetupSelection.preset
-        : 'google-drive',
-  )
   const setupProviderName = $derived.by(() => {
     const request: ProviderSetupNameRequest = {
       vault,
       setup: loginSetup,
-      oauthPreset,
       localWords: I18N_KEYS.AuthStorageThisDevice,
     }
     return new ProviderSetupName(request).text()
@@ -251,7 +202,7 @@
     {/if}
     <form
       novalidate
-      hidden={setupIs(S3_PROVIDER_TYPE)}
+      hidden={setupIs('s3')}
       onsubmit={(e) => {
         e.preventDefault()
         void onReconnect()
@@ -259,40 +210,48 @@
       class="space-y-4"
     >
       {#if showSetup}
-        {#if setupIs('oauth-file')}
+        <!-- Rust keeps the draft's kind equal to the setup's, so the draft
+             picks the wizard and each wizard gets exactly its own draft. -->
+        {@const draft = vault.providerDraft}
+        {#if draft.type === 'oauth-file'}
           <OAuthProviderSetupWizard
             {vault}
-            preset={oauthPreset}
+            {draft}
             {isVerifying}
             {isInitializing}
             {onCancelSetup}
             onConnect={onReconnect}
           />
-        {:else if setupIs('github')}
+        {:else if draft.type === 'github'}
           <GitHubProviderSetupWizard
             {vault}
-            bind:githubPat
-            bind:githubRepo
-            idPrefix="settings"
+            {draft}
+            question={ConnectQuestions.NONE}
             {isVerifying}
             {isInitializing}
             {onCancelSetup}
             onConnect={onReconnect}
           />
-        {:else if setupIs('local-folder')}
+        {:else if draft.type === 'local-folder'}
           <LocalFolderProviderSetupWizard
             {vault}
+            folder={draft}
             idPrefix="settings"
             {isVerifying}
             {isInitializing}
             {onCancelSetup}
             onConnect={onReconnect}
           />
-        {:else if !setupIs(S3_PROVIDER_TYPE)}
+        {:else if draft.type === 'local'}
           <ProviderSetupFields {vault} {onCancelSetup} />
         {/if}
       {:else if addProviderOpen}
-        <ProviderPicker {vault} onSelect={onBeginSetup} excludeLocal />
+        <ProviderPicker
+          {vault}
+          onSelect={onBeginSetup}
+          local={PickerRow.Hidden}
+          localFolder={PickerRow.Offered}
+        />
       {:else}
         <fieldset class="space-y-3">
           {#if syncProviders.length === 0}
@@ -336,18 +295,18 @@
                   provider_supports_replication(
                     provider,
                     vault.vaultArchitecture.replication_type,
-                  )}
-                {@const sharedConfig = sharedProviderConfig(provider)}
+                  ) === ReplicationSupport.Supported}
+                {@const sharedAccounts = SharedProviderAccountsOf.row(provider)}
                 {@const providerLabel = providerTitle(provider)}
                 <li class="nk-panel grid gap-4 p-3 sm:p-4">
                   <div class="flex items-center gap-2">
                     <div
                       class="flex min-w-0 flex-1 items-center gap-3 px-1 py-1"
-                      data-testid="settings-provider-{provider.type}"
+                      data-testid="settings-provider-{provider.provider.type}"
                     >
-                      {#if provider.type === GITHUB_PROVIDER_TYPE || provider.type === OAUTH_FILE_PROVIDER_TYPE}
+                      {#if provider.provider.type === 'github' || provider.provider.type === 'oauth-file'}
                         <Cloud class="size-4 shrink-0 text-primary" />
-                      {:else if provider.type === S3_PROVIDER_TYPE}
+                      {:else if provider.provider.type === 's3'}
                         <Archive class="size-4 shrink-0 text-primary" />
                       {:else}
                         <HardDrive class="size-4 shrink-0 text-primary" />
@@ -446,12 +405,13 @@
                       </button>
                     {/if}
                   </div>
-                  {#if sharedConfig !== false}
+                  {#if sharedAccounts.kind === SharedProviderAccountsKind.Listed}
                     <div class="mt-3 border-t border-border pt-3">
                       <AuthorizedAccountsPanel
                         {vault}
-                        config={sharedConfig}
+                        payload={sharedAccounts.payload}
                         shareTitle={providerTitle(provider)}
+                        selection={SharedJoinerSelections.NONE}
                       />
                     </div>
                   {/if}
@@ -483,7 +443,6 @@
             type="submit"
             class="sm:min-w-[180px]"
             data-testid="connect-provider-btn"
-            disabled={!setupCanConnect}
           >
             {#if isInitializing}
               <RefreshCw class="size-4 animate-spin" />
@@ -499,12 +458,13 @@
         </div>
       {/if}
     </form>
-    {#if setupIs(S3_PROVIDER_TYPE)}
+    {#if setupIs('s3')}
       <!-- The S3 form is a form of its own, and forms do not nest: it sits
            beside this one, which stays hidden meanwhile. -->
       <S3ProviderSetupWizard
         {vault}
         idPrefix="settings"
+        question={ConnectQuestions.NONE}
         {isVerifying}
         {isInitializing}
         {onCancelSetup}

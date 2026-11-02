@@ -293,11 +293,7 @@ export class VaultLoginActions {
     state.localLoginPreparation = LocalLoginPreparationState.Preparing;
     log.debug("preparing local login gate");
     try {
-      state.storageMode = "local";
-      state.githubPat = "";
-      state.clearOauthFile();
-      state.clearLocalFolder();
-      state.clearS3();
+      state.useThisBrowser();
       const passwordRefresh1 = await state.refreshPasswordEntriesList();
       if (passwordRefresh1.isErr()) {
         if (canPublishPreparationResult())
@@ -442,11 +438,7 @@ export class VaultLoginActions {
 
     state.errorMsg = "";
     state.dismissSuccess();
-    state.storageMode = "local";
-    state.githubPat = "";
-    state.clearOauthFile();
-    state.clearLocalFolder();
-    state.clearS3();
+    state.useThisBrowser();
     state.isVerifying = true;
     let creationState = LocalVaultCreationState.Pending;
 

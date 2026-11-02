@@ -46,7 +46,7 @@ export type ConflictProviderSave =
 export class ProviderEventOutbox {
   constructor(private readonly provider: StorageProvider) {}
   request(): EventOutboxRequest {
-    return this.provider.type === "local-folder"
+    return this.provider.provider.type === "local-folder"
       ? { kind: EventOutboxRequestKind.LocalFolder, provider: this.provider }
       : { kind: EventOutboxRequestKind.Remote, provider: this.provider };
   }

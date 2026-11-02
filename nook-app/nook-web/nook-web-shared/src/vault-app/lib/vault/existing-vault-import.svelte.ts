@@ -1,20 +1,14 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import {
+  existing_vault_provider_readiness,
   JoinEnrollmentState,
   NookExistingVaultProviderReadiness,
 } from "$app-wasm";
-import {
-  GITHUB_PROVIDER_TYPE,
-  LOCAL_FOLDER_PROVIDER_TYPE,
-  OAUTH_FILE_PROVIDER_TYPE,
-  S3_PROVIDER_TYPE,
-} from "$lib/auth/providers";
 import {
   ExistingVaultImportQueueKind,
   type ExistingVaultImportQueue,
 } from "$lib/vault/creation-queue";
 import type { VaultState } from "$lib/vault.svelte";
-import { ExistingVaultProviderDraft } from "$lib/vault/existing-vault-provider.svelte";
 import {
   ActiveVaultKind,
   LoginSetupKind,
@@ -40,42 +34,23 @@ export class ExistingVaultImportLifecycle {
   }
 
   remember(storeId: string): void {
-    if (this.vault.loginSetup.kind !== LoginSetupKind.Active) return;
-    const providerRequest: ConstructorParameters<
-      typeof ExistingVaultProviderDraft
-    >[0] = {
-      state: this.vault,
-      setupType: this.vault.loginSetup.providerType,
-    };
-    const prepared = new ExistingVaultProviderDraft(providerRequest).prepare();
-    if (prepared.isErr()) {
-      this.vault.errorMsg = this.vault.t(prepared.error.translationKey);
-      return;
-    }
-    const preparation = prepared.value;
-    if (
-      preparation.kind === NookExistingVaultProviderReadiness.MissingOauthFile
-    ) {
-      this.vault.errorMsg = this.vault.t(
-        I18N_KEYS.ErrorsCloudSyncProviderRequired,
-      );
-      return;
-    }
-    if (
-      preparation.kind === NookExistingVaultProviderReadiness.MissingLocalFolder
-    ) {
+    const setup = this.vault.loginSetup;
+    if (setup.kind !== LoginSetupKind.Active) return;
+    const draft = this.vault.providerDraft;
+    const readiness = existing_vault_provider_readiness(draft);
+    if (readiness === NookExistingVaultProviderReadiness.MissingLocalFolder) {
       this.vault.errorMsg = this.vault.t(
         I18N_KEYS.AuthStorageLocalFolderChooseErr,
       );
       return;
     }
-    if (preparation.kind !== NookExistingVaultProviderReadiness.Ready) return;
     this.queue = {
       kind: ExistingVaultImportQueueKind.WaitingForDevice,
       request: {
         storeId,
         previousActiveVault: this.vault.activeVault,
-        provider: preparation.provider,
+        kind: setup.providerKind,
+        draft,
       },
     };
   }
@@ -113,31 +88,8 @@ export class ExistingVaultImportLifecycle {
       }
     }
     this.vault.loginRequiresExistingVault = true;
-    this.vault.activateLoginSetup(pending.provider.setupType);
-    this.vault.storageMode = pending.provider.setupType;
-    this.vault.githubPat =
-      pending.provider.setupType === GITHUB_PROVIDER_TYPE
-        ? pending.provider.githubPat
-        : "";
-    this.vault.githubRepo =
-      pending.provider.setupType === GITHUB_PROVIDER_TYPE
-        ? pending.provider.githubRepo
-        : "";
-    if (pending.provider.setupType === OAUTH_FILE_PROVIDER_TYPE) {
-      this.vault.configureOauthFile(pending.provider.oauthFile);
-    } else {
-      this.vault.clearOauthFile();
-    }
-    if (pending.provider.setupType === LOCAL_FOLDER_PROVIDER_TYPE) {
-      this.vault.configureLocalFolder(pending.provider.localFolder);
-    } else {
-      this.vault.clearLocalFolder();
-    }
-    if (pending.provider.setupType === S3_PROVIDER_TYPE) {
-      this.vault.configureS3(pending.provider.s3);
-    } else {
-      this.vault.clearS3();
-    }
+    this.vault.activateLoginSetup(pending.kind);
+    this.vault.stageProviderDraft($state.snapshot(pending.draft));
     const recoveryDiscovery = this.vault.recoveryDiscovery;
     await this.vault.connectStagedProvider();
     if (this.vault.isAuthenticated) {

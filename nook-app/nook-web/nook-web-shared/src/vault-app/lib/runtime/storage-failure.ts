@@ -1,8 +1,12 @@
 import {
   classify_vault_recovery_error,
+  provider_draft_gap_translation_key,
   provider_failure_cause,
   provider_failure_code,
+  provider_failure_translation_key,
   VaultRecoveryErrorKind,
+  type ProviderDraftGap,
+  type ProviderFailureCode,
 } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 
@@ -18,12 +22,10 @@ export enum VaultStorageFailureKind {
   ManagerUnavailable = "manager-unavailable",
   TimedOut = "timed-out",
   OperationFailed = "operation-failed",
-  GitHubTokenRejected = "github-token-rejected",
-  S3KeyAccessDenied = "s3-key-access-denied",
-  S3ConfigurationRequired = "s3-configuration-required",
+  /** The provider draft lacks what it needs to connect; Rust names the gap. */
+  ProviderDraftIncomplete = "provider-draft-incomplete",
   VaultSelectionFailed = "vault-selection-failed",
   DuplicateProvider = "duplicate-provider",
-  LocalFolderRequired = "local-folder-required",
   LocalFolderUnsupported = "local-folder-unsupported",
   LocalFolderAutomationUnavailable = "local-folder-automation-unavailable",
   PeerTimeout = "peer-timeout",
@@ -38,58 +40,23 @@ export enum VaultStorageFailureKind {
   ExtensionProvidersHandOverFailed = "extension-providers-hand-over-failed",
 }
 
-/** What a native failure's stable provider code says. */
-export enum NativeProviderFailureKind {
-  GitHubTokenRejected = "github-token-rejected",
-  S3KeyAccessDenied = "s3-key-access-denied",
-  /** No stable code: the failure keeps its generic kind. */
-  Unclassified = "unclassified",
-}
-
-/** Reads a caught native failure's stable provider code, which Rust reads
- * from the raw message. TypeScript never matches the message text. */
-export class NativeProviderFailure<NativeCause = Error | string> {
-  constructor(private readonly cause: NativeCause) {}
-
-  kind(): NativeProviderFailureKind {
-    switch (provider_failure_code(this.message())) {
-      case "github-token-rejected":
-        return NativeProviderFailureKind.GitHubTokenRejected;
-      case "s3-key-access-denied":
-        return NativeProviderFailureKind.S3KeyAccessDenied;
-      case "unclassified":
-        return NativeProviderFailureKind.Unclassified;
-    }
-  }
-
-  /** The storage failure kind the code names. */
-  storageFailureKind(): VaultStorageFailureKind {
-    switch (this.kind()) {
-      case NativeProviderFailureKind.GitHubTokenRejected:
-        return VaultStorageFailureKind.GitHubTokenRejected;
-      case NativeProviderFailureKind.S3KeyAccessDenied:
-        return VaultStorageFailureKind.S3KeyAccessDenied;
-      case NativeProviderFailureKind.Unclassified:
-        return VaultStorageFailureKind.OperationFailed;
-    }
-  }
-
-  private message(): string {
-    const cause = this.cause;
-    if (cause instanceof Error) return cause.message;
-    return String(cause);
-  }
-}
+/** A failure the app raises itself: its kind picks its message. */
+export type AppStorageFailureKind = Exclude<
+  VaultStorageFailureKind,
+  VaultStorageFailureKind.ProviderDraftIncomplete
+>;
 
 export type VaultStorageFailureRequest = {
   readonly kind: VaultStorageFailureKind;
   readonly recoveryKind: VaultRecoveryErrorKind;
   /** Rust's loggable category of the native failure, never its message. */
   readonly cause: string;
+  /** The message key Rust chose for this failure. */
+  readonly translationKey: string;
 };
 
 type VaultStorageFailureInput =
-  VaultStorageFailureKind | VaultStorageFailureRequest;
+  AppStorageFailureKind | VaultStorageFailureRequest;
 
 /** The cause logged for a failure the app raised itself: its kind says it all. */
 const NON_NATIVE_FAILURE_CAUSE = "app";
@@ -98,28 +65,30 @@ export class VaultStorageFailure {
   readonly kind: VaultStorageFailureKind;
   readonly recoveryKind: VaultRecoveryErrorKind;
   readonly cause: string;
+  readonly translationKey: string;
 
   constructor(input: VaultStorageFailureInput) {
     if (typeof input === "string") {
       this.kind = input;
       this.recoveryKind = VaultRecoveryErrorKind.Other;
       this.cause = NON_NATIVE_FAILURE_CAUSE;
+      this.translationKey = VaultStorageFailure.appFailureKey(input);
       return;
     }
     this.kind = input.kind;
     this.recoveryKind = input.recoveryKind;
     this.cause = input.cause;
+    this.translationKey = input.translationKey;
   }
-  get translationKey() {
-    switch (this.kind) {
+
+  private static appFailureKey(kind: AppStorageFailureKind): string {
+    switch (kind) {
       case VaultStorageFailureKind.DuplicateProvider:
         return I18N_KEYS.AuthStorageDuplicateSyncProvider;
       case VaultStorageFailureKind.LocalFolderUnsupported:
         return I18N_KEYS.ProviderSetupLocalFolderUnsupportedBrowser;
       case VaultStorageFailureKind.LocalFolderAutomationUnavailable:
         return I18N_KEYS.ProviderSetupLocalFolderAutomatedBrowserError;
-      case VaultStorageFailureKind.LocalFolderRequired:
-        return I18N_KEYS.AuthStorageLocalFolderChooseErr;
       case VaultStorageFailureKind.DeviceAuthorizationRequired:
         return I18N_KEYS.ErrorsDeviceProtectionAuthorizationRequired;
       case VaultStorageFailureKind.LocalFolderUnavailable:
@@ -136,12 +105,6 @@ export class VaultStorageFailure {
         return I18N_KEYS.ToastsErrorTimeout;
       case VaultStorageFailureKind.VaultSelectionFailed:
         return I18N_KEYS.ErrorsVaultSelectionFailed;
-      case VaultStorageFailureKind.GitHubTokenRejected:
-        return I18N_KEYS.AuthStorageGithubTokenRejected;
-      case VaultStorageFailureKind.S3KeyAccessDenied:
-        return I18N_KEYS.ErrorsS3KeyAccessDenied;
-      case VaultStorageFailureKind.S3ConfigurationRequired:
-        return I18N_KEYS.ErrorsValidationS3StorageTargetInvalid;
       case VaultStorageFailureKind.ExtensionApprovalContextChanged:
         return I18N_KEYS.ExtensionConsentApprovalFailed;
       case VaultStorageFailureKind.ExtensionProvidersHandOverFailed:
@@ -173,16 +136,38 @@ export function isLocalDataInvalidationFailure(
   );
 }
 
-/** Admits a native failure through Rust's compatibility classifier without retaining its message. */
+/** Admits a native failure through Rust's classifiers without retaining its
+ * message: Rust reads the stable provider code and picks the message key. */
 export class NativeVaultStorageFailure<
   NativeCause = Error | string,
 > extends VaultStorageFailure {
+  readonly code: ProviderFailureCode;
+
   constructor(cause: NativeCause) {
     const causeMessage = cause instanceof Error ? cause.message : String(cause);
+    const keyRequest: Parameters<typeof provider_failure_translation_key>[0] = {
+      message: causeMessage,
+      operationFailedKey: I18N_KEYS.AuthStorageSyncFailed,
+    };
     const request: VaultStorageFailureRequest = {
-      kind: new NativeProviderFailure(cause).storageFailureKind(),
+      kind: VaultStorageFailureKind.OperationFailed,
       recoveryKind: classify_vault_recovery_error(causeMessage),
       cause: provider_failure_cause(causeMessage),
+      translationKey: provider_failure_translation_key(keyRequest),
+    };
+    super(request);
+    this.code = provider_failure_code(causeMessage);
+  }
+}
+
+/** A provider draft that cannot connect yet, with Rust's message for its gap. */
+export class ProviderDraftIncompleteFailure extends VaultStorageFailure {
+  constructor(readonly gap: ProviderDraftGap) {
+    const request: VaultStorageFailureRequest = {
+      kind: VaultStorageFailureKind.ProviderDraftIncomplete,
+      recoveryKind: VaultRecoveryErrorKind.Other,
+      cause: NON_NATIVE_FAILURE_CAUSE,
+      translationKey: provider_draft_gap_translation_key(gap),
     };
     super(request);
   }

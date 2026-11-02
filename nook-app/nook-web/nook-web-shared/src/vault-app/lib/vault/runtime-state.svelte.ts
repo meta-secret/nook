@@ -7,7 +7,10 @@ import {
 } from "$lib/runtime/storage-failure";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import type { VaultOperationStale } from "$lib/runtime/vault-operation-stale";
-import type { NookStorageConnection } from "$app-wasm";
+import type {
+  NookStorageConnection,
+  ProviderCredentialReadiness,
+} from "$app-wasm";
 import {
   DeviceProtectionStatus,
   NookManualProviderSyncState,
@@ -241,22 +244,16 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     );
   }
 
-  wasmStorageArgs(): NookStorageConnection {
+  wasmStorageArgs(): Result<NookStorageConnection, VaultStorageFailure> {
     return new providersActions.VaultProviderActions(
       this.providerActionsContext(),
     ).wasmStorageArgs();
   }
 
-  connectStorageArgs(): NookStorageConnection {
+  connectStorageArgs(): Result<NookStorageConnection, VaultStorageFailure> {
     return new providersActions.VaultProviderActions(
       this.providerActionsContext(),
     ).connectStorageArgs();
-  }
-
-  shouldUseJoinProviderForConnect(): boolean {
-    return new providersActions.VaultProviderActions(
-      this.providerActionsContext(),
-    ).shouldUseJoinProviderForConnect();
   }
 
   stagedRemoteStorageArgs(): StagedRemoteStorage {
@@ -277,10 +274,10 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     ).hasRemoteProviderCredentials();
   }
 
-  syncOAuthRemoteRefFromManager() {
+  credentialReadiness(): ProviderCredentialReadiness {
     return new providersActions.VaultProviderActions(
       this.providerActionsContext(),
-    ).syncOAuthRemoteRefFromManager();
+    ).credentialReadiness();
   }
 
   async ensureOAuthTokensFresh(): Promise<

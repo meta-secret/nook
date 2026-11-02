@@ -40,10 +40,10 @@ import {
   VaultSyncTimerStartDecision,
   VaultSyncTimerTickDecision,
 } from "$app-wasm";
+import { ProviderSetupKinds } from "$lib/vault/provider-setup-kinds";
 import {
   activeVaultScope,
   type AuthProvidersSnapshot,
-  LOCAL_FOLDER_PROVIDER_TYPE,
   unselectedVaultScope,
 } from "$lib/auth/providers";
 import {
@@ -191,7 +191,7 @@ export class VaultSyncActions {
     const mergedJoins: JoinRequest[] = [];
     try {
       for (const provider of state.syncProviders) {
-        if (provider.type === LOCAL_FOLDER_PROVIDER_TYPE) {
+        if (provider.provider.type === "local-folder") {
           const localSync: Parameters<
             ProviderSyncActions["syncLocalFolderProvider"]
           >[0] = { provider };
@@ -392,40 +392,55 @@ export class VaultSyncActions {
 
   eventOutboxTarget({
     request,
-  }: EventOutboxTargetSelection): EventOutboxTarget {
+  }: EventOutboxTargetSelection): Result<
+    EventOutboxTarget,
+    StorageOperationFailure
+  > {
     const state = this.state;
+    const unavailable: EventOutboxTarget = {
+      kind: EventOutboxTargetKind.Unavailable,
+    };
     if (request.kind === EventOutboxRequestKind.LocalFolder) {
-      return {
+      const target: EventOutboxTarget = {
         kind: EventOutboxTargetKind.LocalFolder,
         provider: request.provider,
       };
+      return storageOk(target);
     }
     if (request.kind === EventOutboxRequestKind.Remote) {
-      return {
+      const target: EventOutboxTarget = {
         kind: EventOutboxTargetKind.Remote,
         args: state.providerWasmArgs(request.provider),
       };
+      return storageOk(target);
     }
-    if (state.syncProviders[0]?.type === LOCAL_FOLDER_PROVIDER_TYPE) {
-      return {
+    if (state.syncProviders[0]?.provider.type === "local-folder") {
+      const target: EventOutboxTarget = {
         kind: EventOutboxTargetKind.LocalFolder,
         provider: state.syncProviders[0],
       };
+      return storageOk(target);
     }
     if (state.syncProviders.length > 0) {
       const [syncProvider] = state.syncProviders;
-      if (!syncProvider) return { kind: EventOutboxTargetKind.Unavailable };
-      return {
+      if (!syncProvider) return storageOk(unavailable);
+      const target: EventOutboxTarget = {
         kind: EventOutboxTargetKind.Remote,
         args: state.providerWasmArgs(syncProvider),
       };
+      return storageOk(target);
     }
-    return state.hasRemoteCredentials()
-      ? {
+    // With no saved row, the draft in use is the target once it has its
+    // credentials; a draft with a gap fails rather than flushing nowhere.
+    switch (state.credentialReadiness().state) {
+      case "required":
+        return storageOk(unavailable);
+      case "ready":
+        return state.wasmStorageArgs().map((args): EventOutboxTarget => ({
           kind: EventOutboxTargetKind.Remote,
-          args: state.wasmStorageArgs(),
-        }
-      : { kind: EventOutboxTargetKind.Unavailable };
+          args,
+        }));
+    }
   }
 
   async flushRemoteEventOutboxNow({
@@ -437,7 +452,9 @@ export class VaultSyncActions {
     const admitted = state.admitManager();
     if (admitted.isErr()) return storageErr(admitted.error);
     const targetSelection: EventOutboxTargetSelection = { request };
-    const target = this.eventOutboxTarget(targetSelection);
+    const selected = this.eventOutboxTarget(targetSelection);
+    if (selected.isErr()) return storageErr(selected.error);
+    const target = selected.value;
     if (target.kind === EventOutboxTargetKind.LocalFolder) {
       const localSync: Parameters<
         ProviderSyncActions["syncLocalFolderProvider"]
@@ -572,10 +589,7 @@ export class VaultSyncActions {
     state.errorMsg = "";
     state.openSection(WorkspaceSection.Sync);
     state.beginAddProvider();
-    const setupRequest: Parameters<typeof state.beginProviderSetup>[0] = {
-      type: LOCAL_FOLDER_PROVIDER_TYPE,
-    };
-    state.beginProviderSetup(setupRequest);
+    state.beginProviderSetup(ProviderSetupKinds.LOCAL_FOLDER);
   }
 
   startVaultSync() {
@@ -711,7 +725,7 @@ export class VaultSyncActions {
               StorageOperationFailureKind.VaultSelectionFailed,
             ),
           );
-        if (provider.type === "local-folder") {
+        if (provider.provider.type === "local-folder") {
           const localSync: Parameters<
             ProviderSyncActions["syncLocalFolderProvider"]
           >[0] = { provider };
@@ -726,7 +740,9 @@ export class VaultSyncActions {
           if (applied.isErr()) return storageErr(applied.error);
         }
       } else {
-        const applied = await this.synchronizeStorage(state.wasmStorageArgs());
+        const args = state.wasmStorageArgs();
+        if (args.isErr()) return storageErr(args.error);
+        const applied = await this.synchronizeStorage(args.value);
         if (applied.isErr()) return storageErr(applied.error);
       }
       // Join approval can synchronize the encrypted roster before a vault session exists.

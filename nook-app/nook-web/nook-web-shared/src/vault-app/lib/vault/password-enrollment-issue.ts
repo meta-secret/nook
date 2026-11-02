@@ -21,15 +21,9 @@ import {
   enrollment_shared_provider_for_architecture,
   generate_id,
 } from "$app-wasm";
-import {
-  githubPatValue,
-  githubRepositoryValue,
-  decodeStoredOAuthFileConfiguration,
-  StoredOAuthFileConfigurationDecodeKind,
-  OAuthFilePresentation,
-  type StorageProvider,
-} from "$lib/auth/providers";
+import type { StorageProvider } from "$lib/auth/providers";
 import { provider_onboarding_type } from "$lib/vault/architecture-model";
+import { SharedJoinerSelectionKind } from "$lib/vault/shared-joiner-selection";
 
 enum StorageChainReadinessKind {
   Idle = "idle",
@@ -50,7 +44,7 @@ type StorageChainReadinessRace = {
 };
 
 type ProviderEventOutboxFlush = {
-  readonly providerType: StorageProvider["type"];
+  readonly providerType: StorageProvider["provider"]["type"];
 };
 
 const log = browserLogRuntime.createLogger("identity-enrollment");
@@ -127,77 +121,37 @@ export class IdentityEnrollmentIssue {
           new EnrollmentIssueFailure(EnrollmentIssueRejection.ProviderRequired),
         );
       }
-      if (selectedProvider.type === "local") {
+      if (selectedProvider.provider.type === "local") {
         return storageErr(
           new EnrollmentIssueFailure(EnrollmentIssueRejection.LocalProvider),
         );
       }
-      if (selectedProvider.type === "local-folder") {
+      if (selectedProvider.provider.type === "local-folder") {
         return storageErr(
           new EnrollmentIssueFailure(
             EnrollmentIssueRejection.LocalFolderProvider,
           ),
         );
       }
-      const githubPat = githubPatValue(selectedProvider.githubPat);
-      const githubRepo = githubRepositoryValue(selectedProvider.githubRepo);
-      const selectedOauthConfiguration = decodeStoredOAuthFileConfiguration(
-        selectedProvider.oauthFile,
-      );
       // Google Drive and iCloud invites name one of the provider's authorized
       // accounts and carry no provider credential; the account's access comes
       // from the provider's own sharing list.
-      const sharedJoinerIdentity = state.sharedJoinerIdentity.trim();
       const usesSharedProviderGrant =
         provider_onboarding_type(selectedProvider, state.vaultArchitecture) ===
         OnboardingType.SharedProviderGrant;
       log.info("enrollment provider selected");
-      if (
-        selectedProvider.type === "github" &&
-        !usesSharedProviderGrant &&
-        (!githubPat || !githubRepo)
-      ) {
-        return storageErr(
-          new EnrollmentIssueFailure(
-            EnrollmentIssueRejection.GithubCredentialsRequired,
-          ),
-        );
-      }
       let provider: NookEnrollmentProvider;
       if (usesSharedProviderGrant) {
-        if (
-          selectedOauthConfiguration.kind !==
-          StoredOAuthFileConfigurationDecodeKind.Configured
-        ) {
-          return storageErr(
-            new EnrollmentIssueFailure(
-              EnrollmentIssueRejection.OAuthProviderRequired,
-            ),
-          );
-        }
-        const presentation = new OAuthFilePresentation(
-          selectedOauthConfiguration.config,
-        );
-        if (selectedOauthConfiguration.config.preset === "icloud") {
-          if (!presentation.hasICloudShareTarget())
+        const joiner = state.sharedJoinerSelection;
+        switch (joiner.kind) {
+          case SharedJoinerSelectionKind.None:
             return storageErr(
               new EnrollmentIssueFailure(
-                EnrollmentIssueRejection.ICloudTargetRequired,
+                EnrollmentIssueRejection.SharedIdentityRequired,
               ),
             );
-        } else if (!presentation.hasGoogleDriveFolder()) {
-          return storageErr(
-            new EnrollmentIssueFailure(
-              EnrollmentIssueRejection.SharedTargetUnavailable,
-            ),
-          );
-        }
-        if (!sharedJoinerIdentity) {
-          return storageErr(
-            new EnrollmentIssueFailure(
-              EnrollmentIssueRejection.SharedIdentityRequired,
-            ),
-          );
+          case SharedJoinerSelectionKind.Selected:
+            break;
         }
         // The new device reads the vault from the shared target, so it must
         // hold the current vault event log before the invite exists.
@@ -211,7 +165,7 @@ export class IdentityEnrollmentIssue {
               targetArgs,
             );
             const flush: ProviderEventOutboxFlush = {
-              providerType: selectedProvider.type,
+              providerType: selectedProvider.provider.type,
             };
             return storageOk(flush);
           } catch (nativeFailure) {
@@ -223,7 +177,7 @@ export class IdentityEnrollmentIssue {
           provider = enrollment_shared_provider_for_architecture(
             selectedProvider,
             state.vaultArchitecture,
-            sharedJoinerIdentity,
+            joiner.email,
           );
         } catch (failure) {
           return storageErr(new NativeVaultStorageFailure(failure));

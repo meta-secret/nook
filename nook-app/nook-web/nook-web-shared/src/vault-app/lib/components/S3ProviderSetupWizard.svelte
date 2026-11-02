@@ -5,9 +5,13 @@ becomes the S3 draft, then the host connects it; a failure the host reports
 stays beside the form, where the user acted.
 -->
 <script lang="ts">
-  import type { Snippet } from 'svelte'
   import { Archive, ShieldCheck } from '@lucide/svelte'
-  import type { S3Connection } from '$app-wasm'
+  import { s3_provider_draft, type S3Connection } from '$app-wasm'
+  import {
+    ConnectQuestionKind,
+    ConnectQuestions,
+    type ConnectQuestion,
+  } from '$lib/components/connect-button-state'
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   import S3ConnectionPanel from '$lib/components/S3ConnectionPanel.svelte'
@@ -18,21 +22,18 @@ stays beside the form, where the user acted.
     idPrefix,
     isVerifying,
     isInitializing,
-    connectDisabled = false,
+    question,
     onCancelSetup,
     onConnect,
-    beforeConnect,
   }: {
     vault: VaultState
     idPrefix: string
     isVerifying: boolean
     isInitializing: boolean
-    /** The same gate the sibling wizards take: a question above Connect
-     * is still unanswered. */
-    connectDisabled?: boolean
+    /** What the host asks before Connect; Connect waits while it is open. */
+    question: ConnectQuestion
     onCancelSetup: () => void
     onConnect: () => void | Promise<void>
-    beforeConnect?: Snippet
   } = $props()
 
   let stepOpen = $state(true)
@@ -45,7 +46,7 @@ stays beside the form, where the user acted.
   async function connect(configuration: S3Connection): Promise<void> {
     error = ''
     const revision = vault.errorMsgRevision
-    vault.configureS3(configuration)
+    vault.stageProviderDraft(s3_provider_draft(configuration))
     connecting = true
     try {
       await onConnect()
@@ -60,7 +61,9 @@ stays beside the form, where the user acted.
 </script>
 
 {#snippet hostQuestion()}
-  {@render beforeConnect?.()}
+  {#if question.kind === ConnectQuestionKind.Asked}
+    {@render question.prompt()}
+  {/if}
 {/snippet}
 
 <div class="space-y-4" data-testid="s3-setup">
@@ -98,7 +101,7 @@ stays beside the form, where the user acted.
           ? I18N_KEYS.OnboardingLoadingEngine
           : I18N_KEYS.AuthStorageSyncConnecting,
       )}
-      submitDisabled={connectDisabled}
+      submitDisabled={ConnectQuestions.holdsConnect(question)}
       {error}
       onConnect={connect}
       beforeConnect={hostQuestion}

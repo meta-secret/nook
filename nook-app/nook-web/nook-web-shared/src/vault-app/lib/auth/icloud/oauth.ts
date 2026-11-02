@@ -8,16 +8,8 @@ import { OAuthFailure, OAuthFailureKind } from "$lib/auth/oauth-failure";
  * token is passed to wasm for CloudKit REST calls.
  */
 
-import {
-  configuredOAuthFile,
-  OAuthAccessTokenKind,
-  oauth_access_token,
-  storedOAuthAccountEmail,
-  unknownOAuthAccountIdentity,
-  type OAuthFileConfig,
-  type StoredOAuthFileConfiguration,
-} from "$lib/auth/providers";
-import { icloud_oauth_tokens_to_config } from "$app-wasm";
+import type { OAuthAccountIdentity } from "$lib/auth/providers";
+import type { ICloudAccess, ICloudSignIn } from "$app-wasm";
 import {
   default as initNookWasm,
   create_icloud_shared_storage_target,
@@ -112,11 +104,6 @@ type CloudKitRecordLocation = {
     readonly ownerRecordName: string;
   };
   readonly rootRecordName: string;
-};
-
-export type ICloudOAuthConfigurationUpdate = {
-  readonly tokens: ICloudOAuthTokens;
-  readonly existing: StoredOAuthFileConfiguration;
 };
 
 export type ICloudSharedStorageTarget = ICloudSharedTarget & {
@@ -858,41 +845,44 @@ class ICloudOAuthSession {
     }
     return this.requireStoredWebAuthToken();
   }
-  oauthTokensToICloudConfig({
-    tokens,
-    existing,
-  }: ICloudOAuthConfigurationUpdate): Result<OAuthFileConfig, OAuthFailure> {
-    try {
-      return ok(
-        icloud_oauth_tokens_to_config(
-          tokens.accessToken,
-          tokens.accountName.kind === ICloudAccountNameKind.Available
-            ? storedOAuthAccountEmail(tokens.accountName.value)
-            : unknownOAuthAccountIdentity(),
-          existing,
-        ),
-      );
-    } catch {
-      return err(new OAuthFailure(OAuthFailureKind.InvalidConfiguration));
+  /** The iCloud access a web-auth answer grants, as Rust's sign-in DTO. */
+  iCloudAccess(tokens: ICloudOAuthTokens): ICloudAccess {
+    return {
+      webAuthToken: tokens.accessToken,
+      account: ICloudOAuthSession.account(tokens.accountName),
+    };
+  }
+
+  private static account(name: ICloudAccountName): OAuthAccountIdentity {
+    switch (name.kind) {
+      case ICloudAccountNameKind.Available:
+        return { state: "email", email: name.value };
+      case ICloudAccountNameKind.Unavailable:
+        return { state: "unknown" };
     }
   }
-  async ensureValidICloudOAuthFileConfig(
-    config: OAuthFileConfig,
-  ): Promise<Result<OAuthFileConfig, OAuthFailure>> {
-    if (oauth_access_token(config).kind === OAuthAccessTokenKind.Available)
-      return ok(config);
+
+  /** The draft's iCloud access, or a web-auth token requested now. */
+  async ensureICloudAccess(
+    signIn: ICloudSignIn,
+  ): Promise<Result<ICloudAccess, OAuthFailure>> {
+    switch (signIn.state) {
+      case "signedIn":
+        return ok(signIn.value);
+      case "awaitingSignIn":
+        return this.requestICloudAccess();
+    }
+  }
+
+  private async requestICloudAccess(): Promise<
+    Result<ICloudAccess, OAuthFailure>
+  > {
     const tokenRequest: ICloudWebAuthTokenRequest = {
       signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
       clickSignInControl: true,
     };
     const refreshed = await this.requestICloudWebAuthToken(tokenRequest);
-    return refreshed.andThen((tokens) => {
-      const update: ICloudOAuthConfigurationUpdate = {
-        tokens,
-        existing: configuredOAuthFile(config),
-      };
-      return this.oauthTokensToICloudConfig(update);
-    });
+    return refreshed.map((tokens) => this.iCloudAccess(tokens));
   }
 }
 export const iCloudOAuthSession = new ICloudOAuthSession();

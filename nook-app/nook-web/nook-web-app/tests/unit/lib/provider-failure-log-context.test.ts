@@ -5,31 +5,7 @@ import {
 } from '$lib/runtime/storage-failure'
 import { ProviderFailureLogContext } from '$lib/vault/provider-failure-log-context'
 
-test('includes the rejected GitHub token status in provider warning logs', () => {
-  const context = ProviderFailureLogContext.from({
-    provider_type: 'github',
-    failure_kind: VaultStorageFailureKind.GitHubTokenRejected,
-    cause: 'unauthorized',
-  })
-
-  expect(context.serialize()).toBe(
-    '{"provider_type":"github","failure_kind":"github-token-rejected","cause":"unauthorized","http_status":401}',
-  )
-})
-
-test('includes the refused S3 key status in provider warning logs', () => {
-  const context = ProviderFailureLogContext.from({
-    provider_type: 's3',
-    failure_kind: VaultStorageFailureKind.S3KeyAccessDenied,
-    cause: 'forbidden',
-  })
-
-  expect(context.serialize()).toBe(
-    '{"provider_type":"s3","failure_kind":"s3-key-access-denied","cause":"forbidden","http_status":403}',
-  )
-})
-
-test('omits the HTTP status for other provider failures', () => {
+test('logs the failure kind beside the cause Rust read', () => {
   const context = ProviderFailureLogContext.from({
     provider_type: 'github',
     failure_kind: VaultStorageFailureKind.OperationFailed,

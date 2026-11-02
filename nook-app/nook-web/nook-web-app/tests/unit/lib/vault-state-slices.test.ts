@@ -11,7 +11,7 @@ import {
   LoginSetupKind,
   type LoginSetup,
 } from '$lib/vault/state/provider.svelte'
-import { LOCAL_FOLDER_PROVIDER_TYPE } from '$lib/auth/providers'
+import { ProviderSetupKinds } from '$lib/vault/provider-setup-kinds'
 
 describe('vault state slice transitions', () => {
   test('delegates transition methods to their owning slice', () => {
@@ -19,10 +19,10 @@ describe('vault state slice transitions', () => {
       new VaultRuntimeState(NookBrowserLocale.from_tags(['en'])),
     )
 
-    state.activateLoginSetup(LOCAL_FOLDER_PROVIDER_TYPE)
+    state.activateLoginSetup(ProviderSetupKinds.LOCAL_FOLDER)
     expect(state.loginSetup).toEqual({
       kind: LoginSetupKind.Active,
-      providerType: LOCAL_FOLDER_PROVIDER_TYPE,
+      providerKind: ProviderSetupKinds.LOCAL_FOLDER,
     } satisfies LoginSetup)
 
     state.clearLoginSetup()

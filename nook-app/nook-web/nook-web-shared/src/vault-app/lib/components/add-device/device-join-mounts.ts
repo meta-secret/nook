@@ -2,6 +2,7 @@ import { provider_carries_device_join } from "$app-wasm";
 import type { StorageProvider } from "$lib/auth/providers";
 import {
   provider_supports_replication,
+  ReplicationSupport,
   type ReplicationType,
 } from "$lib/vault/architecture-model";
 
@@ -22,7 +23,8 @@ export class DeviceJoinMounts {
     return mounts.filter(
       (provider) =>
         provider_carries_device_join(provider) &&
-        provider_supports_replication(provider, replication),
+        provider_supports_replication(provider, replication) ===
+          ReplicationSupport.Supported,
     );
   }
 }

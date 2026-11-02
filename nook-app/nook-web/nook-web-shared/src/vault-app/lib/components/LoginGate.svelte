@@ -39,18 +39,11 @@
     type StartSentinelGenesisArgs,
   } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
-  import type {
-    OAuthFilePreset,
-    ProviderSetupRequest,
-    StorageProvider,
-    StorageProviderType,
-  } from '$lib/auth/providers'
+  import type { ProviderKind, StorageProvider } from '$lib/auth/providers'
   import {
-    DEFAULT_GITHUB_REPO,
-    LocalFolderPresentation,
-    LocalFolderHandleKind,
-    oauth_access_token,
-  } from '$lib/auth/providers'
+    ConnectQuestions,
+    type AskedConnectQuestion,
+  } from '$lib/components/connect-button-state'
   import { WorkspaceRoute } from '$lib/app/workspace-route'
   import { WorkspaceSectionRoute } from '$lib/vault/ui'
   import { IdentityPages } from '$lib/vault/identity-pages'
@@ -99,11 +92,8 @@
   import { SentinelGenesisPhase, VaultApplication } from '$app-wasm'
   import {
     ActiveVaultKind,
-    LocalFolderDraftKind,
     LoginSetupKind,
     LoginVaultSelectionKind,
-    OAuthFileDraftKind,
-    OAuthSetupPresetKind,
     RecoveryDiscoveryKind,
     type LoginSetup,
   } from '$lib/vault/state/provider.svelte'
@@ -114,8 +104,6 @@
     appKind,
     providers,
     loginSetup,
-    githubPat = $bindable(''),
-    githubRepo = $bindable(DEFAULT_GITHUB_REPO),
     isVerifying,
     isInitializing,
     addProviderOpen = false,
@@ -149,8 +137,6 @@
     appKind: VaultApplication
     providers: StorageProvider[]
     loginSetup: LoginSetup
-    githubPat: string
-    githubRepo: string
     isVerifying: boolean
     isInitializing: boolean
     addProviderOpen?: boolean
@@ -163,7 +149,7 @@
     identityHealth?: NookIdentityHealth
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
-    onBeginSetup: (request: ProviderSetupRequest) => void
+    onBeginSetup: (kind: ProviderKind) => void
     onCancelSetup: () => void
     onUseEnrollmentCode?: (args: EnrollmentCodeUnlock) => void | Promise<void>
     onUnlockWithPassword: (args: VaultPasswordUnlock) => void | Promise<void>
@@ -455,10 +441,13 @@
    * when asked for (New vault, Add provider). */
   let identityCardsShown = $state(false)
   const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active)
-  function setupIs(type: StorageProviderType): boolean {
+  /** Rust keeps the draft's kind equal to the setup's, so the draft picks
+   * the wizard and each wizard gets exactly its own draft. */
+  const setupDraft = $derived(vault.providerDraft)
+  function setupIs(type: ProviderKind['type']): boolean {
     return (
       loginSetup.kind === LoginSetupKind.Active &&
-      loginSetup.providerType === type
+      loginSetup.providerKind.type === type
     )
   }
   const showVaultPicker = $derived(
@@ -549,18 +538,6 @@
   const isUnlocking = $derived(
     isVerifying && (showLocalUnlock || showSetup) && !showSetup,
   )
-  const setupCanConnect = $derived(
-    setupIs('local') ||
-      (setupIs('local-folder') &&
-        vault.localFolderDraft.kind === LocalFolderDraftKind.Configured &&
-        new LocalFolderPresentation(
-          vault.localFolderDraft.config,
-        ).localFolderHandle().kind === LocalFolderHandleKind.Selected) ||
-      (setupIs('oauth-file') &&
-        vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
-        oauth_access_token(vault.oauthFileDraft.config).kind === 'available') ||
-      (setupIs('github') && Boolean(githubPat.trim())),
-  )
   const recoveryPasswordEntries = $derived(
     vault.recoveryDiscovery.kind === RecoveryDiscoveryKind.Found
       ? vault.recoveryDiscovery.summary.passwordEntries
@@ -572,18 +549,10 @@
       ? vault.passwordEntries
       : recoveryPasswordEntries,
   )
-  const oauthPreset = $derived<OAuthFilePreset>(
-    vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-      ? vault.oauthFileDraft.config.preset
-      : vault.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
-        ? vault.oauthSetupSelection.preset
-        : 'google-drive',
-  )
   const setupProviderName = $derived.by(() => {
     const request: ProviderSetupNameRequest = {
       vault,
       setup: loginSetup,
-      oauthPreset,
       localWords: I18N_KEYS.OnboardingLocalStorage,
     }
     return new ProviderSetupName(request).text()
@@ -593,6 +562,15 @@
       vault.remoteVaultRecoveryState,
     ),
   )
+  /** The remote-recovery question the GitHub and S3 setups ask above
+   * Connect, which waits while it is open. */
+  const recoveryQuestion = $derived.by(() => {
+    const asked: AskedConnectQuestion = {
+      prompt: recoveryPrompt,
+      open: recoveryPromptVisible,
+    }
+    return ConnectQuestions.asked(asked)
+  })
 
   function handleFirstConnectSubmit(e: Event) {
     e.preventDefault()
@@ -775,44 +753,41 @@
           {...sentinelCeremonyOptionalProps}
         />
       {:else if showSetup}
-        {#if vault.remoteVaultChoices.length > 0}
+        {#if vault.remoteVaultChoices.vaults.length > 0}
           <RemoteVaultChoice {vault} busy={isVerifying} onApplied={onUnlock} />
-        {:else if setupIs('oauth-file')}
+        {:else if setupDraft.type === 'oauth-file'}
           <OAuthProviderSetupWizard
             {vault}
-            preset={oauthPreset}
+            draft={setupDraft}
             {isVerifying}
             {isInitializing}
             {onCancelSetup}
             onConnect={onUnlock}
           />
-        {:else if setupIs('github')}
+        {:else if setupDraft.type === 'github'}
           <GitHubProviderSetupWizard
             {vault}
-            bind:githubPat
-            bind:githubRepo
-            idPrefix="login"
+            draft={setupDraft}
             {isVerifying}
             {isInitializing}
-            connectDisabled={recoveryPromptVisible}
+            question={recoveryQuestion}
             {onCancelSetup}
             onConnect={onUnlock}
-            beforeConnect={recoveryPrompt}
           />
-        {:else if setupIs('s3')}
+        {:else if setupDraft.type === 's3'}
           <S3ProviderSetupWizard
             {vault}
             idPrefix="login"
             {isVerifying}
             {isInitializing}
-            connectDisabled={recoveryPromptVisible}
+            question={recoveryQuestion}
             {onCancelSetup}
             onConnect={onUnlock}
-            beforeConnect={recoveryPrompt}
           />
-        {:else if setupIs('local-folder')}
+        {:else if setupDraft.type === 'local-folder'}
           <LocalFolderProviderSetupWizard
             {vault}
+            folder={setupDraft}
             idPrefix="login"
             {isVerifying}
             {isInitializing}
@@ -831,7 +806,6 @@
                 type="submit"
                 class="sm:min-w-[180px]"
                 data-testid="connect-provider-btn"
-                disabled={!setupCanConnect}
               >
                 {#if isInitializing}
                   <RefreshCw class="size-4 animate-spin" />

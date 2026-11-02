@@ -81,8 +81,6 @@ Back returns to the overview.
           isInitializing={vault.isInitializing}
           addProviderOpen={vault.addProviderOpen}
           loginSetup={vault.loginSetup}
-          bind:githubPat={vault.githubPat}
-          bind:githubRepo={vault.githubRepo}
           onReconnect={() => pages.connectProvider()}
           onSyncProvider={() => pages.syncLog()}
           onBeginAddProvider={() => vault.beginAddProvider()}

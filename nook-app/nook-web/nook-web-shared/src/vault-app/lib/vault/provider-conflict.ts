@@ -13,7 +13,6 @@ import {
   type NookSyncConflictReview,
   read_local_vault_yaml,
 } from "$app-wasm";
-import { LOCAL_PROVIDER_TYPE } from "$lib/auth/providers";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
   VaultOperationStale,
@@ -88,7 +87,7 @@ export class ProviderConflictActions {
     const [provider = state.providers[state.providers.length - 1]] = [
       state.syncProviders[state.syncProviders.length - 1],
     ];
-    if (!provider || provider.type === LOCAL_PROVIDER_TYPE) {
+    if (!provider || provider.provider.type === "local") {
       return storageErr(
         new StorageOperationFailure(
           StorageOperationFailureKind.OperationFailed,

@@ -16,12 +16,8 @@ import { ProviderVaultIdentitySelectionKind } from '../../../../nook-web-shared/
 import { SyncConflictActions } from '../../../../nook-web-shared/src/vault-app/lib/vault/sync-resolution'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import type { VaultState } from '../../../../nook-web-shared/src/vault-app/lib/vault.svelte'
-import {
-  providerPersistenceDefaults,
-  storedGithubPat,
-  storedGithubRepository,
-  type StorageProvider,
-} from '$lib/auth/providers'
+import { type StorageProvider } from '$lib/auth/providers'
+import { ProviderRowFixture } from '../provider-fixtures'
 
 type ProjectedIdentity = {
   readonly id: string
@@ -157,13 +153,10 @@ describe('provider vault decision panel', () => {
 
 test('selected local target survives loading the selected identity providers', async () => {
   const identityProvider: StorageProvider = {
-    ...providerPersistenceDefaults(),
-    id: 'identity-provider',
-    type: 'github',
+    ...ProviderRowFixture.github(
+      ProviderRowFixture.unscoped('identity-provider'),
+    ),
     label: 'Identity B',
-    githubPat: storedGithubPat('test-pat'),
-    githubRepo: storedGithubRepository('identity/repo'),
-    createdAt: '2026-01-01T00:00:00Z',
   }
   const openActiveVault = vi.fn()
   const state = VaultStateTestFixture.create()
@@ -223,11 +216,10 @@ test('initializes a pristine device without accessing identity-protected provide
   const state = VaultStateTestFixture.create()
   state.providers = [
     {
-      ...providerPersistenceDefaults(),
-      id: 'stale-provider',
-      type: 'github',
+      ...ProviderRowFixture.github(
+        ProviderRowFixture.unscoped('stale-provider'),
+      ),
       label: 'Stale provider',
-      createdAt: '2026-01-01T00:00:00Z',
     },
   ]
   state.providersLoaded = false

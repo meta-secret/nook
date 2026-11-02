@@ -17,7 +17,14 @@ for a device invite; accounts are managed on the Sync page it links to.
   import { RefreshCw, UserMinus, UserPlus, Users } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type { AuthorizedAccount } from '$app-wasm'
-  import type { OAuthFileConfig } from '$lib/auth/providers'
+  import type { OAuthFileProvider } from '$lib/auth/providers'
+  import { SharedProviderAccountsOf } from '$lib/components/shared-provider-accounts'
+  import {
+    SharedJoinerSelectionKind,
+    SharedJoinerSelections,
+    type SharedJoinerSelection,
+    type SharedJoinerReconciliation,
+  } from '$lib/vault/shared-joiner-selection'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     AuthorizedAccountsSource,
@@ -27,21 +34,22 @@ for a device invite; accounts are managed on the Sync page it links to.
 
   let {
     vault,
-    config,
+    payload,
     shareTitle,
     selectable = false,
-    selectedEmail = $bindable(''),
+    selection = $bindable(),
     disabled = false,
     onManageAccounts,
   }: {
     vault: VaultState
     /** The saved provider whose shared target lists the accounts. */
-    config: OAuthFileConfig
+    payload: OAuthFileProvider
     /** Title Apple's sharing sheet shows for the iCloud share. */
     shareTitle: string
     /** Pick one account with write access for a device invite. */
     selectable?: boolean
-    selectedEmail?: string
+    /** The account a device invite names; a manage list picks none. */
+    selection: SharedJoinerSelection
     disabled?: boolean
     /** Where a picker sends the user to authorize another account. */
     onManageAccounts?: () => void
@@ -52,7 +60,7 @@ for a device invite; accounts are managed on the Sync page it links to.
   let busy = $state(false)
   let actionError = $state('')
 
-  const isICloud = $derived(config.preset === 'icloud')
+  const isICloud = $derived(payload.preset === 'icloud')
   const accounts = $derived(
     panel.kind === PanelStateKind.Ready ? panel.accounts.accounts : [],
   )
@@ -101,18 +109,17 @@ for a device invite; accounts are managed on the Sync page it links to.
     }
     panel = { kind: PanelStateKind.Ready, access, accounts: listed.value }
     if (!selectable) return
-    const choice: Parameters<typeof authorizedAccountsClient.inviteAccount>[0] =
-      { accounts: listed.value, email: selectedEmail }
-    const kept = selectedEmail.trim()
-      ? authorizedAccountsClient.inviteAccount(choice)
-      : false
-    selectedEmail = kept && kept.isOk() ? kept.value : ''
+    const reconciliation: SharedJoinerReconciliation = {
+      selection,
+      accounts: listed.value,
+    }
+    selection = SharedJoinerSelections.reconcile(reconciliation)
   }
 
   async function load() {
     panel = { kind: PanelStateKind.Loading }
     actionError = ''
-    const access = await authorizedAccountsClient.access(config)
+    const access = await authorizedAccountsClient.access(payload)
     if (access.isErr()) {
       panel = {
         kind: PanelStateKind.Failed,
@@ -156,13 +163,15 @@ for a device invite; accounts are managed on the Sync page it links to.
       newEmail = ''
       // Keep the wider grant so this provider's sync reads the new
       // account's events without waiting for the next token refresh.
-      const adoption: Parameters<
-        VaultOAuthActions['adoptGoogleProviderTokens']
-      >[0] = { config, tokens: added.value.tokens }
-      const kept = await new VaultOAuthActions(vault).adoptGoogleProviderTokens(
-        adoption,
-      )
-      if (kept.isErr()) actionError = vault.t(kept.error.translationKey)
+      if (payload.preset === 'google-drive') {
+        const adoption: Parameters<
+          VaultOAuthActions['adoptGoogleProviderTokens']
+        >[0] = { drive: payload, tokens: added.value.tokens }
+        const kept = await new VaultOAuthActions(
+          vault,
+        ).adoptGoogleProviderTokens(adoption)
+        if (kept.isErr()) actionError = vault.t(kept.error.translationKey)
+      }
     } finally {
       busy = false
     }
@@ -218,19 +227,11 @@ for a device invite; accounts are managed on the Sync page it links to.
       return
     }
     actionError = ''
-    selectedEmail = picked.value
+    selection = SharedJoinerSelections.selected(picked.value)
   }
 
   // Reload only when the shared target changes, not on every parent render.
-  const targetKey = $derived(
-    config.preset === 'icloud'
-      ? config.iCloudShareTarget.state === 'sharedTarget'
-        ? config.iCloudShareTarget.value
-        : ''
-      : config.folderId.state === 'folderId'
-        ? config.folderId.value
-        : '',
-  )
+  const targetKey = $derived(SharedProviderAccountsOf.targetKey(payload))
 
   $effect(() => {
     void targetKey
@@ -302,7 +303,8 @@ for a device invite; accounts are managed on the Sync page it links to.
           {@const canPick = selectable && invitable(account)}
           {@const selected =
             canPick &&
-            selectedEmail.toLowerCase() === account.email.toLowerCase()}
+            selection.kind === SharedJoinerSelectionKind.Selected &&
+            selection.email === account.email}
           <li class="flex min-h-11 items-center gap-3 py-1.5 text-sm">
             {#if selectable}
               <button

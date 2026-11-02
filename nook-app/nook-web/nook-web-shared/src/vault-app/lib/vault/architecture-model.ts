@@ -1,4 +1,3 @@
-import { I18N_KEYS } from "../../../generated/i18n-keys";
 import {
   DeviceMode,
   NookVaultArchitecture,
@@ -9,9 +8,11 @@ import {
   first_compatible_provider_id,
   first_compatible_provider_id_preferred,
   NookProviderSelectionState,
+  provider_kind_replication_capability,
   provider_replication_capability,
   provider_supports_replication,
   provider_onboarding_type,
+  ReplicationSupport,
   validate_provider_replication,
   validate_vault_architecture,
   vault_architecture_can_create_secret,
@@ -33,8 +34,10 @@ export {
   default_vault_architecture,
   vault_architecture_onboarding_type,
   provider_onboarding_type,
+  provider_kind_replication_capability,
   provider_replication_capability,
   provider_supports_replication,
+  ReplicationSupport,
   validate_provider_replication,
 };
 
@@ -71,23 +74,11 @@ export function validateVaultArchitecture(
   }
 }
 
-export const ProviderCapabilityLabelKey = {
-  PersonalOnly: I18N_KEYS.ProviderPickerCapabilityPersonalOnly,
-  PersonalShared: I18N_KEYS.ProviderPickerCapabilityPersonalShared,
-} as const;
-
-export type ProviderCapabilityLabelKey =
-  (typeof ProviderCapabilityLabelKey)[keyof typeof ProviderCapabilityLabelKey];
-
-/** Presentation label derived from the Rust-owned provider capability. */
-export function providerCapabilityLabelKey(
-  provider: StorageProvider,
-): ProviderCapabilityLabelKey {
+/** The label key Rust picks for a provider's replication capability. */
+export function providerCapabilityLabelKey(provider: StorageProvider): string {
   const capability = provider_replication_capability(provider);
   try {
-    return capability.supportsShared
-      ? ProviderCapabilityLabelKey.PersonalShared
-      : ProviderCapabilityLabelKey.PersonalOnly;
+    return capability.labelKey;
   } finally {
     capability.free();
   }

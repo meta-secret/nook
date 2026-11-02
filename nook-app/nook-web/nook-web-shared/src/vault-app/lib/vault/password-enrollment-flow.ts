@@ -1,117 +1,72 @@
 import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
-import { Effect, Schema } from "effect";
-import {
-  VaultStorageFailure as StorageOperationFailure,
-  VaultStorageFailureKind as StorageOperationFailureKind,
-} from "$lib/runtime/storage-failure";
 import type { NookStorageConnection } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import { VaultState } from "$lib/vault.svelte";
-import { isoTimestamp } from "$lib/nook";
-import type { OAuthFailure } from "$lib/auth/oauth-failure";
+import { OAuthFailure, OAuthFailureKind } from "$lib/auth/oauth-failure";
 import {
-  SharedGrantProviderOutcomeKind,
   findSharedGrantProvider,
   SharedStorageTargetKind,
+  type SharedGrantProviderOutcome,
   type SharedStorageTarget,
 } from "$lib/vault/password-enrollment";
 
 import {
   JoinEnrollmentState,
   OnboardingType,
+  apply_google_drive_sign_in,
+  apply_icloud_sign_in,
+  bind_icloud_share,
   decrypt_enrollment_payload,
+  draft_storage_args,
+  provider_draft_gap_translation_key,
+  provider_draft_kind,
+  provider_row_draft,
   verify_joiner_account,
+  type NookDecryptedEnrollmentPayload,
+  type NookEnrollmentProvider,
+  type ProviderDraft,
 } from "$app-wasm";
+import type { StorageProvider } from "$lib/auth/providers";
 import {
-  DEFAULT_DRIVE_BACKUP_NAME,
-  configuredOAuthFile,
-  defaultOAuthFileConfig,
-  GITHUB_PROVIDER_TYPE,
-  GOOGLE_DRIVE_OAUTH_FILE_PRESET,
-  ICLOUD_OAUTH_FILE_PRESET,
-  githubPatValue,
-  githubRepositoryValue,
-  storedGithubPat,
-  storedGithubRepository,
-  StorageProviderPresentation,
-  LocalFolderProviderConfigurationKind,
-  decodeStoredOAuthFileConfiguration,
-  StoredOAuthFileConfigurationDecodeKind,
-  oauth_access_token,
-  OAuthFilePresentation,
-  OAuthFileNameKind,
-  oauthConfigurationNotApplicable,
-  OAUTH_FILE_PROVIDER_TYPE,
-  providerPersistenceDefaults,
-  S3_PROVIDER_TYPE,
-  storedGoogleDriveFolder,
-  storedICloudShareTarget,
-  storedOAuthAccountEmail,
-  storedOAuthRemoteFileName,
-  type OAuthFilePreset,
-  type OAuthFileConfig,
-  type StorageProvider,
-} from "$lib/auth/providers";
-import { InviteS3Connection } from "$lib/vault/invite-s3-connection";
-import {
+  GoogleAccountIdentities,
   GoogleAccountIdentityKind,
   GoogleOAuthPrompt,
   googleOAuthSession,
 } from "$lib/auth/google/oauth";
-import {
-  ICLOUD_SIGN_IN_TIMEOUT_MS,
-  ICloudAccountNameKind,
-  type ICloudAccountName,
-  type ICloudOAuthTokens,
-  iCloudOAuthSession,
-} from "$lib/auth/icloud/oauth";
+import { iCloudOAuthSession } from "$lib/auth/icloud/oauth";
 import { JoinICloudSignIn } from "$lib/vault/state/ui.svelte";
-
-enum SavedEnrollmentProviderKind {
-  Local = "local",
-  Remote = "remote",
-}
-
-type SavedEnrollmentProvider =
-  | { kind: SavedEnrollmentProviderKind.Local }
-  | { kind: SavedEnrollmentProviderKind.Remote; provider: StorageProvider };
-
-type SavedEnrollmentProviderApplication = {
-  readonly selection: SavedEnrollmentProvider;
-};
+import { ProviderSetupKinds } from "$lib/vault/provider-setup-kinds";
+import {
+  DraftICloudSignInKind,
+  ProviderDraftReads,
+  type OAuthProviderDraft,
+} from "$lib/vault/provider-draft-reads";
 
 enum IdentityInviteJoinOutcome {
   Joined = "joined",
 }
 
-export enum OAuthFilePresetDecodeFailureKind {
-  Invalid = "invalid-oauth-file-preset",
+/** Why an invite could not reach its provider; the message is already chosen. */
+class InviteJoinFailure {
+  constructor(readonly translationKey: string) {}
 }
 
-export class OAuthFilePresetDecoder {
-  private constructor() {}
+type InviteStorageArgs = Result<NookStorageConnection, InviteJoinFailure>;
 
-  static decode(value: string): Effect.Effect<
-    OAuthFilePreset,
-    {
-      readonly kind: OAuthFilePresetDecodeFailureKind.Invalid;
-      readonly cause: Schema.SchemaError;
-    }
-  > {
-    return Schema.decodeUnknownEffect(
-      Schema.Literals([
-        GOOGLE_DRIVE_OAUTH_FILE_PRESET,
-        ICLOUD_OAUTH_FILE_PRESET,
-      ]),
-    )(value).pipe(
-      Effect.mapError((cause) => ({
-        kind: OAuthFilePresetDecodeFailureKind.Invalid,
-        cause,
-      })),
-    );
-  }
-}
+type InviteProviderSource = {
+  readonly payload: NookDecryptedEnrollmentPayload;
+  readonly enrollmentProvider: NookEnrollmentProvider;
+};
+
+type OAuthGrantJoin = Omit<SharedGrantJoin, "saved">;
+type ICloudJoinBase = Omit<SharedGrantJoin, "enrollmentProvider">;
+
+type SharedGrantJoin = {
+  readonly enrollmentProvider: NookEnrollmentProvider;
+  readonly grant: OAuthProviderDraft;
+  readonly saved: SharedGrantProviderOutcome;
+};
 
 export type EnrollmentCodeConnection = {
   readonly code: string;
@@ -130,79 +85,286 @@ export class PasswordEnrollmentActions {
     state.clearActiveEnrollmentEntry();
   }
 
-  private applySavedEnrollmentProvider({
-    selection,
-  }: SavedEnrollmentProviderApplication): Result<
-    StorageProvider["type"],
-    StorageOperationFailure
-  > {
+  /** The connection an invite joins through: the payload's own provider for a
+   * personal invite, or the shared target the joiner signs in to. */
+  private async inviteStorageArgs({
+    payload,
+    enrollmentProvider,
+  }: InviteProviderSource): Promise<InviteStorageArgs> {
+    const kind = enrollmentProvider.type;
+    if (kind.type === "github" || kind.type === "s3") {
+      return this.connectPersonalInvite(enrollmentProvider);
+    }
+    if (payload.onboardingType === OnboardingType.SharedProviderGrant) {
+      return this.joinSharedGrant(enrollmentProvider);
+    }
+    if (kind.type === "oauth-file") {
+      return this.connectPersonalInvite(enrollmentProvider);
+    }
+    // A local provider cannot carry an identity to another app.
+    return storageErr(
+      new InviteJoinFailure(I18N_KEYS.IdentityControlJoinLocalProvider),
+    );
+  }
+
+  /** A personal invite carries its complete provider: stage it and connect. */
+  private connectPersonalInvite(
+    enrollmentProvider: NookEnrollmentProvider,
+  ): InviteStorageArgs {
     const state = this.state;
-    if (
-      selection.kind === SavedEnrollmentProviderKind.Local ||
-      selection.provider.type === "local"
-    ) {
-      state.storageMode = "local";
-      state.activateLoginSetup("local");
-      return storageOk(state.storageMode);
-    }
-
-    const { provider } = selection;
-    if (provider.type === "github") {
-      state.storageMode = provider.type;
-      state.clearLoginSetup();
-      state.githubPat = githubPatValue(provider.githubPat);
-      state.githubRepo = githubRepositoryValue(provider.githubRepo);
-      state.clearOauthFile();
-      state.clearLocalFolder();
-      state.clearS3();
-      return storageOk(state.storageMode);
-    }
-    if (provider.type === "oauth-file") {
-      const configuration = provider.oauthFile;
-      const decodedConfiguration =
-        decodeStoredOAuthFileConfiguration(configuration);
-      if (
-        decodedConfiguration.kind !==
-        StoredOAuthFileConfigurationDecodeKind.Configured
-      ) {
-        return storageErr(
-          new StorageOperationFailure(
-            StorageOperationFailureKind.OperationFailed,
-          ),
-        );
-      }
-      state.storageMode = provider.type;
-      state.clearLoginSetup();
-      state.configureOauthFile(decodedConfiguration.config);
-      state.githubPat = "";
-      const fileName = new OAuthFilePresentation(
-        decodedConfiguration.config,
-      ).oauthFileName();
-      if (fileName.kind === OAuthFileNameKind.Resolved) {
-        state.githubRepo = fileName.fileName;
-      }
-      state.clearLocalFolder();
-      state.clearS3();
-      return storageOk(state.storageMode);
-    }
-
-    const configuration = new StorageProviderPresentation(
-      provider,
-    ).localFolderProviderConfiguration();
-    if (configuration.kind === LocalFolderProviderConfigurationKind.Missing) {
+    let draft: ProviderDraft;
+    try {
+      draft = enrollmentProvider.providerDraft();
+    } catch (failure) {
       return storageErr(
-        new StorageOperationFailure(
-          StorageOperationFailureKind.LocalFolderRequired,
+        new InviteJoinFailure(
+          new NativeVaultStorageFailure(failure).translationKey,
         ),
       );
     }
-    state.storageMode = provider.type;
+    state.activateLoginSetup(provider_draft_kind(draft));
+    state.stageProviderDraft(draft);
+    return this.draftArgs(draft);
+  }
+
+  private draftArgs(draft: ProviderDraft): InviteStorageArgs {
+    const connection = draft_storage_args(draft);
+    switch (connection.state) {
+      case "ready":
+        return storageOk(connection.connection);
+      case "incomplete":
+        return storageErr(
+          new InviteJoinFailure(
+            provider_draft_gap_translation_key(connection.gap),
+          ),
+        );
+    }
+  }
+
+  /** A shared grant names a target the joiner reaches with its own sign-in,
+   * or through a saved row of that target. */
+  private async joinSharedGrant(
+    enrollmentProvider: NookEnrollmentProvider,
+  ): Promise<InviteStorageArgs> {
+    let grant: ProviderDraft;
+    try {
+      grant = enrollmentProvider.providerDraft();
+    } catch (failure) {
+      return storageErr(
+        new InviteJoinFailure(
+          new NativeVaultStorageFailure(failure).translationKey,
+        ),
+      );
+    }
+    switch (grant.type) {
+      case "oauth-file": {
+        const join: OAuthGrantJoin = { enrollmentProvider, grant };
+        return this.joinOAuthGrant(join);
+      }
+      case "local":
+      case "local-folder":
+      case "github":
+      case "s3":
+        return storageErr(
+          new InviteJoinFailure(I18N_KEYS.ErrorsVaultSelectionFailed),
+        );
+    }
+  }
+
+  private async joinOAuthGrant({
+    enrollmentProvider,
+    grant,
+  }: OAuthGrantJoin): Promise<InviteStorageArgs> {
+    const state = this.state;
+    const providerLoadOptions: Parameters<typeof state.loadProviders>[0] = {
+      ensureLocalRow: false,
+    };
+    const loaded = await state.loadProviders(providerLoadOptions);
+    if (loaded.isErr())
+      return storageErr(new InviteJoinFailure(loaded.error.translationKey));
+    const target: SharedStorageTarget = {
+      kind: SharedStorageTargetKind.Bound,
+      storageTargetId: enrollmentProvider.sharedStorageTargetId,
+    };
+    const findSharedGrantProviderArgs: Parameters<
+      typeof findSharedGrantProvider
+    >[0] = {
+      providers: state.providers,
+      preset: grant.preset,
+      target,
+    };
+    const join: SharedGrantJoin = {
+      enrollmentProvider,
+      grant,
+      saved: findSharedGrantProvider(findSharedGrantProviderArgs),
+    };
+    switch (grant.preset) {
+      case "google-drive":
+        return this.joinDriveGrant(join);
+      case "icloud":
+        return this.joinICloudGrant(join);
+    }
+  }
+
+  private async joinDriveGrant(
+    join: SharedGrantJoin,
+  ): Promise<InviteStorageArgs> {
+    const saved = join.saved;
+    switch (saved.kind) {
+      case "existing":
+        return storageOk(this.useSavedGrantRow(saved.provider));
+      case "authorizationRequired":
+        return this.signInToDriveGrant(join);
+    }
+  }
+
+  /** A saved row of the target serves the join, with no setup. */
+  private useSavedGrantRow(row: StorageProvider): NookStorageConnection {
+    const state = this.state;
+    state.stageProviderDraft(provider_row_draft(row));
     state.clearLoginSetup();
-    state.configureLocalFolder(configuration.config);
-    state.githubPat = "";
-    state.clearOauthFile();
-    state.clearS3();
-    return storageOk(state.storageMode);
+    return state.providerWasmArgs(row);
+  }
+
+  private async signInToDriveGrant({
+    enrollmentProvider,
+    grant,
+  }: SharedGrantJoin): Promise<InviteStorageArgs> {
+    const state = this.state;
+    if (!googleOAuthSession.isGoogleOAuthConfigured())
+      return storageErr(
+        new InviteJoinFailure(I18N_KEYS.ProviderSetupGoogleOauthUnconfigured),
+      );
+    // Google preselects the authorized account the link names; the
+    // folder's Drive permissions decide whether it can read the vault.
+    const invitedAccount = enrollmentProvider.sharedJoinerIdentity;
+    const requestGoogleDriveSharedAccessArgs: Parameters<
+      typeof googleOAuthSession.requestGoogleDriveSharedAccess
+    >[0] = {
+      prompt: GoogleOAuthPrompt.Consent,
+      accountHint: invitedAccount,
+    };
+    const tokens = await googleOAuthSession.requestGoogleDriveSharedAccess(
+      requestGoogleDriveSharedAccessArgs,
+    );
+    if (tokens.isErr())
+      return storageErr(new InviteJoinFailure(tokens.error.translationKey));
+    const signedIn = await googleOAuthSession.fetchGoogleAccountEmail(
+      tokens.value.accessToken,
+    );
+    if (signedIn.isErr())
+      return storageErr(new InviteJoinFailure(signedIn.error.translationKey));
+    const signedInAccount =
+      signedIn.value.kind === GoogleAccountIdentityKind.Available
+        ? signedIn.value.label
+        : "";
+    try {
+      verify_joiner_account(invitedAccount, signedInAccount);
+    } catch {
+      return storageErr(
+        new InviteJoinFailure(I18N_KEYS.ErrorsValidationJoinerAccountMismatch),
+      );
+    }
+    let draft: ProviderDraft;
+    try {
+      const accessGrant: Parameters<typeof googleOAuthSession.driveAccess>[0] =
+        {
+          tokens: tokens.value,
+          account: GoogleAccountIdentities.of(signedIn.value),
+        };
+      const signInRequest: Parameters<typeof apply_google_drive_sign_in>[0] = {
+        draft: grant,
+        access: googleOAuthSession.driveAccess(accessGrant),
+      };
+      draft = apply_google_drive_sign_in(signInRequest);
+    } catch {
+      return storageErr(
+        new InviteJoinFailure(
+          new OAuthFailure(OAuthFailureKind.GoogleInvalidConfiguration)
+            .translationKey,
+        ),
+      );
+    }
+    state.activateLoginSetup(ProviderSetupKinds.GOOGLE_DRIVE);
+    state.stageProviderDraft(draft);
+    return this.draftArgs(draft);
+  }
+
+  /** iCloud joins through a saved row's sign-in or a new one, then accepts
+   * the share the invite names. */
+  private async joinICloudGrant({
+    enrollmentProvider,
+    grant,
+    saved,
+  }: SharedGrantJoin): Promise<InviteStorageArgs> {
+    const state = this.state;
+    const baseRequest: ICloudJoinBase = { grant, saved };
+    const base = this.iCloudJoinBase(baseRequest);
+    const signIn = ProviderDraftReads.icloudSignIn(base);
+    switch (signIn.kind) {
+      case DraftICloudSignInKind.NotICloud:
+        return storageErr(
+          new InviteJoinFailure(I18N_KEYS.ErrorsVaultSelectionFailed),
+        );
+      case DraftICloudSignInKind.ICloud:
+        break;
+    }
+    const access = await iCloudOAuthSession.ensureICloudAccess(signIn.signIn);
+    if (access.isErr()) {
+      // The join screen shows the iCloud sign-in only now.
+      state.joinICloudSignIn = JoinICloudSignIn.Needed;
+      return storageErr(new InviteJoinFailure(access.error.translationKey));
+    }
+    state.joinICloudSignIn = JoinICloudSignIn.NotNeeded;
+    const accepted = await iCloudOAuthSession.acceptICloudSharedVault(
+      enrollmentProvider.sharedStorageTargetId,
+    );
+    if (accepted.isErr())
+      return storageErr(new InviteJoinFailure(accepted.error.translationKey));
+    let draft: ProviderDraft;
+    try {
+      const signInRequest: Parameters<typeof apply_icloud_sign_in>[0] = {
+        draft: base,
+        access: access.value,
+      };
+      const binding: Parameters<typeof bind_icloud_share>[0] = {
+        draft: apply_icloud_sign_in(signInRequest),
+        shareTarget: accepted.value.storageTargetId,
+      };
+      draft = bind_icloud_share(binding);
+    } catch {
+      return storageErr(
+        new InviteJoinFailure(
+          new OAuthFailure(OAuthFailureKind.InvalidConfiguration)
+            .translationKey,
+        ),
+      );
+    }
+    state.stageProviderDraft(draft);
+    this.settleICloudSetup(saved);
+    return this.draftArgs(draft);
+  }
+
+  private iCloudJoinBase({ grant, saved }: ICloudJoinBase): ProviderDraft {
+    switch (saved.kind) {
+      case "existing":
+        return provider_row_draft(saved.provider);
+      case "authorizationRequired":
+        return grant;
+    }
+  }
+
+  /** A saved row needs no setup; a new iCloud provider is saved by one. */
+  private settleICloudSetup(saved: SharedGrantProviderOutcome): void {
+    const state = this.state;
+    switch (saved.kind) {
+      case "existing":
+        state.clearLoginSetup();
+        return;
+      case "authorizationRequired":
+        state.activateLoginSetup(ProviderSetupKinds.ICLOUD);
+        return;
+    }
   }
 
   async connectWithEnrollmentCode({
@@ -250,372 +412,16 @@ export class PasswordEnrollmentActions {
             return;
           }
 
-          let enrollmentStorageArgs: NookStorageConnection;
-          if (enrollmentProvider.type === GITHUB_PROVIDER_TYPE) {
-            const githubPat = enrollmentProvider.githubPat;
-            const githubRepo = enrollmentProvider.githubRepo;
-            state.storageMode = "github";
-            state.githubPat = githubPat;
-            state.githubRepo = githubRepo;
-            state.activateLoginSetup("github");
-            const githubMount: StorageProvider = {
-              ...providerPersistenceDefaults(),
-              id: "enrollment-github",
-              type: GITHUB_PROVIDER_TYPE,
-              label: "GitHub",
-              githubPat: storedGithubPat(githubPat),
-              githubRepo: storedGithubRepository(githubRepo),
-              createdAt: isoTimestamp(),
-            };
-            enrollmentStorageArgs = state.providerWasmArgs(githubMount);
-          } else if (enrollmentProvider.type === S3_PROVIDER_TYPE) {
-            const staged = new InviteS3Connection(state).stage(
-              enrollmentProvider,
-            );
-            if (staged.isErr()) {
-              state.errorMsg = state.t(staged.error.translationKey);
-              return;
-            }
-            enrollmentStorageArgs = staged.value;
-          } else if (
-            payload.onboardingType === OnboardingType.SharedProviderGrant
-          ) {
-            const presetValue = enrollmentProvider.oauthPreset;
-            const decodedPreset = await Effect.runPromise(
-              Effect.result(OAuthFilePresetDecoder.decode(presetValue)),
-            );
-            if (decodedPreset._tag === "Failure") {
-              state.errorMsg = state.t(I18N_KEYS.ErrorsVaultSelectionFailed);
-              return;
-            }
-            const preset = decodedPreset.success;
-            const storageTarget: SharedStorageTarget = {
-              kind: SharedStorageTargetKind.Bound,
-              storageTargetId: enrollmentProvider.sharedStorageTargetId,
-            };
-            const providerLoadOptions: Parameters<
-              typeof state.loadProviders
-            >[0] = {
-              ensureLocalRow: false,
-            };
-            const loadedProviders1 =
-              await state.loadProviders(providerLoadOptions);
-            if (loadedProviders1.isErr()) {
-              state.errorMsg = state.t(loadedProviders1.error.translationKey);
-              return;
-            }
-            const findSharedGrantProviderArgs: Parameters<
-              typeof findSharedGrantProvider
-            >[0] = {
-              providers: state.providers,
-              preset,
-              target: storageTarget,
-            };
-            const providerSelection = findSharedGrantProvider(
-              findSharedGrantProviderArgs,
-            );
-            let sharedProvider = providerSelection;
-            let sharedProviderNeedsSave = false;
-            if (
-              sharedProvider.kind ===
-                SharedGrantProviderOutcomeKind.AuthorizationRequired &&
-              preset === "google-drive"
-            ) {
-              if (!googleOAuthSession.isGoogleOAuthConfigured()) {
-                state.errorMsg = state.t(
-                  I18N_KEYS.ProviderSetupGoogleOauthUnconfigured,
-                );
-                return;
-              }
-              // Google preselects the authorized account the link names; the
-              // folder's Drive permissions decide whether it can read the vault.
-              const invitedAccount = enrollmentProvider.sharedJoinerIdentity;
-              const requestGoogleDriveSharedAccessArgs: Parameters<
-                typeof googleOAuthSession.requestGoogleDriveSharedAccess
-              >[0] = {
-                prompt: GoogleOAuthPrompt.Consent,
-                accountHint: invitedAccount,
-              };
-              const tokens =
-                await googleOAuthSession.requestGoogleDriveSharedAccess(
-                  requestGoogleDriveSharedAccessArgs,
-                );
-              if (tokens.isErr()) {
-                state.errorMsg = state.t(tokens.error.translationKey);
-                return;
-              }
-              const signedIn = await googleOAuthSession.fetchGoogleAccountEmail(
-                tokens.value.accessToken,
-              );
-              if (signedIn.isErr()) {
-                state.errorMsg = state.t(signedIn.error.translationKey);
-                return;
-              }
-              const signedInAccount =
-                signedIn.value.kind === GoogleAccountIdentityKind.Available
-                  ? signedIn.value.label
-                  : "";
-              try {
-                verify_joiner_account(invitedAccount, signedInAccount);
-              } catch {
-                state.errorMsg = state.t(
-                  I18N_KEYS.ErrorsValidationJoinerAccountMismatch,
-                );
-                return;
-              }
-              const defaultOAuthFileConfigArgs2: Parameters<
-                typeof defaultOAuthFileConfig
-              >[0] = { preset: "google-drive", fileName: "nook-events" };
-              const initialConfig: OAuthFileConfig = {
-                ...defaultOAuthFileConfig(defaultOAuthFileConfigArgs2),
-                folderId: storedGoogleDriveFolder(
-                  storageTarget.storageTargetId,
-                ),
-                accountEmail: storedOAuthAccountEmail(signedInAccount),
-              };
-              const oauthTokensToConfigArgs: Parameters<
-                typeof googleOAuthSession.oauthTokensToConfig
-              >[0] = {
-                tokens: tokens.value,
-                existing: configuredOAuthFile(initialConfig),
-              };
-              const oauthFile = googleOAuthSession.oauthTokensToConfig(
-                oauthTokensToConfigArgs,
-              );
-              if (oauthFile.isErr()) {
-                state.errorMsg = state.t(oauthFile.error.translationKey);
-                return;
-              }
-              sharedProvider = {
-                kind: SharedGrantProviderOutcomeKind.Existing,
-                provider: {
-                  ...providerPersistenceDefaults(),
-                  id: "enrollment-shared-oauth",
-                  type: OAUTH_FILE_PROVIDER_TYPE,
-                  label: "Shared Google Drive",
-                  oauthFile: configuredOAuthFile(oauthFile.value),
-                  createdAt: isoTimestamp(),
-                },
-              };
-              sharedProviderNeedsSave = true;
-            }
-            if (preset === "icloud") {
-              const existingProvider = sharedProvider;
-              const existingConfiguration =
-                existingProvider.kind ===
-                SharedGrantProviderOutcomeKind.Existing
-                  ? existingProvider.provider.oauthFile
-                  : oauthConfigurationNotApplicable();
-              const decodedExistingConfiguration =
-                decodeStoredOAuthFileConfiguration(existingConfiguration);
-              const existingConfig =
-                decodedExistingConfiguration.kind ===
-                StoredOAuthFileConfigurationDecodeKind.Configured
-                  ? decodedExistingConfiguration.config
-                  : (() => {
-                      const defaultOAuthFileConfigArgs3: Parameters<
-                        typeof defaultOAuthFileConfig
-                      >[0] = { preset: "icloud", fileName: "nook-events" };
-                      return defaultOAuthFileConfig(
-                        defaultOAuthFileConfigArgs3,
-                      );
-                    })();
-              const existingCredential = oauth_access_token(existingConfig);
-              let tokens: Result<ICloudOAuthTokens, OAuthFailure>;
-              if (existingCredential.kind === "available") {
-                const accountName: ICloudAccountName =
-                  existingConfig.accountEmail.state === "email"
-                    ? {
-                        kind: ICloudAccountNameKind.Available,
-                        value: existingConfig.accountEmail.value,
-                      }
-                    : { kind: ICloudAccountNameKind.Unavailable };
-                const availableTokens: ICloudOAuthTokens = {
-                  accessToken: existingCredential.token,
-                  accountName,
-                };
-                tokens = storageOk(availableTokens);
-              } else {
-                const request: Parameters<
-                  typeof iCloudOAuthSession.requestICloudWebAuthToken
-                >[0] = {
-                  signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
-                  clickSignInControl: true,
-                };
-                tokens =
-                  await iCloudOAuthSession.requestICloudWebAuthToken(request);
-              }
-              if (tokens.isErr()) {
-                // The join screen shows the iCloud sign-in only now.
-                state.joinICloudSignIn = JoinICloudSignIn.Needed;
-                state.errorMsg = state.t(tokens.error.translationKey);
-                return;
-              }
-              state.joinICloudSignIn = JoinICloudSignIn.NotNeeded;
-              const accepted = await iCloudOAuthSession.acceptICloudSharedVault(
-                storageTarget.storageTargetId,
-              );
-              if (accepted.isErr()) {
-                state.errorMsg = state.t(accepted.error.translationKey);
-                return;
-              }
-              const sharedConfig: OAuthFileConfig = {
-                ...existingConfig,
-                iCloudShareTarget: storedICloudShareTarget(
-                  accepted.value.storageTargetId,
-                ),
-                fileName:
-                  existingConfig.fileName.state === "fileName"
-                    ? existingConfig.fileName
-                    : storedOAuthRemoteFileName("nook-events"),
-              };
-              const oauthTokensToICloudConfigArgs: Parameters<
-                typeof iCloudOAuthSession.oauthTokensToICloudConfig
-              >[0] = {
-                tokens: tokens.value,
-                existing: configuredOAuthFile(sharedConfig),
-              };
-              const configured = iCloudOAuthSession.oauthTokensToICloudConfig(
-                oauthTokensToICloudConfigArgs,
-              );
-              if (configured.isErr()) {
-                state.errorMsg = state.t(configured.error.translationKey);
-                return;
-              }
-              const provider: StorageProvider = {
-                ...providerPersistenceDefaults(),
-                id:
-                  existingProvider.kind ===
-                  SharedGrantProviderOutcomeKind.Existing
-                    ? existingProvider.provider.id
-                    : "enrollment-shared-icloud",
-                type: OAUTH_FILE_PROVIDER_TYPE,
-                label:
-                  existingProvider.kind ===
-                  SharedGrantProviderOutcomeKind.Existing
-                    ? existingProvider.provider.label
-                    : state.t(I18N_KEYS.ProviderPickerIcloud),
-                oauthFile: configuredOAuthFile(configured.value),
-                createdAt:
-                  existingProvider.kind ===
-                  SharedGrantProviderOutcomeKind.Existing
-                    ? existingProvider.provider.createdAt
-                    : isoTimestamp(),
-              };
-              sharedProvider = {
-                kind: SharedGrantProviderOutcomeKind.Existing,
-                provider,
-              };
-              sharedProviderNeedsSave =
-                provider.id === "enrollment-shared-icloud";
-            }
-            if (
-              sharedProvider.kind ===
-              SharedGrantProviderOutcomeKind.AuthorizationRequired
-            ) {
-              state.errorMsg = state.t(
-                I18N_KEYS.ErrorsSharedProviderAccessRequired,
-              );
-              return;
-            }
-            let provider: StorageProvider = sharedProvider.provider;
-            const providerConfiguration = provider.oauthFile;
-            const decodedProviderConfiguration =
-              decodeStoredOAuthFileConfiguration(providerConfiguration);
-            if (
-              storageTarget.kind === SharedStorageTargetKind.Bound &&
-              preset === "google-drive" &&
-              decodedProviderConfiguration.kind ===
-                StoredOAuthFileConfigurationDecodeKind.Configured &&
-              decodedProviderConfiguration.config.folderId.state === "root"
-            ) {
-              const configuredOAuthFileArgs: Parameters<
-                typeof configuredOAuthFile
-              >[0] = {
-                ...decodedProviderConfiguration.config,
-                folderId: storedGoogleDriveFolder(
-                  storageTarget.storageTargetId,
-                ),
-              };
-              provider = {
-                ...provider,
-                oauthFile: configuredOAuthFile(configuredOAuthFileArgs),
-              };
-            }
-            const applySavedEnrollmentProviderArgs2: Parameters<
-              PasswordEnrollmentActions["applySavedEnrollmentProvider"]
-            >[0] = {
-              selection: {
-                kind: SavedEnrollmentProviderKind.Remote,
-                provider,
-              },
-            };
-            const applied = this.applySavedEnrollmentProvider(
-              applySavedEnrollmentProviderArgs2,
-            );
-            if (applied.isErr()) {
-              state.errorMsg = state.t(applied.error.translationKey);
-              return;
-            }
-            if (sharedProviderNeedsSave) {
-              state.activateLoginSetup("oauth-file");
-            }
-            enrollmentStorageArgs = state.providerWasmArgs(provider);
-          } else if (enrollmentProvider.type === OAUTH_FILE_PROVIDER_TYPE) {
-            const presetValue = enrollmentProvider.oauthPreset;
-            const decodedPreset = await Effect.runPromise(
-              Effect.result(OAuthFilePresetDecoder.decode(presetValue)),
-            );
-            if (decodedPreset._tag === "Failure") {
-              state.errorMsg = state.t(I18N_KEYS.ErrorsVaultSelectionFailed);
-              return;
-            }
-            const defaultOAuthFileConfigArgs: Parameters<
-              typeof defaultOAuthFileConfig
-            >[0] = {
-              preset: decodedPreset.success,
-              fileName: DEFAULT_DRIVE_BACKUP_NAME,
-            };
-            const defaults = defaultOAuthFileConfig(defaultOAuthFileConfigArgs);
-            let oauthFile: ReturnType<
-              typeof enrollmentProvider.oauth_configuration
-            >;
-            try {
-              oauthFile = enrollmentProvider.oauth_configuration(defaults);
-            } catch (failure) {
-              state.errorMsg = state.t(
-                new NativeVaultStorageFailure(failure).translationKey,
-              );
-              return;
-            }
-            const oauthProvider: StorageProvider = {
-              ...providerPersistenceDefaults(),
-              id: "enrollment-oauth",
-              type: OAUTH_FILE_PROVIDER_TYPE,
-              label: "Enrollment OAuth provider",
-              oauthFile: configuredOAuthFile(oauthFile),
-              createdAt: isoTimestamp(),
-            };
-            state.storageMode = "oauth-file";
-            state.activateLoginSetup("oauth-file");
-            state.configureOauthFile(oauthFile);
-            state.githubPat = "";
-            const fileName = new OAuthFilePresentation(
-              oauthFile,
-            ).oauthFileName();
-            if (fileName.kind === OAuthFileNameKind.Resolved) {
-              state.githubRepo = fileName.fileName;
-            }
-            state.clearLocalFolder();
-            state.clearS3();
-            enrollmentStorageArgs = state.providerWasmArgs(oauthProvider);
-          } else {
-            // A local provider cannot carry an identity to another app.
-            state.errorMsg = state.t(
-              I18N_KEYS.IdentityControlJoinLocalProvider,
-            );
+          const source: InviteProviderSource = {
+            payload,
+            enrollmentProvider,
+          };
+          const storageArgs = await this.inviteStorageArgs(source);
+          if (storageArgs.isErr()) {
+            state.errorMsg = state.t(storageArgs.error.translationKey);
             return;
           }
+          const enrollmentStorageArgs = storageArgs.value;
 
           const identityInitialization = await state.initDeviceIdentity();
           if (identityInitialization.isErr()) {

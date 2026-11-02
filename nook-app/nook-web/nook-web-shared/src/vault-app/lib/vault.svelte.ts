@@ -21,7 +21,7 @@ import {
   type StartSentinelGenesisArgs,
   type StoreId,
 } from "$app-wasm";
-import { type ProviderSetupRequest } from "$lib/auth/providers";
+import type { ProviderKind } from "$lib/auth/providers";
 import type { ProviderVaultIdentitySelection } from "$lib/vault/provider-vault-decision";
 import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import type {
@@ -346,11 +346,13 @@ export class VaultState extends VaultRuntimeState {
     return persisted;
   }
 
-  beginProviderSetup(request: ProviderSetupRequest) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return new providersActions.VaultProviderActions(this).beginProviderSetup({
-      request,
-    });
+  beginProviderSetup(kind: ProviderKind) {
+    const setup: Parameters<
+      providersActions.VaultProviderActions["beginProviderSetup"]
+    >[0] = { kind };
+    return new providersActions.VaultProviderActions(this).beginProviderSetup(
+      setup,
+    );
   }
 
   beginExistingVaultOpen() {
@@ -402,9 +404,7 @@ export class VaultState extends VaultRuntimeState {
     ).confirmCreateFreshRemoteVault();
   }
 
-  async assessVaultConnectStatus(argsOverride?: NookStorageConnection) {
-    const [args = this.connectStorageArgs()] = [argsOverride];
-
+  async assessVaultConnectStatus(args: NookStorageConnection) {
     return new providersActions.VaultProviderActions(
       this,
       // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
@@ -583,7 +583,9 @@ export class VaultState extends VaultRuntimeState {
     });
   }
 
-  eventOutboxTarget(request: EventOutboxRequest): EventOutboxTarget {
+  eventOutboxTarget(
+    request: EventOutboxRequest,
+  ): Result<EventOutboxTarget, VaultStorageFailure> {
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return new syncActions.VaultSyncActions(this).eventOutboxTarget({
       request,
@@ -715,10 +717,10 @@ export class VaultState extends VaultRuntimeState {
     if (mounted.isErr()) this.errorMsg = this.t(mounted.error.translationKey);
   }
 
-  async discoverStagedVaultStoreId() {
+  async discoverStagedVault() {
     return new providersActions.ProviderConnectionActions(
       this,
-    ).discoverStagedVaultStoreId();
+    ).discoverStagedVault();
   }
 
   chooseRemoteVault(storeId: string) {

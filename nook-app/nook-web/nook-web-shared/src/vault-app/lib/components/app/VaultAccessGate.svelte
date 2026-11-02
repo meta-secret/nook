@@ -33,13 +33,13 @@
   import { VaultStatusBarVariant } from '$lib/components/vault-status-bar-state'
   import type { VaultState } from '$lib/vault.svelte'
   import type { NookIdentityHealth } from '$app-wasm'
-  import type { ProviderSetupRequest } from '$lib/auth/providers'
+  import type { ProviderKind } from '$lib/auth/providers'
   import type { ExtensionConsentCloseOutcome } from '$lib/components/extension-connect-consent-outcome'
 
   const APP_KIND = configured_vault_application()
 
-  function beginProviderSetup(request: ProviderSetupRequest): void {
-    vault.beginProviderSetup(request)
+  function beginProviderSetup(kind: ProviderKind): void {
+    vault.beginProviderSetup(kind)
   }
 
   async function removeProvider(id: string): Promise<void> {
@@ -165,8 +165,6 @@
         appKind={APP_KIND}
         providers={vault.providers}
         loginSetup={vault.loginSetup}
-        bind:githubPat={vault.githubPat}
-        bind:githubRepo={vault.githubRepo}
         addProviderOpen={vault.addProviderOpen}
         isVerifying={vault.isVerifying}
         isInitializing={vault.isInitializing}
@@ -199,8 +197,6 @@
     {/if}
     <VaultStatusBar
       {vault}
-      storageMode={vault.storageMode}
-      githubRepo={vault.githubRepo}
       lastSync={vault.lastSync}
       isSyncing={vault.isSyncActivityVisible}
       successMsg={vault.successMsg}

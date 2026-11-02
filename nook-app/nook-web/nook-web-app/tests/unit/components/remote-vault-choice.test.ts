@@ -15,6 +15,10 @@ import {
   AccessCheckTargetKind,
 } from '$lib/vault/access-check'
 import { IdentityJoinWaitKind } from '$lib/vault/identity-join-wait'
+import {
+  RemoteVaultChoices,
+  type RemoteVaultChoiceList,
+} from '$lib/vault/state/provider.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import RemoteVaultChoice from '../../../../nook-web-shared/src/vault-app/lib/components/login/RemoteVaultChoice.svelte'
 
@@ -74,7 +78,8 @@ function choice({ storeId, identity }: ChoiceRequest): ProviderVaultSummary {
 
 function renderChoice(vaults: ProviderVaultSummary[]) {
   const vault = VaultStateTestFixture.create()
-  vault.remoteVaultChoices = vaults
+  const choices: RemoteVaultChoiceList = { vaults, identities: [] }
+  vault.remoteVaultChoices = new RemoteVaultChoices(choices)
   const onApplied = vi.fn()
   const props = { vault, busy: false, onApplied } satisfies ComponentProps<
     typeof RemoteVaultChoice

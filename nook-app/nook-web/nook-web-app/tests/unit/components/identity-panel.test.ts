@@ -2,12 +2,8 @@ import { fireEvent, render } from '@testing-library/svelte'
 import type { ComponentProps } from 'svelte'
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest'
 import initNookWasm, { assess_identity_health } from '$app-wasm'
-import {
-  providerPersistenceDefaults,
-  storedGithubPat,
-  storedGithubRepository,
-  type StorageProvider,
-} from '$lib/auth/providers'
+import { type StorageProvider } from '$lib/auth/providers'
+import { ProviderRowFixture } from '../provider-fixtures'
 import { ok } from 'neverthrow'
 import { IdentityActionOutcome } from '$lib/vault/identity-control.svelte'
 import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
@@ -22,14 +18,8 @@ afterEach(() => vi.restoreAllMocks())
 
 function cloudProvider(): StorageProvider {
   return {
-    ...providerPersistenceDefaults(),
-    id: 'github-1',
-    type: 'github',
+    ...ProviderRowFixture.github(ProviderRowFixture.unscoped('github-1')),
     label: 'GitHub',
-    githubRepo: storedGithubRepository('nook-vault'),
-    githubPat: storedGithubPat('github_pat_test'),
-    syncCheckpoint: { state: 'neverSynced' },
-    createdAt: '2026-10-24T00:00:00.000Z',
   }
 }
 

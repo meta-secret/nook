@@ -2,7 +2,8 @@ import { fireEvent, render } from '@testing-library/svelte'
 import type { ComponentProps } from 'svelte'
 import { afterEach, describe, expect, onTestFinished, test, vi } from 'vitest'
 import { ReplicationType } from '$app-wasm'
-import { S3_PROVIDER_TYPE } from '$lib/auth/providers'
+import { PickerRow } from '$lib/components/provider-picker-state'
+import { ProviderSetupKinds } from '$lib/vault/provider-setup-kinds'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import ProviderPicker from '../../../../nook-web-shared/src/vault-app/lib/components/ProviderPicker.svelte'
@@ -19,6 +20,8 @@ function renderWithoutFolderAccess() {
   const props = {
     vault,
     onSelect: vi.fn(),
+    local: PickerRow.Offered,
+    localFolder: PickerRow.Offered,
   } satisfies ComponentProps<typeof ProviderPicker>
   return render(ProviderPicker, props)
 }
@@ -35,6 +38,8 @@ function renderFor(replication: ReplicationType) {
   const props = {
     vault,
     onSelect,
+    local: PickerRow.Offered,
+    localFolder: PickerRow.Offered,
   } satisfies ComponentProps<typeof ProviderPicker>
   return { view: render(ProviderPicker, props), onSelect }
 }
@@ -51,7 +56,7 @@ describe('provider picker', () => {
 
     await fireEvent.click(s3)
 
-    expect(onSelect).toHaveBeenCalledWith({ type: S3_PROVIDER_TYPE })
+    expect(onSelect).toHaveBeenCalledWith(ProviderSetupKinds.S3)
   })
 
   test('a vault shared with other accounts cannot use S3, as with GitHub', () => {

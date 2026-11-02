@@ -136,7 +136,7 @@ describe('automatic vault sync', () => {
   test.each([
     ['generation changed', VaultStorageFailureKind.GenerationChanged],
     ['deletion active', VaultStorageFailureKind.DeletionActive],
-  ])(
+  ] as const)(
     'preserves a %s alert after a later successful scheduled sync',
     async (_label, failureKind) => {
       const state = VaultStateTestFixture.create()

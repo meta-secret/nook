@@ -1,9 +1,16 @@
 import { fireEvent, render } from '@testing-library/svelte'
 import type { ComponentProps } from 'svelte'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import type { ProviderVaultListing, ProviderVaultSummary } from '$app-wasm'
+import {
+  s3_provider_draft,
+  type ProviderVaultListing,
+  type ProviderVaultSummary,
+} from '$app-wasm'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
-import { S3DraftKind } from '$lib/vault/state/provider.svelte'
+import {
+  DraftS3ConnectionKind,
+  S3DraftReads,
+} from '$lib/vault/provider-draft-reads'
 import { FirstRunStage } from '$lib/vault/state/ui.svelte'
 import FirstRunSyncStep from '../../../../nook-web-shared/src/vault-app/lib/components/login/FirstRunSyncStep.svelte'
 import { S3ConnectionFixture } from '../s3-connection-fixture'
@@ -91,7 +98,7 @@ function strangerVault(): ProviderVaultSummary {
 }
 
 function listing(vaults: ProviderVaultSummary[]): ProviderVaultListing {
-  return { vaults, replacement: { state: 'unavailable' } }
+  return { vaults, identities: [], replacement: { state: 'unavailable' } }
 }
 
 describe('first-run Sync step on S3 storage', () => {
@@ -126,10 +133,9 @@ describe('first-run Sync step on S3 storage', () => {
     expect(wasm.listS3Vaults.mock.calls[0]?.[0]).toEqual(
       S3ConnectionFixture.configuration(),
     )
-    expect(fixture.vault.s3Draft).toEqual({
-      kind: S3DraftKind.Configured,
-      config: S3ConnectionFixture.configuration(),
-    })
+    expect(fixture.vault.providerDraft).toEqual(
+      s3_provider_draft(S3ConnectionFixture.configuration()),
+    )
     expect(location.textContent).toContain('S3 · nook-dev/e2e')
     expect(location.textContent).toContain('127.0.0.1:8333 · device-a')
     expect(view.container.innerHTML).not.toContain(S3ConnectionFixture.SECRET)
@@ -170,6 +176,8 @@ describe('first-run Sync step on S3 storage', () => {
     expect(alert.textContent?.trim()).toBe(I18N_KEYS.ErrorsS3KeyAccessDenied)
     expect(view.getByTestId('first-run-s3-setup')).toBeTruthy()
     // Nothing is staged until the location lists.
-    expect(fixture.vault.s3Draft.kind).toBe(S3DraftKind.NotConfigured)
+    expect(S3DraftReads.connection(fixture.vault.providerDraft).kind).toBe(
+      DraftS3ConnectionKind.NotReady,
+    )
   })
 })

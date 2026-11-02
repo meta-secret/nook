@@ -290,7 +290,7 @@ vaults, this browser), then the details (sign-in keys). Each action says what it
           {#each vault.syncProviders as provider (provider.id)}
             <li
               class="flex min-h-11 min-w-0 items-center gap-3 px-2.5 py-2"
-              data-testid="identity-panel-provider-{provider.type}"
+              data-testid="identity-panel-provider-{provider.provider.type}"
             >
               <span class="nk-vault-icon" aria-hidden="true">
                 <Cloud class="size-4" />

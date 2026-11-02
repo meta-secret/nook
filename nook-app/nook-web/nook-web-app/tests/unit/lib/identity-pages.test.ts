@@ -14,6 +14,7 @@ import {
   IdentityControlViewKind,
 } from '$lib/vault/identity-control.svelte'
 import { IdentityPages } from '$lib/vault/identity-pages'
+import { ProviderSetupKinds } from '$lib/vault/provider-setup-kinds'
 import { ProviderSaveOutcome } from '$lib/vault/providers.svelte'
 import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
 import type { VaultState } from '$lib/vault.svelte'
@@ -95,7 +96,7 @@ describe('IdentityPages', () => {
     expect(vault.identityPage).toBe(WorkspaceSection.Overview)
     expect(cancelSetup).not.toHaveBeenCalled()
 
-    vault.activateLoginSetup('oauth-file')
+    vault.activateLoginSetup(ProviderSetupKinds.GOOGLE_DRIVE)
     pages.show(WorkspaceSection.Sync)
     pages.back()
     expect(vault.identityPage).toBe(WorkspaceSection.Overview)
@@ -112,7 +113,7 @@ describe('IdentityPages', () => {
     const sync = vi.spyOn(vault.identityControl, 'syncWithMounts')
     const cancelSetup = vi.spyOn(vault, 'cancelProviderSetup')
     const cancelAdd = vi.spyOn(vault, 'cancelAddProvider')
-    vault.activateLoginSetup('oauth-file')
+    vault.activateLoginSetup(ProviderSetupKinds.GOOGLE_DRIVE)
     const pages = new IdentityPages(vault)
     pages.addSyncProvider()
 
@@ -144,7 +145,7 @@ describe('IdentityPages', () => {
     vi.spyOn(vault, 'saveProviderForAddedIdentity').mockResolvedValue(
       err(refused),
     )
-    vault.activateLoginSetup('oauth-file')
+    vault.activateLoginSetup(ProviderSetupKinds.GOOGLE_DRIVE)
 
     await new IdentityPages(vault).keyringAddedBeside({
       identityId: 'idn_inspirealien',
@@ -171,7 +172,7 @@ describe('IdentityPages', () => {
       order.push('sync')
       return Promise.resolve(ok(IdentityActionOutcome.Completed))
     })
-    vault.activateLoginSetup('oauth-file')
+    vault.activateLoginSetup(ProviderSetupKinds.GOOGLE_DRIVE)
 
     await new IdentityPages(vault).connectProvider()
 
@@ -217,7 +218,7 @@ describe('IdentityPages', () => {
     vi.spyOn(vault.identityControl, 'syncWithMounts').mockResolvedValue(
       ok(IdentityActionOutcome.Completed),
     )
-    vault.activateLoginSetup('oauth-file')
+    vault.activateLoginSetup(ProviderSetupKinds.GOOGLE_DRIVE)
 
     await new IdentityPages(vault).connectProvider()
 
@@ -252,7 +253,7 @@ describe('IdentityPages', () => {
     )
     vi.spyOn(vault, 'ensureProviderSaved').mockResolvedValue(err(failure))
     const sync = vi.spyOn(vault.identityControl, 'syncWithMounts')
-    vault.activateLoginSetup('oauth-file')
+    vault.activateLoginSetup(ProviderSetupKinds.GOOGLE_DRIVE)
 
     await new IdentityPages(vault).connectProvider()
 

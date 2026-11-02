@@ -257,8 +257,9 @@ export class SentinelUnlockActions {
       const manager = state.admitManager();
       if (manager.isErr()) return storageErr(manager.error);
       const args = state.connectStorageArgs();
+      if (args.isErr()) return storageErr(args.error);
       try {
-        await manager.value.connect(args);
+        await manager.value.connect(args.value);
         return storageOk(VaultChangeOutcome.Completed);
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));

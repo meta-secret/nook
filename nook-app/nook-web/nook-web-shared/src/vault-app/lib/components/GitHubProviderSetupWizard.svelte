@@ -1,36 +1,68 @@
 <script lang="ts">
+  import { untrack } from 'svelte'
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import type { Snippet } from 'svelte'
   import { Cloud, ExternalLink, RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import { github_provider_draft, type ProviderDraft } from '$app-wasm'
   import { Button, buttonVariants } from '$lib/components/ui/button'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   import { DEFAULT_GITHUB_REPO } from '$lib/auth/providers'
   import { cn } from '$lib/utils'
   import type { VaultState } from '$lib/vault.svelte'
+  import type { GithubProviderDraft } from '$lib/vault/provider-draft-reads'
+  import {
+    ConnectQuestionKind,
+    ConnectQuestions,
+    type ConnectQuestion,
+  } from '$lib/components/connect-button-state'
+  import { GithubDraftText } from '$lib/components/github-provider-setup-state'
 
   let {
     vault,
-    githubPat = $bindable(''),
-    githubRepo = $bindable(DEFAULT_GITHUB_REPO),
-    idPrefix = 'provider',
+    draft,
     isVerifying,
     isInitializing,
-    connectDisabled = false,
+    question,
     onCancelSetup,
     onConnect,
-    beforeConnect,
   }: {
     vault: VaultState
-    githubPat?: string
-    githubRepo?: string
-    idPrefix?: string
+    /** The staged GitHub draft this form edits. */
+    draft: GithubProviderDraft
     isVerifying: boolean
     isInitializing: boolean
-    connectDisabled?: boolean
+    /** What the host asks before Connect. */
+    question: ConnectQuestion
     onCancelSetup: () => void
     onConnect: () => void | Promise<void>
-    beforeConnect?: Snippet
   } = $props()
+
+  const uid = $props.id()
+
+  // The form owns its text, because Rust trims the draft it stages. It
+  // takes the draft's text again when another owner replaced the draft: a
+  // lock or a cancel clears the typed token.
+  let stagedDraft: ProviderDraft = untrack(() => draft)
+  let tokenText = $state(untrack(() => GithubDraftText.token(draft)))
+  let repositoryText = $state(
+    untrack(() => GithubDraftText.repository(draft)),
+  )
+  $effect.pre(() => {
+    const current = draft
+    if (current === stagedDraft) return
+    stagedDraft = current
+    tokenText = GithubDraftText.token(current)
+    repositoryText = GithubDraftText.repository(current)
+  })
+
+  function stageForm() {
+    const form: Parameters<typeof github_provider_draft>[0] = {
+      token: tokenText,
+      repository: repositoryText,
+    }
+    const next = github_provider_draft(form)
+    stagedDraft = next
+    vault.stageProviderDraft(next)
+  }
 
   const githubPatUrl =
     'https://github.com/settings/tokens/new?scopes=repo&description=nook'
@@ -44,7 +76,7 @@
     'w-full sm:w-auto',
   )
 
-  const githubCredentialsReady = $derived(Boolean(githubPat.trim()))
+  const githubCredentialsReady = $derived(GithubDraftText.tokenEntered(draft))
 
   let connectionStepOpen = $state(true)
   let syncStepOpen = $state(false)
@@ -100,14 +132,18 @@
         <div class="space-y-1.5">
           <label
             class="text-xs font-medium text-foreground"
-            for="{idPrefix}-github-repo"
+            for="{uid}-github-repo"
           >
             {vault.t(I18N_KEYS.ProviderSetupRepoName)}
           </label>
           <input
-            id="{idPrefix}-github-repo"
+            id="{uid}-github-repo"
             type="text"
-            bind:value={githubRepo}
+            value={repositoryText}
+            oninput={(event) => {
+              repositoryText = event.currentTarget.value
+              stageForm()
+            }}
             placeholder={DEFAULT_GITHUB_REPO}
             autocomplete="off"
             spellcheck="false"
@@ -122,14 +158,18 @@
         <div class="space-y-1.5">
           <label
             class="text-xs font-medium text-foreground"
-            for="{idPrefix}-github-pat"
+            for="{uid}-github-pat"
           >
             {vault.t(I18N_KEYS.ProviderSetupPatLabel)}
           </label>
           <input
-            id="{idPrefix}-github-pat"
+            id="{uid}-github-pat"
             type="password"
-            bind:value={githubPat}
+            value={tokenText}
+            oninput={(event) => {
+              tokenText = event.currentTarget.value
+              stageForm()
+            }}
             placeholder="ghp_xxxxxxxxxxxx"
             autocomplete="off"
             data-testid="github-pat-input"
@@ -139,7 +179,7 @@
             {(() => { const translationRequest: Parameters<typeof vault.t>[0] = {
   key: I18N_KEYS.ProviderSetupStoredLocallyDesc,
   replacements: {
-              repo: githubRepo.trim() || DEFAULT_GITHUB_REPO,
+              repo: GithubDraftText.repository(draft),
             },
 }; return vault.t(translationRequest); })()}
           </p>
@@ -161,7 +201,9 @@
         {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
       </p>
 
-      {@render beforeConnect?.()}
+      {#if question.kind === ConnectQuestionKind.Asked}
+        {@render question.prompt()}
+      {/if}
 
       <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
         <Button
@@ -169,7 +211,7 @@
           class="sm:min-w-[180px]"
           data-testid="connect-provider-btn"
           disabled={!githubCredentialsReady ||
-            connectDisabled ||
+            ConnectQuestions.holdsConnect(question) ||
             isVerifying ||
             isInitializing}
           onclick={() => void onConnect()}

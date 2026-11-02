@@ -10,10 +10,6 @@ export enum EnrollmentIssueRejection {
   LocalProvider = "local-provider",
   LocalFolderProvider = "local-folder-provider",
   SharedIdentityRequired = "shared-identity-required",
-  GithubCredentialsRequired = "github-credentials-required",
-  ICloudTargetRequired = "icloud-target-required",
-  OAuthProviderRequired = "oauth-provider-required",
-  SharedTargetUnavailable = "shared-target-unavailable",
 }
 
 export class EnrollmentIssueFailure {
@@ -30,13 +26,6 @@ export class EnrollmentIssueFailure {
         return I18N_KEYS.ErrorsCloudSyncProviderRequired;
       case EnrollmentIssueRejection.SharedIdentityRequired:
         return I18N_KEYS.ErrorsValidationSharedJoinerIdentityRequired;
-      case EnrollmentIssueRejection.GithubCredentialsRequired:
-        return I18N_KEYS.ErrorsGithubEnrollmentCredentialsRequired;
-      case EnrollmentIssueRejection.OAuthProviderRequired:
-        return I18N_KEYS.ErrorsSharedProviderOauthRequired;
-      case EnrollmentIssueRejection.ICloudTargetRequired:
-      case EnrollmentIssueRejection.SharedTargetUnavailable:
-        return I18N_KEYS.ErrorsValidationSharedStorageTargetRequired;
     }
   }
 }

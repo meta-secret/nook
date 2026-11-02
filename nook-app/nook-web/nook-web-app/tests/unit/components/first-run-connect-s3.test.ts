@@ -3,14 +3,14 @@ import { err, ok } from 'neverthrow'
 import type { ComponentProps } from 'svelte'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
-import { LOCAL_PROVIDER_TYPE } from '$lib/auth/providers'
+import { NookDriveRootOrigin, s3_provider_draft } from '$app-wasm'
 import {
   VaultStorageFailure,
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
 import { FirstRunActions } from '$lib/vault/first-run'
 import { IdentityActionOutcome } from '$lib/vault/identity-control.svelte'
-import { GoogleVaultFolderOrigin, VaultOAuthActions } from '$lib/vault/oauth'
+import { VaultOAuthActions } from '$lib/vault/oauth'
 import { ProviderSaveOutcome } from '$lib/vault/providers.svelte'
 import { FirstRunStage } from '$lib/vault/state/ui.svelte'
 import FirstRunConnectStep from '../../../../nook-web-shared/src/vault-app/lib/components/login/FirstRunConnectStep.svelte'
@@ -27,18 +27,19 @@ describe('the first-run Connect step on S3', () => {
     )
     const actions = new FirstRunActions(vault)
     actions.beginS3()
-    vault.configureS3(S3ConnectionFixture.configuration())
+    vault.stageProviderDraft(
+      s3_provider_draft(S3ConnectionFixture.configuration()),
+    )
     vault.firstRun = FirstRunStage.Connect
     const folder = vi
       .spyOn(VaultOAuthActions.prototype, 'connectGoogleVaultFolder')
       .mockResolvedValue(
-        ok({ name: 'Nook', origin: GoogleVaultFolderOrigin.Existing }),
+        ok({ name: 'Nook', origin: NookDriveRootOrigin.Existing }),
       )
-    // Saving projects the saved credentials back: the storage mode is local
-    // again and the S3 draft is gone.
+    // Saving projects the saved credentials back: the draft is this
+    // browser again and the S3 connection is gone from it.
     vi.spyOn(vault, 'ensureProviderSaved').mockImplementation(() => {
-      vault.storageMode = LOCAL_PROVIDER_TYPE
-      vault.clearS3()
+      vault.useThisBrowser()
       return Promise.resolve(ok(ProviderSaveOutcome.Saved))
     })
     const sync = vi

@@ -38,7 +38,7 @@
   import type { VaultState } from '$lib/vault.svelte'
   import type { NookImportResult } from '$lib/nook'
   import type {
-    ProviderSetupRequest,
+    ProviderKind,
     StorageProvider,
   } from '$lib/auth/providers'
   import {
@@ -62,8 +62,6 @@
     isSaving,
     addProviderOpen = false,
     loginSetup,
-    githubPat = $bindable(''),
-    githubRepo = $bindable(''),
     passwordEntries,
     isPasswordBusy,
     passwordError,
@@ -100,8 +98,6 @@
     isSaving: boolean
     addProviderOpen?: boolean
     loginSetup: LoginSetup
-    githubPat: string
-    githubRepo: string
     passwordEntries: NookPasswordEntrySummary[]
     isPasswordBusy: boolean
     passwordError: string
@@ -110,7 +106,7 @@
     onSyncProvider?: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
-    onBeginSetup: (request: ProviderSetupRequest) => void
+    onBeginSetup: (kind: ProviderKind) => void
     onCancelSetup: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>
     onAddPassword: (
@@ -222,8 +218,6 @@
         {isInitializing}
         {addProviderOpen}
         {loginSetup}
-        bind:githubPat
-        bind:githubRepo
         {onReconnect}
         {...authStorageOptionalProps}
         {onBeginSetup}

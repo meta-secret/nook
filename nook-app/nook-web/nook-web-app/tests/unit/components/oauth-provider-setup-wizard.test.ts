@@ -1,9 +1,10 @@
 import { fireEvent, render } from '@testing-library/svelte'
 import type { ComponentProps } from 'svelte'
 import { err, ok } from 'neverthrow'
-import { DeviceProtectionStatus } from '$app-wasm'
+import { DeviceProtectionStatus, NookDriveRootOrigin } from '$app-wasm'
 import type {
   CredentialCheckReport,
+  ProviderDraft,
   IdentityControlSnapshot,
   NookGoogleDriveVaultListing,
   ProviderIdentityJoin,
@@ -13,12 +14,12 @@ import { OAuthFailure, OAuthFailureKind } from '$lib/auth/oauth-failure'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import {
-  defaultOAuthFileConfig,
-  storedGoogleDriveFolder,
-  storedOAuthCredential,
-  type OAuthFileConfig,
-} from '$lib/auth/providers'
-import { GoogleVaultFolderOrigin, VaultOAuthActions } from '$lib/vault/oauth'
+  ProviderDraftFixture,
+  ProviderFixtureCredentials,
+} from '../provider-fixtures'
+import { VaultOAuthActions } from '$lib/vault/oauth'
+import type { OAuthProviderDraft } from '$lib/vault/provider-draft-reads'
+import { ProviderSetupKinds } from '$lib/vault/provider-setup-kinds'
 import {
   AccessCheckActions,
   AccessCheckTargetKind,
@@ -59,16 +60,31 @@ class DecisionButtons {
   }
 }
 
-function signedInDrive(): OAuthFileConfig {
-  return {
-    ...defaultOAuthFileConfig({ preset: 'google-drive', fileName: 'vault' }),
-    accessToken: storedOAuthCredential('drive-token'),
+/** A Drive draft, as the wizard's host narrows it. */
+function oauthDraft(draft: ProviderDraft): OAuthProviderDraft {
+  switch (draft.type) {
+    case 'oauth-file':
+      return draft
+    case 'local':
+    case 'local-folder':
+    case 'github':
+    case 's3':
+      throw new Error('expected a Drive draft')
   }
 }
 
-function signedInDriveWithFolder(folderId: string): OAuthFileConfig {
-  return { ...signedInDrive(), folderId: storedGoogleDriveFolder(folderId) }
+function signedInDrive(): OAuthProviderDraft {
+  return oauthDraft(ProviderDraftFixture.googleDriveSignedIn())
 }
+
+/** The Drive source a signed-in draft lists from. */
+const DRIVE_SOURCE = {
+  kind: 'remote',
+  source: {
+    kind: 'googleDrive',
+    accessToken: ProviderFixtureCredentials.DRIVE_TOKEN,
+  },
+} as const
 
 function summary(
   storeId: string,
@@ -161,12 +177,14 @@ function listVaults(listing: NookGoogleDriveVaultListing) {
     .mockResolvedValue(ok(listing))
 }
 
-function renderWizard(config: OAuthFileConfig) {
+function renderWizard(draft: OAuthProviderDraft) {
   const vault = VaultStateTestFixture.create()
-  vault.configureOauthFile(config)
+  vault.activateLoginSetup(ProviderSetupKinds.GOOGLE_DRIVE)
+  vault.stageProviderDraft(draft)
   const onConnect = vi.fn()
   const props = {
     vault,
+    draft,
     isVerifying: false,
     isInitializing: false,
     onCancelSetup: vi.fn(),
@@ -178,7 +196,7 @@ function renderWizard(config: OAuthFileConfig) {
 describe('Google Drive provider setup', () => {
   test('before sign-in, the step draws where the identity goes instead of explaining it', () => {
     const { view, vault } = renderWizard(
-      defaultOAuthFileConfig({ preset: 'google-drive', fileName: 'vault' }),
+      oauthDraft(ProviderDraftFixture.googleDriveAwaitingSignIn()),
     )
 
     const step = view.getByTestId('google-setup-connection-step')
@@ -197,7 +215,7 @@ describe('Google Drive provider setup', () => {
     const connect = vi
       .spyOn(VaultOAuthActions.prototype, 'connectGoogleVaultFolder')
       .mockResolvedValue(
-        ok({ name: 'Nook', origin: GoogleVaultFolderOrigin.Created }),
+        ok({ name: 'Nook', origin: NookDriveRootOrigin.Created }),
       )
     const { view, onConnect, vault } = renderWizard(signedInDrive())
 
@@ -258,6 +276,7 @@ describe('Google Drive provider setup', () => {
           summary('store_othervault1', { state: 'locked' }, ['requestAccess']),
           summary('store_othervault2', { state: 'locked' }, ['requestAccess']),
         ],
+        identities: [],
         replacement: { state: 'unavailable' },
       },
     })
@@ -326,6 +345,7 @@ describe('Google Drive provider setup', () => {
         vaults: [
           summary('store_othervault1', { state: 'locked' }, ['requestAccess']),
         ],
+        identities: [],
         replacement: { state: 'unavailable' },
       },
     })
@@ -344,10 +364,7 @@ describe('Google Drive provider setup', () => {
     const call = run.mock.calls.at(0)
     if (!call) throw new Error('the join was not asked')
     const [request] = call
-    expect(request.source).toEqual({
-      kind: 'googleDrive',
-      accessToken: 'drive-token',
-    })
+    expect(request.source).toEqual(DRIVE_SOURCE)
     expect(request.planned.map((entry) => entry.decision)).toEqual([
       'askToJoin',
     ])
@@ -364,6 +381,7 @@ describe('Google Drive provider setup', () => {
           joinedSummary('idn_approvedabc', 'approved'),
           joinedSummary('idn_requestedab', 'requested'),
         ],
+        identities: [],
         replacement: { state: 'unavailable' },
       },
     })
@@ -376,7 +394,7 @@ describe('Google Drive provider setup', () => {
     const connect = vi
       .spyOn(VaultOAuthActions.prototype, 'connectGoogleVaultFolder')
       .mockResolvedValue(
-        ok({ name: 'Nook', origin: GoogleVaultFolderOrigin.Created }),
+        ok({ name: 'Nook', origin: NookDriveRootOrigin.Created }),
       )
     const { view, vault, onConnect } = renderWizard(signedInDrive())
     useIdentity(vault)
@@ -422,6 +440,7 @@ describe('Google Drive provider setup', () => {
       root: 'found',
       listing: {
         vaults: [joinedSummary('idn_approvedabc', 'approved')],
+        identities: [],
         replacement: { state: 'unavailable' },
       },
     })
@@ -447,6 +466,7 @@ describe('Google Drive provider setup', () => {
         vaults: [
           summary('store_othervault1', { state: 'locked' }, ['requestAccess']),
         ],
+        identities: [],
         replacement: { state: 'unavailable' },
       },
     })
@@ -493,6 +513,7 @@ describe('Google Drive provider setup', () => {
             },
           },
         ],
+        identities: [],
         replacement: { state: 'unavailable' },
       },
     })
@@ -524,6 +545,7 @@ describe('Google Drive provider setup', () => {
             'importSeparately',
           ]),
         ],
+        identities: [],
         replacement: { state: 'unavailable' },
       },
     })
@@ -568,7 +590,7 @@ describe('Google Drive provider setup', () => {
     const connect = vi
       .spyOn(VaultOAuthActions.prototype, 'connectGoogleVaultFolder')
       .mockResolvedValue(
-        ok({ name: 'Nook', origin: GoogleVaultFolderOrigin.Existing }),
+        ok({ name: 'Nook', origin: NookDriveRootOrigin.Existing }),
       )
     const { view, vault, onConnect } = renderWizard(signedInDrive())
 
@@ -587,7 +609,7 @@ describe('Google Drive provider setup', () => {
     )
     expect(check).toHaveBeenCalledWith({
       kind: AccessCheckTargetKind.Source,
-      source: { kind: 'googleDrive', accessToken: 'drive-token' },
+      source: DRIVE_SOURCE,
     })
     expect(
       identity
@@ -621,10 +643,7 @@ describe('Google Drive provider setup', () => {
     const call = run.mock.calls.at(0)
     if (!call) throw new Error('the plan did not run')
     const [request] = call
-    expect(request.source).toEqual({
-      kind: 'googleDrive',
-      accessToken: 'drive-token',
-    })
+    expect(request.source).toEqual(DRIVE_SOURCE)
     expect(request.planned.map((entry) => entry.decision)).toEqual([
       'addToBrowser',
     ])
@@ -638,6 +657,7 @@ describe('Google Drive provider setup', () => {
         vaults: [
           summary('store_othervault1', { state: 'locked' }, ['requestAccess']),
         ],
+        identities: [],
         replacement: { state: 'unavailable' },
       },
     })
@@ -662,6 +682,7 @@ describe('Google Drive provider setup', () => {
       root: 'found',
       listing: {
         vaults: [summary('store_othervault1', { state: 'unchecked' }, [])],
+        identities: [],
         replacement: { state: 'unavailable' },
       },
     })
@@ -711,13 +732,17 @@ describe('Google Drive provider setup', () => {
   test('says it found the existing Nook root and syncs beside its vaults', async () => {
     listVaults({
       root: 'found',
-      listing: { vaults: [], replacement: { state: 'unavailable' } },
+      listing: {
+        vaults: [],
+        identities: [],
+        replacement: { state: 'unavailable' },
+      },
     })
     vi.spyOn(
       VaultOAuthActions.prototype,
       'connectGoogleVaultFolder',
     ).mockResolvedValue(
-      ok({ name: 'Nook', origin: GoogleVaultFolderOrigin.Existing }),
+      ok({ name: 'Nook', origin: NookDriveRootOrigin.Existing }),
     )
     const { view, onConnect, vault } = renderWizard(signedInDrive())
     const noticeRequest: Parameters<typeof vault.t>[0] = {
@@ -788,7 +813,7 @@ describe('Google Drive provider setup', () => {
       'connectGoogleVaultFolder',
     )
     const { view, onConnect } = renderWizard(
-      signedInDriveWithFolder('vault-folder'),
+      oauthDraft(ProviderDraftFixture.googleDriveConnected()),
     )
 
     await view.findByTestId('google-folder-on-connect')

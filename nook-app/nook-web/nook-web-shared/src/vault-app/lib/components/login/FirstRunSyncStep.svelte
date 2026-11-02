@@ -12,18 +12,18 @@ its location lists, its keyrings show the same way.
   import { ok, type Result } from 'neverthrow'
   import { Archive, ArrowRight, Cloud, Plus, RefreshCw } from '@lucide/svelte'
   import {
+    provider_draft_label,
+    s3_provider_draft,
     staged_s3_provider_detail,
-    staged_s3_provider_label,
     type ProviderIdentityChoice,
     type S3Connection,
   } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
   import {
-    OAuthFilePresentation,
-    oauth_access_token,
-    S3_PROVIDER_TYPE,
-  } from '$lib/auth/providers'
+    DraftDriveSignInKind,
+    ProviderDraftReads,
+  } from '$lib/vault/provider-draft-reads'
   import {
     BrowserOAuthProvider,
     resolveCurrentOAuthOriginSupport,
@@ -47,6 +47,7 @@ its location lists, its keyrings show the same way.
   import type { VaultState } from '$lib/vault.svelte'
   import {
     FirstRunActions,
+    FirstRunConnectionKind,
     FirstRunIdentityAction,
     FirstRunInventoryKind,
     type FirstRunIdentityRun,
@@ -54,11 +55,6 @@ its location lists, its keyrings show the same way.
     type FirstRunProviderSource,
   } from '$lib/vault/first-run'
   import { VaultOAuthActions } from '$lib/vault/oauth'
-  import {
-    LoginSetupKind,
-    OAuthFileDraftKind,
-    S3DraftKind,
-  } from '$lib/vault/state/provider.svelte'
   import {
     FirstRunPlace,
     FirstRunStage,
@@ -80,45 +76,23 @@ its location lists, its keyrings show the same way.
 
   // Google Drive is the provider setup offers; it is staged once, here,
   // unless S3 already is (Back from naming keeps it).
-  untrack(() => {
-    const s3Staged =
-      vault.loginSetup.kind === LoginSetupKind.Active &&
-      vault.loginSetup.providerType === S3_PROVIDER_TYPE
-    if (!s3Staged && vault.oauthFileDraft.kind !== OAuthFileDraftKind.Configured)
-      actions.beginGoogleDrive()
-  })
+  untrack(() => actions.stageOnEntry())
 
-  const accessToken = $derived.by(() => {
-    if (vault.oauthFileDraft.kind !== OAuthFileDraftKind.Configured) return ''
-    const credential = oauth_access_token(vault.oauthFileDraft.config)
-    return credential.kind === 'available' ? credential.token : ''
-  })
-  const account = $derived(
-    vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-      ? new OAuthFilePresentation(vault.oauthFileDraft.config).oauthAccountLabel()
-      : '',
+  /** The signed-in Drive account the step names. */
+  const driveSignIn = $derived(
+    ProviderDraftReads.driveSignIn(vault.providerDraft),
   )
   const syncSource = $derived(actions.syncSource())
-  /** Where the keyrings are read from: the staged S3 location, else the
-   * signed-in Google account. */
-  const source = $derived.by((): FirstRunProviderSource => {
-    const s3 = vault.s3Draft
-    switch (s3.kind) {
-      case S3DraftKind.Configured:
-        return { kind: 's3', configuration: s3.config }
-      case S3DraftKind.NotConfigured:
-        return { kind: 'googleDrive', accessToken }
-    }
-  })
-  const onS3 = $derived(source.kind === 's3')
-  const connected = $derived.by(() => {
-    switch (syncSource) {
-      case FirstRunSyncSource.GoogleDrive:
-        return Boolean(accessToken)
-      case FirstRunSyncSource.S3:
-        return vault.s3Draft.kind === S3DraftKind.Configured
-    }
-  })
+  /** Where the keyrings are read from: the staged S3 location, or the
+   * signed-in Google account, once the picked provider can list. */
+  const connection = $derived(actions.connection())
+  const onS3 = $derived(
+    connection.kind === FirstRunConnectionKind.Connected &&
+      connection.source.kind === 's3',
+  )
+  const connected = $derived(
+    connection.kind === FirstRunConnectionKind.Connected,
+  )
   const diagram = $derived.by(() => {
     const request: FirstRunSyncDiagramRequest = {
       vault,
@@ -133,30 +107,47 @@ its location lists, its keyrings show the same way.
 
   /** Read the provider's keyrings; a failed read says why on the vault.
    * Keyrings read for a source that changed meanwhile are not shown. */
-  async function load(): Promise<void> {
-    const listing = source
+  async function load(listing: FirstRunProviderSource): Promise<void> {
     inventory = { kind: FirstRunInventoryKind.Loading }
     const read = await actions.listVaults(listing)
     if (read.kind === FirstRunInventoryKind.Failed)
       vault.errorMsg = vault.t(read.failure)
-    if (listing === source) inventory = read
+    const current = actions.connection()
+    if (
+      current.kind === FirstRunConnectionKind.Connected &&
+      current.source.kind === listing.kind
+    )
+      inventory = read
   }
 
   $effect(() => {
     // Only a new sign-in reads the folder again.
-    if (accessToken) untrack(() => void load())
+    const current = connection
+    if (
+      current.kind === FirstRunConnectionKind.Connected &&
+      current.source.kind === 'googleDrive'
+    ) {
+      const listing = current.source
+      untrack(() => void load(listing))
+    }
   })
 
   // Back from naming or a join keeps the S3 location: read it again.
   untrack(() => {
-    if (vault.s3Draft.kind === S3DraftKind.Configured) void load()
+    const current = actions.connection()
+    if (
+      current.kind === FirstRunConnectionKind.Connected &&
+      current.source.kind === 's3'
+    )
+      void load(current.source)
   })
 
   const choices = $derived.by(
     (): Result<readonly ProviderIdentityChoice[], IdentityChoicesFailure> => {
       if (inventory.kind !== FirstRunInventoryKind.Loaded) return ok([])
       const request: IdentityChoicesRequest = {
-        vaults: inventory.vaults,
+        vaults: inventory.listing.vaults,
+        identities: inventory.listing.identities,
         checks: [],
         authenticated: false,
       }
@@ -171,14 +162,21 @@ its location lists, its keyrings show the same way.
     action: FirstRunIdentityAction,
   ): (choice: ProviderIdentityChoice) => Promise<void> {
     return async (choice) => {
+      // Identities list only from a connected provider.
+      const current = actions.connection()
+      if (current.kind !== FirstRunConnectionKind.Connected) return
       working = choice.identity.identityId
       try {
-        const run: FirstRunIdentityRun = { choice, source, action }
+        const run: FirstRunIdentityRun = {
+          choice,
+          source: { kind: 'remote', source: current.source },
+          action,
+        }
         await actions.runOn(run)
       } finally {
         working = ''
       }
-      if (vault.firstRun === FirstRunStage.Sync) await load()
+      if (vault.firstRun === FirstRunStage.Sync) await load(current.source)
     }
   }
 
@@ -192,7 +190,7 @@ its location lists, its keyrings show the same way.
       const read = await actions.listVaults(location)
       switch (read.kind) {
         case FirstRunInventoryKind.Loaded:
-          vault.configureS3(configuration)
+          vault.stageProviderDraft(s3_provider_draft(configuration))
           inventory = read
           return
         case FirstRunInventoryKind.Failed:
@@ -333,8 +331,8 @@ its location lists, its keyrings show the same way.
       </button>
     </div>
   {:else}
-    {#if vault.s3Draft.kind === S3DraftKind.Configured}
-      {@const label = staged_s3_provider_label(vault.s3Configuration)}
+    {#if connection.kind === FirstRunConnectionKind.Connected && connection.source.kind === 's3'}
+      {@const label = provider_draft_label(vault.providerDraft)}
       <p
         class="nk-spec flex min-w-0 items-baseline gap-2"
         data-testid="first-run-s3-location"
@@ -343,11 +341,15 @@ its location lists, its keyrings show the same way.
           >{label}</span
         >
         <span class="shrink-0 text-muted-foreground"
-          >{staged_s3_provider_detail(vault.s3Draft.config)}</span
+          >{staged_s3_provider_detail(connection.source.configuration)}</span
         >
       </p>
     {:else}
-      <p class="nk-spec" data-testid="first-run-google-account">{account}</p>
+      <p class="nk-spec" data-testid="first-run-google-account">
+        {#if driveSignIn.kind === DraftDriveSignInKind.SignedIn && driveSignIn.access.account.state === 'email'}
+          {driveSignIn.access.account.email}
+        {/if}
+      </p>
     {/if}
     {#if inventory.kind === FirstRunInventoryKind.Loading}
       <p

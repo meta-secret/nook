@@ -1,24 +1,26 @@
 import { err, ok, type Result } from "neverthrow";
 import {
   list_s3_vaults,
+  provider_draft_credential_readiness,
+  provider_failure_translation_key,
   type NookProviderSource,
+  type NookRemoteSource,
+  type ProviderDraft,
   type ProviderIdentityChoice,
-  type ProviderVaultSummary,
-  type S3Connection,
 } from "$app-wasm";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import {
-  GOOGLE_DRIVE_OAUTH_FILE_PRESET,
-  OAUTH_FILE_PROVIDER_TYPE,
-  S3_PROVIDER_TYPE,
-  type ProviderSetupRequest,
-} from "$lib/auth/providers";
-import { listedVaults } from "$lib/components/provider-vaults/drive-vault-inventory";
+  listedVaults,
+  type ListedVaults,
+} from "$lib/components/provider-vaults/drive-vault-inventory";
 import { IdentityDecisionText } from "$lib/components/provider-vaults/identity-plan.svelte";
+import { ProviderSetupKinds } from "$lib/vault/provider-setup-kinds";
 import {
-  NativeProviderFailure,
-  NativeProviderFailureKind,
-} from "$lib/runtime/storage-failure";
+  DraftDriveSignInKind,
+  DraftS3ConnectionKind,
+  ProviderDraftReads,
+  S3DraftReads,
+} from "$lib/vault/provider-draft-reads";
 import type { VaultState } from "$lib/vault.svelte";
 import {
   FirstRunJoinKind,
@@ -35,24 +37,33 @@ import {
 import { VaultOAuthActions } from "$lib/vault/oauth";
 import { ProviderVaultActions } from "$lib/vault/provider-vaults";
 import {
-  OAuthFileDraftKind,
-  S3DraftKind,
-  type OAuthFileDraft,
-  type S3Draft,
-} from "$lib/vault/state/provider.svelte";
-import {
   FirstRunPlace,
   FirstRunStage,
   FirstRunSyncSource,
   WorkspaceSection,
 } from "$lib/vault/state/ui.svelte";
-import { I18N_KEYS, type I18nKey } from "../../../generated/i18n-keys";
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 
 /** Where first run lists keyrings from: the signed-in Google account, or an
  * S3 location, which is staged only once it lists. */
-export type FirstRunProviderSource =
-  | Extract<NookProviderSource, { readonly accessToken: string }>
-  | Extract<NookProviderSource, { readonly configuration: S3Connection }>;
+export type FirstRunProviderSource = Extract<
+  NookRemoteSource,
+  { readonly kind: "googleDrive" } | { readonly kind: "s3" }
+>;
+
+export enum FirstRunConnectionKind {
+  NotConnected = "not-connected",
+  Connected = "connected",
+}
+
+/** Whether the provider picked last can list: Google Drive once signed in,
+ * S3 once its form connected. */
+export type FirstRunConnection =
+  | { readonly kind: FirstRunConnectionKind.NotConnected }
+  | {
+      readonly kind: FirstRunConnectionKind.Connected;
+      readonly source: FirstRunProviderSource;
+    };
 
 export enum FirstRunInventoryKind {
   Loading = "loading",
@@ -64,12 +75,12 @@ export enum FirstRunInventoryKind {
 export type FirstRunVaultRead =
   | {
       readonly kind: FirstRunInventoryKind.Loaded;
-      readonly vaults: readonly ProviderVaultSummary[];
+      readonly listing: ListedVaults;
     }
   | {
       readonly kind: FirstRunInventoryKind.Failed;
-      /** Why, in the user's words. */
-      readonly failure: I18nKey;
+      /** Why, in the user's words: a message key Rust or the step picked. */
+      readonly failure: string;
     };
 
 /** What the Sync step knows about the sync provider's keyrings. */
@@ -111,8 +122,7 @@ class FirstRunNamingFailure {
  * was made on this browser. */
 type FirstRunStagedProvider = {
   readonly source: FirstRunSyncSource;
-  readonly oauthFile: OAuthFileDraft;
-  readonly s3: S3Draft;
+  readonly draft: ProviderDraft;
 };
 
 /** Whether the named identity's provider is staged again to connect. */
@@ -168,19 +178,68 @@ export class FirstRunActions {
 
   /** Stage Google Drive, ready for its sign-in. */
   beginGoogleDrive(): void {
-    const request: ProviderSetupRequest = {
-      type: OAUTH_FILE_PROVIDER_TYPE,
-      oauthPreset: GOOGLE_DRIVE_OAUTH_FILE_PRESET,
-    };
-    this.vault.beginProviderSetup(request);
+    this.vault.beginProviderSetup(ProviderSetupKinds.GOOGLE_DRIVE);
     this.vault.firstRunSyncSource = FirstRunSyncSource.GoogleDrive;
   }
 
   /** Stage S3 in place of Google Drive; its form supplies the connection. */
   beginS3(): void {
-    const request: ProviderSetupRequest = { type: S3_PROVIDER_TYPE };
-    this.vault.beginProviderSetup(request);
+    this.vault.beginProviderSetup(ProviderSetupKinds.S3);
     this.vault.firstRunSyncSource = FirstRunSyncSource.S3;
+  }
+
+  /** Stage Google Drive when the step opens, unless the draft already is
+   * the picked source's: Back keeps a staged S3 location or Drive sign-in. */
+  stageOnEntry(): void {
+    switch (this.vault.providerDraft.type) {
+      case "s3":
+      case "oauth-file":
+        return;
+      case "local":
+      case "local-folder":
+      case "github":
+        this.beginGoogleDrive();
+    }
+  }
+
+  /** The source the picked provider lists from, read from the draft. */
+  connection(): FirstRunConnection {
+    const draft = this.vault.providerDraft;
+    switch (this.syncSource()) {
+      case FirstRunSyncSource.GoogleDrive:
+        return FirstRunActions.driveConnection(draft);
+      case FirstRunSyncSource.S3:
+        return FirstRunActions.s3Connection(draft);
+    }
+  }
+
+  private static driveConnection(draft: ProviderDraft): FirstRunConnection {
+    const signIn = ProviderDraftReads.driveSignIn(draft);
+    switch (signIn.kind) {
+      case DraftDriveSignInKind.SignedIn:
+        return {
+          kind: FirstRunConnectionKind.Connected,
+          source: {
+            kind: "googleDrive",
+            accessToken: signIn.access.authorization.accessToken,
+          },
+        };
+      case DraftDriveSignInKind.NotSignedIn:
+        return { kind: FirstRunConnectionKind.NotConnected };
+    }
+  }
+
+  private static s3Connection(draft: ProviderDraft): FirstRunConnection {
+    const s3 = S3DraftReads.connection(draft);
+    switch (s3.kind) {
+      case DraftS3ConnectionKind.Ready:
+        return {
+          kind: FirstRunConnectionKind.Connected,
+          source: { kind: "s3", configuration: s3.connection },
+        };
+      case DraftS3ConnectionKind.NotReady:
+        return { kind: FirstRunConnectionKind.NotConnected };
+    }
   }
 
   /** The provider picked last: S3 once its row was picked, Google Drive
@@ -208,7 +267,7 @@ export class FirstRunActions {
           };
         return {
           kind: FirstRunInventoryKind.Loaded,
-          vaults: listedVaults(listed.value),
+          listing: listedVaults(listed.value),
         };
       }
       case "s3":
@@ -217,16 +276,17 @@ export class FirstRunActions {
             source.configuration,
             localVault,
           );
-          return { kind: FirstRunInventoryKind.Loaded, vaults: listing.vaults };
+          return { kind: FirstRunInventoryKind.Loaded, listing };
         } catch (cause) {
-          const refused =
-            new NativeProviderFailure(cause).kind() ===
-            NativeProviderFailureKind.S3KeyAccessDenied;
+          const keyRequest: Parameters<
+            typeof provider_failure_translation_key
+          >[0] = {
+            message: cause instanceof Error ? cause.message : String(cause),
+            operationFailedKey: I18N_KEYS.ProviderSetupS3ListFailed,
+          };
           return {
             kind: FirstRunInventoryKind.Failed,
-            failure: refused
-              ? I18N_KEYS.ErrorsS3KeyAccessDenied
-              : I18N_KEYS.ProviderSetupS3ListFailed,
+            failure: provider_failure_translation_key(keyRequest),
           };
         }
     }
@@ -267,8 +327,7 @@ export class FirstRunActions {
     }
     const staged: FirstRunStagedProvider = {
       source: this.syncSource(),
-      oauthFile: vault.oauthFileDraft,
-      s3: vault.s3Draft,
+      draft: vault.providerDraft,
     };
     vault.firstRunVaultName = label;
     // The vault is made on this browser first. A sign-in still staged would
@@ -290,21 +349,22 @@ export class FirstRunActions {
   /** Stage the provider the identity was named on again, so the Connect
    * step connects it without another sign-in or form. */
   private restage(staged: FirstRunStagedProvider): FirstRunRestage {
-    const vault = this.vault;
+    switch (provider_draft_credential_readiness(staged.draft).state) {
+      case "required":
+        return FirstRunRestage.NothingStaged;
+      case "ready":
+        break;
+    }
     switch (staged.source) {
       case FirstRunSyncSource.GoogleDrive:
-        if (staged.oauthFile.kind !== OAuthFileDraftKind.Configured)
-          return FirstRunRestage.NothingStaged;
         this.beginGoogleDrive();
-        vault.configureOauthFile(staged.oauthFile.config);
-        return FirstRunRestage.Staged;
+        break;
       case FirstRunSyncSource.S3:
-        if (staged.s3.kind !== S3DraftKind.Configured)
-          return FirstRunRestage.NothingStaged;
         this.beginS3();
-        vault.configureS3(staged.s3.config);
-        return FirstRunRestage.Staged;
+        break;
     }
+    this.vault.stageProviderDraft(staged.draft);
+    return FirstRunRestage.Staged;
   }
 
   /** The identity kept on this browser gets its first vault, named here. */

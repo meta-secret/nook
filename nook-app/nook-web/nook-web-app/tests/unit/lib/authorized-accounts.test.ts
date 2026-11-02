@@ -2,14 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { err, ok } from 'neverthrow'
 import { OAuthFailure, OAuthFailureKind } from '$lib/auth/oauth-failure'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
-import {
-  defaultOAuthFileConfig,
-  storedGoogleDriveFolder,
-  storedICloudShareTarget,
-  storedOAuthAccountEmail,
-  storedOAuthCredential,
-  type OAuthFileConfig,
-} from '$lib/auth/providers'
+import type { OAuthFileProvider, StorageProvider } from '$app-wasm'
 import { GoogleOAuthPrompt, googleOAuthSession } from '$lib/auth/google/oauth'
 import { iCloudOAuthSession } from '$lib/auth/icloud/oauth'
 import {
@@ -17,6 +10,14 @@ import {
   AuthorizedAccountsSource,
   authorizedAccountsClient,
 } from '$lib/vault/authorized-accounts'
+import {
+  SharedJoinerSelectionKind,
+  SharedJoinerSelections,
+} from '$lib/vault/shared-joiner-selection'
+import {
+  ProviderFixtureCredentials,
+  ProviderRowFixture,
+} from '../provider-fixtures'
 
 const wasm = vi.hoisted(() => ({
   listGoogleDriveAuthorizedAccounts: vi.fn(),
@@ -29,16 +30,23 @@ vi.mock('$app-wasm', async (importOriginal) => ({
   add_google_drive_authorized_account: wasm.addGoogleDriveAuthorizedAccount,
 }))
 
-const ICLOUD_TARGET =
-  'icloud-share-v1:{"role":"owner","zoneName":"zone","ownerRecordName":"owner","rootRecordName":"root","shortGuid":"guid"}'
-
-function driveConfig(): OAuthFileConfig {
-  return {
-    ...defaultOAuthFileConfig({ preset: 'google-drive', fileName: 'vault' }),
-    accessToken: storedOAuthCredential('drive-token'),
-    folderId: storedGoogleDriveFolder('vault-folder'),
-    accountEmail: storedOAuthAccountEmail('owner@example.com'),
+/** The OAuth payload of a saved Drive or iCloud row. */
+function oauthPayload(row: StorageProvider): OAuthFileProvider {
+  switch (row.provider.type) {
+    case 'oauth-file':
+      return row.provider
+    case 'local':
+    case 'local-folder':
+    case 'github':
+    case 's3':
+      throw new Error('expected an OAuth file provider row')
   }
+}
+
+function drivePayload(): OAuthFileProvider {
+  return oauthPayload(
+    ProviderRowFixture.googleDrive(ProviderRowFixture.unscoped('drive')),
+  )
 }
 
 const SHARED_TOKENS = {
@@ -59,12 +67,14 @@ describe('authorized accounts client', () => {
     wasm.addGoogleDriveAuthorizedAccount.mockReset()
   })
 
-  test('needs the vault folder before it can list Drive accounts', async () => {
-    const unbound: OAuthFileConfig = {
-      ...driveConfig(),
-      folderId: { state: 'root' },
+  test('needs a readable iCloud share before it can list its accounts', async () => {
+    const unreadable: OAuthFileProvider = {
+      preset: 'icloud',
+      webAuthToken: ProviderFixtureCredentials.ICLOUD_TOKEN,
+      account: { state: 'unknown' },
+      shareTarget: 'not-a-share',
     }
-    const access = await authorizedAccountsClient.access(unbound)
+    const access = await authorizedAccountsClient.access(unreadable)
     expect(access.isErr()).toBe(true)
     if (access.isOk()) return
     expect(access.error.kind).toBe(AuthorizedAccountsFailureKind.TargetRequired)
@@ -74,21 +84,21 @@ describe('authorized accounts client', () => {
   })
 
   test('lists Drive accounts with a fresh token for the vault folder', async () => {
-    const config = driveConfig()
-    vi.spyOn(
-      googleOAuthSession,
-      'ensureValidOAuthFileConfig',
-    ).mockResolvedValue(ok(config))
+    const payload = drivePayload()
+    const fresh = vi
+      .spyOn(googleOAuthSession, 'ensureFreshDriveAccess')
+      .mockImplementation(async (current) => ok(current))
     const accounts = { accounts: [] }
     wasm.listGoogleDriveAuthorizedAccounts.mockResolvedValue(accounts)
 
-    const access = await authorizedAccountsClient.access(config)
+    const access = await authorizedAccountsClient.access(payload)
+    expect(fresh).toHaveBeenCalledOnce()
     expect(access).toEqual(
       ok({
         source: AuthorizedAccountsSource.GoogleDrive,
-        accessToken: 'drive-token',
-        folderId: 'vault-folder',
-        accountHint: 'owner@example.com',
+        accessToken: ProviderFixtureCredentials.DRIVE_TOKEN,
+        folderId: ProviderFixtureCredentials.DRIVE_FOLDER,
+        accountHint: ProviderFixtureCredentials.ACCOUNT,
       }),
     )
     if (access.isErr()) return
@@ -96,9 +106,19 @@ describe('authorized accounts client', () => {
       ok(accounts),
     )
     expect(wasm.listGoogleDriveAuthorizedAccounts).toHaveBeenCalledWith(
-      'drive-token',
-      'vault-folder',
+      ProviderFixtureCredentials.DRIVE_TOKEN,
+      ProviderFixtureCredentials.DRIVE_FOLDER,
     )
+  })
+
+  test('asks the Drive owner to sign in again when the refresh fails', async () => {
+    vi.spyOn(googleOAuthSession, 'ensureFreshDriveAccess').mockResolvedValue(
+      err(new OAuthFailure(OAuthFailureKind.GoogleCancelled)),
+    )
+    const access = await authorizedAccountsClient.access(drivePayload())
+    expect(access.isErr()).toBe(true)
+    if (access.isOk()) return
+    expect(access.error.kind).toBe(AuthorizedAccountsFailureKind.SignInRequired)
   })
 
   test('asks the owner for drive.readonly from the click, then shares with that grant', async () => {
@@ -204,12 +224,11 @@ describe('authorized accounts client', () => {
         ],
       }),
     )
-    const config: OAuthFileConfig = {
-      ...defaultOAuthFileConfig({ preset: 'icloud', fileName: 'vault' }),
-      accessToken: storedOAuthCredential('cloudkit-token'),
-      iCloudShareTarget: storedICloudShareTarget(ICLOUD_TARGET),
-    }
-    const access = await authorizedAccountsClient.access(config)
+    const access = await authorizedAccountsClient.access(
+      oauthPayload(
+        ProviderRowFixture.icloud(ProviderRowFixture.unscoped('icloud')),
+      ),
+    )
     expect(access.isOk()).toBe(true)
     if (access.isErr()) return
     const listed = await authorizedAccountsClient.list(access.value)
@@ -232,5 +251,24 @@ describe('authorized accounts client', () => {
         email: 'MEMBER@icloud.com',
       }),
     ).toEqual(ok('member@icloud.com'))
+    // A picked joiner stays picked while the list still invites it.
+    expect(
+      SharedJoinerSelections.reconcile({
+        selection: SharedJoinerSelections.selected('MEMBER@icloud.com'),
+        accounts: listed.value,
+      }),
+    ).toEqual(SharedJoinerSelections.selected('member@icloud.com'))
+    expect(
+      SharedJoinerSelections.reconcile({
+        selection: SharedJoinerSelections.selected('gone@icloud.com'),
+        accounts: listed.value,
+      }).kind,
+    ).toBe(SharedJoinerSelectionKind.None)
+    expect(
+      SharedJoinerSelections.reconcile({
+        selection: SharedJoinerSelections.NONE,
+        accounts: listed.value,
+      }),
+    ).toEqual(SharedJoinerSelections.NONE)
   })
 })

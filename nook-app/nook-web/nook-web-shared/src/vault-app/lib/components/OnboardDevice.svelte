@@ -22,12 +22,16 @@ itself, so nothing here waits for it.
   import { enrollmentBrowser } from '$lib/enrollment/code'
   import AuthorizedAccountsPanel from '$lib/components/AuthorizedAccountsPanel.svelte'
   import {
-    StoredOAuthFileConfigurationDecodeKind,
-    decodeStoredOAuthFileConfiguration,
     localizeProviderLabel,
     localizedProviderStorageDetail,
     type StorageProvider,
   } from '$lib/auth/providers'
+  import {
+    SharedProviderAccountsKind,
+    SharedProviderAccountsOf,
+    type SharedProviderAccounts,
+  } from '$lib/components/shared-provider-accounts'
+  import { SharedJoinerSelectionKind } from '$lib/vault/shared-joiner-selection'
   import { peek_enrollment_issued_at } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
   import {
@@ -98,14 +102,10 @@ itself, so nothing here waits for it.
   )
   // Google Drive and iCloud invites name one of the provider's authorized
   // accounts, picked from the provider's own sharing list.
-  const sharedProviderConfig = $derived.by(() => {
-    if (!usesSharedGrant || selectedProvider === false) return false
-    const decoded = decodeStoredOAuthFileConfiguration(
-      selectedProvider.oauthFile,
-    )
-    return decoded.kind === StoredOAuthFileConfigurationDecodeKind.Configured
-      ? decoded.config
-      : false
+  const sharedAccounts = $derived.by((): SharedProviderAccounts => {
+    if (!usesSharedGrant || selectedProvider === false)
+      return { kind: SharedProviderAccountsKind.None }
+    return SharedProviderAccountsOf.row(selectedProvider)
   })
   const sharedProviderTitle = $derived(
     selectedProvider === false ? '' : providerLabel(selectedProvider),
@@ -177,7 +177,10 @@ itself, so nothing here waits for it.
       localError = vault.t(I18N_KEYS.IdentityControlErrorProviderNotMount)
       return
     }
-    if (usesSharedGrant && !vault.sharedJoinerIdentity.trim()) {
+    if (
+      usesSharedGrant &&
+      vault.sharedJoinerSelection.kind === SharedJoinerSelectionKind.None
+    ) {
       localError = vault.t(I18N_KEYS.OnboardDeviceSharedIdentityRequired)
       return
     }
@@ -295,13 +298,13 @@ itself, so nothing here waits for it.
         </div>
       </div>
 
-      {#if usesSharedGrant && sharedProviderConfig !== false}
+      {#if sharedAccounts.kind === SharedProviderAccountsKind.Listed}
         <AuthorizedAccountsPanel
           {vault}
-          config={sharedProviderConfig}
+          payload={sharedAccounts.payload}
           shareTitle={sharedProviderTitle}
           selectable
-          bind:selectedEmail={vault.sharedJoinerIdentity}
+          bind:selection={vault.sharedJoinerSelection}
           disabled={isBusy || isGenerating}
           {onManageAccounts}
         />

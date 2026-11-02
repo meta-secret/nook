@@ -2,6 +2,7 @@ import { err, ok, type Result } from "neverthrow";
 import {
   check_backup_password_access,
   check_passkey_access,
+  provider_failure_translation_key,
   type CredentialCheckReport,
   type IdentityCheck,
   type NookAccessCheckSource,
@@ -9,54 +10,62 @@ import {
   type NookVaultManager,
   type VaultCheck,
 } from "$app-wasm";
-import {
-  LOCAL_FOLDER_PROVIDER_TYPE,
-  LocalFolderHandleKind,
-  LocalFolderPresentation,
-} from "$lib/auth/providers";
 import type { VaultState } from "$lib/vault.svelte";
-import {
-  NativeProviderFailure,
-  NativeProviderFailureKind,
-} from "$lib/runtime/storage-failure";
-import {
-  LocalFolderDraftKind,
-  LoginSetupKind,
-} from "$lib/vault/state/provider.svelte";
-import { I18N_KEYS, type I18nKey } from "../../../generated/i18n-keys";
+import { LoginSetupKind } from "$lib/vault/state/provider.svelte";
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 
 export enum AccessCheckFailureKind {
   Passkey = "passkey",
   BackupPassword = "backup-password",
-  /** The S3 server refused this device's key. */
-  S3KeyAccessDenied = "s3-key-access-denied",
 }
 
 /** A check that could not finish; what it says to the user. */
 export class AccessCheckFailure {
   constructor(readonly kind: AccessCheckFailureKind) {}
 
-  /** The same failure, unless a refused S3 key stopped the check: then
-   * that refusal, which names what to fix. */
+  /** The same check's failure, with the message Rust picks for what
+   * stopped it: a refused GitHub token or S3 key names what to fix, and any
+   * other failure keeps the check's own message. */
   refusedBy<NativeCause>(refusal: NativeCause): AccessCheckFailure {
-    switch (new NativeProviderFailure(refusal).kind()) {
-      case NativeProviderFailureKind.S3KeyAccessDenied:
-        return new AccessCheckFailure(AccessCheckFailureKind.S3KeyAccessDenied);
-      case NativeProviderFailureKind.GitHubTokenRejected:
-      case NativeProviderFailureKind.Unclassified:
-        return this;
-    }
+    const message =
+      refusal instanceof Error ? refusal.message : String(refusal);
+    const keyRequest: Parameters<typeof provider_failure_translation_key>[0] = {
+      message,
+      operationFailedKey: this.translationKey,
+    };
+    const refusalRequest: AccessCheckRefusalRequest = {
+      kind: this.kind,
+      translationKey: provider_failure_translation_key(keyRequest),
+    };
+    return new AccessCheckRefusal(refusalRequest);
   }
 
-  get translationKey(): I18nKey {
+  get translationKey(): string {
     switch (this.kind) {
       case AccessCheckFailureKind.Passkey:
         return I18N_KEYS.AccessCheckPasskeyFailed;
       case AccessCheckFailureKind.BackupPassword:
         return I18N_KEYS.AccessCheckFailed;
-      case AccessCheckFailureKind.S3KeyAccessDenied:
-        return I18N_KEYS.ErrorsS3KeyAccessDenied;
     }
+  }
+}
+
+type AccessCheckRefusalRequest = {
+  readonly kind: AccessCheckFailureKind;
+  readonly translationKey: string;
+};
+
+/** A check a provider refused, with Rust's message for the refusal. */
+class AccessCheckRefusal extends AccessCheckFailure {
+  private readonly refusalKey: string;
+
+  constructor({ kind, translationKey }: AccessCheckRefusalRequest) {
+    super(kind);
+    this.refusalKey = translationKey;
+  }
+
+  override get translationKey(): string {
+    return this.refusalKey;
   }
 }
 
@@ -189,17 +198,16 @@ type CurrentProviderCheck = {
 /** The provider a recovery reads: the folder the user picked, or the
  * provider staged for the recovery. */
 export function recoveryProviderSource(vault: VaultState): NookProviderSource {
+  const draft = vault.providerDraft;
   if (
     vault.loginSetup.kind === LoginSetupKind.Active &&
-    vault.loginSetup.providerType === LOCAL_FOLDER_PROVIDER_TYPE &&
-    vault.localFolderDraft.kind === LocalFolderDraftKind.Configured
-  ) {
-    const handle = new LocalFolderPresentation(
-      vault.localFolderDraft.config,
-    ).localFolderHandle();
-    if (handle.kind === LocalFolderHandleKind.Selected)
-      return { kind: "localFolder", handleId: handle.handleId };
-  }
+    draft.type === "local-folder" &&
+    draft.state === "selected"
+  )
+    return {
+      kind: "remote",
+      source: { kind: "localFolder", handleId: draft.handleId },
+    };
   return currentProvider();
 }
 
@@ -209,20 +217,10 @@ export function recoveryCheckTarget(vault: VaultState): AccessCheckTarget {
   switch (source.kind) {
     case "currentProvider":
       return { kind: AccessCheckTargetKind.CurrentProvider };
-    case "localFolder":
+    case "remote":
       return {
         kind: AccessCheckTargetKind.Source,
-        source: { kind: "localFolder", handleId: source.handleId },
-      };
-    case "googleDrive":
-      return {
-        kind: AccessCheckTargetKind.Source,
-        source: { kind: "googleDrive", accessToken: source.accessToken },
-      };
-    case "s3":
-      return {
-        kind: AccessCheckTargetKind.Source,
-        source: { kind: "s3", configuration: source.configuration },
+        source: { kind: "remote", source: source.source },
       };
   }
 }

@@ -44,7 +44,7 @@ describe('a check the connected provider refused', () => {
 
     expect(checked.isErr()).toBe(true)
     if (checked.isOk()) return
-    expect(checked.error.kind).toBe(AccessCheckFailureKind.S3KeyAccessDenied)
+    expect(checked.error.kind).toBe(AccessCheckFailureKind.BackupPassword)
     expect(checked.error.translationKey).toBe(I18N_KEYS.ErrorsS3KeyAccessDenied)
   })
 

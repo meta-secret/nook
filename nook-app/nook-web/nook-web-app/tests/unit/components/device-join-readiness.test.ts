@@ -1,11 +1,7 @@
 import { beforeAll, describe, expect, test } from 'vitest'
 import initNookWasm, { ReplicationType } from '$app-wasm'
-import {
-  providerPersistenceDefaults,
-  storedGithubPat,
-  storedGithubRepository,
-  type StorageProvider,
-} from '$lib/auth/providers'
+import { type StorageProvider } from '$lib/auth/providers'
+import { ProviderRowFixture } from '../provider-fixtures'
 import {
   DeviceJoinAvailability,
   DeviceJoinReadiness,
@@ -17,14 +13,8 @@ beforeAll(async () => {
 
 function githubProvider(): StorageProvider {
   return {
-    ...providerPersistenceDefaults(),
-    id: 'github-1',
-    type: 'github',
+    ...ProviderRowFixture.github(ProviderRowFixture.unscoped('github-1')),
     label: 'GitHub',
-    githubRepo: storedGithubRepository('nook-vault'),
-    githubPat: storedGithubPat('github_pat_test'),
-    syncCheckpoint: { state: 'neverSynced' },
-    createdAt: '2026-10-16T00:00:00.000Z',
   }
 }
 

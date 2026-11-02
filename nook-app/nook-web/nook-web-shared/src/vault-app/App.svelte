@@ -8,6 +8,7 @@
   import { I18N_KEYS } from '../generated/i18n-keys'
   import { onMount, untrack } from 'svelte'
   import { VaultState } from '$lib/vault.svelte'
+  import { StagedVaultDiscoveryKind } from '$lib/vault/provider-connection'
   import {
     DeviceProtectionStatus,
     set_vault_session_locked,
@@ -211,20 +212,23 @@
       return
     }
     if (existingVaultImport) {
-      const discovered = await vault.discoverStagedVaultStoreId()
+      const discovered = await vault.discoverStagedVault()
       if (discovered.isErr()) {
         vault.errorMsg = vault.t(discovered.error.translationKey)
         return
       }
-      const activeStoreId = discovered.value
-      // Several vaults wait for the user's choice; the import continues
-      // once one is chosen.
-      if (vault.remoteVaultChoices.length > 0) return
-      if (!activeStoreId) {
-        vault.errorMsg = vault.t(I18N_KEYS.AuthStorageExistingVaultNotFound)
-        return
+      const found = discovered.value
+      switch (found.kind) {
+        // Several vaults wait for the user's choice; the import continues
+        // once one is chosen.
+        case StagedVaultDiscoveryKind.Several:
+          return
+        case StagedVaultDiscoveryKind.NotFound:
+          vault.errorMsg = vault.t(I18N_KEYS.AuthStorageExistingVaultNotFound)
+          return
+        case StagedVaultDiscoveryKind.Found:
+          existingVaultImportLifecycle.remember(found.storeId)
       }
-      existingVaultImportLifecycle.remember(activeStoreId)
     }
     if (existingVaultNeedsDeviceUnlock || existingVaultImportNeedsIdentity) {
       // A card shows its key unlock, a failure, and recovery itself: no

@@ -94,8 +94,10 @@ decrypts in memory and changes nothing.
   const choices = $derived.by(
     (): Result<readonly ProviderIdentityChoice[], IdentityChoicesFailure> => {
       if (inventory.kind !== DriveVaultInventoryKind.Loaded) return ok([])
+      const listed = listedVaults(inventory.listing)
       const request: IdentityChoicesRequest = {
-        vaults: listedVaults(inventory.listing),
+        vaults: listed.vaults,
+        identities: listed.identities,
         checks,
         authenticated: vault.identityInUse,
       }
@@ -124,7 +126,7 @@ decrypts in memory and changes nothing.
   function driveTarget(): AccessCheckTarget {
     return {
       kind: AccessCheckTargetKind.Source,
-      source: { kind: 'googleDrive', accessToken },
+      source: { kind: 'remote', source: { kind: 'googleDrive', accessToken } },
     }
   }
 
@@ -151,7 +153,10 @@ decrypts in memory and changes nothing.
     if (planned.length > 0) {
       working = true
       try {
-        const source: NookProviderSource = { kind: 'googleDrive', accessToken }
+        const source: NookProviderSource = {
+          kind: 'remote',
+          source: { kind: 'googleDrive', accessToken },
+        }
         const run: IdentityPlanRun = { source, planned }
         const ran = await new IdentityPlanActions(vault).run(run)
         if (ran.isErr()) {
@@ -213,7 +218,10 @@ decrypts in memory and changes nothing.
     return async (choice) => {
       workingOn = choice.identity.identityId
       try {
-        const source: NookProviderSource = { kind: 'googleDrive', accessToken }
+        const source: NookProviderSource = {
+          kind: 'remote',
+          source: { kind: 'googleDrive', accessToken },
+        }
         const run: IdentityPlanRun = {
           source,
           planned: [{ choice, decision: decide(choice) }],

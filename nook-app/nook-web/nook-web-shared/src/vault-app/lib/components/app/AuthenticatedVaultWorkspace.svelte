@@ -375,8 +375,6 @@ band, the scrolling page and the status line.
     isInitializing={vault.isInitializing}
     addProviderOpen={vault.addProviderOpen}
     loginSetup={vault.loginSetup}
-    bind:githubPat={vault.githubPat}
-    bind:githubRepo={vault.githubRepo}
     passwordEntries={vault.passwordEntries}
     isPasswordBusy={vault.isPasswordBusy}
     passwordError={vault.passwordError}
@@ -532,8 +530,6 @@ band, the scrolling page and the status line.
     />
     <VaultStatusBar
       {vault}
-      storageMode={vault.storageMode}
-      githubRepo={vault.githubRepo}
       lastSync={vault.lastSync}
       isSyncing={vault.isSyncActivityVisible}
       successMsg={vault.successMsg}
@@ -563,8 +559,6 @@ band, the scrolling page and the status line.
     {#snippet footer()}
       <VaultStatusBar
         {vault}
-        storageMode={vault.storageMode}
-        githubRepo={vault.githubRepo}
         lastSync={vault.lastSync}
         isSyncing={vault.isSyncActivityVisible}
         successMsg={vault.successMsg}
@@ -658,8 +652,6 @@ band, the scrolling page and the status line.
     <div class="nk-shell-status min-w-0 px-3 md:px-5">
       <VaultStatusBar
         {vault}
-        storageMode={vault.storageMode}
-        githubRepo={vault.githubRepo}
         lastSync={vault.lastSync}
         isSyncing={vault.isSyncActivityVisible}
         successMsg={vault.successMsg}

@@ -18,12 +18,10 @@ import type {
   ProviderSyncFailureHandling,
   ProviderSyncFreshness,
   ProviderSyncVisibility,
+  ProviderCredentialReadiness,
 } from "$app-wasm";
 import type { NookVaultSyncResult, VaultAccessStatus } from "$lib/nook";
-import type {
-  ProviderSetupRequest,
-  StorageProvider,
-} from "$lib/auth/providers";
+import type { ProviderKind, StorageProvider } from "$lib/auth/providers";
 import type {
   ProviderRemovalOutcome,
   ProviderPersistenceOutcome,
@@ -143,35 +141,25 @@ type ProviderStateFields = Pick<
   | "activeVault"
   | "addProviderOpen"
   | "clearExistingVaultRecoverySummary"
-  | "clearLocalFolder"
   | "clearLoginSetup"
-  | "clearOauthFile"
-  | "clearOauthSetupPreset"
   | "activateLoginSetup"
   | "recoveryDiscovery"
   | "recordExistingVaultRecovery"
-  | "githubPat"
-  | "githubRepo"
   | "hasActiveVaultStore"
   | "icloudOAuthBusy"
   | "icloudOAuthPreparing"
   | "icloudOAuthReady"
-  | "localFolderDraft"
-  | "configureLocalFolder"
-  | "s3Draft"
-  | "s3Configuration"
-  | "configureS3"
-  | "clearS3"
   | "localFolderBackupSupported"
   | "localVaultCatalog"
   | "localVaults"
   | "localVaultPresent"
   | "loginRequiresExistingVault"
   | "loginSetup"
-  | "oauthFileDraft"
-  | "configureOauthFile"
-  | "oauthSetupSelection"
-  | "selectOauthSetupPreset"
+  | "providerDraft"
+  | "stageProviderDraft"
+  | "useThisBrowser"
+  | "forgetDraftCredentials"
+  | "localVaultPresence"
   | "openActiveVault"
   | "providers"
   | "remoteVaultChoices"
@@ -179,7 +167,6 @@ type ProviderStateFields = Pick<
   | "hasSelectedLoginVaultStore"
   | "selectedLoginVault"
   | "selectLoginVault"
-  | "storageMode"
 >;
 
 type ProviderRuntimeFields = Pick<
@@ -205,7 +192,7 @@ interface SharedStorageActionsContext {
 
 type ProviderPersistenceOptions = {
   readonly replace: boolean;
-  readonly providers?: StorageProvider[];
+  readonly providers: readonly StorageProvider[];
 };
 
 export type ProviderSyncRequest = {
@@ -220,7 +207,7 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   readonly syncProviders: StorageProvider[];
   applyActiveProviderCredentials(): void;
   assessVaultConnectStatus(
-    argsOverride?: NookStorageConnection,
+    args: NookStorageConnection,
   ): Promise<Result<VaultAccessStatus, VaultStorageFailure>>;
   clearUnlockedSession(resetManager?: boolean): void;
   connectAndSyncStagedProvider(): Promise<void>;
@@ -255,7 +242,7 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   syncProviderById(
     request: ProviderSyncRequest,
   ): Promise<Result<ProviderSyncOutcome, VaultStorageFailure | OAuthFailure>>;
-  wasmStorageArgs(): NookStorageConnection;
+  wasmStorageArgs(): Result<NookStorageConnection, VaultStorageFailure>;
 }
 
 export type ProviderActionsContext = ProviderStateFields &
@@ -266,20 +253,10 @@ export type ProviderActionsContext = ProviderStateFields &
 
 export type ActiveProviderCredentialsContext = Pick<
   ProviderActionsContext,
-  | "clearLocalFolder"
-  | "clearOauthFile"
-  | "clearS3"
-  | "configureLocalFolder"
-  | "configureOauthFile"
-  | "configureS3"
-  | "githubPat"
-  | "githubRepo"
-  | "localFolderDraft"
-  | "localVaultPresent"
   | "loginSetup"
-  | "oauthFileDraft"
-  | "s3Configuration"
-  | "storageMode"
+  | "providerDraft"
+  | "stageProviderDraft"
+  | "localVaultPresence"
   | "syncProviders"
 >;
 
@@ -289,25 +266,19 @@ export type ProviderSaveContext = Pick<
   | "addProviderOpen"
   | "applyActiveProviderCredentials"
   | "clearLoginSetup"
-  | "configureOauthFile"
   | "enqueueStorage"
   | "errorMsg"
-  | "githubPat"
-  | "githubRepo"
   | "hasActiveVaultStore"
   | "hasManager"
   | "isAuthenticated"
-  | "localFolderDraft"
   | "loginRequiresExistingVault"
   | "loginSetup"
-  | "oauthFileDraft"
-  | "oauthSetupSelection"
+  | "providerDraft"
+  | "stageProviderDraft"
   | "persistProviders"
   | "providers"
   | "admitManager"
-  | "s3Configuration"
   | "selectedLoginVault"
-  | "storageMode"
   | "t"
 >;
 
@@ -419,7 +390,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   stopScheduledSync(): boolean;
   clearUnlockedSession(resetManager?: boolean): void;
   beginAddProvider(): void;
-  beginProviderSetup(request: ProviderSetupRequest): void;
+  beginProviderSetup(kind: ProviderKind): void;
   openSection(section: WorkspaceSection): void;
   ensureOAuthTokensFresh(): Promise<
     Result<
@@ -434,6 +405,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
     conflict: NookSyncConflictReview,
   ): void;
   hasRemoteCredentials(): boolean;
+  credentialReadiness(): ProviderCredentialReadiness;
   hydrateMultiDeviceState(): Promise<
     Result<RosterHydrationOutcome, OAuthFailure | VaultStorageFailure>
   >;
@@ -449,7 +421,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
     request: StorageTimeoutRace<T, E>,
   ): Promise<Result<T, E | VaultStorageFailure>>;
   assessVaultConnectStatus(
-    args?: NookStorageConnection,
+    args: NookStorageConnection,
   ): Promise<Result<VaultAccessStatus, VaultStorageFailure>>;
   refreshLocalVaultCatalog(): Promise<
     Result<LocalVaultCatalog, VaultStorageFailure>
@@ -498,7 +470,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   updateProviderSyncMetadata(
     request: ProviderSyncMetadataRequest,
   ): Promise<Result<ProviderSyncMetadataUpdateOutcome, VaultStorageFailure>>;
-  wasmStorageArgs(): NookStorageConnection;
+  wasmStorageArgs(): Result<NookStorageConnection, VaultStorageFailure>;
 }
 
 export type SyncActionsContext = SyncProviderFields &
@@ -545,7 +517,7 @@ export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
     | "selectPasswordEntry"
     | "sessionExpiredByIdle"
     | "sessionEpoch"
-    | "sharedJoinerIdentity"
+    | "sharedJoinerSelection"
     | "vaultMembers"
   > &
   Pick<

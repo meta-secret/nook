@@ -14,7 +14,6 @@ keeps one live action button: preparing a source comes first, then Check.
     type CredentialCheckReport,
     type NookAccessCheckSource,
   } from '$app-wasm'
-  import { LOCAL_PROVIDER_TYPE } from '$lib/auth/providers'
   import BackButton from '$lib/components/workspace/BackButton.svelte'
   import AccessCheckResults from '$lib/components/access-check/AccessCheckResults.svelte'
   import { Button } from '$lib/components/ui/button'
@@ -68,16 +67,16 @@ keeps one live action button: preparing a source comes first, then Check.
       case AccessCheckSourceKind.GoogleDrive: {
         if (!driveToken) return { kind: PreparedSourceKind.Pending }
         const drive: NookAccessCheckSource = {
-          kind: 'googleDrive',
-          accessToken: driveToken,
+          kind: 'remote',
+          source: { kind: 'googleDrive', accessToken: driveToken },
         }
         return ready(drive)
       }
       case AccessCheckSourceKind.LocalFolder: {
         if (!folderHandle) return { kind: PreparedSourceKind.Pending }
         const folder: NookAccessCheckSource = {
-          kind: 'localFolder',
-          handleId: folderHandle,
+          kind: 'remote',
+          source: { kind: 'localFolder', handleId: folderHandle },
         }
         return ready(folder)
       }
@@ -94,7 +93,7 @@ keeps one live action button: preparing a source comes first, then Check.
     ACCESS_CHECK_SOURCES.filter(
       (kind) =>
         kind !== AccessCheckSourceKind.CurrentProvider ||
-        (vault.isAuthenticated && vault.storageMode !== LOCAL_PROVIDER_TYPE),
+        (vault.isAuthenticated && vault.providerDraft.type !== 'local'),
     ),
   )
 
