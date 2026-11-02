@@ -13,9 +13,9 @@
 
 use crate::{TypedInput, TypedOutput};
 use nook_core::{
-    EventLogLocation, EventStorageBytes, IdentityId, ListedIdentityLog, LocalEventWrite,
-    LocalVaultOccupancy, PlacedNamespace, ProviderIdentityLogEvents, ProviderVaultObservation,
-    ProviderVaultSummary, StorageMode, StoreId, VaultEvent,
+    EventLogLocation, EventLogNamespaceKind, EventStorageBytes, IdentityId, ListedIdentityLog,
+    LocalEventWrite, LocalVaultOccupancy, PlacedNamespace, ProviderIdentityLogEvents,
+    ProviderVaultObservation, ProviderVaultSummary, StorageMode, StoreId, VaultEvent,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -173,29 +173,36 @@ impl NookVaultManager {
     async fn discovered_identity_logs(
         &self,
         source: &DiscoveredVaultSource<'_>,
-        observations: &[ProviderVaultObservation],
         this_browser: Option<&nook_core::ListingAppKey>,
     ) -> Result<Vec<ListedIdentityLog>, NookError> {
-        let mut identities: Vec<IdentityId> = Vec::new();
-        for observation in observations {
-            if !identities.contains(&observation.identity) {
-                identities.push(observation.identity.clone());
-            }
-        }
+        // Every identity log the source holds, as Check access reads it, not
+        // only those of identities that file a discovered vault.
         if let (DiscoveredVaultSource::CurrentProvider, PreparedProvider::Remote(remote)) =
             (source, &self.storage.provider)
             && let RemoteProvider::GoogleDrive(drive) = remote.provider()
         {
-            return Ok(DriveVaultListing {
+            return DriveVaultListing {
                 token: drive.token.expose(),
                 root: &drive.root,
             }
             .identity_logs(this_browser)
-            .await?
-            .into_iter()
-            .filter(|listed| identities.contains(&listed.identity_id))
-            .collect());
+            .await;
         }
+        let logs_held = match source {
+            DiscoveredVaultSource::CurrentProvider => {
+                self.list_namespaces_at_current_provider(EventLogNamespaceKind::Identity)
+                    .await?
+            }
+            DiscoveredVaultSource::BackupFolder(handle_id) => {
+                LocalFolderHandles::current()
+                    .open_folder(handle_id)
+                    .await?
+                    .list_namespaces(EventLogNamespaceKind::Identity)
+                    .await?
+            }
+        };
+        let identities: Vec<IdentityId> =
+            logs_held.iter().map(|log| log.identity().clone()).collect();
         let mut logs = Vec::new();
         for identity_id in identities {
             let location = EventLogLocation::Identity(identity_id.clone());
@@ -246,7 +253,7 @@ impl NookVaultManager {
             .inspect_discovered_vaults(&source, &held.unheld(&observations), held.app_id.as_ref())
             .await?;
         let identity_logs = self
-            .discovered_identity_logs(&source, &observations, held.listing_key.as_ref())
+            .discovered_identity_logs(&source, held.listing_key.as_ref())
             .await?;
         let listing = LocalVaultClassification {
             local_vault: &LocalVaultOccupancy::Closed,
