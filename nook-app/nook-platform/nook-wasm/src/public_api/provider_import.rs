@@ -74,7 +74,6 @@ pub fn decode_storage_providers(
 mod wasm_tests {
     use super::*;
     use js_sys::JSON;
-    use nook_core::ProviderSyncCheckpoint;
     use tsify::Ts;
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -94,6 +93,14 @@ mod wasm_tests {
         }],
         "activeVaultStoreId": { "state": "unselected" }
     }"#;
+
+    /// A current-shape snapshot; `checkpoint` is spliced in before the
+    /// creation time.
+    fn nested_provider_snapshot(checkpoint: &str) -> String {
+        format!(
+            r#"{{"providers":[{{"id":"github","label":"GitHub","storeId":{{"state":"unscoped"}},{checkpoint}"createdAt":"2026-08-08T00:00:00.000Z","provider":{{"type":"github","repository":{{"state":"repository","value":"repo"}},"token":"github_pat_fixture"}}}}],"activeVaultStoreId":{{"state":"unselected"}}}}"#
+        )
+    }
 
     const MALFORMED_PROVIDER_SNAPSHOT: &str = r#"{
         "providers": [{
@@ -120,19 +127,19 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
-    fn provider_decoder_normalizes_legacy_javascript_snapshot() -> Result<(), wasm_bindgen::JsError>
-    {
-        let snapshot = decode_snapshot_json(LEGACY_PROVIDER_SNAPSHOT)?;
-        let decoded = decode_storage_providers(&snapshot)?.decode()?;
-
-        assert_eq!(
-            decoded
-                .providers
-                .first()
-                .ok_or_else(|| JsError::new("Expected decoded provider."))?
-                .sync_checkpoint,
-            ProviderSyncCheckpoint::NeverSynced
+    fn provider_decoder_rejects_the_flat_shape_and_a_missing_checkpoint()
+    -> Result<(), wasm_bindgen::JsError> {
+        // No snapshot is migrated: the old flat row and a row without its
+        // sync checkpoint both fail, and only the complete row decodes.
+        assert!(
+            decode_storage_providers(&decode_snapshot_json(LEGACY_PROVIDER_SNAPSHOT)?).is_err()
         );
+        assert!(
+            decode_storage_providers(&decode_snapshot_json(&nested_provider_snapshot(""))?)
+                .is_err()
+        );
+        let complete = nested_provider_snapshot(r#""syncCheckpoint":{"state":"neverSynced"},"#);
+        assert!(decode_storage_providers(&decode_snapshot_json(&complete)?).is_ok());
         Ok(())
     }
 
