@@ -30,22 +30,7 @@ impl<'a> DriveStorageClient<'a> {
     }
 }
 
-use serde::Deserialize;
-
-#[derive(Deserialize)]
-#[allow(dead_code)]
-struct DriveAboutUser {
-    #[serde(rename = "emailAddress")]
-    #[serde(default)]
-    email_address: DriveEmailDisclosure,
-}
-
-#[derive(Deserialize)]
-#[allow(dead_code)]
-struct DriveAboutResponse {
-    #[serde(default)]
-    user: DriveAccountObservation,
-}
+use serde::de::IgnoredAny;
 
 impl DriveStorageClient<'_> {
     fn drive_error(request: DriveStorageClientDriveError<'_>) -> NookError {
@@ -86,7 +71,8 @@ impl DriveStorageClient<'_> {
                 },
             ));
         }
-        let _parsed: DriveAboutResponse = response
+        // Only that Drive answered with JSON matters; nothing reads the user.
+        let _about: IgnoredAny = response
             .json()
             .await
             .map_err(|e| NookError::Serialization(format!("Failed to parse Drive about: {e}")))?;
@@ -112,41 +98,10 @@ mod tests {
                 if message == "Google Drive API responded with status 503 Service Unavailable"
         ));
     }
-
-    #[wasm_bindgen_test]
-    fn about_response_accepts_optional_user_payloads() -> anyhow::Result<()> {
-        let with_user: DriveAboutResponse =
-            serde_json::from_str(r#"{"user":{"emailAddress":"person@example.test"}}"#)?;
-        assert!(
-            matches!(with_user.user, DriveAccountObservation::Account(DriveAboutUser { email_address: DriveEmailDisclosure::Address(email) }) if email == "person@example.test")
-        );
-        let without_user: DriveAboutResponse = serde_json::from_str("{}")?;
-        assert!(matches!(
-            without_user.user,
-            DriveAccountObservation::Unreported
-        ));
-        Ok(())
-    }
 }
 /// Named values required by `DriveStorageClient::drive_error`.
 #[derive(Clone, Copy)]
 pub(crate) struct DriveStorageClientDriveError<'a> {
     pub(crate) status: reqwest::StatusCode,
     pub(crate) body: &'a str,
-}
-#[derive(Default, Deserialize)]
-#[serde(untagged)]
-#[allow(dead_code)]
-enum DriveEmailDisclosure {
-    Address(String),
-    #[default]
-    Undisclosed,
-}
-#[derive(Default, Deserialize)]
-#[serde(untagged)]
-#[allow(dead_code)]
-enum DriveAccountObservation {
-    Account(DriveAboutUser),
-    #[default]
-    Unreported,
 }

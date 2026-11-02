@@ -358,7 +358,9 @@ impl DriveVaultListing<'_> {
             DriveNamespace::list_folders(self.token, self.root, EventLogNamespaceKind::Vault)
                 .await?
                 .into_iter()
-                .filter(|folder| folder.store_id() == Some(store_id))
+                .filter(|folder| {
+                    *folder.placed.location() == EventLogLocation::Vault(store_id.clone())
+                })
                 .collect::<Vec<_>>();
         match (folders.pop(), folders.is_empty()) {
             (Some(folder), true) => Ok(folder),

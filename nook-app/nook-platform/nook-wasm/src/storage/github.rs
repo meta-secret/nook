@@ -79,7 +79,7 @@ pub(crate) struct GitHubStorageClientFetchGithubFileAtPath<'a> {
 mod discovery;
 use discovery::GitHubDirectoryListing;
 pub(crate) use discovery::{
-    GitHubFileWrite, GitHubRootDiscovery, GitHubStorageClientFetchGithubVault,
+    GitHubRootDiscovery, GitHubStorageClientFetchGithubVault,
     GitHubStorageClientWriteGithubTextFile, GitHubVaultDiscovery,
 };
 // -------------------------------------------------------------
@@ -270,7 +270,6 @@ impl GitHubStorageClient<'_> {
             repo,
             path,
             content,
-            write,
         } = request;
         use base64::{Engine as _, engine::general_purpose};
 
@@ -279,7 +278,6 @@ impl GitHubStorageClient<'_> {
         let body = GitHubPutBody {
             message: "Update secrets store via Nook WASM".to_owned(),
             content: base64_content,
-            sha: write,
         };
 
         let body_str = serde_json::to_string(&body)

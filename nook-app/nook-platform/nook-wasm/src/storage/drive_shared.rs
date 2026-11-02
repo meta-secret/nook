@@ -9,8 +9,10 @@
 
 use crate::DriveStorageClient;
 
-use super::drive::wire::{FileIdentity, FileName};
+use super::drive::wire::{DriveCreatedFolder, DrivePageRequest, PageAfter, PageCompletion};
+use super::omittable_list::OmittableList;
 use crate::NookError;
+use crate::types::NookDriveRootOrigin;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
@@ -28,29 +30,20 @@ struct DriveFolderPermissionRequest<'a> {
     email_address: &'a str,
 }
 
-#[derive(Default, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct DriveVaultFolderListResponse {
-    #[serde(default)]
-    files: Vec<nook_core::DriveVaultFolderObservation>,
-    #[serde(default)]
-    next_page_token: Option<String>,
+    files: OmittableList<nook_core::DriveVaultFolderObservation>,
+    next_page_token: PageCompletion,
 }
 
 /// The vault folder Connect & sync bound the provider to.
 pub(crate) struct DriveVaultFolderConnection {
     pub(crate) id: String,
     pub(crate) name: String,
-    /// The folder existed before this connect; its events are kept.
-    pub(crate) existed: bool,
-}
-
-#[derive(Deserialize)]
-struct DriveFileCreateResponse {
-    #[serde(default)]
-    id: FileIdentity,
-    #[serde(default)]
-    name: FileName,
+    /// Whether the folder existed before this connect, keeping its events,
+    /// or was created by it.
+    pub(crate) origin: NookDriveRootOrigin,
 }
 
 pub(crate) struct DriveStorageClientShareFolderWithEmail<'a> {
@@ -84,26 +77,15 @@ impl DriveStorageClient<'_> {
 }
 
 impl DriveStorageClient<'_> {
-    fn create_folder_projection(
-        request: DriveStorageClientCreateFolderProjection<'_>,
-    ) -> Result<(String, String), NookError> {
-        let DriveStorageClientCreateFolderProjection {
-            parsed,
-            fallback_name,
-        } = request;
-        let folder_id = match parsed.id {
-            FileIdentity::Reported(id) if !id.trim().is_empty() => id,
-            _ => {
-                return Err(NookError::Drive(
-                    "Drive folder create response missing id.".to_owned(),
-                ));
-            }
-        };
-        let folder_name = match parsed.name {
-            FileName::Reported(name) if !name.trim().is_empty() => name,
-            _ => fallback_name.to_owned(),
-        };
-        Ok((folder_id, folder_name))
+    /// The created root, which must carry a non-blank id and name; nothing
+    /// stands in for either.
+    fn created_root(created: DriveCreatedFolder) -> Result<DriveCreatedFolder, NookError> {
+        if created.id.trim().is_empty() || created.name.trim().is_empty() {
+            return Err(NookError::Drive(
+                "Drive folder create response missing id or name.".to_owned(),
+            ));
+        }
+        Ok(created)
     }
 }
 
@@ -128,14 +110,14 @@ impl DriveStorageClient<'_> {
             return Ok(DriveVaultFolderConnection {
                 id: folder_id.into_inner(),
                 name: folder_name.to_owned(),
-                existed: true,
+                origin: NookDriveRootOrigin::Existing,
             });
         }
-        let (id, name) = self.create_vault_folder(folder_name).await?;
+        let created = self.create_vault_folder(folder_name).await?;
         Ok(DriveVaultFolderConnection {
-            id,
-            name,
-            existed: false,
+            id: created.id,
+            name: created.name,
+            origin: NookDriveRootOrigin::Created,
         })
     }
 
@@ -145,7 +127,7 @@ impl DriveStorageClient<'_> {
         let token = self.as_str();
         let query =
             DriveStorageClient::vault_folder_query(nook_core::DriveVaultFolderLookup::root_name());
-        let mut page_token: Option<String> = None;
+        let mut page_token = DrivePageRequest::FirstPage;
         let mut folders = Vec::new();
         loop {
             let mut request = self
@@ -158,8 +140,8 @@ impl DriveStorageClient<'_> {
                     ("spaces", "drive"),
                 ])
                 .bearer_auth(token);
-            if let Some(page) = page_token.as_deref() {
-                request = request.query(&[("pageToken", page)]);
+            if let DrivePageRequest::Continuation(page) = &page_token {
+                request = request.query(&[("pageToken", page.as_str())]);
             }
             let response = request.send().await?;
             if !response.status().is_success() {
@@ -175,15 +157,20 @@ impl DriveStorageClient<'_> {
             let parsed: DriveVaultFolderListResponse = response.json().await.map_err(|error| {
                 NookError::Serialization(format!("Failed to parse Drive folder list: {error}"))
             })?;
-            folders.extend(parsed.files);
-            page_token = parsed.next_page_token;
-            if page_token.is_none() {
-                return Ok(folders);
-            }
+            folders.extend(parsed.files.into_rows());
+            page_token = match DrivePageRequest::after(parsed.next_page_token) {
+                PageAfter::Next(next) => next,
+                PageAfter::Done => return Ok(folders),
+            };
         }
     }
 
-    async fn create_vault_folder(&self, folder_name: &str) -> Result<(String, String), NookError> {
+    /// Create the Nook root; Drive's answer must name it, with the id and
+    /// name the request asked back.
+    async fn create_vault_folder(
+        &self,
+        folder_name: &str,
+    ) -> Result<DriveCreatedFolder, NookError> {
         let token = self.as_str();
         let client = &self.client;
         let response = client
@@ -207,13 +194,10 @@ impl DriveStorageClient<'_> {
                 },
             ));
         }
-        let parsed: DriveFileCreateResponse = response.json().await.map_err(|e| {
+        let created: DriveCreatedFolder = response.json().await.map_err(|e| {
             NookError::Serialization(format!("Failed to parse Drive folder create: {e}"))
         })?;
-        DriveStorageClient::create_folder_projection(DriveStorageClientCreateFolderProjection {
-            parsed,
-            fallback_name: folder_name,
-        })
+        DriveStorageClient::created_root(created)
     }
 }
 
@@ -274,10 +258,8 @@ impl DriveStorageClient<'_> {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct DrivePermissionListResponse {
-    #[serde(default)]
-    permissions: Vec<nook_core::DrivePermissionObservation>,
-    #[serde(default)]
-    next_page_token: Option<String>,
+    permissions: OmittableList<nook_core::DrivePermissionObservation>,
+    next_page_token: PageCompletion,
 }
 
 /// Read and revoke the vault folder's Drive permissions: its authorized
@@ -293,7 +275,7 @@ impl DriveStorageClient<'_> {
             "https://www.googleapis.com/drive/v3/files/{}/permissions",
             urlencoding::encode(folder_id.as_str())
         );
-        let mut page_token: Option<String> = None;
+        let mut page_token = DrivePageRequest::FirstPage;
         let mut permissions = Vec::new();
         loop {
             let mut request = self
@@ -308,8 +290,8 @@ impl DriveStorageClient<'_> {
                     ("supportsAllDrives", "true"),
                 ])
                 .bearer_auth(token);
-            if let Some(page) = page_token.as_deref() {
-                request = request.query(&[("pageToken", page)]);
+            if let DrivePageRequest::Continuation(page) = &page_token {
+                request = request.query(&[("pageToken", page.as_str())]);
             }
             let response = request.send().await?;
             if !response.status().is_success() {
@@ -325,11 +307,11 @@ impl DriveStorageClient<'_> {
             let parsed: DrivePermissionListResponse = response.json().await.map_err(|error| {
                 NookError::Serialization(format!("Failed to parse Drive permissions: {error}"))
             })?;
-            permissions.extend(parsed.permissions);
-            page_token = parsed.next_page_token;
-            if page_token.is_none() {
-                break;
-            }
+            permissions.extend(parsed.permissions.into_rows());
+            page_token = match DrivePageRequest::after(parsed.next_page_token) {
+                PageAfter::Next(next) => next,
+                PageAfter::Done => break,
+            };
         }
         Ok(permissions)
     }
@@ -393,12 +375,36 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn shared_drive_response_shapes_accept_optional_fields() -> anyhow::Result<()> {
-        let created: DriveFileCreateResponse =
-            serde_json::from_str(r#"{"id":"folder-1","name":"Shared"}"#)?;
-        assert_eq!(created.id, FileIdentity::Reported("folder-1".to_owned()));
-        assert_eq!(created.name, FileName::Reported("Shared".to_owned()));
-
+    fn drive_folder_answers_decode_documented_absence_and_require_the_rest() -> anyhow::Result<()> {
+        let listed: DriveVaultFolderListResponse = serde_json::from_str(
+            r#"{"files":[{"id":"folder-1","name":"nook-events","mimeType":"application/vnd.google-apps.folder"}],"nextPageToken":"next"}"#,
+        )?;
+        assert_eq!(
+            listed.next_page_token,
+            PageCompletion::Continue("next".to_owned())
+        );
+        assert_eq!(listed.files.into_rows().len(), 1);
+        // The last page may omit both; files.list does not promise the array.
+        let empty: DriveVaultFolderListResponse = serde_json::from_str("{}")?;
+        assert_eq!(empty.next_page_token, PageCompletion::Complete);
+        assert!(empty.files.into_rows().is_empty());
+        let permissions: DrivePermissionListResponse = serde_json::from_str("{}")?;
+        assert!(permissions.permissions.into_rows().is_empty());
+        // A created root needs a non-blank id and name; nothing stands in.
+        let created = DriveStorageClient::created_root(serde_json::from_str(
+            r#"{"id":"folder-1","name":"Shared"}"#,
+        )?)?;
+        assert_eq!(
+            (created.id.as_str(), created.name.as_str()),
+            ("folder-1", "Shared")
+        );
+        for blank in [
+            r#"{"id":"  ","name":"Shared"}"#,
+            r#"{"id":"folder-1","name":" "}"#,
+        ] {
+            assert!(DriveStorageClient::created_root(serde_json::from_str(blank)?).is_err());
+        }
+        assert!(serde_json::from_str::<DriveCreatedFolder>(r#"{"id":"folder-1"}"#).is_err());
         Ok(())
     }
 
@@ -408,46 +414,6 @@ mod tests {
             DriveStorageClient::vault_folder_query("Bob's \\ vault"),
             "name = 'Bob\\'s \\\\ vault' and mimeType = 'application/vnd.google-apps.folder' and 'root' in parents and 'me' in owners and trashed = false"
         );
-    }
-
-    #[wasm_bindgen_test]
-    fn vault_folder_list_response_accepts_missing_fields() -> anyhow::Result<()> {
-        let listed: DriveVaultFolderListResponse = serde_json::from_str(
-            r#"{"files":[{"id":"folder-1","name":"nook-events","mimeType":"application/vnd.google-apps.folder"}],"nextPageToken":"next"}"#,
-        )?;
-        assert_eq!(listed.files.len(), 1);
-        assert_eq!(listed.next_page_token.as_deref(), Some("next"));
-        let empty: DriveVaultFolderListResponse = serde_json::from_str("{}")?;
-        assert!(empty.files.is_empty() && empty.next_page_token.is_none());
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    fn create_folder_projection_requires_id_and_falls_back_to_name() -> anyhow::Result<()> {
-        let Err(missing_id) = DriveStorageClient::create_folder_projection(
-            DriveStorageClientCreateFolderProjection {
-                parsed: DriveFileCreateResponse {
-                    id: FileIdentity::Reported("  ".to_owned()),
-                    name: FileName::Reported("Shared".to_owned()),
-                },
-                fallback_name: "Fallback",
-            },
-        ) else {
-            anyhow::bail!("a folder response without an id must be rejected");
-        };
-        assert!(matches!(missing_id, NookError::Drive(message) if message.contains("missing id")));
-
-        let projected = DriveStorageClient::create_folder_projection(
-            DriveStorageClientCreateFolderProjection {
-                parsed: DriveFileCreateResponse {
-                    id: FileIdentity::Reported("folder-1".to_owned()),
-                    name: FileName::Reported("  ".to_owned()),
-                },
-                fallback_name: "Fallback",
-            },
-        )?;
-        assert_eq!(projected, ("folder-1".to_owned(), "Fallback".to_owned()));
-        Ok(())
     }
 }
 
@@ -488,9 +454,4 @@ mod browser_tests {
 pub(crate) struct DriveStorageClientSharedDriveError<'a> {
     pub(crate) status: reqwest::StatusCode,
     pub(crate) body: &'a str,
-}
-/// Named values required by `DriveStorageClient::create_folder_projection`.
-pub(crate) struct DriveStorageClientCreateFolderProjection<'a> {
-    parsed: DriveFileCreateResponse,
-    pub(crate) fallback_name: &'a str,
 }

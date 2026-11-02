@@ -13,31 +13,45 @@ use nook_core::{DriveEventParent, EventLogNamespaceKind, IdentityId, PlacedNames
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use super::drive::wire::CreatedTime;
+use super::drive::wire::{
+    CreatedTime, DriveCreatedFolder, DrivePageRequest, PageAfter, PageCompletion,
+};
+use super::omittable_list::OmittableList;
 use crate::NookError;
+use serde::de::IgnoredAny;
 
 const DRIVE_FOLDER_MIME_TYPE: &str = "application/vnd.google-apps.folder";
 
-#[derive(Default, Deserialize)]
+/// One page of a namespace-folder listing.
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct NamespaceFolderList {
-    #[serde(default)]
-    files: Vec<NamespaceFolder>,
-    #[serde(default)]
-    next_page_token: Option<String>,
+    files: OmittableList<NamespaceFolderRow>,
+    next_page_token: PageCompletion,
 }
 
-#[derive(Default, Deserialize)]
+/// A listed row: a folder with every field the listing asks for, or a
+/// malformed or unrelated row, which is skipped.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum NamespaceFolderRow {
+    Folder(NamespaceFolder),
+    Unrelated(IgnoredAny),
+}
+
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct NamespaceFolder {
-    #[serde(default)]
     id: String,
-    #[serde(default)]
     name: String,
-    #[serde(default)]
     mime_type: String,
-    #[serde(default)]
     created_time: CreatedTime,
+}
+
+/// Whether a parent holds the one folder of a name.
+enum DriveFolderLookup {
+    Found(DriveEventParent),
+    Absent,
 }
 
 /// One namespace folder listed under a provider's root.
@@ -45,16 +59,6 @@ pub(crate) struct ListedNamespaceFolder {
     pub(crate) placed: PlacedNamespace,
     pub(crate) folder: DriveEventParent,
     pub(crate) created: CreatedTime,
-}
-
-impl ListedNamespaceFolder {
-    /// The vault this folder holds, when it is a vault's.
-    pub(crate) fn store_id(&self) -> Option<&nook_core::StoreId> {
-        match self.placed.location() {
-            nook_core::EventLogLocation::Vault(store_id) => Some(store_id),
-            nook_core::EventLogLocation::Identity(_) => None,
-        }
-    }
 }
 
 #[derive(Serialize)]
@@ -111,10 +115,12 @@ impl DriveNamespace<'_> {
         }
     }
 
-    fn select(folders: &[NamespaceFolder]) -> Result<Option<String>, NookError> {
+    fn select(folders: &[NamespaceFolder]) -> Result<DriveFolderLookup, NookError> {
         match folders {
-            [] => Ok(None),
-            [folder] if !folder.id.trim().is_empty() => Ok(Some(folder.id.trim().to_owned())),
+            [] => Ok(DriveFolderLookup::Absent),
+            [folder] if !folder.id.trim().is_empty() => Ok(DriveFolderLookup::Found(
+                Self::child_parent(folder.id.trim().to_owned()),
+            )),
             [_] => Err(NookError::Drive(
                 "Google Drive namespace folder is missing its ID.".to_owned(),
             )),
@@ -134,7 +140,7 @@ impl DriveNamespace<'_> {
         } = lookup;
         let client = Client::new();
         let q = Self::query(parent, &query);
-        let mut page_token: Option<String> = None;
+        let mut page_token = DrivePageRequest::FirstPage;
         let mut folders = Vec::new();
         loop {
             let mut request = client
@@ -148,8 +154,8 @@ impl DriveNamespace<'_> {
                     ),
                     ("pageSize", "1000"),
                 ]);
-            if let Some(page) = page_token.as_deref() {
-                request = request.query(&[("pageToken", page)]);
+            if let DrivePageRequest::Continuation(page) = &page_token {
+                request = request.query(&[("pageToken", page.as_str())]);
             }
             let response = request.send().await?;
             if !response.status().is_success() {
@@ -158,21 +164,28 @@ impl DriveNamespace<'_> {
                     response.status()
                 )));
             }
-            let body: NamespaceFolderList = response
+            let NamespaceFolderList {
+                files,
+                next_page_token,
+            } = response
                 .json()
                 .await
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
-            folders.extend(body.files.into_iter().filter(|folder| {
-                folder.mime_type == DRIVE_FOLDER_MIME_TYPE
+            for row in files.into_rows() {
+                if let NamespaceFolderRow::Folder(folder) = row
+                    && folder.mime_type == DRIVE_FOLDER_MIME_TYPE
                     && match query {
                         FolderQuery::Children => true,
                         FolderQuery::Named(name) => folder.name == name,
                     }
-            }));
-            page_token = body.next_page_token;
-            if page_token.is_none() {
-                return Ok(folders);
+                {
+                    folders.push(folder);
+                }
             }
+            page_token = match DrivePageRequest::after(next_page_token) {
+                PageAfter::Next(next) => next,
+                PageAfter::Done => return Ok(folders),
+            };
         }
     }
 
@@ -194,7 +207,7 @@ impl DriveNamespace<'_> {
                 response.status()
             )));
         }
-        let created: NamespaceFolder = response
+        let created: DriveCreatedFolder = response
             .json()
             .await
             .map_err(|error| NookError::Serialization(error.to_string()))?;
@@ -211,14 +224,14 @@ impl DriveNamespace<'_> {
         &self,
         parent: &DriveEventParent,
         name: &str,
-    ) -> Result<Option<DriveEventParent>, NookError> {
+    ) -> Result<DriveFolderLookup, NookError> {
         let folders = Self::folders(FolderLookup {
             token: self.token,
             parent,
             query: FolderQuery::Named(name),
         })
         .await?;
-        Ok(Self::select(&folders)?.map(Self::child_parent))
+        Self::select(&folders)
     }
 
     /// The one folder named `name` in `parent`, created when missing.
@@ -227,16 +240,16 @@ impl DriveNamespace<'_> {
         parent: &DriveEventParent,
         name: &str,
     ) -> Result<DriveEventParent, NookError> {
-        if let Some(folder) = self.existing(parent, name).await? {
+        if let DriveFolderLookup::Found(folder) = self.existing(parent, name).await? {
             return Ok(folder);
         }
         let created = self.create(parent, name).await?;
         // A second lookup catches a concurrent creation before any write picks
         // one of two ambiguous parents.
-        Ok(self
-            .existing(parent, name)
-            .await?
-            .unwrap_or_else(|| Self::child_parent(created)))
+        Ok(match self.existing(parent, name).await? {
+            DriveFolderLookup::Found(folder) => folder,
+            DriveFolderLookup::Absent => Self::child_parent(created),
+        })
     }
 
     /// Every namespace of one kind under the root, each with its folder and
@@ -254,11 +267,10 @@ impl DriveNamespace<'_> {
         .await?;
         let mut listed = Vec::new();
         for identity in identities {
-            if IdentityId::parse(&identity.name)
-                .ok()
-                .is_none_or(|id| id.as_str() != identity.name)
-            {
-                continue;
+            // Only a folder named exactly by an identity id is an identity's.
+            match IdentityId::parse(&identity.name) {
+                Ok(id) if id.as_str() == identity.name => {}
+                Ok(_) | Err(_) => continue,
             }
             let identity_folder = Self::child_parent(identity.id.trim().to_owned());
             for folder in Self::folders(FolderLookup {
@@ -337,9 +349,31 @@ mod tests {
             DriveNamespace::query(&shared, &FolderQuery::Children),
             "mimeType = 'application/vnd.google-apps.folder' and 'shared-root' in parents and trashed = false"
         );
-        assert!(DriveNamespace::select(&[]).is_ok_and(|selected| selected.is_none()));
-        let duplicate = [NamespaceFolder::default(), NamespaceFolder::default()];
-        assert!(DriveNamespace::select(&duplicate).is_err());
+        assert!(matches!(
+            DriveNamespace::select(&[]),
+            Ok(DriveFolderLookup::Absent)
+        ));
+        let folder: NamespaceFolder = serde_json::from_value(serde_json::json!({
+            "id": "f",
+            "name": "n",
+            "mimeType": DRIVE_FOLDER_MIME_TYPE,
+            "createdTime": "2026-11-01T12:00:00Z",
+        }))?;
+        let duplicate: NamespaceFolder = serde_json::from_value(serde_json::json!({
+            "id": "g",
+            "name": "n",
+            "mimeType": DRIVE_FOLDER_MIME_TYPE,
+            "createdTime": "2026-11-01T12:00:00Z",
+        }))?;
+        assert!(DriveNamespace::select(&[folder, duplicate]).is_err());
+        // A page may omit files and token; a row missing a field is skipped.
+        let page: NamespaceFolderList = serde_json::from_str(r#"{"files":[{"id":"x"}]}"#)?;
+        assert_eq!(page.next_page_token, PageCompletion::Complete);
+        assert!(matches!(
+            page.files.into_rows().first(),
+            Some(NamespaceFolderRow::Unrelated(_))
+        ));
+        assert!(serde_json::from_str::<NamespaceFolderList>("{}").is_ok());
         Ok(())
     }
 }

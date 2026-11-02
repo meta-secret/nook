@@ -50,7 +50,16 @@ struct PathRemoval<'a> {
     mode: &'static str,
     #[serde(rename = "type")]
     kind: &'static str,
-    sha: Option<&'a str>,
+    sha: RemovedBlob,
+}
+
+/// The blob of a removed path: always JSON `null`.
+struct RemovedBlob;
+
+impl Serialize for RemovedBlob {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_unit()
+    }
 }
 
 #[derive(Serialize)]
@@ -170,7 +179,7 @@ impl GitHubEventStore<'_> {
                         path,
                         mode: "100644",
                         kind: "blob",
-                        sha: None,
+                        sha: RemovedBlob,
                     })
                     .collect(),
             }),
@@ -257,7 +266,7 @@ mod tests {
             path: "nook-log/v1/vaults/store_drop/events/a.yaml",
             mode: "100644",
             kind: "blob",
-            sha: None,
+            sha: RemovedBlob,
         };
         let json = serde_json::to_value(&removal)?;
         assert!(json.get("sha").is_some_and(serde_json::Value::is_null));

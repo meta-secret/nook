@@ -19,7 +19,7 @@ use std::str;
 
 use super::checked_event_write::CheckedEventWrite;
 use super::event_store::EventStore;
-use super::github::{GitHubFileWrite, GitHubRootDiscovery, GitHubVaultDiscovery};
+use super::github::{GitHubRootDiscovery, GitHubVaultDiscovery};
 use super::remote_event::RemoteEventRead;
 
 mod namespace;
@@ -331,7 +331,6 @@ impl EventStore for GitHubEventStore<'_> {
                     repo,
                     path: &path,
                     content,
-                    write: GitHubFileWrite::Create,
                 })
                 .await
             {

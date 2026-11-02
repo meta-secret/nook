@@ -44,7 +44,7 @@ impl AccountListOutput<'_> {
     let folder = DriveStorageClient::new(&token)
         .connect_vault_folder()
         .await?;
-    Ok(NookGoogleDriveFolder::new(folder.id, folder.name, folder.existed))
+    Ok(NookGoogleDriveFolder::new(folder))
 }
 
 /// The individual Google accounts the vault folder is shared with.

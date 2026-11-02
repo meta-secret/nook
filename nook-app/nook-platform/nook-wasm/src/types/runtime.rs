@@ -1,5 +1,6 @@
 use super::{wasm_bindgen, window};
 use crate::TypedOutput;
+use crate::storage::drive_shared::DriveVaultFolderConnection;
 use nook_core::SupportedAppLocale;
 use nook_core::{ClientRunMode, RuntimeConfigValue, VaultRuntimePolicy};
 use wasm_bindgen::JsError;
@@ -115,12 +116,26 @@ pub type NookStorageConnection = nook_core::StorageConnection;
 pub struct NookGoogleDriveFolder {
     id: String,
     name: String,
-    existed: bool,
+    origin: NookDriveRootOrigin,
+}
+
+/// Whether Connect & sync found the account's Nook root or created it.
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookDriveRootOrigin {
+    /// Connect & sync created the root.
+    Created,
+    /// The root existed before; its encrypted events stay.
+    Existing,
 }
 
 impl NookGoogleDriveFolder {
-    pub(crate) fn new(id: String, name: String, existed: bool) -> Self {
-        Self { id, name, existed }
+    pub(crate) fn new(connection: DriveVaultFolderConnection) -> Self {
+        Self {
+            id: connection.id,
+            name: connection.name,
+            origin: connection.origin,
+        }
     }
 }
 
@@ -138,11 +153,11 @@ impl NookGoogleDriveFolder {
         self.name.clone()
     }
 
-    /// The folder existed before Connect & sync; its encrypted events stay.
+    /// Whether the root existed before Connect & sync or was created by it.
     #[wasm_bindgen(getter)]
     #[must_use]
-    pub fn existed(&self) -> bool {
-        self.existed
+    pub fn origin(&self) -> NookDriveRootOrigin {
+        self.origin
     }
 }
 
@@ -324,10 +339,14 @@ mod tests {
             NookClientRunMode::Prod
         );
 
-        let folder = NookGoogleDriveFolder::new("folder-1".to_owned(), "Vault".to_owned(), true);
+        let folder = NookGoogleDriveFolder::new(DriveVaultFolderConnection {
+            id: "folder-1".to_owned(),
+            name: "Vault".to_owned(),
+            origin: NookDriveRootOrigin::Existing,
+        });
         assert_eq!(folder.id(), "folder-1");
         assert_eq!(folder.name(), "Vault");
-        assert!(folder.existed());
+        assert_eq!(folder.origin(), NookDriveRootOrigin::Existing);
         Ok(())
     }
 
@@ -389,10 +408,14 @@ mod browser_tests {
         }
         assert!(NookClientRunModeUtil::parse("unknown").is_err());
 
-        let folder = NookGoogleDriveFolder::new("folder".into(), "Vault".into(), false);
+        let folder = NookGoogleDriveFolder::new(DriveVaultFolderConnection {
+            id: "folder".into(),
+            name: "Vault".into(),
+            origin: NookDriveRootOrigin::Created,
+        });
         assert_eq!(folder.id(), "folder");
         assert_eq!(folder.name(), "Vault");
-        assert!(!folder.existed());
+        assert_eq!(folder.origin(), NookDriveRootOrigin::Created);
 
         for (mode, local, dev, prod) in [
             (NookClientRunMode::Local, true, false, false),
