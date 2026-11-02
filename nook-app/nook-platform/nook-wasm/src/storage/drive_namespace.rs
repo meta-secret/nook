@@ -404,8 +404,11 @@ mod fetch_tests {
         ))
     }
 
+    /// A folder row as Drive answers the listing's requested fields.
     fn folder(id: &str, name: &str) -> String {
-        format!(r#"{{"id":"{id}","name":"{name}","mimeType":"{DRIVE_FOLDER_MIME_TYPE}"}}"#)
+        format!(
+            r#"{{"id":"{id}","name":"{name}","mimeType":"{DRIVE_FOLDER_MIME_TYPE}","createdTime":"2026-11-01T12:00:00Z"}}"#
+        )
     }
 
     fn listing(folders: &[String]) -> String {
