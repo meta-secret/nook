@@ -8,6 +8,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use nook_core::ProviderSecretText;
 use nook_core::{DriveEventParent, EventLogNamespaceKind, IdentityId, PlacedNamespace};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -73,14 +74,14 @@ enum FolderQuery<'a> {
 
 /// Named values required by `DriveNamespace::folders`.
 struct FolderLookup<'a> {
-    token: &'a str,
+    token: &'a ProviderSecretText,
     parent: &'a DriveEventParent,
     query: FolderQuery<'a>,
 }
 
 /// Resolve the Drive folder that holds one placed namespace's events.
 pub(crate) struct DriveNamespace<'a> {
-    pub(crate) token: &'a str,
+    pub(crate) token: &'a ProviderSecretText,
     /// The provider's root folder.
     pub(crate) parent: &'a DriveEventParent,
     pub(crate) placed: &'a PlacedNamespace,
@@ -138,7 +139,7 @@ impl DriveNamespace<'_> {
         loop {
             let mut request = client
                 .get("https://www.googleapis.com/drive/v3/files")
-                .header("Authorization", format!("Bearer {}", token.trim()))
+                .bearer_auth(token.expose())
                 .query(&[
                     ("q", q.as_str()),
                     (
@@ -178,7 +179,7 @@ impl DriveNamespace<'_> {
     async fn create(&self, parent: &DriveEventParent, name: &str) -> Result<String, NookError> {
         let response = Client::new()
             .post("https://www.googleapis.com/drive/v3/files")
-            .header("Authorization", format!("Bearer {}", self.token.trim()))
+            .bearer_auth(self.token.expose())
             .header("User-Agent", "nook-wasm")
             .json(&NamespaceFolderMetadata {
                 name,
@@ -241,7 +242,7 @@ impl DriveNamespace<'_> {
     /// Every namespace of one kind under the root, each with its folder and
     /// the time Drive created it.
     pub(crate) async fn list_folders(
-        token: &str,
+        token: &ProviderSecretText,
         root: &DriveEventParent,
         kind: EventLogNamespaceKind,
     ) -> Result<Vec<ListedNamespaceFolder>, NookError> {
@@ -287,7 +288,7 @@ impl DriveNamespace<'_> {
 
     /// Every namespace of one kind under the root.
     pub(crate) async fn list_placed(
-        token: &str,
+        token: &ProviderSecretText,
         root: &DriveEventParent,
         kind: EventLogNamespaceKind,
     ) -> Result<Vec<PlacedNamespace>, NookError> {
@@ -351,6 +352,7 @@ mod fetch_tests {
     use crate::storage::event_store::EventStore;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
     use crate::storage::remote_event::RemoteEventRead;
+    use crate::test_fixtures::WasmFixture;
     use nook_core::StoreId;
     use nook_core::{EventId, EventLogLocation};
     use std::str;
@@ -385,6 +387,7 @@ mod fetch_tests {
         )
     )]
     async fn resolve_reuses_the_identity_and_vault_folders_across_pages() -> anyhow::Result<()> {
+        let token = WasmFixture::secret("drive-token")?;
         let placed = placed()?;
         let stub = FetchStub::install(vec![
             FetchRoute::ok("GET", LIST, &listing(&[folder("identity", IDENTITY)])),
@@ -392,7 +395,7 @@ mod fetch_tests {
             FetchRoute::ok("GET", LIST, &listing(&[folder("existing", STORE)])),
         ])?;
         let resolved = DriveNamespace {
-            token: "drive-token",
+            token: &token,
             parent: &DriveEventParent::shared_folder_id("root-folder"),
             placed: &placed,
         }
@@ -417,6 +420,7 @@ mod fetch_tests {
         )
     )]
     async fn resolve_creates_missing_folders_and_rechecks_them() -> anyhow::Result<()> {
+        let token = WasmFixture::secret("drive-token")?;
         let placed = placed()?;
         let root = DriveEventParent::shared_folder_id("root-folder");
         let stub = FetchStub::install(vec![
@@ -428,7 +432,7 @@ mod fetch_tests {
             FetchRoute::ok("GET", LIST, &listing(&[])),
         ])?;
         let resolved = DriveNamespace {
-            token: "drive-token",
+            token: &token,
             parent: &root,
             placed: &placed,
         }
@@ -445,7 +449,7 @@ mod fetch_tests {
         ])?;
         assert!(
             DriveNamespace {
-                token: "drive-token",
+                token: &token,
                 parent: &root,
                 placed: &placed,
             }
@@ -465,9 +469,10 @@ mod fetch_tests {
         )
     )]
     async fn duplicate_or_failed_lookups_fail_closed() -> anyhow::Result<()> {
+        let token = WasmFixture::secret("drive-token")?;
         let placed = placed()?;
         let namespace = DriveNamespace {
-            token: "drive-token",
+            token: &token,
             parent: &DriveEventParent::shared_folder_id("root-folder"),
             placed: &placed,
         };
@@ -508,6 +513,7 @@ mod fetch_tests {
         )
     )]
     async fn listing_walks_each_identity_folder() -> anyhow::Result<()> {
+        let token = WasmFixture::secret("drive-token")?;
         let routes = || {
             vec![
                 FetchRoute::ok(
@@ -540,7 +546,7 @@ mod fetch_tests {
 
         let stub = FetchStub::install(routes())?;
         let vaults =
-            DriveNamespace::list_placed("drive-token", &root, EventLogNamespaceKind::Vault).await?;
+            DriveNamespace::list_placed(&token, &root, EventLogNamespaceKind::Vault).await?;
         assert_eq!(
             vaults,
             [
@@ -554,15 +560,14 @@ mod fetch_tests {
 
         let stub = FetchStub::install(routes())?;
         assert_eq!(
-            DriveNamespace::list_placed("drive-token", &root, EventLogNamespaceKind::Identity)
-                .await?,
+            DriveNamespace::list_placed(&token, &root, EventLogNamespaceKind::Identity).await?,
             [PlacedNamespace::identity_log(first)]
         );
         drop(stub);
 
         let _stub = FetchStub::install(vec![FetchRoute::failing("GET", LIST, 401)])?;
         assert!(
-            DriveNamespace::list_placed("drive-token", &root, EventLogNamespaceKind::Vault)
+            DriveNamespace::list_placed(&token, &root, EventLogNamespaceKind::Vault)
                 .await
                 .is_err()
         );
@@ -578,10 +583,11 @@ mod fetch_tests {
         )
     )]
     async fn deleting_a_namespace_removes_its_folder() -> anyhow::Result<()> {
+        let token = WasmFixture::secret("drive-token")?;
         let placed = placed()?;
         // The store's parent is the namespace folder itself.
         let store = DriveEventStore {
-            token: "drive-token",
+            token: &token,
             parent: DriveEventParent::shared_folder_id("doomed"),
             location: placed.location(),
         };
@@ -608,9 +614,10 @@ mod fetch_tests {
         )
     )]
     async fn an_event_with_no_file_reads_as_unavailable() -> anyhow::Result<()> {
+        let token = WasmFixture::secret("drive-token")?;
         let placed = placed()?;
         let store = DriveEventStore {
-            token: "drive-token",
+            token: &token,
             parent: DriveEventParent::shared_folder_id("vault"),
             location: placed.location(),
         };
@@ -629,10 +636,11 @@ mod fetch_tests {
         )
     )]
     async fn a_stored_event_settles_its_write_without_an_upload() -> anyhow::Result<()> {
+        let token = WasmFixture::secret("drive-token")?;
         let fixture = EventFixture::new()?;
         let location = EventLogLocation::Vault(StoreId::parse("store_testtoken11")?);
         let store = DriveEventStore {
-            token: "drive-token",
+            token: &token,
             parent: DriveEventParent::shared_folder_id("vault"),
             location: &location,
         };

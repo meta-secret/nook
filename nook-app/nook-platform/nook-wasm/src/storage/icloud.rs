@@ -6,6 +6,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use nook_core::ProviderSecretText;
 use reqwest::Client;
 #[cfg(test)]
 use std::collections;
@@ -20,7 +21,7 @@ use serde::Serialize;
 use std::collections::BTreeSet;
 
 pub(crate) struct ICloudEventStore<'a> {
-    pub(crate) web_auth_token: &'a str,
+    pub(crate) web_auth_token: &'a ProviderSecretText,
     pub(crate) target: &'a ICloudSharedTarget,
     /// The identity log or vault these records belong to.
     pub(crate) placed: &'a PlacedNamespace,
@@ -190,7 +191,7 @@ impl ICloudEventStore<'_> {
     pub(crate) async fn list_icloud_event_ids(&self) -> Result<Vec<String>, NookError> {
         let web_auth_token = self.web_auth_token;
         let target = self.target;
-        let token = nook_core::OauthAccessToken::parse(web_auth_token)?;
+        let token = web_auth_token.expose();
         let namespace = self.namespace();
         let client = Client::new();
         let mut event_ids = Vec::new();
@@ -217,7 +218,7 @@ impl ICloudEventStore<'_> {
                 target,
             );
 
-            Self::log_icloud_request_start(OPERATION, PATH, token.as_ref());
+            Self::log_icloud_request_start(OPERATION, PATH, token);
             tracing::info!(
                 scope = "wasm-icloud",
                 operation = OPERATION,
@@ -230,7 +231,7 @@ impl ICloudEventStore<'_> {
             let mut request = client
                 .post(Self::icloud_database_url(target, PATH))
                 .header("Content-Type", "application/json");
-            for (name, value) in Self::icloud_auth_query(token.as_ref()) {
+            for (name, value) in Self::icloud_auth_query(token) {
                 request = request.query(&[(name, value)]);
             }
             let response = request.json(&body).send().await?;
@@ -238,7 +239,7 @@ impl ICloudEventStore<'_> {
             Self::log_icloud_response(OPERATION, PATH, status);
             if !response.status().is_success() {
                 let body = response.text().await.unwrap_or_default();
-                Self::log_icloud_error_body(OPERATION, PATH, status, &body, token.as_ref());
+                Self::log_icloud_error_body(OPERATION, PATH, status, &body, token);
                 return Err(Self::icloud_error(status, &body));
             }
             let ICloudQueryResponse {
@@ -283,7 +284,7 @@ impl ICloudEventStore<'_> {
     async fn read_icloud_event(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
         let web_auth_token = self.web_auth_token;
         let target = self.target;
-        let token = nook_core::OauthAccessToken::parse(web_auth_token)?;
+        let token = web_auth_token.expose();
         let record_name = Self::icloud_event_record_name(&self.namespace(), event_id);
         tracing::info!(
             scope = "wasm-icloud",
@@ -292,7 +293,7 @@ impl ICloudEventStore<'_> {
             "CloudKit event fetch started"
         );
         let record = match Self::lookup_record(CloudKitRecordQuery {
-            web_auth_token: token.as_ref(),
+            web_auth_token: token,
             target,
             record_name: &record_name,
         })
@@ -528,35 +529,10 @@ mod tests {
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
-mod browser_tests {
-    use super::*;
-    use wasm_bindgen_test::*;
-
-    wasm_bindgen_test_configure!(run_in_browser);
-
-    #[wasm_bindgen_test]
-    async fn empty_icloud_token_is_rejected_before_network_access() -> anyhow::Result<()> {
-        let target = super::owner_share_fixture()?;
-        let location = nook_core::PlacedNamespace::vault(
-            nook_core::IdentityId::parse("idn_abcdefghijk")?,
-            nook_core::StoreId::parse("store_abcdefghijk")?,
-        );
-        let store = ICloudEventStore {
-            web_auth_token: "  ",
-            target: &target,
-            placed: &location,
-        };
-        let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
-        assert!(store.list_icloud_event_ids().await.is_err());
-        assert!(store.read(&event_id).await.is_err());
-        Ok(())
-    }
-}
-
-#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod fetch_tests {
     use super::*;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+    use crate::test_fixtures::WasmFixture;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     const QUERY: &str = "records/query";
@@ -603,8 +579,9 @@ mod fetch_tests {
             FetchRoute::ok("POST", QUERY, &first),
             FetchRoute::ok("POST", QUERY, &second),
         ])?;
+        let web_token = WasmFixture::secret("web-token")?;
         let store = ICloudEventStore {
-            web_auth_token: "web-token",
+            web_auth_token: &web_token,
             target: &super::owner_share_fixture()?,
             placed: &location,
         };
@@ -633,8 +610,9 @@ mod fetch_tests {
             nook_core::IdentityId::parse("idn_abcdefghijk")?,
             nook_core::StoreId::parse("store_abcdefghijk")?,
         );
+        let web_token = WasmFixture::secret("web-token")?;
         let store = ICloudEventStore {
-            web_auth_token: "web-token",
+            web_auth_token: &web_token,
             target: &super::owner_share_fixture()?,
             placed: &location,
         };

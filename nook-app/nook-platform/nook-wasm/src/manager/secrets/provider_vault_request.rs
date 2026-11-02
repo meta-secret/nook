@@ -26,11 +26,12 @@ impl NookVaultManager {
         store_id: String,
     ) -> Result<(), JsError> {
         let store_id = StoreId::parse(&store_id)?;
-        let root = crate::DriveStorageClient::new(&access_token)
+        let token = crate::DriveStorageClient::access_token(&access_token)?;
+        let root = crate::DriveStorageClient::new(&token)
             .existing_nook_root()
             .await?;
         let listing = DriveVaultListing {
-            token: &access_token,
+            token: &token,
             root: &root,
         };
         let events = listing.vault_events(&store_id).await?;

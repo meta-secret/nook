@@ -14,7 +14,7 @@ use crate::NookError;
 use crate::storage::drive_events::DriveEventStore;
 use crate::storage::drive_namespace::DriveNamespace;
 use crate::storage::event_store::RemoteEventStore;
-use crate::storage::github_events::GitHubEventStore;
+use crate::storage::github_events::{GitHubEventStore, GitHubRepository};
 use crate::storage::icloud::ICloudEventStore;
 use crate::storage::s3::{S3EventStore, S3Storage};
 #[cfg(test)]
@@ -138,12 +138,12 @@ impl PreparedProvider {
             StorageConnection::Github { token, repo } => {
                 let name = GithubRepoName::parse(repo)?;
                 drop(status.send("GITHUB_USER_FETCH".to_owned()));
-                let owner = GitHubStorageClient::new(token.expose())
+                let owner = GitHubStorageClient::new(token)?
                     .fetch_github_username()
                     .await?;
                 let repository = GithubRepositoryPath(format!("{owner}/{name}"));
                 drop(status.send("GITHUB_REPO_ENSURE".to_owned()));
-                GitHubStorageClient::new(token.expose())
+                GitHubStorageClient::new(token)?
                     .ensure_github_repo_exists(repository.as_str())
                     .await?;
                 RemoteProvider::Github(PreparedGithub {
@@ -153,9 +153,7 @@ impl PreparedProvider {
             }
             StorageConnection::GoogleDrive { token, folder_id } => {
                 drop(status.send("DRIVE_VERIFY".to_owned()));
-                DriveStorageClient::new(token.expose())
-                    .verify_drive_access()
-                    .await?;
+                DriveStorageClient::new(token).verify_drive_access().await?;
                 RemoteProvider::GoogleDrive(PreparedGoogleDrive {
                     token: token.clone(),
                     root: DriveEventParent::shared_folder_id(folder_id.as_str()),
@@ -238,19 +236,18 @@ impl PreparedRemote {
     ) -> Result<Vec<PlacedNamespace>, NookError> {
         match &self.provider {
             RemoteProvider::Github(github) => {
-                GitHubEventStore::list_github_namespaces(
-                    github.token.expose(),
-                    github.repository.as_str(),
-                    kind,
-                )
+                GitHubRepository {
+                    token: &github.token,
+                    repo: github.repository.as_str(),
+                }
+                .namespaces(kind)
                 .await
             }
             RemoteProvider::GoogleDrive(drive) => {
-                DriveNamespace::list_placed(drive.token.expose(), &drive.root, kind).await
+                DriveNamespace::list_placed(&drive.token, &drive.root, kind).await
             }
             RemoteProvider::ICloud(icloud) => {
-                ICloudEventStore::list_icloud_namespaces(icloud.token.expose(), &icloud.share, kind)
-                    .await
+                ICloudEventStore::list_icloud_namespaces(&icloud.token, &icloud.share, kind).await
             }
             RemoteProvider::S3(s3) => {
                 S3Storage {
@@ -270,8 +267,7 @@ impl PreparedRemote {
     ) -> Result<Vec<PlacedNamespace>, NookError> {
         match &self.provider {
             RemoteProvider::ICloud(icloud) => {
-                ICloudEventStore::find_icloud_vault(icloud.token.expose(), &icloud.share, store_id)
-                    .await
+                ICloudEventStore::find_icloud_vault(&icloud.token, &icloud.share, store_id).await
             }
             RemoteProvider::Github(_) | RemoteProvider::GoogleDrive(_) | RemoteProvider::S3(_) => {
                 let location = EventLogLocation::Vault(store_id.clone());
@@ -326,17 +322,17 @@ impl PreparedRemote {
     ) -> Result<RemoteEventStore<'a>, NookError> {
         Ok(match &self.provider {
             RemoteProvider::Github(github) => RemoteEventStore::Github(GitHubEventStore {
-                pat: github.token.expose(),
+                token: &github.token,
                 repo: github.repository.as_str(),
                 placed,
             }),
             RemoteProvider::GoogleDrive(drive) => RemoteEventStore::GoogleDrive(DriveEventStore {
-                token: drive.token.expose(),
+                token: &drive.token,
                 parent: drive.namespace_folder(placed).await?,
                 location: placed.location(),
             }),
             RemoteProvider::ICloud(icloud) => RemoteEventStore::ICloud(ICloudEventStore {
-                web_auth_token: icloud.token.expose(),
+                web_auth_token: &icloud.token,
                 target: &icloud.share,
                 placed,
             }),
@@ -361,7 +357,7 @@ impl PreparedGoogleDrive {
             return Ok(folder.clone());
         }
         let folder = DriveNamespace {
-            token: self.token.expose(),
+            token: &self.token,
             parent: &self.root,
             placed,
         }

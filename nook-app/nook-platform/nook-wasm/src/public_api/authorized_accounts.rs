@@ -40,7 +40,8 @@ impl AccountListOutput<'_> {
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn connect_google_drive_vault_folder(
     access_token: &str,
 ) -> Result<NookGoogleDriveFolder, wasm_bindgen::JsError> {
-    let folder = DriveStorageClient::new(access_token)
+    let token = DriveStorageClient::access_token(access_token)?;
+    let folder = DriveStorageClient::new(&token)
         .connect_vault_folder()
         .await?;
     Ok(NookGoogleDriveFolder::new(folder.id, folder.name, folder.existed))
@@ -52,7 +53,8 @@ impl AccountListOutput<'_> {
     access_token: &str,
     folder_id: &str,
 ) -> Result<tsify::Ts<AuthorizedAccountList>, wasm_bindgen::JsError> {
-    let accounts = DriveStorageClient::new(access_token)
+    let token = DriveStorageClient::access_token(access_token)?;
+    let accounts = DriveStorageClient::new(&token)
         .authorized_accounts(folder_id)
         .await?;
     AccountListOutput(&accounts).encode()
@@ -66,7 +68,8 @@ impl AccountListOutput<'_> {
     folder_id: &str,
     email: &str,
 ) -> Result<tsify::Ts<AuthorizedAccountList>, wasm_bindgen::JsError> {
-    let client = DriveStorageClient::new(access_token);
+    let token = DriveStorageClient::access_token(access_token)?;
+    let client = DriveStorageClient::new(&token);
     let email = client.authorized_accounts(folder_id).await?.addition(email)?;
     client
         .share_folder_with_email(DriveStorageClientShareFolderWithEmail {
@@ -85,7 +88,8 @@ impl AccountListOutput<'_> {
     folder_id: &str,
     email: &str,
 ) -> Result<tsify::Ts<AuthorizedAccountList>, wasm_bindgen::JsError> {
-    let client = DriveStorageClient::new(access_token);
+    let token = DriveStorageClient::access_token(access_token)?;
+    let client = DriveStorageClient::new(&token);
     let accounts = client.authorized_accounts(folder_id).await?;
     let account = accounts.removal(email)?;
     client

@@ -103,11 +103,11 @@ impl NookRemoteSource {
     pub(crate) async fn contents(&self) -> Result<SourceContents, NookError> {
         match self {
             Self::GoogleDrive { access_token } => {
-                let root = DriveStorageClient::new(access_token.expose())
+                let root = DriveStorageClient::new(access_token)
                     .existing_nook_root()
                     .await?;
                 let drive = DriveVaultListing {
-                    token: access_token.expose(),
+                    token: access_token,
                     root: &root,
                 };
                 Ok(SourceContents {

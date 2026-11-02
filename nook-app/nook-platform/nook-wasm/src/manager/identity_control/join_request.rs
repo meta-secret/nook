@@ -22,8 +22,8 @@ use nook_core::{
     IdentityJoinCompletion, IdentityJoinCompletionPlan, IdentityJoinKey, IdentityJoinRequestPlan,
     IdentityMemberKeys, KeyInUseAddition, PasskeyDeviceProtectionMode, PasskeyIdentityAddition,
     PasskeyRegistration, PasskeyRegistrationInput, PlacedNamespace, ProviderIdentityJoinRequest,
-    ProviderIdentityKeyInUse, ProviderIdentityLogEvents, SigningIdentity, StorageMode,
-    WebAuthnPrfInput, WebAuthnPrfOutput,
+    ProviderIdentityKeyInUse, ProviderIdentityLogEvents, ProviderSecretText, SigningIdentity,
+    StorageMode, WebAuthnPrfInput, WebAuthnPrfOutput,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -83,7 +83,7 @@ struct IdentityJoinLog<'a> {
 enum OpenedIdentitySource<'a> {
     CurrentProvider,
     GoogleDrive {
-        access_token: &'a str,
+        access_token: &'a ProviderSecretText,
         root: DriveEventParent,
     },
     LocalFolder(OpenedLocalFolder),
@@ -119,8 +119,8 @@ impl NookVaultManager {
             }
             NookProviderSource::Remote(NookRemoteSource::GoogleDrive { access_token }) => {
                 OpenedIdentitySource::GoogleDrive {
-                    access_token: access_token.expose(),
-                    root: DriveStorageClient::new(access_token.expose())
+                    access_token,
+                    root: DriveStorageClient::new(access_token)
                         .existing_nook_root()
                         .await?,
                 }

@@ -37,7 +37,8 @@ pub enum NookGoogleDriveVaultListing {
     local_vault: &tsify::Ts<LocalVaultOccupancy>,
 ) -> Result<tsify::Ts<NookGoogleDriveVaultListing>, JsError> {
     let local_vault = local_vault.decode()?;
-    let listing = match DriveStorageClient::new(access_token)
+    let token = DriveStorageClient::access_token(access_token)?;
+    let listing = match DriveStorageClient::new(&token)
         .find_vault_folder()
         .await?
     {
@@ -45,7 +46,7 @@ pub enum NookGoogleDriveVaultListing {
         DriveVaultFolderSelection::Existing(folder_id) => {
             let root = DriveEventParent::shared_folder_id(folder_id.as_str());
             let drive = DriveVaultListing {
-                token: access_token,
+                token: &token,
                 root: &root,
             };
             let held = BrowserHeldVaults::load().await?;

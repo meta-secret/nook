@@ -13,6 +13,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use nook_core::ProviderSecretText;
 use nook_core::{
     AppId, BrowserIdentityVault, BrowserVaultKeys, CheckedVaultEvents, DriveEventParent,
     EventError, EventId, EventLogLocation, EventLogNamespaceKind, EventStorageBytes, IdentityId,
@@ -34,7 +35,7 @@ use crate::{NookDatabase, NookError};
 
 /// The vault namespaces under one Google Drive Nook root.
 pub(crate) struct DriveVaultListing<'a> {
-    pub(crate) token: &'a str,
+    pub(crate) token: &'a ProviderSecretText,
     pub(crate) root: &'a DriveEventParent,
 }
 

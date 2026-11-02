@@ -68,7 +68,7 @@ impl NookVaultManager {
             && let RemoteProvider::GoogleDrive(drive) = remote.provider()
         {
             let observations = DriveVaultListing {
-                token: drive.token.expose(),
+                token: &drive.token,
                 root: &drive.root,
             }
             .observations()
@@ -129,7 +129,7 @@ impl NookVaultManager {
             && let RemoteProvider::GoogleDrive(drive) = remote.provider()
         {
             return DriveVaultListing {
-                token: drive.token.expose(),
+                token: &drive.token,
                 root: &drive.root,
             }
             .inspect_vaults(store_ids, app_id)
@@ -182,7 +182,7 @@ impl NookVaultManager {
             && let RemoteProvider::GoogleDrive(drive) = remote.provider()
         {
             return DriveVaultListing {
-                token: drive.token.expose(),
+                token: &drive.token,
                 root: &drive.root,
             }
             .identity_logs(this_browser)

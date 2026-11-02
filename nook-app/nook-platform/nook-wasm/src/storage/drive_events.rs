@@ -9,6 +9,7 @@
 use futures_util::{StreamExt, TryStreamExt, stream};
 #[cfg(test)]
 use nook_core::GenesisImportRequest;
+use nook_core::ProviderSecretText;
 use reqwest::Client;
 use serde::{Deserialize, Serialize, de::IgnoredAny};
 use std::collections::{BTreeMap, BTreeSet};
@@ -72,7 +73,7 @@ use nook_core::{DriveEventParent, EventId, EventLogLocation, LocalEventWrite};
 
 /// Event IO under an already resolved namespace parent; see `DriveNamespace`.
 pub(crate) struct DriveEventStore<'a> {
-    pub(crate) token: &'a str,
+    pub(crate) token: &'a ProviderSecretText,
     pub(crate) parent: DriveEventParent,
     pub(crate) location: &'a EventLogLocation,
 }
@@ -259,7 +260,7 @@ impl DriveEventStore<'_> {
     async fn list_drive_events(&self) -> Result<Vec<ListedDriveEvent>, NookError> {
         let token = self.token;
         let parent = &self.parent;
-        let token = token.trim();
+        let token = token.expose();
         let query = format!(
             "name contains '.yaml' and {} and trashed=false",
             Self::parent_query_fragment(parent)
@@ -278,11 +279,7 @@ impl DriveEventStore<'_> {
                 request_url.push_str("&pageToken=");
                 request_url.push_str(&urlencoding::encode(page));
             }
-            let response = client
-                .get(&request_url)
-                .header("Authorization", format!("Bearer {token}"))
-                .send()
-                .await?;
+            let response = client.get(&request_url).bearer_auth(token).send().await?;
             if !response.status().is_success() {
                 return Err(NookError::Drive(format!(
                     "Drive list events failed: {}",
@@ -325,7 +322,7 @@ impl DriveEventStore<'_> {
         read: ListedEventRead<'_>,
     ) -> Result<StoredEventRead, NookError> {
         let event_id = EventId::parse(&read.raw_id)?;
-        let token = self.token.trim();
+        let token = self.token.expose();
         let mut candidates = Vec::with_capacity(read.file_ids.len());
         for file_id in &read.file_ids {
             candidates.push(Self::download_drive_event_file(read.client, token, file_id).await?);
@@ -344,7 +341,7 @@ impl DriveEventStore<'_> {
     async fn read_drive_event(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
         let token = self.token;
         let parent = &self.parent;
-        let token = token.trim();
+        let token = token.expose();
         let file_ids = Self::lookup_drive_event_file_ids(
             token,
             parent,
@@ -385,11 +382,7 @@ impl DriveEventStore<'_> {
             urlencoding::encode(&query)
         );
         let client = Client::new();
-        let response = client
-            .get(&list_url)
-            .header("Authorization", format!("Bearer {token}"))
-            .send()
-            .await?;
+        let response = client.get(&list_url).bearer_auth(token).send().await?;
         if !response.status().is_success() {
             return Err(NookError::Drive(format!(
                 "Drive lookup event failed: {}",
@@ -419,11 +412,7 @@ impl DriveEventStore<'_> {
         file_id: &str,
     ) -> Result<Vec<u8>, NookError> {
         let download_url = format!("https://www.googleapis.com/drive/v3/files/{file_id}?alt=media");
-        let download = client
-            .get(&download_url)
-            .header("Authorization", format!("Bearer {token}"))
-            .send()
-            .await?;
+        let download = client.get(&download_url).bearer_auth(token).send().await?;
         if !download.status().is_success() {
             return Err(NookError::Drive(format!(
                 "Drive download event failed: {}",
@@ -440,7 +429,7 @@ impl DriveEventStore<'_> {
     /// The same event already stored is a success; other bytes fail. The
     /// created file's id is required in Drive's answer.
     async fn put_drive_event(&self, checked: CheckedEventWrite<'_>) -> Result<(), NookError> {
-        let token = self.token.trim();
+        let token = self.token.expose();
         let parent = &self.parent;
         let event_id = checked.event_id();
         let bytes = checked.bytes();
@@ -464,7 +453,7 @@ impl DriveEventStore<'_> {
         let client = Client::new();
         let response = client
             .post("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart")
-            .header("Authorization", format!("Bearer {token}"))
+            .bearer_auth(token)
             .header(
                 "Content-Type",
                 format!("multipart/related; boundary={boundary}"),
@@ -547,7 +536,7 @@ impl EventStore for DriveEventStore<'_> {
                 "https://www.googleapis.com/drive/v3/files/{}",
                 urlencoding::encode(self.parent.folder_id.as_str())
             ))
-            .header("Authorization", format!("Bearer {}", self.token.trim()))
+            .bearer_auth(self.token.expose())
             .query(&[("supportsAllDrives", "true")])
             .send()
             .await?;

@@ -9,8 +9,10 @@
 use crate::GitHubStorageClient;
 use crate::GitHubStorageClientFetchGithubVault;
 use crate::GitHubStorageClientWriteGithubTextFile;
+use crate::storage::github::GitHubRequest;
 use nook_core::EventId;
-use reqwest::{Client, StatusCode};
+use nook_core::ProviderSecretText;
+use reqwest::{Method, StatusCode};
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::str;
@@ -45,7 +47,7 @@ enum TreeEvent {
 use serde::Deserialize;
 
 pub(crate) struct GitHubEventStore<'a> {
-    pub(crate) pat: &'a str,
+    pub(crate) token: &'a ProviderSecretText,
     pub(crate) repo: &'a str,
     pub(crate) placed: &'a nook_core::PlacedNamespace,
 }
@@ -185,35 +187,44 @@ impl GitHubEventStore<'_> {
     }
 
     /// Every namespace of one kind in a repository.
-    pub(crate) async fn list_github_namespaces(
-        pat: &str,
-        repo: &str,
+    async fn tree_entries(&self, root: &str) -> Result<Vec<GitTreeEntry>, NookError> {
+        GitHubRepository {
+            token: self.token,
+            repo: self.repo,
+        }
+        .tree_entries(root)
+        .await
+    }
+}
+
+/// One repository reached with this browser's token.
+#[derive(Clone, Copy)]
+pub(crate) struct GitHubRepository<'a> {
+    pub(crate) token: &'a ProviderSecretText,
+    pub(crate) repo: &'a str,
+}
+
+impl GitHubRepository<'_> {
+    /// Every namespace of one kind in the repository.
+    pub(crate) async fn namespaces(
+        &self,
         kind: nook_core::EventLogNamespaceKind,
     ) -> Result<Vec<nook_core::PlacedNamespace>, NookError> {
-        Ok(Self::namespaces_from_tree(
-            &Self::tree_entries_at(pat, repo, nook_core::PROVIDER_ROOT_DIR).await?,
+        Ok(GitHubEventStore::namespaces_from_tree(
+            &self.tree_entries(nook_core::PROVIDER_ROOT_DIR).await?,
             kind,
         ))
     }
 
     async fn tree_entries(&self, root: &str) -> Result<Vec<GitTreeEntry>, NookError> {
-        Self::tree_entries_at(self.pat, self.repo, root).await
-    }
-
-    async fn tree_entries_at(
-        pat: &str,
-        repo: &str,
-        root: &str,
-    ) -> Result<Vec<GitTreeEntry>, NookError> {
-        let pat = pat.trim();
-        let client = Client::new();
-
+        let repo = self.repo;
+        let client = GitHubStorageClient::new(self.token)?;
+        let repo_url = format!("https://api.github.com/repos/{repo}");
         let repo_response = client
-            .get(format!("https://api.github.com/repos/{repo}"))
-            .header("Authorization", format!("Bearer {pat}"))
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .header("User-Agent", "nook-wasm")
+            .call(GitHubRequest {
+                method: Method::GET,
+                url: &repo_url,
+            })
             .send()
             .await?;
 
@@ -223,7 +234,7 @@ impl GitHubEventStore<'_> {
             .await
             .map_err(|e| NookError::Serialization(e.to_string()))?;
         let RepositoryDiscovery::Loaded(repo_info) =
-            Self::github_repo_response(RepositoryResponse {
+            GitHubEventStore::github_repo_response(RepositoryResponse {
                 status: repo_status,
                 text: &repo_text,
                 repo,
@@ -235,11 +246,10 @@ impl GitHubEventStore<'_> {
         let tree_url =
             format!("https://api.github.com/repos/{repo}/git/trees/{branch}?recursive=1");
         let tree_response = client
-            .get(&tree_url)
-            .header("Authorization", format!("Bearer {pat}"))
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .header("User-Agent", "nook-wasm")
+            .call(GitHubRequest {
+                method: Method::GET,
+                url: &tree_url,
+            })
             .send()
             .await?;
 
@@ -249,18 +259,19 @@ impl GitHubEventStore<'_> {
             .await
             .map_err(|e| NookError::Serialization(e.to_string()))?;
         let TreeDiscovery::Loaded(tree) =
-            Self::github_tree_response(tree_status, &tree_text, root)?
+            GitHubEventStore::github_tree_response(tree_status, &tree_text, root)?
         else {
             return Ok(Vec::new());
         };
         Ok(tree.tree)
     }
+}
 
+impl GitHubEventStore<'_> {
     async fn read_github_event(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
-        let pat = self.pat;
         let repo = self.repo;
         let path = self.placed.event_path(event_id);
-        if let GitHubVaultDiscovery::FileLoaded(file) = GitHubStorageClient::new(pat)
+        if let GitHubVaultDiscovery::FileLoaded(file) = GitHubStorageClient::new(self.token)?
             .fetch_github_vault(GitHubStorageClientFetchGithubVault {
                 repo,
                 path: &path,
@@ -296,7 +307,6 @@ impl EventStore for GitHubEventStore<'_> {
     /// Append-only event upload. Retries branch conflicts; never overwrites
     /// different content.
     async fn put_checked(&self, checked: CheckedEventWrite<'_>) -> Result<(), NookError> {
-        let pat = self.pat;
         let repo = self.repo;
         let event_id = checked.event_id();
         let bytes = checked.bytes();
@@ -316,7 +326,7 @@ impl EventStore for GitHubEventStore<'_> {
         let content = Self::event_content(bytes)?;
 
         for attempt in 0..3 {
-            match GitHubStorageClient::new(pat)
+            match GitHubStorageClient::new(self.token)?
                 .write_github_text_file(GitHubStorageClientWriteGithubTextFile {
                     repo,
                     path: &path,
@@ -329,7 +339,7 @@ impl EventStore for GitHubEventStore<'_> {
                 Err(NookError::GitHub(message)) if attempt < 2 => {
                     if Self::is_retryable_event_write_error(&message) {
                         if let Ok(GitHubVaultDiscovery::FileLoaded(existing)) =
-                            GitHubStorageClient::new(pat)
+                            GitHubStorageClient::new(self.token)?
                                 .fetch_github_vault(GitHubStorageClientFetchGithubVault {
                                     repo,
                                     path: &path,
@@ -717,6 +727,7 @@ mod fetch_tests {
     use super::*;
     use crate::storage::checked_event_write::tests::EventFixture;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+    use crate::test_fixtures::WasmFixture;
     use base64::{Engine as _, engine::general_purpose::STANDARD};
     use nook_core::{IdentityId, PlacedNamespace, StoreId};
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -745,6 +756,7 @@ mod fetch_tests {
     async fn event_ids_come_from_the_namespace_tree() -> anyhow::Result<()> {
         let fixture = EventFixture::new()?;
         let location = location()?;
+        let token = WasmFixture::secret("pat")?;
         let path = location.event_path(&fixture.event_id);
         let tree = serde_json::json!({
             "truncated": false,
@@ -759,7 +771,7 @@ mod fetch_tests {
             FetchRoute::ok("GET", "repos/owner/repo", r#"{"default_branch":"main"}"#),
         ])?;
         let store = GitHubEventStore {
-            pat: "pat",
+            token: &token,
             repo: "owner/repo",
             placed: &location,
         };
@@ -782,8 +794,9 @@ mod fetch_tests {
     async fn events_are_fetched_and_written_only_when_absent() -> anyhow::Result<()> {
         let fixture = EventFixture::new()?;
         let location = location()?;
+        let token = WasmFixture::secret("pat")?;
         let store = GitHubEventStore {
-            pat: "pat",
+            token: &token,
             repo: "owner/repo",
             placed: &location,
         };
@@ -842,8 +855,9 @@ mod fetch_tests {
     async fn write_conflicts_compare_the_stored_event() -> anyhow::Result<()> {
         let fixture = EventFixture::new()?;
         let location = location()?;
+        let token = WasmFixture::secret("pat")?;
         let store = GitHubEventStore {
-            pat: "pat",
+            token: &token,
             repo: "owner/repo",
             placed: &location,
         };

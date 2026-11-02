@@ -19,22 +19,56 @@ pub(crate) use response_mapping::{
 };
 
 use js_sys::Date;
-use reqwest::{Client, StatusCode};
+use nook_core::ProviderSecretText;
+use reqwest::header::{ACCEPT, CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue, USER_AGENT};
+use reqwest::{Client, Method, RequestBuilder, StatusCode};
 
 use crate::NookError;
+/// A GitHub API client: every request carries GitHub's API headers and this
+/// browser's token as its bearer credential.
 pub(crate) struct GitHubStorageClient<'a> {
     client: Client,
-    credential: &'a str,
+    token: &'a ProviderSecretText,
 }
+
+/// One GitHub API request line.
+pub(crate) struct GitHubRequest<'a> {
+    pub(crate) method: Method,
+    pub(crate) url: &'a str,
+}
+
 impl<'a> GitHubStorageClient<'a> {
-    pub(crate) fn new(credential: &'a str) -> Self {
-        Self {
-            client: Client::new(),
-            credential,
-        }
+    const ACCEPT: &'static str = "application/vnd.github+json";
+    const API_VERSION_HEADER: &'static str = "x-github-api-version";
+    const API_VERSION: &'static str = "2022-11-28";
+    const USER_AGENT: &'static str = "nook-wasm";
+
+    pub(crate) fn new(token: &'a ProviderSecretText) -> Result<Self, NookError> {
+        Ok(Self {
+            client: Client::builder()
+                .default_headers(Self::default_headers())
+                .build()?,
+            token,
+        })
     }
-    fn as_str(&self) -> &'a str {
-        self.credential
+
+    /// The headers every GitHub request carries.
+    fn default_headers() -> HeaderMap {
+        HeaderMap::from_iter([
+            (ACCEPT, HeaderValue::from_static(Self::ACCEPT)),
+            (
+                HeaderName::from_static(Self::API_VERSION_HEADER),
+                HeaderValue::from_static(Self::API_VERSION),
+            ),
+            (USER_AGENT, HeaderValue::from_static(Self::USER_AGENT)),
+        ])
+    }
+
+    /// One request with the token as its bearer credential.
+    pub(crate) fn call(&self, request: GitHubRequest<'_>) -> RequestBuilder {
+        self.client
+            .request(request.method, request.url)
+            .bearer_auth(self.token.expose())
     }
 }
 
@@ -70,35 +104,12 @@ impl GitHubStorageClient<'_> {
 }
 
 impl GitHubStorageClient<'_> {
-    fn github_get_headers(&self) -> [(&'static str, String); 4] {
-        let pat = self.as_str();
-        [
-            ("Authorization", format!("Bearer {}", pat.trim())),
-            ("Accept", "application/vnd.github+json".to_owned()),
-            ("X-GitHub-Api-Version", "2022-11-28".to_owned()),
-            ("User-Agent", "nook-wasm".to_owned()),
-        ]
-    }
-}
-
-impl GitHubStorageClient<'_> {
     pub(crate) async fn fetch_github_username(&self) -> Result<String, NookError> {
-        let pat = self.as_str();
-        let pat = pat.trim();
-        if pat.is_empty() {
-            return Err(NookError::GitHub(
-                "GitHub personal access token is required.".to_owned(),
-            ));
-        }
-
-        let url = "https://api.github.com/user";
-        let client = &self.client;
-        let response = client
-            .get(url)
-            .header("Authorization", format!("Bearer {pat}"))
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .header("User-Agent", "nook-wasm")
+        let response = self
+            .call(GitHubRequest {
+                method: Method::GET,
+                url: "https://api.github.com/user",
+            })
             .send()
             .await?;
 
@@ -113,16 +124,12 @@ impl GitHubStorageClient<'_> {
 
 impl GitHubStorageClient<'_> {
     pub(crate) async fn ensure_github_repo_exists(&self, repo: &str) -> Result<(), NookError> {
-        let pat = self.as_str();
-        let pat = pat.trim();
-        let client = &self.client;
         let check_url = format!("https://api.github.com/repos/{repo}");
-        let check = client
-            .get(&check_url)
-            .header("Authorization", format!("Bearer {pat}"))
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .header("User-Agent", "nook-wasm")
+        let check = self
+            .call(GitHubRequest {
+                method: Method::GET,
+                url: &check_url,
+            })
             .send()
             .await?;
 
@@ -145,13 +152,11 @@ impl GitHubStorageClient<'_> {
             auto_init: true,
         };
 
-        let create = client
-            .post("https://api.github.com/user/repos")
-            .header("Authorization", format!("Bearer {pat}"))
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .header("User-Agent", "nook-wasm")
-            .header("Content-Type", "application/json")
+        let create = self
+            .call(GitHubRequest {
+                method: Method::POST,
+                url: "https://api.github.com/user/repos",
+            })
             .json(&body)
             .send()
             .await?;
@@ -181,15 +186,16 @@ impl GitHubStorageClient<'_> {
         request: GitHubStorageClientFetchGithubFileAtPath<'_>,
     ) -> Result<GitHubVaultDiscovery, NookError> {
         let GitHubStorageClientFetchGithubFileAtPath { repo, path } = request;
-        let pat = self.as_str();
-        let client = &self.client;
-        let mut request = client.get(GitHubStorageClient::github_cache_bust_url(&format!(
+        let url = GitHubStorageClient::github_cache_bust_url(&format!(
             "https://api.github.com/repos/{repo}/contents/{path}"
-        )));
-        for (name, value) in GitHubStorageClient::new(pat).github_get_headers() {
-            request = request.header(name, value);
-        }
-        let file_response = request.send().await?;
+        ));
+        let file_response = self
+            .call(GitHubRequest {
+                method: Method::GET,
+                url: &url,
+            })
+            .send()
+            .await?;
 
         let status = file_response.status();
         let text = file_response.text().await?;
@@ -208,35 +214,29 @@ impl GitHubStorageClient<'_> {
         request: GitHubStorageClientFetchGithubVault<'_>,
     ) -> Result<GitHubVaultDiscovery, NookError> {
         let GitHubStorageClientFetchGithubVault { repo, path, root } = request;
-        let pat = self.as_str();
         if matches!(root, GitHubRootDiscovery::KnownUnavailable) {
             return Ok(GitHubVaultDiscovery::DirectoryUnavailable);
         }
 
-        let pat = pat.trim();
-
         // Event files and other nested paths are not listed under the repo root.
         if path.contains('/') {
-            return GitHubStorageClient::new(pat)
+            return self
                 .fetch_github_file_at_path(GitHubStorageClientFetchGithubFileAtPath { repo, path })
                 .await;
         }
-
-        let client = &self.client;
-        let apply_headers = |request: reqwest::RequestBuilder| {
-            let mut request = request;
-            for (name, value) in GitHubStorageClient::new(pat).github_get_headers() {
-                request = request.header(name, value);
-            }
-            request
-        };
 
         // List repo root first so a missing vault file does not produce fetch 404
         // noise in the browser console (Chrome logs failed fetch responses).
         let list_url = GitHubStorageClient::github_cache_bust_url(&format!(
             "https://api.github.com/repos/{repo}/contents/"
         ));
-        let list_response = apply_headers(client.get(&list_url)).send().await?;
+        let list_response = self
+            .call(GitHubRequest {
+                method: Method::GET,
+                url: &list_url,
+            })
+            .send()
+            .await?;
 
         let list_status = list_response.status();
         let list_text = list_response.text().await?;
@@ -256,8 +256,7 @@ impl GitHubStorageClient<'_> {
             GitHubDirectoryListing::FileListed => {}
         }
 
-        GitHubStorageClient::new(pat)
-            .fetch_github_file_at_path(GitHubStorageClientFetchGithubFileAtPath { repo, path })
+        self.fetch_github_file_at_path(GitHubStorageClientFetchGithubFileAtPath { repo, path })
             .await
     }
 }
@@ -273,7 +272,6 @@ impl GitHubStorageClient<'_> {
             content,
             write,
         } = request;
-        let pat = self.as_str();
         use base64::{Engine as _, engine::general_purpose};
 
         let base64_content = general_purpose::STANDARD.encode(content.as_bytes());
@@ -288,14 +286,12 @@ impl GitHubStorageClient<'_> {
             .map_err(|e| NookError::Serialization(format!("Failed to serialize body: {}", e)))?;
 
         let url = format!("https://api.github.com/repos/{}/contents/{}", repo, path);
-        let client = &self.client;
-        let response = client
-            .put(&url)
-            .header("Authorization", format!("Bearer {}", pat.trim()))
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .header("User-Agent", "nook-wasm")
-            .header("Content-Type", "application/json")
+        let response = self
+            .call(GitHubRequest {
+                method: Method::PUT,
+                url: &url,
+            })
+            .header(CONTENT_TYPE, "application/json")
             .body(body_str)
             .send()
             .await?;
@@ -314,6 +310,8 @@ impl GitHubStorageClient<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_fixtures::WasmFixture;
+    use reqwest::header::AUTHORIZATION;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -328,34 +326,36 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn request_headers_trim_tokens_and_pin_the_github_api_version() {
+    fn every_request_pins_the_github_api_and_carries_the_token() -> anyhow::Result<()> {
+        let headers = GitHubStorageClient::default_headers();
         assert_eq!(
-            GitHubStorageClient::new("  pat  ").github_get_headers(),
-            [
-                ("Authorization", "Bearer pat".to_owned()),
-                ("Accept", "application/vnd.github+json".to_owned()),
-                ("X-GitHub-Api-Version", "2022-11-28".to_owned()),
-                ("User-Agent", "nook-wasm".to_owned()),
-            ]
+            headers.get(ACCEPT).map(HeaderValue::as_bytes),
+            Some(&b"application/vnd.github+json"[..])
         );
-    }
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-        )
-    )]
-    async fn username_lookup_rejects_empty_token_before_network() -> anyhow::Result<()> {
-        let Err(error) = GitHubStorageClient::new("  ").fetch_github_username().await else {
-            anyhow::bail!("empty token must fail closed");
-        };
-        assert!(matches!(
-            error,
-            NookError::GitHub(message) if message == "GitHub personal access token is required."
-        ));
+        assert_eq!(
+            headers
+                .get("x-github-api-version")
+                .map(HeaderValue::as_bytes),
+            Some(&b"2022-11-28"[..])
+        );
+        assert_eq!(
+            headers.get(USER_AGENT).map(HeaderValue::as_bytes),
+            Some(&b"nook-wasm"[..])
+        );
+        let token = WasmFixture::secret("TEST-ONLY-pat")?;
+        let request = GitHubStorageClient::new(&token)?
+            .call(GitHubRequest {
+                method: Method::GET,
+                url: "https://api.github.com/user",
+            })
+            .build()?;
+        assert_eq!(
+            request
+                .headers()
+                .get(AUTHORIZATION)
+                .map(HeaderValue::as_bytes),
+            Some(&b"Bearer TEST-ONLY-pat"[..])
+        );
         Ok(())
     }
 
@@ -368,7 +368,8 @@ mod tests {
         )
     )]
     async fn root_empty_short_circuits_vault_lookup() -> anyhow::Result<()> {
-        let result = GitHubStorageClient::new("token")
+        let token = WasmFixture::secret("token")?;
+        let result = GitHubStorageClient::new(&token)?
             .fetch_github_vault(GitHubStorageClientFetchGithubVault {
                 repo: "owner/repo",
                 path: "vault.yaml",

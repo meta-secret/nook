@@ -143,8 +143,7 @@ impl ICloudEventStore<'_> {
         &self,
         checked: CheckedEventWrite<'_>,
     ) -> Result<(), NookError> {
-        let token = nook_core::OauthAccessToken::parse(self.web_auth_token)?;
-        let token = token.as_ref();
+        let token = self.web_auth_token.expose();
         let content = str::from_utf8(checked.bytes())
             .map_err(|e| NookError::Serialization(format!("Event YAML must be UTF-8: {e}")))?;
         let target = self.target;
@@ -340,6 +339,7 @@ mod fetch_tests {
     use crate::storage::checked_event_write::tests::EventFixture;
     use crate::storage::event_store::EventStore;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+    use crate::test_fixtures::WasmFixture;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     const LOOKUP: &str = "records/lookup";
@@ -372,8 +372,9 @@ mod fetch_tests {
             nook_core::IdentityId::parse("idn_abcdefghijk")?,
             nook_core::StoreId::parse("store_testtoken11")?,
         );
+        let web_token = WasmFixture::secret("web-token")?;
         let store = ICloudEventStore {
-            web_auth_token: "web-token",
+            web_auth_token: &web_token,
             target: &super::super::owner_share_fixture()?,
             placed: &location,
         };
@@ -427,8 +428,9 @@ mod fetch_tests {
             nook_core::IdentityId::parse("idn_abcdefghijk")?,
             nook_core::StoreId::parse("store_testtoken11")?,
         );
+        let web_token = WasmFixture::secret("web-token")?;
         let store = ICloudEventStore {
-            web_auth_token: "web-token",
+            web_auth_token: &web_token,
             target: &super::super::owner_share_fixture()?,
             placed: &location,
         };

@@ -1,6 +1,7 @@
 //! Whole-namespace `CloudKit` operations: which identities and vaults a target holds,
 //! and deleting every record of one log (a vault deleted everywhere).
 
+use nook_core::ProviderSecretText;
 use reqwest::Client;
 
 use super::wire::{
@@ -14,7 +15,7 @@ use nook_core::{EventLogNamespaceKind, ICloudSharedTarget, PlacedNamespace, Stor
 
 /// Named values required by `ICloudEventStore::namespaces_tagged`.
 struct TaggedNamespaces<'a> {
-    web_auth_token: &'a str,
+    web_auth_token: &'a ProviderSecretText,
     target: &'a ICloudSharedTarget,
     prefix: &'a str,
 }
@@ -91,7 +92,7 @@ impl ICloudEventStore<'_> {
 
     /// Ids of every namespace of one kind with a log on this target.
     pub(crate) async fn list_icloud_namespaces(
-        web_auth_token: &str,
+        web_auth_token: &ProviderSecretText,
         target: &ICloudSharedTarget,
         kind: EventLogNamespaceKind,
     ) -> Result<Vec<PlacedNamespace>, NookError> {
@@ -106,7 +107,7 @@ impl ICloudEventStore<'_> {
     /// Where this target files one vault: every namespace whose tag names its
     /// store id, whichever identity filed it.
     pub(crate) async fn find_icloud_vault(
-        web_auth_token: &str,
+        web_auth_token: &ProviderSecretText,
         target: &ICloudSharedTarget,
         store_id: &StoreId,
     ) -> Result<Vec<PlacedNamespace>, NookError> {
@@ -126,9 +127,9 @@ impl ICloudEventStore<'_> {
             target,
             prefix,
         } = request;
-        let token = nook_core::OauthAccessToken::parse(web_auth_token)?;
+        let token = web_auth_token.expose();
         let records = Self::query_records(RecordQuery {
-            web_auth_token: token.as_ref(),
+            web_auth_token: token,
             target,
             comparator: "BEGINS_WITH",
             location: prefix,
@@ -148,10 +149,10 @@ impl ICloudEventStore<'_> {
 
     /// Delete every record of this store's log.
     pub(super) async fn delete_icloud_namespace(&self) -> Result<(), NookError> {
-        let token = nook_core::OauthAccessToken::parse(self.web_auth_token)?;
+        let token = self.web_auth_token.expose();
         let namespace = self.namespace();
         let records = Self::query_records(RecordQuery {
-            web_auth_token: token.as_ref(),
+            web_auth_token: token,
             target: self.target,
             comparator: "EQUALS",
             location: &namespace,
@@ -175,11 +176,11 @@ impl ICloudEventStore<'_> {
                 },
                 self.target,
             );
-            Self::log_icloud_request_start(OPERATION, PATH, token.as_ref());
+            Self::log_icloud_request_start(OPERATION, PATH, token);
             let mut request = client
                 .post(Self::icloud_database_url(self.target, PATH))
                 .header("Content-Type", "application/json");
-            for (name, value) in Self::icloud_auth_query(token.as_ref()) {
+            for (name, value) in Self::icloud_auth_query(token) {
                 request = request.query(&[(name, value)]);
             }
             let response = request.json(&body).send().await?;
@@ -189,7 +190,7 @@ impl ICloudEventStore<'_> {
             // A batch answers 200 even when single records fail; any failed
             // record fails the deletion.
             if !status.is_success() || body.contains("serverErrorCode") {
-                Self::log_icloud_error_body(OPERATION, PATH, status, &body, token.as_ref());
+                Self::log_icloud_error_body(OPERATION, PATH, status, &body, token);
                 return Err(Self::icloud_error(status, &body));
             }
         }
@@ -207,6 +208,7 @@ impl ICloudEventStore<'_> {
 mod fetch_tests {
     use super::*;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+    use crate::test_fixtures::WasmFixture;
     use nook_core::{IdentityId, PlacedNamespace, StoreId};
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -241,7 +243,7 @@ mod fetch_tests {
             FetchRoute::ok("POST", QUERY, &second),
         ])?;
         let placed = ICloudEventStore::list_icloud_namespaces(
-            "web-token",
+            &WasmFixture::secret("web-token")?,
             &super::super::owner_share_fixture()?,
             EventLogNamespaceKind::Vault,
         )
@@ -267,16 +269,7 @@ mod fetch_tests {
         let _stub = FetchStub::install(vec![FetchRoute::failing("POST", QUERY, 421)])?;
         assert!(
             ICloudEventStore::list_icloud_namespaces(
-                "web-token",
-                &super::super::owner_share_fixture()?,
-                EventLogNamespaceKind::Identity,
-            )
-            .await
-            .is_err()
-        );
-        assert!(
-            ICloudEventStore::list_icloud_namespaces(
-                "",
+                &WasmFixture::secret("web-token")?,
                 &super::super::owner_share_fixture()?,
                 EventLogNamespaceKind::Identity,
             )
@@ -300,8 +293,9 @@ mod fetch_tests {
             nook_core::StoreId::parse("store_abcdefghijk")?,
         );
         let tag = location.cloudkit_tag();
+        let web_token = WasmFixture::secret("web-token")?;
         let store = ICloudEventStore {
-            web_auth_token: "web-token",
+            web_auth_token: &web_token,
             target: &super::super::owner_share_fixture()?,
             placed: &location,
         };

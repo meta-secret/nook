@@ -1,22 +1,32 @@
 //! Google Drive account verification for event-log sync.
 pub(crate) mod wire;
 
+use nook_core::ProviderSecretText;
+use reqwest::header::USER_AGENT;
 use reqwest::{Client, StatusCode};
 
 use crate::NookError;
 pub(crate) struct DriveStorageClient<'a> {
     pub(super) client: Client,
-    credential: &'a str,
+    credential: &'a ProviderSecretText,
 }
 impl<'a> DriveStorageClient<'a> {
-    pub(crate) fn new(credential: &'a str) -> Self {
+    pub(crate) fn new(credential: &'a ProviderSecretText) -> Self {
         Self {
             client: Client::new(),
             credential,
         }
     }
+    /// The token every Drive request carries as its bearer credential.
     pub(super) fn as_str(&self) -> &'a str {
-        self.credential
+        self.credential.expose()
+    }
+
+    /// A raw token from the page, checked once: a blank one fails with
+    /// `OauthAccessTokenEmpty`, as before.
+    pub(crate) fn access_token(raw: &str) -> Result<ProviderSecretText, NookError> {
+        let token = nook_core::OauthAccessToken::parse(raw)?;
+        Ok(ProviderSecretText::try_from(token.as_ref().to_owned())?)
     }
 }
 
@@ -38,16 +48,6 @@ struct DriveAboutResponse {
 }
 
 impl DriveStorageClient<'_> {
-    fn drive_headers(&self) -> [(&'static str, String); 2] {
-        let access_token = self.as_str();
-        [
-            ("Authorization", format!("Bearer {}", access_token.trim())),
-            ("User-Agent", "nook-wasm".to_owned()),
-        ]
-    }
-}
-
-impl DriveStorageClient<'_> {
     fn drive_error(request: DriveStorageClientDriveError<'_>) -> NookError {
         let DriveStorageClientDriveError { status, body } = request;
         NookError::Drive(format!(
@@ -63,16 +63,14 @@ impl DriveStorageClient<'_> {
 
 impl DriveStorageClient<'_> {
     pub(crate) async fn verify_drive_access(&self) -> Result<(), NookError> {
-        let access_token = self.as_str();
-        let token = nook_core::OauthAccessToken::parse(access_token)?;
-        let client = &self.client;
-        let mut request = client
+        let response = self
+            .client
             .get("https://www.googleapis.com/drive/v3/about")
-            .query(&[("fields", "user")]);
-        for (name, value) in DriveStorageClient::new(token.as_ref()).drive_headers() {
-            request = request.header(name, value);
-        }
-        let response = request.send().await?;
+            .query(&[("fields", "user")])
+            .bearer_auth(self.as_str())
+            .header(USER_AGENT, "nook-wasm")
+            .send()
+            .await?;
         if response.status() == StatusCode::UNAUTHORIZED {
             return Err(NookError::Drive(
                 "Google Drive rejected the access token (401). Sign in again.".to_owned(),
@@ -102,17 +100,6 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
-    fn headers_trim_access_tokens_and_keep_the_product_user_agent() {
-        assert_eq!(
-            DriveStorageClient::new("  token-123  ").drive_headers(),
-            [
-                ("Authorization", "Bearer token-123".to_owned()),
-                ("User-Agent", "nook-wasm".to_owned()),
-            ]
-        );
-    }
-
-    #[wasm_bindgen_test]
     fn errors_preserve_status_and_optional_body_without_leaking_empty_delimiters() {
         assert!(matches!(
             DriveStorageClient::drive_error(DriveStorageClientDriveError { status: StatusCode::BAD_REQUEST, body: "bad query" }),
@@ -137,26 +124,6 @@ mod tests {
         assert!(matches!(
             without_user.user,
             DriveAccountObservation::Unreported
-        ));
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-        )
-    )]
-    async fn access_verification_rejects_empty_token_before_network() -> anyhow::Result<()> {
-        let Err(error) = DriveStorageClient::new("  ").verify_drive_access().await else {
-            anyhow::bail!("empty OAuth access token must fail closed");
-        };
-        assert!(matches!(
-            error,
-            NookError::Database(message)
-                if message == nook_core::ValidationError::OauthAccessTokenEmpty.to_string()
         ));
         Ok(())
     }

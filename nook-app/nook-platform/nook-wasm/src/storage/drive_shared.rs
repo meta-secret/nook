@@ -142,7 +142,7 @@ impl DriveStorageClient<'_> {
     async fn list_vault_folders(
         &self,
     ) -> Result<Vec<nook_core::DriveVaultFolderObservation>, NookError> {
-        let token = nook_core::OauthAccessToken::parse(self.as_str())?;
+        let token = self.as_str();
         let query =
             DriveStorageClient::vault_folder_query(nook_core::DriveVaultFolderLookup::root_name());
         let mut page_token: Option<String> = None;
@@ -157,7 +157,7 @@ impl DriveStorageClient<'_> {
                     ("pageSize", "100"),
                     ("spaces", "drive"),
                 ])
-                .header("Authorization", format!("Bearer {}", token.as_ref()));
+                .bearer_auth(token);
             if let Some(page) = page_token.as_deref() {
                 request = request.query(&[("pageToken", page)]);
             }
@@ -184,12 +184,12 @@ impl DriveStorageClient<'_> {
     }
 
     async fn create_vault_folder(&self, folder_name: &str) -> Result<(String, String), NookError> {
-        let token = nook_core::OauthAccessToken::parse(self.as_str())?;
+        let token = self.as_str();
         let client = &self.client;
         let response = client
             .post("https://www.googleapis.com/drive/v3/files")
             .query(&[("fields", "id,name")])
-            .header("Authorization", format!("Bearer {}", token.as_ref()))
+            .bearer_auth(token)
             .header("Content-Type", "application/json")
             .json(&DriveFolderCreateRequest {
                 name: folder_name,
@@ -224,8 +224,7 @@ impl DriveStorageClient<'_> {
         request: DriveStorageClientShareFolderWithEmail<'_>,
     ) -> Result<(), NookError> {
         let DriveStorageClientShareFolderWithEmail { folder_id, email } = request;
-        let access_token = self.as_str();
-        let token = nook_core::OauthAccessToken::parse(access_token)?;
+        let token = self.as_str();
         let folder_id = folder_id.trim();
         let email = email.trim();
         if folder_id.is_empty() {
@@ -249,7 +248,7 @@ impl DriveStorageClient<'_> {
                 ("sendNotificationEmail", "true"),
                 ("supportsAllDrives", "true"),
             ])
-            .header("Authorization", format!("Bearer {}", token.as_ref()))
+            .bearer_auth(token)
             .header("Content-Type", "application/json")
             .json(&DriveFolderPermissionRequest {
                 permission_type: "user",
@@ -288,7 +287,7 @@ impl DriveStorageClient<'_> {
         &self,
         folder_id: &str,
     ) -> Result<Vec<nook_core::DrivePermissionObservation>, NookError> {
-        let token = nook_core::OauthAccessToken::parse(self.as_str())?;
+        let token = self.as_str();
         let folder_id = nook_core::GoogleDriveFolderId::parse(folder_id)?;
         let url = format!(
             "https://www.googleapis.com/drive/v3/files/{}/permissions",
@@ -308,7 +307,7 @@ impl DriveStorageClient<'_> {
                     ("pageSize", "100"),
                     ("supportsAllDrives", "true"),
                 ])
-                .header("Authorization", format!("Bearer {}", token.as_ref()));
+                .bearer_auth(token);
             if let Some(page) = page_token.as_deref() {
                 request = request.query(&[("pageToken", page)]);
             }
@@ -340,7 +339,7 @@ impl DriveStorageClient<'_> {
         folder_id: &str,
         permission_id: &str,
     ) -> Result<(), NookError> {
-        let token = nook_core::OauthAccessToken::parse(self.as_str())?;
+        let token = self.as_str();
         let folder_id = nook_core::GoogleDriveFolderId::parse(folder_id)?;
         let permission_id = permission_id.trim();
         if permission_id.is_empty() {
@@ -357,7 +356,7 @@ impl DriveStorageClient<'_> {
             .client
             .delete(&url)
             .query(&[("supportsAllDrives", "true")])
-            .header("Authorization", format!("Bearer {}", token.as_ref()))
+            .bearer_auth(token)
             .send()
             .await?;
         if !response.status().is_success() {
@@ -455,20 +454,16 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::test_fixtures::WasmFixture;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
     async fn shared_drive_input_guards_fail_before_network_access() -> anyhow::Result<()> {
+        let token = WasmFixture::secret("ya29.test")?;
         assert!(
-            DriveStorageClient::new("")
-                .connect_vault_folder()
-                .await
-                .is_err()
-        );
-        assert!(
-            DriveStorageClient::new("ya29.test")
+            DriveStorageClient::new(&token)
                 .share_folder_with_email(DriveStorageClientShareFolderWithEmail {
                     folder_id: "",
                     email: "joiner@example.test"
@@ -477,7 +472,7 @@ mod browser_tests {
                 .is_err()
         );
         assert!(
-            DriveStorageClient::new("ya29.test")
+            DriveStorageClient::new(&token)
                 .share_folder_with_email(DriveStorageClientShareFolderWithEmail {
                     folder_id: "folder-1",
                     email: ""
