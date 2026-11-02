@@ -145,6 +145,7 @@ pub(super) mod tests {
         }
 
         /// The fixture as a checked write into one log.
+        #[cfg(feature = "browser-wasm-tests")]
         pub(crate) fn checked<'a>(
             &'a self,
             location: &'a EventLogLocation,

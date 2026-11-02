@@ -54,6 +54,7 @@ impl NookError {
 #[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
+    #[cfg(feature = "browser-wasm-tests")]
     use crate::TypedOutput;
     use crate::manager::VaultNameState;
     use crate::manager::{OutboxTarget, PreparedProvider};
