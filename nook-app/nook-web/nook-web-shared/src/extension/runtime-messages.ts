@@ -4,14 +4,10 @@ import { err, ok, type Result } from "neverthrow";
 import { Effect, Schema } from "effect";
 import {
   decode_extension_pairing_storage_provider,
-  type ExtensionPairingStorageProviderPayload as RustExtensionPairingStorageProviderPayload,
+  type ExtensionPairingStorageProviderPayload,
   type NookKeyringProviderSharesAdmission,
 } from "../vault-app/lib/nook-wasm/nook_wasm.js";
-import type {
-  ExtensionStorageProviderIdentity,
-  ExtensionStorageProviderType as RustExtensionStorageProviderType,
-  ExtensionVaultEventLogRequestMessage,
-} from "./nook-companion-wasm/nook_companion_wasm.js";
+import type { ExtensionVaultEventLogRequestMessage } from "./nook-companion-wasm/nook_companion_wasm.js";
 import { ExtensionConnectScope } from "./extension-connect-scope";
 import { ExtensionPairingApprovedMessageAdmissionFailure } from "./extension-pairing-admission-failure";
 import type { ExtensionKeyringVault } from "./keyring-grant-wire";
@@ -103,8 +99,6 @@ export type GeneratePasswordRequest = {
   readonly payload: { origin: string };
 };
 
-export type ExtensionPairingStorageProviderPayload =
-  RustExtensionPairingStorageProviderPayload;
 export class ExtensionPairingStorageProviderPayloadDecoder {
   private constructor() {}
 
@@ -295,54 +289,6 @@ export class ExtensionKeyringApprovalAdmission {
   }
 }
 
-export type ExtensionStorageProviderType = RustExtensionStorageProviderType;
-export const ExtensionStorageProviderType = {
-  Local: "local",
-  LocalFolder: "local-folder",
-  Github: "github",
-  OAuthFile: "oauth-file",
-  S3: "s3",
-} satisfies Record<string, RustExtensionStorageProviderType>;
-export type ExtensionStorageProviderPayload = ExtensionStorageProviderIdentity;
-/** Structural browser wire value; validation requires no instance methods or runtime state. */
-export enum ExtensionStorageProviderIdentityFailure {
-  Invalid = "invalid-provider-identity",
-}
-export class ExtensionStorageProviderPayloadAdmission {
-  constructor(private readonly value: unknown) {}
-  parse(): Result<
-    ExtensionStorageProviderPayload,
-    ExtensionStorageProviderIdentityFailure
-  > {
-    const value = this.value;
-    if (!value || typeof value !== "object")
-      return err(ExtensionStorageProviderIdentityFailure.Invalid);
-    const provider = value;
-    if (
-      !("id" in provider) ||
-      typeof provider.id !== "string" ||
-      provider.id.length === 0 ||
-      !("type" in provider)
-    )
-      return err(ExtensionStorageProviderIdentityFailure.Invalid);
-    switch (provider.type) {
-      case ExtensionStorageProviderType.Local:
-      case ExtensionStorageProviderType.LocalFolder:
-      case ExtensionStorageProviderType.Github:
-      case ExtensionStorageProviderType.OAuthFile:
-      case ExtensionStorageProviderType.S3: {
-        const admittedProvider: ExtensionStorageProviderPayload = {
-          id: provider.id,
-          type: provider.type,
-        };
-        return ok(admittedProvider);
-      }
-      default:
-        return err(ExtensionStorageProviderIdentityFailure.Invalid);
-    }
-  }
-}
-
 export enum ExtensionPairingApprovedMessageType {
   NookExtensionPairingApproved = "nook:extension-pairing-approved",
 }
@@ -411,6 +357,3 @@ export type RuntimeMessage =
   | ExtensionLocalEventLogUpdatedMessage
   | ExtensionKeyringProvidersMessage
   | ExtensionSidePanelSignal;
-
-export const ExtensionStorageProviderPayload =
-  ExtensionStorageProviderPayloadAdmission;
