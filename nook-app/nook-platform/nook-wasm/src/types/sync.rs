@@ -132,7 +132,7 @@ impl NookEnrollmentProvider {
     /// The draft the invite gives the joiner: the provider complete for a
     /// personal code, the shared target awaiting the joiner's own sign-in
     /// for a grant.
-    #[wasm_bindgen(js_name = providerDraft)]
+    #[wasm_bindgen]
     pub fn provider_draft(&self) -> Result<tsify::Ts<ProviderDraft>, wasm_bindgen::JsError> {
         let draft = ProviderDraft::try_from(&self.0)?;
         Ok(draft.encode()?)

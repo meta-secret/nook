@@ -114,7 +114,7 @@ export class PasswordEnrollmentActions {
     const state = this.state;
     let draft: ProviderDraft;
     try {
-      draft = enrollmentProvider.providerDraft();
+      draft = enrollmentProvider.provider_draft();
     } catch (failure) {
       return storageErr(
         new InviteJoinFailure(
@@ -148,7 +148,7 @@ export class PasswordEnrollmentActions {
   ): Promise<InviteStorageArgs> {
     let grant: ProviderDraft;
     try {
-      grant = enrollmentProvider.providerDraft();
+      grant = enrollmentProvider.provider_draft();
     } catch (failure) {
       return storageErr(
         new InviteJoinFailure(
