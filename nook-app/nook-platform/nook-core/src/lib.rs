@@ -400,9 +400,10 @@ pub use sync_provider_store::{
     DraftStorageConnection, DuplicateCandidatePolicy, DuplicateProviderHandling,
     DuplicateProviderSelection, DuplicateSyncProvider, EnrollmentAudience, GithubDraft,
     GithubDraftForm, GithubDraftToken, GithubProvider, GoogleDriveAccess, GoogleDriveAuthorization,
-    GoogleDriveDraft, GoogleDriveFolder, GoogleDriveFolderBinding, GoogleDriveProvider,
-    GoogleDriveSignIn, GoogleDriveSignInRequest, ICloudAccess, ICloudDraft, ICloudProvider,
-    ICloudShare, ICloudShareBinding, ICloudSignIn, ICloudSignInRequest, IdentityMountCapability,
+    GoogleDriveAuthorizationCheck, GoogleDriveAuthorizationFreshness, GoogleDriveDraft,
+    GoogleDriveFolder, GoogleDriveFolderBinding, GoogleDriveProvider, GoogleDriveSignIn,
+    GoogleDriveSignInRequest, ICloudAccess, ICloudDraft, ICloudProvider, ICloudShare,
+    ICloudShareBinding, ICloudSignIn, ICloudSignInRequest, IdentityMountCapability,
     LocalFolderDraft, LocalFolderHandleId, LocalFolderName, LocalFolderProvider,
     LocalProviderRowChange, LocalProviderRowOutcome, LocalProviderRowRequest,
     LocalProviderSelection, ManagerStoreScopeRef, OAuthFileDraft, OAuthFileProvider,
@@ -614,6 +615,7 @@ pub use nook_companion_core::BackupCodePageText;
 
 pub use nook_companion_core::{VaultHostObservation, VaultHostPolicy};
 
+pub use vault_client_policy::{JoinConnectEnrollment, JoinConnectRequest, JoinConnectSource};
 pub use vault_client_policy::{
     LoginDeviceKeyAvailability, LoginPasswordPromptUpdate, LoginUnlockAssessment,
     LoginUnlockDecision, PasswordEntryPresence,
@@ -633,8 +635,7 @@ pub use vault_client_policy::{
     LocalVaultPresence, ManualSyncHasTargetRequest, ProviderSetupState,
     RemoteVaultAssessDecisionRequest, RemoteVaultCredentialPresence,
     ShouldAutoConnectAfterApprovalRequest, ShouldAutoUnlockRequest,
-    ShouldShowLoginVaultPickerRequest, ShouldSyncFromProvidersRequest,
-    ShouldUseJoinProviderForConnectRequest, SyncActivityVisibleRequest,
+    ShouldShowLoginVaultPickerRequest, ShouldSyncFromProvidersRequest, SyncActivityVisibleRequest,
     UnauthenticatedSyncDecisionRequest, VaultAuthenticationState, VaultConnectProbeDecisionRequest,
     VaultExistenceRequirement, VaultFanOutSyncState, VaultIdleExpiration, VaultJoinApprovalWait,
     VaultPasswordActivity, VaultPasswordPromptState, VaultProviderSyncState, VaultSaveActivity,

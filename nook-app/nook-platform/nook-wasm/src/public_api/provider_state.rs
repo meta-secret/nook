@@ -208,6 +208,20 @@ pub fn local_folder_provider_draft(
     Ok(ProviderDraft::LocalFolder(LocalFolderDraft::Selected(folder)).encode()?)
 }
 
+/// Whether a Google sign-in's token still serves a request, or needs a fresh
+/// sign-in first: Rust owns the one-minute margin and the comparison, and the
+/// page passes its clock as `now`.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn google_drive_authorization_freshness(
+    check: &tsify::Ts<nook_core::GoogleDriveAuthorizationCheck>,
+) -> Result<tsify::Ts<nook_core::GoogleDriveAuthorizationFreshness>, wasm_bindgen::JsError> {
+    Ok(check.decode()?.freshness()?.encode()?)
+}
+
 /// The saved rows after the draft's fresh sign-in: every row of its target
 /// and account takes it as one unit.
 #[wasm_bindgen]

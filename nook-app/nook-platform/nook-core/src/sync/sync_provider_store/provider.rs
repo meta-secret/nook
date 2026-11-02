@@ -19,11 +19,15 @@ use crate::{
     ProviderTargetKey, S3Connection, StorageConnection, StoredGithubRepository,
 };
 
+mod authorization_freshness;
 mod github;
 mod local_folder;
 mod oauth_file;
 mod s3;
 
+pub use authorization_freshness::{
+    GoogleDriveAuthorizationCheck, GoogleDriveAuthorizationFreshness,
+};
 pub use github::GithubProvider;
 pub use local_folder::{LocalFolderHandleId, LocalFolderName, LocalFolderProvider};
 pub use oauth_file::{

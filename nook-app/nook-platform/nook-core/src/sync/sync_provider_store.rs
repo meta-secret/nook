@@ -54,8 +54,9 @@ pub use identity_mounts::{
 pub use keyring_providers::AppProviderShare;
 pub use persistence::*;
 pub use provider::{
-    GithubProvider, GoogleDriveAuthorization, GoogleDriveProvider, ICloudProvider,
-    LocalFolderHandleId, LocalFolderName, LocalFolderProvider, OAuthFileProvider, StoredProvider,
+    GithubProvider, GoogleDriveAuthorization, GoogleDriveAuthorizationCheck,
+    GoogleDriveAuthorizationFreshness, GoogleDriveProvider, ICloudProvider, LocalFolderHandleId,
+    LocalFolderName, LocalFolderProvider, OAuthFileProvider, StoredProvider,
 };
 pub use save::{
     DuplicateProviderHandling, ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup,

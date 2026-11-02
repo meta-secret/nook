@@ -265,6 +265,14 @@ impl NookProviderReplicationCapability {
         Ok(self.0.kind.encode()?)
     }
 
+    /// The translation key of the label a provider picker shows for this
+    /// capability; Rust chooses it.
+    #[wasm_bindgen(getter, js_name = labelKey)]
+    #[must_use]
+    pub fn label_key(&self) -> String {
+        self.0.label_translation_key().to_owned()
+    }
+
     /// Whether the provider replicates vaults of `replication`.
     #[wasm_bindgen]
     #[must_use]

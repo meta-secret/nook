@@ -8,7 +8,7 @@
 
 use super::{ReplicationType, VaultArchitecture};
 use crate::errors::{ValidationError, ValidationResult};
-use crate::{OAuthFilePreset, ProviderKind};
+use crate::{OAuthFilePreset, ProviderKind, i18n_keys};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -87,6 +87,18 @@ impl ProviderKind {
 }
 
 impl ProviderReplicationCapability {
+    /// The translation key of the label a provider picker shows for this
+    /// capability: personal and shared replication, or personal only.
+    #[must_use]
+    pub const fn label_translation_key(&self) -> &'static str {
+        match self.shared {
+            SharedReplication::Supported(_) => {
+                i18n_keys::PROVIDER_PICKER_CAPABILITY_PERSONAL_SHARED
+            }
+            SharedReplication::Unsupported => i18n_keys::PROVIDER_PICKER_CAPABILITY_PERSONAL_ONLY,
+        }
+    }
+
     #[must_use]
     pub const fn supports(&self, replication: ReplicationType) -> ReplicationSupport {
         match (replication, self.shared) {
@@ -130,6 +142,29 @@ impl VaultArchitecture {
 mod tests {
     use super::*;
     use crate::vault::vault_architecture::{DeviceMode, SentinelPolicy};
+
+    #[test]
+    fn the_picker_label_names_shared_replication_only_where_supported() {
+        for kind in [
+            ProviderKind::Local,
+            ProviderKind::LocalFolder,
+            ProviderKind::Github,
+            ProviderKind::S3,
+        ] {
+            assert_eq!(
+                kind.replication_capability().label_translation_key(),
+                i18n_keys::PROVIDER_PICKER_CAPABILITY_PERSONAL_ONLY
+            );
+        }
+        for preset in [OAuthFilePreset::GoogleDrive, OAuthFilePreset::ICloud] {
+            assert_eq!(
+                ProviderKind::OauthFile(preset)
+                    .replication_capability()
+                    .label_translation_key(),
+                i18n_keys::PROVIDER_PICKER_CAPABILITY_PERSONAL_SHARED
+            );
+        }
+    }
 
     #[test]
     fn provider_capability_matrix_is_fail_closed() -> anyhow::Result<()> {
