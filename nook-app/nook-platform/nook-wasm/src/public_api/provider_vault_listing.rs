@@ -98,6 +98,7 @@ mod tests {
         let found = serde_json::to_value(NookGoogleDriveVaultListing::Found {
             listing: ProviderVaultListing {
                 vaults: Vec::new(),
+                identities: Vec::new(),
                 replacement: nook_core::EmptyVaultReplacement::Unavailable,
             },
         })?;
@@ -105,7 +106,11 @@ mod tests {
             found,
             serde_json::json!({
                 "root": "found",
-                "listing": { "vaults": [], "replacement": { "state": "unavailable" } },
+                "listing": {
+                    "vaults": [],
+                    "identities": [],
+                    "replacement": { "state": "unavailable" },
+                },
             })
         );
         Ok(())

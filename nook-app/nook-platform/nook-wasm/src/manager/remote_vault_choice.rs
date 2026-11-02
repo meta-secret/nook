@@ -42,7 +42,12 @@ pub enum NookRemoteVaultDiscovery {
     Found { store_id: String },
     /// The provider holds several vaults; choose one and discover again.
     #[serde(rename_all = "camelCase")]
-    Several { vaults: Vec<ProviderVaultSummary> },
+    Several {
+        vaults: Vec<ProviderVaultSummary>,
+        /// Every identity the provider holds, for the recovery screen's
+        /// cards.
+        identities: Vec<nook_core::FilingIdentity>,
+    },
 }
 
 /// Where the several vaults of a discovery were listed.
@@ -249,6 +254,7 @@ impl NookVaultManager {
         .listing(observations, &held, &inspected, &identity_logs);
         Ok(NookRemoteVaultDiscovery::Several {
             vaults: listing.vaults,
+            identities: listing.identities,
         })
     }
 }
@@ -411,6 +417,7 @@ mod tests {
         .listing();
         let discovery = NookRemoteVaultDiscovery::Several {
             vaults: listing.vaults,
+            identities: listing.identities,
         };
         assert_eq!(
             serde_json::to_value(&discovery)?,
@@ -436,6 +443,7 @@ mod tests {
                     "access": { "state": "unchecked" },
                     "actions": ["importSeparately"],
                 }],
+                "identities": [],
             })
         );
         Ok(())

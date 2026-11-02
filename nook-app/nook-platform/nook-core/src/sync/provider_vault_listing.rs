@@ -172,8 +172,9 @@ struct KnownIdentity<'a> {
     logs: &'a [ListedIdentityLog],
 }
 
-/// The identity whose folder files a listed vault: the vault came from it,
-/// whichever identities share the vault since.
+/// An identity the provider holds: one whose folder files a listed vault (the
+/// vault came from it, whichever identities share the vault since), or whose
+/// control log the provider keeps.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct FilingIdentity {
@@ -392,6 +393,9 @@ pub enum EmptyVaultReplacement {
 #[serde(rename_all = "camelCase")]
 pub struct ProviderVaultListing {
     pub vaults: Vec<ProviderVaultSummary>,
+    /// Every identity whose control log the provider holds, in the order
+    /// the logs were listed, each with what its log tells.
+    pub identities: Vec<FilingIdentity>,
     pub replacement: EmptyVaultReplacement,
 }
 
@@ -438,8 +442,21 @@ impl ProviderVaultListingRequest<'_> {
             },
             Some(_) | None => EmptyVaultReplacement::Unavailable,
         };
+        let identities = identity_logs
+            .iter()
+            .map(|listed| {
+                FilingIdentity::of(
+                    listed.identity_id.clone(),
+                    KnownIdentity {
+                        names: names.identities,
+                        logs: identity_logs,
+                    },
+                )
+            })
+            .collect();
         ProviderVaultListing {
             vaults,
+            identities,
             replacement,
         }
     }
@@ -875,16 +892,17 @@ mod tests {
             })
         );
         // An identity this browser does not hold is told apart by its id.
-        assert_eq!(
-            identity_of("store_othervault1"),
-            Some(FilingIdentity {
-                words: IdentityWords::of(&theirs),
-                log: theirs_facts,
-                identity_id: theirs,
-                short_id: "stranger".to_owned(),
-                name: ProviderVaultName::Unknown,
-            })
-        );
+        let stranger = FilingIdentity {
+            words: IdentityWords::of(&theirs),
+            log: theirs_facts,
+            identity_id: theirs,
+            short_id: "stranger".to_owned(),
+            name: ProviderVaultName::Unknown,
+        };
+        assert_eq!(identity_of("store_othervault1"), Some(stranger.clone()));
+        // The listing names every identity whose log was read, with its
+        // log's vault count, whether or not one of its vaults is listed.
+        assert_eq!(listing.identities, vec![stranger]);
         Ok(())
     }
 
@@ -922,6 +940,7 @@ mod tests {
                 access: ProviderVaultAccess::Syncs,
                 actions: Vec::new(),
             }],
+            identities: Vec::new(),
             replacement: EmptyVaultReplacement::Unavailable,
         })?;
         assert_eq!(
@@ -951,6 +970,7 @@ mod tests {
                     "access": { "state": "syncs" },
                     "actions": [],
                 }],
+                "identities": [],
                 "replacement": { "state": "unavailable" },
             })
         );

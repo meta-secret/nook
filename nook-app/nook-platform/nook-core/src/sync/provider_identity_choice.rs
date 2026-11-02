@@ -151,12 +151,16 @@ pub struct ProviderIdentityChoice {
 #[derive(Clone, Copy, Debug)]
 pub struct ProviderIdentityChoices<'a> {
     pub vaults: &'a [ProviderVaultSummary],
+    /// Every identity the listing names, a vaultless one included.
+    pub identities: &'a [FilingIdentity],
     pub checks: &'a [CredentialCheckReport],
     pub session: IdentitySession,
 }
 
 impl ProviderIdentityChoices<'_> {
-    /// Every listed identity, in listing order.
+    /// Every listed identity: the identities filing vaults in listing order,
+    /// then each identity that files none, so it can be set up or joined as
+    /// well.
     #[must_use]
     pub fn choices(&self) -> Vec<ProviderIdentityChoice> {
         let mut choices: Vec<ProviderIdentityChoice> = Vec::new();
@@ -174,6 +178,20 @@ impl ProviderIdentityChoices<'_> {
                     decisions: Vec::new(),
                     setup: IdentitySetup::Unavailable,
                     vaults: vec![vault],
+                });
+            }
+        }
+        for identity in self.identities {
+            if !choices
+                .iter()
+                .any(|choice| choice.identity.identity_id == identity.identity_id)
+            {
+                choices.push(ProviderIdentityChoice {
+                    identity: self.named_identity(identity),
+                    standing: IdentityStanding::Unchecked,
+                    decisions: Vec::new(),
+                    setup: IdentitySetup::Unavailable,
+                    vaults: Vec::new(),
                 });
             }
         }
@@ -418,6 +436,7 @@ mod tests {
             )?];
             ProviderIdentityChoices {
                 vaults: &vaults,
+                identities: &[],
                 checks: &[],
                 session,
             }
@@ -452,6 +471,37 @@ mod tests {
         }
     }
 
+    /// An identity the provider holds a log for but that files no vault
+    /// there gets a card too, after the vault cards, which keep their order.
+    #[test]
+    fn a_vaultless_identity_gets_a_card_after_the_vault_cards() -> anyhow::Result<()> {
+        let mine = Fixture::identity(MINE, Fixture::log_with(ProviderIdentityJoin::NotAsked))?;
+        let other = Fixture::identity(OTHER, Fixture::log_with(ProviderIdentityJoin::NotAsked))?;
+        let vaults = [Fixture::vault(
+            OTHER_VAULT,
+            &other,
+            ProviderVaultAccess::Locked,
+        )?];
+        let identities = [other.clone(), mine.clone()];
+        let choices = ProviderIdentityChoices {
+            vaults: &vaults,
+            identities: &identities,
+            checks: &[],
+            session: IdentitySession::NoIdentity,
+        }
+        .choices();
+        let order: Vec<&IdentityId> = choices
+            .iter()
+            .map(|choice| &choice.identity.identity_id)
+            .collect();
+        assert_eq!(order, [&other.identity_id, &mine.identity_id]);
+        let vaultless = Fixture::at(&choices, 1)?;
+        assert!(vaultless.vaults.is_empty());
+        // Nothing here opens it yet, so it can be asked to join.
+        assert_eq!(vaultless.setup, IdentitySetup::RequestToJoin);
+        Ok(())
+    }
+
     const MINE: &str = "idn_mineabcdefg";
     const OTHER: &str = "idn_otherabcdef";
     const MY_VAULT: &str = "store_mineabcdefg";
@@ -464,6 +514,7 @@ mod tests {
         let vaults = [Fixture::vault(MY_VAULT, &mine, ProviderVaultAccess::Syncs)?];
         let choices = ProviderIdentityChoices {
             vaults: &vaults,
+            identities: &[],
             checks: &[],
             session: IdentitySession::IdentityInUse,
         }
@@ -489,6 +540,7 @@ mod tests {
         ];
         let choices = ProviderIdentityChoices {
             vaults: &vaults,
+            identities: &[],
             checks: &[],
             session: IdentitySession::IdentityInUse,
         }
@@ -513,6 +565,7 @@ mod tests {
         let checks = [Fixture::passkey_opening(&other, OTHER_VAULT)?];
         let choices = ProviderIdentityChoices {
             vaults: &vaults,
+            identities: &[],
             checks: &checks,
             session: IdentitySession::IdentityInUse,
         }
@@ -547,6 +600,7 @@ mod tests {
         )?];
         let choices = ProviderIdentityChoices {
             vaults: &vaults,
+            identities: &[],
             checks: &[],
             session: IdentitySession::NoIdentity,
         }
@@ -579,6 +633,7 @@ mod tests {
         let checks = [Fixture::passkey_opening(&mine, MY_VAULT)?];
         let choices = ProviderIdentityChoices {
             vaults: &vaults,
+            identities: &[],
             checks: &checks,
             session: IdentitySession::IdentityInUse,
         }
@@ -667,6 +722,7 @@ mod tests {
         )?];
         let choices = ProviderIdentityChoices {
             vaults: &vaults,
+            identities: &[],
             checks: &[],
             session: IdentitySession::IdentityInUse,
         }
@@ -698,6 +754,7 @@ mod tests {
         let checks = [password];
         let choices = ProviderIdentityChoices {
             vaults: &vaults,
+            identities: &[],
             checks: &checks,
             session: IdentitySession::IdentityInUse,
         }
@@ -733,6 +790,7 @@ mod tests {
         let vaults = [Fixture::vault(MY_VAULT, &mine, ProviderVaultAccess::Syncs)?];
         let held = ProviderIdentityChoices {
             vaults: &vaults,
+            identities: &[],
             checks: &[],
             session: IdentitySession::NoIdentity,
         }
@@ -753,6 +811,7 @@ mod tests {
         let setup = |session| -> anyhow::Result<IdentitySetup> {
             let choices = ProviderIdentityChoices {
                 vaults: &vaults,
+                identities: &[],
                 checks: &[],
                 session,
             }
@@ -802,6 +861,7 @@ mod tests {
         let checks = [Fixture::passkey_opening(&other, OTHER_VAULT)?];
         let choices = ProviderIdentityChoices {
             vaults: &vaults,
+            identities: &[],
             checks: &checks,
             session: IdentitySession::NoIdentity,
         }
@@ -827,6 +887,7 @@ mod tests {
         )?];
         let choices = ProviderIdentityChoices {
             vaults: &vaults,
+            identities: &[],
             checks: &[],
             session: IdentitySession::NoIdentity,
         }
