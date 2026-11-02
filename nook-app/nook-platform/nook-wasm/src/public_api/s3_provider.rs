@@ -99,7 +99,8 @@ mod tests {
         provider_draft_label, s3_provider_draft, staged_storage_args,
     };
     use nook_core::{
-        ProviderDraft, ProviderKind, S3Connection, S3ConnectionDraft, StorageConnection,
+        DraftStorageConnection, ProviderDraft, ProviderKind, S3Connection, S3ConnectionDraft,
+        StorageConnection,
     };
     use tsify::Tsify;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -206,8 +207,10 @@ mod tests {
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert_eq!(
             args,
-            StorageConnection::S3 {
-                connection: configuration()?
+            DraftStorageConnection::Ready {
+                connection: StorageConnection::S3 {
+                    connection: configuration()?
+                }
             }
         );
         Ok(())

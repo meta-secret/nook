@@ -9,8 +9,9 @@ use tsify::Tsify;
 
 use crate::errors::ValidationResult;
 use crate::{
-    GoogleDriveFolderId, ICloudShareTargetId, ProviderReplicationCapability, ProviderSecretText,
-    ReplicationSupport, ReplicationType, S3Connection, StorageMode, StorageProvider,
+    GoogleDriveFolderId, ICloudShareTargetId, ProviderDraftGap, ProviderReplicationCapability,
+    ProviderSecretText, ReplicationSupport, ReplicationType, S3Connection, StorageMode,
+    StorageProvider,
 };
 
 /// Where the manager opens a vault: the provider and everything it connects
@@ -45,6 +46,14 @@ pub enum StorageConnection {
     },
     /// An S3-compatible location and this device's key.
     S3 { connection: S3Connection },
+}
+
+/// Where the manager opens a vault through a draft, or the gap that stops it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(tag = "state", rename_all = "camelCase", deny_unknown_fields)]
+pub enum DraftStorageConnection {
+    Ready { connection: StorageConnection },
+    Incomplete { gap: ProviderDraftGap },
 }
 
 /// The remote connection a staged setup can open.

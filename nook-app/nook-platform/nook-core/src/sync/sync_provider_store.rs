@@ -25,6 +25,7 @@ mod save;
 mod scope;
 mod selection;
 mod shared_grant;
+mod sign_in;
 mod state;
 mod storage_args;
 mod sync_metadata;
@@ -67,9 +68,11 @@ pub use selection::{
     ProviderId, ProviderSelection, ProviderSelectionPolicy, ProviderSelectionRequest,
 };
 pub use shared_grant::*;
+pub use sign_in::ProviderSignInUpdate;
 pub use state::*;
 pub use storage_args::{
-    ProviderLabelLabels, ProviderStorageDetailLabels, StagedStorageConnection, StorageConnection,
+    DraftStorageConnection, ProviderLabelLabels, ProviderStorageDetailLabels,
+    StagedStorageConnection, StorageConnection,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]

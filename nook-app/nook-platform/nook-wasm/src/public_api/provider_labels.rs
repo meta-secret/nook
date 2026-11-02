@@ -52,10 +52,41 @@ pub fn provider_default_label_without_detail(
     Ok(kind.bare_label())
 }
 
+/// The toast a successful connect through a provider of `kind` shows.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn provider_connected_toast_key(
+    kind: &tsify::Ts<nook_core::ProviderKind>,
+) -> Result<String, wasm_bindgen::JsError> {
+    let kind = kind
+        .to_rust()
+        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    Ok(kind.connected_toast_key().to_owned())
+}
+
+/// The name a setup heading gives a provider; this browser's own store takes
+/// the host's words for it.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn provider_setup_name_key(
+    request: &tsify::Ts<nook_core::ProviderSetupNameRequest>,
+) -> Result<String, wasm_bindgen::JsError> {
+    let request = request
+        .to_rust()
+        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    Ok(request.translation_key().to_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nook_core::{OAuthFilePreset, ProviderKind};
+    use nook_core::{OAuthFilePreset, ProviderKind, ProviderSetupNameRequest, i18n_keys};
     use tsify::Tsify;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -77,6 +108,30 @@ mod tests {
         let github = Tsify::into_ts(&ProviderKind::Github)?;
         assert_eq!(wasm_storage_mode_for_provider(&github)?, "github");
         assert_eq!(provider_default_label(&github, " repo ")?, "GitHub · repo");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn the_connect_toast_and_setup_name_come_from_the_kind() -> Result<(), wasm_bindgen::JsError> {
+        let icloud = Tsify::into_ts(&ProviderKind::OauthFile(OAuthFilePreset::ICloud))?;
+        assert_eq!(
+            provider_connected_toast_key(&icloud)?,
+            i18n_keys::TOASTS_GOOGLE_DRIVE_CONNECTED
+        );
+        let name = |kind| {
+            Tsify::into_ts(&ProviderSetupNameRequest {
+                kind,
+                this_browser_key: "host.this_browser".to_owned(),
+            })
+        };
+        assert_eq!(
+            provider_setup_name_key(&name(ProviderKind::OauthFile(OAuthFilePreset::ICloud))?)?,
+            i18n_keys::PROVIDER_PICKER_ICLOUD
+        );
+        assert_eq!(
+            provider_setup_name_key(&name(ProviderKind::Local)?)?,
+            "host.this_browser"
+        );
         Ok(())
     }
 }

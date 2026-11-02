@@ -8,7 +8,9 @@
 use crate::NookError;
 use gloo_file::{File, futures};
 use js_sys::{Array, AsyncIterator, JsString, Object, Reflect};
-use nook_core::EventId;
+use nook_core::{
+    EventId, LocalFolderHandleId, LocalFolderName, LocalFolderProvider, ValidationError,
+};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen_futures::JsFuture;
@@ -62,6 +64,27 @@ impl NookLocalFolderConfig {
     #[must_use]
     pub fn handle_id(&self) -> String {
         self.handle_id.clone()
+    }
+}
+
+impl NookLocalFolderConfig {
+    /// The chosen folder as the local-folder provider its setup holds.
+    pub(crate) fn provider(&self) -> Result<LocalFolderProvider, ValidationError> {
+        Ok(LocalFolderProvider {
+            directory_name: LocalFolderName::from(self.directory_name.clone()),
+            handle_id: LocalFolderHandleId::try_from(self.handle_id.clone())?,
+        })
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32"))]
+impl NookLocalFolderConfig {
+    /// A chooser answer for tests that cannot open the browser's picker.
+    pub(crate) fn fixture(directory_name: &str, handle_id: &str) -> Self {
+        Self {
+            directory_name: directory_name.to_owned(),
+            handle_id: handle_id.to_owned(),
+        }
     }
 }
 

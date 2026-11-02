@@ -16,8 +16,8 @@ use tsify::Tsify;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::{
-    ExistingVaultProviderReadiness, GithubProvider, LocalFolderProvider, ProviderKind,
-    ProviderSecretText, S3Connection, StagedStorageConnection, StorageConnection,
+    DraftStorageConnection, ExistingVaultProviderReadiness, GithubProvider, LocalFolderProvider,
+    ProviderKind, ProviderSecretText, S3Connection, StagedStorageConnection, StorageConnection,
     StoredGithubRepository, StoredProvider,
 };
 
@@ -120,11 +120,12 @@ impl ProviderDraftGap {
     }
 
     /// What the provider needs before a backup password can unlock through
-    /// it, worded as the unlock screen words it today.
+    /// it. A local folder asks for its folder, not for GitHub credentials.
     #[must_use]
     pub const fn unlock_translation_key(self) -> &'static str {
         match self {
-            Self::LocalFolder | Self::GithubToken => i18n_keys::ERRORS_GITHUB_CREDENTIALS_REQUIRED,
+            Self::LocalFolder => i18n_keys::ERRORS_LOCAL_BACKUP_FOLDER_REQUIRED,
+            Self::GithubToken => i18n_keys::ERRORS_GITHUB_CREDENTIALS_REQUIRED,
             Self::OAuthSignIn | Self::SharedTarget => i18n_keys::ERRORS_GOOGLE_SIGN_IN_REQUIRED,
             Self::S3Connection => i18n_keys::ERRORS_VALIDATION_S3_STORAGE_TARGET_INVALID,
         }
@@ -198,15 +199,21 @@ impl ProviderDraft {
         }
     }
 
-    /// Where the manager opens a vault through this draft. A local folder in
-    /// any stage opens this browser's store, as it syncs beside it; every
-    /// other draft must be complete.
-    pub fn storage_connection(self) -> Result<StorageConnection, ProviderDraftGap> {
+    /// Where the manager opens a vault through this draft, or what it lacks.
+    /// A local folder in any stage opens this browser's store, as it syncs
+    /// beside it; every other draft must be complete.
+    #[must_use]
+    pub fn storage_connection(self) -> DraftStorageConnection {
         match self {
-            Self::Local {} | Self::LocalFolder(_) => Ok(StorageConnection::Local),
-            remote => remote
-                .complete()
-                .map(|provider| provider.storage_connection()),
+            Self::Local {} | Self::LocalFolder(_) => DraftStorageConnection::Ready {
+                connection: StorageConnection::Local,
+            },
+            remote => match remote.complete() {
+                Ok(provider) => DraftStorageConnection::Ready {
+                    connection: provider.storage_connection(),
+                },
+                Err(gap) => DraftStorageConnection::Incomplete { gap },
+            },
         }
     }
 
@@ -306,8 +313,8 @@ mod tests {
         ProviderCredentialReadiness, ProviderDraft, ProviderDraftGap, S3Draft,
     };
     use crate::{
-        ExistingVaultProviderReadiness, OAuthFilePreset, ProviderKind, StagedStorageConnection,
-        StorageConnection, StoredGithubRepository, StoredProvider,
+        DraftStorageConnection, ExistingVaultProviderReadiness, OAuthFilePreset, ProviderKind,
+        StagedStorageConnection, StorageConnection, StoredGithubRepository, StoredProvider,
     };
     use nook_app_common::i18n_keys;
     use serde_json::json;
@@ -382,16 +389,28 @@ mod tests {
         ] {
             assert_eq!(
                 draft.clone().storage_connection(),
-                Ok(StorageConnection::Local)
+                DraftStorageConnection::Ready {
+                    connection: StorageConnection::Local
+                }
             );
             assert_eq!(
                 draft.staged_connection(),
                 StagedStorageConnection::Incomplete
             );
         }
-        for kind in [ProviderKind::Github, ProviderKind::S3] {
+        for (kind, gap) in [
+            (ProviderKind::Github, ProviderDraftGap::GithubToken),
+            (ProviderKind::S3, ProviderDraftGap::S3Connection),
+            (
+                ProviderKind::OauthFile(OAuthFilePreset::GoogleDrive),
+                ProviderDraftGap::OAuthSignIn,
+            ),
+        ] {
             let draft = ProviderDraft::begin(kind);
-            assert!(draft.clone().storage_connection().is_err());
+            assert_eq!(
+                draft.clone().storage_connection(),
+                DraftStorageConnection::Incomplete { gap }
+            );
             assert_eq!(
                 draft.staged_connection(),
                 StagedStorageConnection::Incomplete
@@ -406,7 +425,9 @@ mod tests {
         assert_eq!(repo, "team-vault");
         assert!(matches!(
             github.storage_connection(),
-            Ok(StorageConnection::Github { .. })
+            DraftStorageConnection::Ready {
+                connection: StorageConnection::Github { .. }
+            }
         ));
         Ok(())
     }
@@ -417,7 +438,7 @@ mod tests {
             (
                 ProviderDraftGap::LocalFolder,
                 i18n_keys::ERRORS_LOCAL_BACKUP_FOLDER_REQUIRED,
-                i18n_keys::ERRORS_GITHUB_CREDENTIALS_REQUIRED,
+                i18n_keys::ERRORS_LOCAL_BACKUP_FOLDER_REQUIRED,
             ),
             (
                 ProviderDraftGap::GithubToken,
@@ -443,6 +464,24 @@ mod tests {
             assert_eq!(gap.translation_key(), connect);
             assert_eq!(gap.unlock_translation_key(), unlock);
         }
+    }
+
+    #[test]
+    fn a_folder_that_is_not_chosen_asks_for_the_folder_at_unlock() -> anyhow::Result<()> {
+        let ProviderCredentialReadiness::Required(gap) =
+            ProviderDraft::begin(ProviderKind::LocalFolder).credential_readiness()
+        else {
+            anyhow::bail!("a new local-folder draft has no folder");
+        };
+        assert_eq!(
+            gap.unlock_translation_key(),
+            i18n_keys::ERRORS_LOCAL_BACKUP_FOLDER_REQUIRED
+        );
+        assert_ne!(
+            gap.unlock_translation_key(),
+            i18n_keys::ERRORS_GITHUB_CREDENTIALS_REQUIRED
+        );
+        Ok(())
     }
 
     #[test]
