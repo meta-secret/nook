@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 use super::identity_control::ReplicatedIdentityStanding;
-use crate::{IdentityMountCapability, StorageProviderData};
+use crate::{IdentityMountCapability, StorageProvider};
 
 /// This installation's standing in its identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -109,11 +109,11 @@ pub struct IdentityControlSnapshotRequest<'a> {
     pub state: &'a IdentityControlState,
     pub identity_label: &'a str,
     pub current_app_id: &'a AppId,
-    pub providers: &'a [StorageProviderData],
+    pub providers: &'a [StorageProvider],
 }
 
 impl IdentityMountView {
-    fn from_mount(mount: &IdentityProviderMount, providers: &[StorageProviderData]) -> Self {
+    fn from_mount(mount: &IdentityProviderMount, providers: &[StorageProvider]) -> Self {
         let (provider, target) = match &mount.target {
             IdentityMountTarget::Github { repository } => {
                 (IdentityMountProvider::Github, repository.clone())
@@ -237,8 +237,7 @@ mod tests {
 
     use super::{IdentityMountProvider, IdentityMountView};
     use crate::{
-        IdentityProviderMount, ProviderMountId, S3Connection, StorageProviderData,
-        StorageProviderType, StoredGithubPat, StoredS3Configuration,
+        IdentityProviderMount, ProviderMountId, S3Connection, StorageProvider, StoredProvider,
     };
 
     #[test]
@@ -249,18 +248,15 @@ mod tests {
             label: "S3 · nook-dev/e2e/run-1".to_owned(),
             target: config.mount_target(),
         };
-        let mut row = StorageProviderData::github("s3", "S3", "", "", "now");
-        row.provider_type = StorageProviderType::S3;
-        row.github_pat = StoredGithubPat::Missing;
-        row.s3 = StoredS3Configuration::Configured(config);
+        let mut row = StorageProvider::fixture("s3", StoredProvider::S3(config));
         let view = IdentityMountView::from_mount(&mount, slice::from_ref(&row));
         assert_eq!(view.provider, IdentityMountProvider::S3);
         assert_eq!(view.target, "http://127.0.0.1:8333/nook-dev/e2e/run-1");
         assert!(view.connected_here);
         assert!(!IdentityMountView::from_mount(&mount, &[]).connected_here);
         // A row that signs for the same location in another region connects it.
-        let StoredS3Configuration::Configured(config) = &mut row.s3 else {
-            anyhow::bail!("an S3 row carries its block");
+        let StoredProvider::S3(config) = &mut row.provider else {
+            anyhow::bail!("an S3 row carries its connection");
         };
         config.region = "eu-central-1".to_owned();
         assert!(IdentityMountView::from_mount(&mount, slice::from_ref(&row)).connected_here);

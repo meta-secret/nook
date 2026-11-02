@@ -498,7 +498,7 @@ impl Default for SyncOutboxState {
 impl SyncOutboxState {
     pub(in crate::manager) fn reset(&mut self) {
         self.provider_id.clear();
-        self.connection.zeroize();
+        // Replacing the connection drops its credential, which wipes itself.
         self.connection = StorageConnection::Local;
     }
 }
@@ -559,6 +559,7 @@ impl NookVaultManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_fixtures::WasmFixture;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -648,7 +649,7 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn session_helpers_trim_public_ids_and_reset_outbox_state() {
+    fn session_helpers_trim_public_ids_and_reset_outbox_state() -> anyhow::Result<()> {
         let mut device = DeviceSessionState {
             id: "  app-id  ".to_owned(),
             ..DeviceSessionState::default()
@@ -659,14 +660,12 @@ mod tests {
 
         let mut outbox = SyncOutboxState {
             provider_id: "provider".to_owned(),
-            connection: StorageConnection::Github {
-                token: "token".to_owned(),
-                repo: "owner/repo".to_owned(),
-            },
+            connection: WasmFixture::github_connection("token", "owner/repo")?,
         };
         outbox.reset();
         assert!(outbox.provider_id.is_empty());
         assert_eq!(outbox.connection, StorageConnection::Local);
+        Ok(())
     }
 
     #[wasm_bindgen_test]

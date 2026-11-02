@@ -3,7 +3,7 @@
 //! app key connects it to one more identity.
 
 use nook_core::{
-    AppKeyIdentityMembership, AuthProvidersSnapshotData, IdentityConnectionKey,
+    AppKeyIdentityMembership, AuthProvidersSnapshot, IdentityConnectionKey,
     IdentityConnectionKeyRequest, IdentityVaultPairingPlan, IdentityVaultPairingRequest,
     LocalIdentityLog,
 };
@@ -60,7 +60,7 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn identity_vault_pairing_plan(
         &self,
-        snapshot: &tsify::Ts<AuthProvidersSnapshotData>,
+        snapshot: &tsify::Ts<AuthProvidersSnapshot>,
         paired: &tsify::Ts<NookPairedVaults>,
     ) -> Result<tsify::Ts<IdentityVaultPairingPlan>, JsError> {
         let providers = snapshot

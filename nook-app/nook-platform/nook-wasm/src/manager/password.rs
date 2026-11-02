@@ -321,6 +321,7 @@ impl NookVaultManager {
 mod metadata_tests {
     use super::*;
     use crate::manager::VaultNameState;
+    use crate::test_fixtures::WasmFixture;
     use nook_core::{DeviceIdentity, VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite};
     use std::slice;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -548,9 +549,8 @@ mod metadata_tests {
         .to_storage_id()?;
         manager
             .prepare_storage_preserving_vault_metadata(&nook_core::StorageConnection::ICloud {
-                token: "oauth_token_for_metadata_test".to_owned(),
-                share_target,
-                file_name: "work-vault.yaml".to_owned(),
+                token: WasmFixture::secret("oauth_token_for_metadata_test")?,
+                share_target: nook_core::ICloudShareTargetId::try_from(share_target)?,
             })
             .await?;
         manager
@@ -625,6 +625,7 @@ mod metadata_tests {
 mod wasm_tests {
     use super::*;
     use crate::manager::VaultNameState;
+    use crate::test_fixtures::WasmFixture;
 
     use nook_core::{
         Database, DeviceIdentity, SecretId, SecretValue, VaultCrypto, VaultName, VaultNameRef,
@@ -722,10 +723,8 @@ mod wasm_tests {
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.bootstrap_event_log_genesis().await?;
         manager.sync_outbox.provider_id = "configured-provider".to_owned();
-        manager.sync_outbox.connection = nook_core::StorageConnection::Github {
-            token: "invalid-token".to_owned(),
-            repo: "invalid-repository".to_owned(),
-        };
+        manager.sync_outbox.connection =
+            WasmFixture::github_connection("invalid-token", "invalid-repository")?;
 
         assert!(manager.set_vault_name("   ").await.is_err());
         manager

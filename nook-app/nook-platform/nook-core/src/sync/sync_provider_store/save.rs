@@ -3,62 +3,44 @@
     forbid(invalid_unowned_function_suppression)
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
-
-use crate::{ActiveVaultScope, LocalProviderSelection, ProviderLabel};
-use crate::{
-    DuplicateCandidatePolicy, DuplicateSyncProvider, ProviderSelection, StoredOAuthRemoteFileId,
-};
-use crate::{DuplicateProviderSelection, LocalProviderRowRequest};
-use crate::{ProviderRows, StoredICloudShareTarget};
+//! Saving the provider being set up into the snapshot.
 
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 use crate::{
-    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, OAuthAccessTokenRef, OAuthFilePreset,
-    OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope, StorageProviderType,
-    StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
-    StoredLocalFolderConfiguration, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
-    StoredOAuthRemoteFileName, StoredOAuthTokenExpiry, StoredS3Configuration,
+    ActiveVaultScope, AuthProvidersSnapshot, DuplicateCandidatePolicy, DuplicateProviderSelection,
+    DuplicateSyncProvider, LocalProviderRowOutcome, LocalProviderRowRequest,
+    LocalProviderSelection, ProviderDraft, ProviderDraftGap, ProviderKind, ProviderRows,
+    ProviderSelection, ProviderVaultScope, StorageProvider, StoredProvider,
 };
 
-use super::{AuthProvidersSnapshotData, OAuthFileConfigData, StorageProviderData};
-
+/// Whether the save adds a provider or saves the one already chosen.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", content = "providerType", rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 pub enum ProviderSaveSetup {
     Existing,
-    New(StorageProviderType),
+    New,
 }
 
-impl ProviderSaveSetup {
-    fn provider_type(self, storage_mode: StorageProviderType) -> StorageProviderType {
-        match self {
-            Self::Existing => storage_mode,
-            Self::New(provider_type) => provider_type,
-        }
-    }
-
-    const fn is_new(self) -> bool {
-        matches!(self, Self::New(_))
-    }
+/// What a new provider that is already saved does to the save.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub enum DuplicateProviderHandling {
+    /// The person added it on purpose: report the duplicate.
+    Reject,
+    /// A setup reached it again: keep the saved row.
+    KeepExisting,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProviderSaveRequest {
-    pub snapshot: AuthProvidersSnapshotData,
+    pub snapshot: AuthProvidersSnapshot,
     pub provider_store_id: ProviderVaultScope,
-    pub storage_mode: StorageProviderType,
     pub setup: ProviderSaveSetup,
-    pub explicit_add: bool,
-    pub github_pat: String,
-    pub github_repo: String,
-    pub oauth_file: StoredOAuthFileConfiguration,
-    pub oauth_preset: OAuthFilePreset,
-    pub local_folder: StoredLocalFolderConfiguration,
-    /// The validated S3 block a new S3 provider is saved with.
-    pub s3: StoredS3Configuration,
+    pub duplicates: DuplicateProviderHandling,
+    pub draft: ProviderDraft,
     pub new_provider_id: String,
     pub created_at: String,
 }
@@ -66,864 +48,381 @@ pub struct ProviderSaveRequest {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "state", rename_all = "camelCase")]
 pub enum ProviderSaveOutcome {
+    /// The snapshot to persist and the draft the setup continues with.
     Saved {
-        snapshot: AuthProvidersSnapshotData,
-        oauth_file: Box<StoredOAuthFileConfiguration>,
+        snapshot: AuthProvidersSnapshot,
+        draft: ProviderDraft,
     },
     Duplicate,
-    LocalFolderRequired,
-    /// A new S3 provider was requested without its validated connection.
-    S3ConfigurationRequired,
+    /// A new provider was requested from a draft that cannot be saved yet.
+    Incomplete {
+        gap: ProviderDraftGap,
+    },
 }
 
-enum ProviderConstructionError {
-    LocalFolderRequired,
-    S3ConfigurationRequired,
-}
-
-struct ProviderRowDefaults {
-    provider_type: StorageProviderType,
-    label: String,
+/// What the new-provider step did to the rows.
+enum NewProviderStep {
+    Added {
+        rows: Vec<StorageProvider>,
+        merge_target: ProviderSelection,
+    },
+    Stopped(ProviderSaveOutcome),
 }
 
 impl ProviderSaveRequest {
-    fn provider_defaults(&self, row: ProviderRowDefaults) -> StorageProviderData {
-        let request = self;
-        let ProviderRowDefaults {
-            provider_type,
-            label,
-        } = row;
-        StorageProviderData {
-            id: request.new_provider_id.clone(),
-            provider_type,
-            label,
-            github_pat: StoredGithubPat::Missing,
-            github_repo: StoredGithubRepository::DefaultRepository,
-            oauth_file: StoredOAuthFileConfiguration::NotApplicable,
-            local_folder: StoredLocalFolderConfiguration::NotApplicable,
-            s3: StoredS3Configuration::NotApplicable,
-            store_id: request.row_scope(provider_type),
-            sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-            created_at: request.created_at.clone(),
-        }
-    }
-
-    /// Only this browser's own store belongs to one vault. Every remote row
-    /// is an identity mount that keeps each vault in its own namespace.
-    fn row_scope(&self, provider_type: StorageProviderType) -> ProviderVaultScope {
-        match provider_type {
-            StorageProviderType::Local => self.provider_store_id.clone(),
-            StorageProviderType::Github
-            | StorageProviderType::OauthFile
-            | StorageProviderType::LocalFolder
-            | StorageProviderType::S3 => ProviderVaultScope::Unscoped,
-        }
-    }
-
-    fn configured_drive_file(&self) -> String {
-        let request = self;
-        if let StoredOAuthFileConfiguration::Configured(config) = &request.oauth_file
-            && config.preset == OauthFilePreset::GoogleDrive
-        {
-            return match &config.file_name {
-                StoredOAuthRemoteFileName::FileName(name) if !name.trim().is_empty() => {
-                    name.trim().to_owned()
-                }
-                StoredOAuthRemoteFileName::FileName(_) | StoredOAuthRemoteFileName::Unresolved => {
-                    DEFAULT_DRIVE_BACKUP_NAME.to_owned()
-                }
-            };
-        }
-        // A private folder the draft already names wins over the setup field,
-        // which still holds the default when the name came from elsewhere.
-        if let StoredOAuthFileConfiguration::Configured(config) = &request.oauth_file
-            && let StoredOAuthRemoteFileName::FileName(name) = &config.file_name
-            && !name.trim().is_empty()
-            && name.trim() != DEFAULT_DRIVE_BACKUP_NAME
-        {
-            return name.trim().to_owned();
-        }
-        let requested = request.github_repo.trim();
-        if requested.is_empty() {
-            DEFAULT_DRIVE_BACKUP_NAME.to_owned()
-        } else {
-            requested.to_owned()
-        }
-    }
-
-    fn new_provider(
-        &self,
-        provider_type: StorageProviderType,
-    ) -> Result<StorageProviderData, ProviderConstructionError> {
-        let request = self;
-        match provider_type {
-            StorageProviderType::Local => Ok(request.provider_defaults(ProviderRowDefaults {
-                provider_type,
-                label: ProviderLabel::Local.render(),
-            })),
-            StorageProviderType::Github => {
-                let requested = request.github_repo.trim();
-                let repo = if requested.is_empty() {
-                    DEFAULT_GITHUB_REPO_NAME
-                } else {
-                    requested
-                };
-                let mut provider = request.provider_defaults(ProviderRowDefaults {
-                    provider_type,
-                    label: ProviderLabel::Github(&StoredGithubRepository::Repository(
-                        repo.to_owned(),
-                    ))
-                    .render(),
-                });
-                provider.github_pat = StoredGithubPat::Token(request.github_pat.trim().to_owned());
-                provider.github_repo = StoredGithubRepository::Repository(repo.to_owned());
-                Ok(provider)
+    /// A new remote provider is added unless it is saved already; otherwise
+    /// this browser's row is seeded or scoped. A signed-in, bound OAuth draft
+    /// then refreshes the saved row it reaches.
+    #[must_use]
+    pub fn apply(self) -> ProviderSaveOutcome {
+        let kind = self.draft.kind();
+        let (providers, merge_target) = match (self.setup, kind) {
+            (ProviderSaveSetup::New, ProviderKind::Local) | (ProviderSaveSetup::Existing, _) => {
+                (self.seeded_local_rows(), ProviderSelection::Unavailable)
             }
-            StorageProviderType::OauthFile => {
-                let drive_file = request.configured_drive_file();
-                let mut oauth = match &request.oauth_file {
-                    StoredOAuthFileConfiguration::Configured(config) => config.as_ref().clone(),
-                    StoredOAuthFileConfiguration::NotApplicable => OAuthFileConfigData {
-                        preset: request.oauth_preset,
-                        file_name: StoredOAuthRemoteFileName::FileName(drive_file.clone()),
-                        ..OAuthFileConfigData::default()
-                    },
-                };
-                oauth.preset = request.oauth_preset;
-                oauth.file_name = StoredOAuthRemoteFileName::FileName(drive_file.clone());
-                let mut provider = request.provider_defaults(ProviderRowDefaults {
-                    provider_type,
-                    label: ProviderLabel::OAuth(crate::OAuthProviderLabel {
-                        preset: request.oauth_preset,
-                        file_name: &StoredOAuthRemoteFileName::FileName(drive_file.clone()),
-                    })
-                    .render(),
-                });
-                provider.oauth_file = StoredOAuthFileConfiguration::configured(oauth);
-                Ok(provider)
-            }
-            StorageProviderType::LocalFolder => {
-                let folder = match &request.local_folder {
-                    StoredLocalFolderConfiguration::Configured(folder) => folder,
-                    StoredLocalFolderConfiguration::NotApplicable => {
-                        return Err(ProviderConstructionError::LocalFolderRequired);
-                    }
-                };
-                let mut provider = request.provider_defaults(ProviderRowDefaults {
-                    provider_type,
-                    label: ProviderLabel::LocalFolder(&folder.directory_name).render(),
-                });
-                provider.local_folder = request.local_folder.clone();
-                Ok(provider)
-            }
-            StorageProviderType::S3 => {
-                let StoredS3Configuration::Configured(config) = &request.s3 else {
-                    return Err(ProviderConstructionError::S3ConfigurationRequired);
-                };
-                let mut provider = request.provider_defaults(ProviderRowDefaults {
-                    provider_type,
-                    label: ProviderLabel::S3(&request.s3).render(),
-                });
-                provider.s3 = StoredS3Configuration::Configured(config.clone());
-                Ok(provider)
-            }
-        }
-    }
-}
-
-struct ActiveOAuthMerge<'a> {
-    persisted: &'a OAuthFileConfigData,
-    active: &'a OAuthFileConfigData,
-    drive_file: &'a str,
-}
-
-impl ActiveOAuthMerge<'_> {
-    fn merge(self) -> OAuthFileConfigData {
-        let Self {
-            persisted,
-            active,
-            drive_file,
-        } = self;
-        OAuthFileConfigData {
-            preset: active.preset,
-            access_token: match active.usable_access_token() {
-                OAuthAccessTokenRef::Available(_) => active.access_token.clone(),
-                OAuthAccessTokenRef::Missing => persisted.access_token.clone(),
+            (ProviderSaveSetup::New, _) => match self.add_new_provider() {
+                NewProviderStep::Added { rows, merge_target } => (rows, merge_target),
+                NewProviderStep::Stopped(outcome) => return outcome,
             },
-            refresh_token: persisted.refresh_token.clone(),
-            expires_at: match persisted.expires_at {
-                StoredOAuthTokenExpiry::ExpiresAt(_) => persisted.expires_at.clone(),
-                StoredOAuthTokenExpiry::Unknown => active.expires_at.clone(),
-            },
-            file_id: active.file_id.clone(),
-            folder_id: match active.folder_id {
-                StoredGoogleDriveFolder::FolderId(_) => active.folder_id.clone(),
-                StoredGoogleDriveFolder::Root => persisted.folder_id.clone(),
-            },
-            icloud_share_target: match active.icloud_share_target {
-                StoredICloudShareTarget::SharedTarget(_) => active.icloud_share_target.clone(),
-                StoredICloudShareTarget::Unbound => persisted.icloud_share_target.clone(),
-            },
-            file_name: match (&persisted.file_name, &active.file_name) {
-                (StoredOAuthRemoteFileName::FileName(name), _) if !name.trim().is_empty() => {
-                    persisted.file_name.clone()
-                }
-                (_, StoredOAuthRemoteFileName::FileName(name)) if !name.trim().is_empty() => {
-                    active.file_name.clone()
-                }
-                _ => StoredOAuthRemoteFileName::FileName(drive_file.to_owned()),
-            },
-            account_email: match persisted.account_email {
-                StoredOAuthAccountIdentity::Email(_) => persisted.account_email.clone(),
-                StoredOAuthAccountIdentity::Unknown => active.account_email.clone(),
-            },
-        }
-    }
-}
-
-struct OAuthUpdateTarget<'a> {
-    providers: &'a [StorageProviderData],
-    active_store_id: &'a crate::ActiveVaultScope,
-    active_oauth: &'a OAuthFileConfigData,
-}
-
-impl OAuthUpdateTarget<'_> {
-    fn id(&self) -> ProviderSelection {
-        let providers = self.providers;
-        let active_store_id = self.active_store_id;
-        let active_oauth = self.active_oauth;
-        let candidate = StorageProviderData {
-            id: "oauth-provider-update-target".to_owned(),
-            provider_type: StorageProviderType::OauthFile,
-            label: String::new(),
-            github_pat: StoredGithubPat::Missing,
-            github_repo: StoredGithubRepository::DefaultRepository,
-            oauth_file: StoredOAuthFileConfiguration::configured(active_oauth.clone()),
-            local_folder: StoredLocalFolderConfiguration::NotApplicable,
-            s3: StoredS3Configuration::NotApplicable,
-            store_id: ProviderVaultScope::Unscoped,
-            sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-            created_at: String::new(),
         };
-        let sync_providers = ProviderRows { providers }.for_vault(active_store_id).sync();
-        match (DuplicateProviderSelection {
-            providers: &sync_providers,
-            candidate: &candidate,
-            policy: DuplicateCandidatePolicy::IncludeAll,
-        })
-        .find()
-        {
-            DuplicateSyncProvider::Unique => ProviderSelection::Unavailable,
-            DuplicateSyncProvider::Duplicate { provider } => {
-                ProviderSelection::Selected(provider.id.into())
-            }
+        let (providers, draft) = self.merge_oauth_sign_in(providers, merge_target);
+        ProviderSaveOutcome::Saved {
+            snapshot: AuthProvidersSnapshot {
+                providers,
+                active_vault_store_id: self.snapshot.active_vault_store_id,
+            },
+            draft,
         }
     }
-}
 
-struct ActiveProviderSnapshotRows {
-    active: Vec<StorageProviderData>,
-    local: crate::LocalProviderSelection,
-}
-impl ProviderSaveRequest {
-    fn active_provider_rows(&self) -> ActiveProviderSnapshotRows {
-        let active_store_id = &self.snapshot.active_vault_store_id;
+    fn add_new_provider(&self) -> NewProviderStep {
+        let provider = match self.draft.clone().complete() {
+            Ok(provider) => provider,
+            Err(gap) => return NewProviderStep::Stopped(ProviderSaveOutcome::Incomplete { gap }),
+        };
+        // Every remote row is an identity mount that keeps each vault apart.
+        let row = StorageProvider::never_synced(
+            self.new_provider_id.clone(),
+            ProviderVaultScope::Unscoped,
+            self.created_at.clone(),
+            provider,
+        );
         let active = ProviderRows {
             providers: &self.snapshot.providers,
         }
-        .for_vault(active_store_id)
+        .for_vault(&self.snapshot.active_vault_store_id)
         .active();
+        let duplicate = DuplicateProviderSelection {
+            providers: &active,
+            candidate: &row,
+            policy: DuplicateCandidatePolicy::IncludeAll,
+        }
+        .find();
+        let mut rows = self.snapshot.providers.clone();
+        match (duplicate, self.duplicates) {
+            (DuplicateSyncProvider::Duplicate { .. }, DuplicateProviderHandling::Reject) => {
+                NewProviderStep::Stopped(ProviderSaveOutcome::Duplicate)
+            }
+            (DuplicateSyncProvider::Duplicate { .. }, DuplicateProviderHandling::KeepExisting) => {
+                NewProviderStep::Added {
+                    rows,
+                    merge_target: ProviderSelection::Unavailable,
+                }
+            }
+            (DuplicateSyncProvider::Unique, _) => {
+                let merge_target = match row.provider {
+                    StoredProvider::OauthFile(_) => {
+                        ProviderSelection::Selected(row.id.clone().into())
+                    }
+                    StoredProvider::Local {}
+                    | StoredProvider::LocalFolder(_)
+                    | StoredProvider::Github(_)
+                    | StoredProvider::S3(_) => ProviderSelection::Unavailable,
+                };
+                rows.push(row);
+                NewProviderStep::Added { rows, merge_target }
+            }
+        }
+    }
+
+    /// Seed this browser's row when the setup adds it, scope the active
+    /// vault's row, or seed one for a vault the save names.
+    fn seeded_local_rows(&self) -> Vec<StorageProvider> {
         let local = ProviderRows {
             providers: &self.snapshot.providers,
         }
-        .for_vault(active_store_id)
+        .for_vault(&self.snapshot.active_vault_store_id)
         .local();
-        ActiveProviderSnapshotRows { active, local }
-    }
-
-    #[must_use]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "the save transition remains one atomic provider update"
-    )]
-    pub fn apply(&self) -> ProviderSaveOutcome {
-        let request = self;
-        let provider_type = request.setup.provider_type(request.storage_mode);
-        let active_store_id = &request.snapshot.active_vault_store_id;
-        let ActiveProviderSnapshotRows {
-            active: active_providers,
-            local: local_provider,
-        } = request.active_provider_rows();
-        let mut providers = request.snapshot.providers.clone();
-        let mut oauth_update_id = ProviderSelection::Unavailable;
-
-        if request.setup.is_new() && provider_type != StorageProviderType::Local {
-            let provider = match request.new_provider(provider_type) {
-                Ok(provider) => provider,
-                Err(ProviderConstructionError::LocalFolderRequired) => {
-                    return ProviderSaveOutcome::LocalFolderRequired;
-                }
-                Err(ProviderConstructionError::S3ConfigurationRequired) => {
-                    return ProviderSaveOutcome::S3ConfigurationRequired;
-                }
-            };
-            let duplicate = DuplicateProviderSelection {
-                providers: &active_providers,
-                candidate: &provider,
-                policy: DuplicateCandidatePolicy::IncludeAll,
+        let mut providers = self.snapshot.providers.clone();
+        match (
+            self.setup,
+            self.draft.kind(),
+            local,
+            &self.provider_store_id,
+        ) {
+            (ProviderSaveSetup::New, ProviderKind::Local, LocalProviderSelection::Unseeded, _) => {
+                providers.push(StorageProvider::never_synced(
+                    self.new_provider_id.clone(),
+                    self.provider_store_id.clone(),
+                    self.created_at.clone(),
+                    StoredProvider::Local {},
+                ));
+                providers
             }
-            .find();
-            if matches!(duplicate, DuplicateSyncProvider::Duplicate { .. }) && request.explicit_add
-            {
-                return ProviderSaveOutcome::Duplicate;
-            }
-            if matches!(duplicate, DuplicateSyncProvider::Unique) {
-                if provider.provider_type == StorageProviderType::OauthFile {
-                    oauth_update_id = ProviderSelection::Selected(provider.id.clone().into());
-                }
-                providers.push(provider);
-            }
-        } else if request.setup.is_new()
-            && provider_type == StorageProviderType::Local
-            && matches!(local_provider, LocalProviderSelection::Unseeded)
-        {
-            providers.push(request.provider_defaults(ProviderRowDefaults {
-                provider_type: StorageProviderType::Local,
-                label: ProviderLabel::Local.render(),
-            }));
-        } else if let LocalProviderSelection::Selected(local_provider) = local_provider {
-            for provider in &mut providers {
-                if provider.id == local_provider.id {
-                    provider.store_id = request.provider_store_id.clone();
-                }
-            }
-        } else if let ProviderVaultScope::StoreId(store_id) = &request.provider_store_id {
-            let snapshot = AuthProvidersSnapshotData {
-                providers,
-                active_vault_store_id: request.snapshot.active_vault_store_id.clone(),
-            };
-            let crate::LocalProviderRowOutcome {
-                snapshot: seeded, ..
-            } = snapshot.ensure_local_row(LocalProviderRowRequest {
-                active_store_id: &ActiveVaultScope::StoreId(store_id.clone()),
-                new_id: &request.new_provider_id,
-                created_at: &request.created_at,
-            });
-            providers = seeded.providers;
-        }
-
-        let mut returned_oauth = StoredOAuthFileConfiguration::NotApplicable;
-        if request.storage_mode == StorageProviderType::OauthFile
-            && let StoredOAuthFileConfiguration::Configured(active_oauth) = &request.oauth_file
-            && matches!(active_oauth.file_id, StoredOAuthRemoteFileId::FileId(_))
-        {
-            let target_id = match oauth_update_id {
-                ProviderSelection::Selected(id) => ProviderSelection::Selected(id),
-                ProviderSelection::Unavailable => OAuthUpdateTarget {
-                    providers: &providers,
-                    active_store_id,
-                    active_oauth,
-                }
-                .id(),
-            };
-            if let ProviderSelection::Selected(target_id) = target_id {
-                let drive_file = request.configured_drive_file();
+            (_, _, LocalProviderSelection::Selected(local), _) => {
                 for provider in &mut providers {
-                    if provider.id == target_id.as_str()
-                        && let StoredOAuthFileConfiguration::Configured(persisted) =
-                            &provider.oauth_file
-                    {
-                        let merged = ActiveOAuthMerge {
-                            persisted,
-                            active: active_oauth,
-                            drive_file: &drive_file,
-                        }
-                        .merge();
-                        provider.oauth_file =
-                            StoredOAuthFileConfiguration::configured(merged.clone());
-                        returned_oauth = StoredOAuthFileConfiguration::configured(merged);
+                    if provider.id == local.id {
+                        provider.store_id = self.provider_store_id.clone();
                     }
                 }
+                providers
             }
-            if matches!(returned_oauth, StoredOAuthFileConfiguration::NotApplicable) {
-                returned_oauth =
-                    StoredOAuthFileConfiguration::configured(active_oauth.as_ref().clone());
+            (_, _, LocalProviderSelection::Unseeded, ProviderVaultScope::StoreId(store_id)) => {
+                let LocalProviderRowOutcome { snapshot, .. } = AuthProvidersSnapshot {
+                    providers,
+                    active_vault_store_id: self.snapshot.active_vault_store_id.clone(),
+                }
+                .ensure_local_row(LocalProviderRowRequest {
+                    active_store_id: &ActiveVaultScope::StoreId(store_id.clone()),
+                    new_id: &self.new_provider_id,
+                    created_at: &self.created_at,
+                });
+                snapshot.providers
             }
+            (_, _, LocalProviderSelection::Unseeded, ProviderVaultScope::Unscoped) => providers,
         }
+    }
 
-        ProviderSaveOutcome::Saved {
-            snapshot: AuthProvidersSnapshotData {
-                providers,
-                active_vault_store_id: request.snapshot.active_vault_store_id.clone(),
-            },
-            oauth_file: Box::new(returned_oauth),
+    /// A complete OAuth draft refreshes the saved row it reaches: the row just
+    /// added, or the active vault's row with the same target. The outcome's
+    /// draft is that merged row, or the request's draft when nothing merged.
+    fn merge_oauth_sign_in(
+        &self,
+        mut providers: Vec<StorageProvider>,
+        merge_target: ProviderSelection,
+    ) -> (Vec<StorageProvider>, ProviderDraft) {
+        let Ok(StoredProvider::OauthFile(fresh)) = self.draft.clone().complete() else {
+            return (providers, self.draft.clone());
+        };
+        let target = match merge_target {
+            ProviderSelection::Selected(id) => ProviderSelection::Selected(id),
+            ProviderSelection::Unavailable => {
+                let candidate = StorageProvider::never_synced(
+                    self.new_provider_id.clone(),
+                    ProviderVaultScope::Unscoped,
+                    self.created_at.clone(),
+                    StoredProvider::OauthFile(fresh.clone()),
+                );
+                let sync = ProviderRows {
+                    providers: &providers,
+                }
+                .for_vault(&self.snapshot.active_vault_store_id)
+                .sync();
+                match (DuplicateProviderSelection {
+                    providers: &sync,
+                    candidate: &candidate,
+                    policy: DuplicateCandidatePolicy::IncludeAll,
+                })
+                .find()
+                {
+                    DuplicateSyncProvider::Duplicate { provider } => {
+                        ProviderSelection::Selected(provider.id.into())
+                    }
+                    DuplicateSyncProvider::Unique => ProviderSelection::Unavailable,
+                }
+            }
+        };
+        let ProviderSelection::Selected(target) = target else {
+            return (providers, self.draft.clone());
+        };
+        let mut draft = self.draft.clone();
+        for provider in &mut providers {
+            if provider.id == target.as_str()
+                && let StoredProvider::OauthFile(saved) = &provider.provider
+            {
+                let merged = StoredProvider::OauthFile(fresh.clone().merged_into(saved));
+                draft = ProviderDraft::from(merged.clone());
+                provider.provider = merged;
+            }
         }
+        (providers, draft)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        ActiveVaultScope, LocalFolderConfigData, OauthFilePreset, ProviderVaultScope, S3Connection,
-        StorageProviderType, StoredGoogleDriveFolder, StoredLocalFolderConfiguration,
-        StoredLocalFolderDirectory, StoredLocalFolderHandle, StoredOAuthAccessCredential,
-        StoredOAuthFileConfiguration, StoredOAuthRefreshCredential, StoredOAuthRemoteFileId,
-        StoredOAuthRemoteFileName, StoredS3Configuration,
+    use super::{
+        DuplicateProviderHandling, ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup,
     };
-    use crate::{StoredGithubPat, StoredGithubRepository};
-
-    use super::{ActiveOAuthMerge, ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup};
-    use crate::{AuthProvidersSnapshotData, OAuthFileConfigData, StorageProviderData};
+    use crate::{
+        ActiveVaultScope, AuthProvidersSnapshot, GoogleDriveAccess, GoogleDriveAuthorization,
+        GoogleDriveFolderId, OAuthAccountIdentity, OAuthFilePreset, ProviderDraft,
+        ProviderDraftGap, ProviderKind, ProviderVaultScope, S3Connection, StorageProvider,
+        StoredProvider,
+    };
 
     impl ProviderSaveRequest {
-        fn fixture(provider_type: StorageProviderType) -> Self {
-            ProviderSaveRequest {
-                snapshot: AuthProvidersSnapshotData {
+        fn fixture(draft: ProviderDraft) -> Self {
+            Self {
+                snapshot: AuthProvidersSnapshot {
                     providers: Vec::new(),
-                    active_vault_store_id: ActiveVaultScope::StoreId("vault-1".to_owned()),
+                    active_vault_store_id: ActiveVaultScope::StoreId("store-a".to_owned()),
                 },
-                provider_store_id: ProviderVaultScope::StoreId("vault-1".to_owned()),
-                storage_mode: provider_type,
-                setup: ProviderSaveSetup::New(provider_type),
-                explicit_add: true,
-                github_pat: " pat ".to_owned(),
-                github_repo: " owner/repo ".to_owned(),
-                oauth_file: StoredOAuthFileConfiguration::NotApplicable,
-                oauth_preset: OauthFilePreset::GoogleDrive,
-                local_folder: StoredLocalFolderConfiguration::NotApplicable,
-                s3: StoredS3Configuration::NotApplicable,
-                new_provider_id: "provider-new".to_owned(),
-                created_at: "2026-08-11T00:00:00Z".to_owned(),
-            }
-        }
-
-        fn s3_fixture() -> anyhow::Result<Self> {
-            let mut request = Self::fixture(StorageProviderType::S3);
-            request.s3 = StoredS3Configuration::Configured(S3Connection::fixture()?);
-            Ok(request)
-        }
-    }
-
-    #[test]
-    fn a_new_s3_provider_is_an_identity_mount_with_its_validated_block() -> anyhow::Result<()> {
-        let request = ProviderSaveRequest::s3_fixture()?;
-        let snapshot = request.apply().saved().map_err(anyhow::Error::msg)?;
-        let [row] = snapshot.providers.as_slice() else {
-            anyhow::bail!("exactly the S3 row is saved");
-        };
-        assert_eq!(row.provider_type, StorageProviderType::S3);
-        assert_eq!(row.label, "S3 · nook-dev/e2e/run-1");
-        assert_eq!(row.store_id, ProviderVaultScope::Unscoped);
-        assert_eq!(row.s3, request.s3);
-        assert_eq!(row.github_pat, StoredGithubPat::Missing);
-        assert_eq!(row.oauth_file, StoredOAuthFileConfiguration::NotApplicable);
-        Ok(())
-    }
-
-    #[test]
-    fn an_s3_provider_needs_its_connection_and_one_location_is_one_mount() -> anyhow::Result<()> {
-        assert_eq!(
-            ProviderSaveRequest::fixture(StorageProviderType::S3).apply(),
-            ProviderSaveOutcome::S3ConfigurationRequired
-        );
-        let saved = ProviderSaveRequest::s3_fixture()?
-            .apply()
-            .saved()
-            .map_err(anyhow::Error::msg)?;
-        // The same location with this device's other key is still one mount.
-        let mut again = ProviderSaveRequest::s3_fixture()?;
-        let mut other_key = S3Connection::fixture()?;
-        other_key.access_key_id = "device-b".to_owned();
-        again.s3 = StoredS3Configuration::Configured(other_key);
-        again.snapshot = saved.clone();
-        assert_eq!(again.apply(), ProviderSaveOutcome::Duplicate);
-        again.explicit_add = false;
-        assert_eq!(again.apply().saved().map_err(anyhow::Error::msg)?, saved);
-        Ok(())
-    }
-
-    impl ProviderSaveOutcome {
-        fn saved(self) -> Result<AuthProvidersSnapshotData, &'static str> {
-            match self {
-                ProviderSaveOutcome::Saved { snapshot, .. } => Ok(snapshot),
-                _ => Err("expected saved provider outcome"),
+                provider_store_id: ProviderVaultScope::StoreId("store-a".to_owned()),
+                setup: ProviderSaveSetup::New,
+                duplicates: DuplicateProviderHandling::Reject,
+                draft,
+                new_provider_id: "new-row".to_owned(),
+                created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }
         }
     }
 
-    #[test]
-    fn remote_rows_belong_to_the_identity_not_the_open_vault() -> Result<(), &'static str> {
-        let mut folder = ProviderSaveRequest::fixture(StorageProviderType::LocalFolder);
-        folder.local_folder = StoredLocalFolderConfiguration::Configured(LocalFolderConfigData {
-            directory_name: StoredLocalFolderDirectory::DirectoryName("Nook Backup".to_owned()),
-            handle_id: StoredLocalFolderHandle::HandleId("handle-1".to_owned()),
-        });
-        let mut icloud = ProviderSaveRequest::fixture(StorageProviderType::OauthFile);
-        icloud.oauth_preset = OauthFilePreset::ICloud;
-        for request in [folder, icloud] {
-            let snapshot = request.apply().saved()?;
-            let remote = snapshot
-                .providers
-                .iter()
-                .find(|row| row.provider_type == request.storage_mode)
-                .ok_or("expected the saved remote row")?;
-            assert_eq!(remote.store_id, ProviderVaultScope::Unscoped);
+    fn saved(
+        outcome: ProviderSaveOutcome,
+    ) -> anyhow::Result<(AuthProvidersSnapshot, ProviderDraft)> {
+        match outcome {
+            ProviderSaveOutcome::Saved { snapshot, draft } => Ok((snapshot, draft)),
+            other => anyhow::bail!("expected a save, got {other:?}"),
         }
-        Ok(())
     }
 
-    #[test]
-    fn a_drive_row_keeps_the_backup_name_its_draft_names() -> Result<(), &'static str> {
-        let named = |file_name: &str| {
-            let mut request = ProviderSaveRequest::fixture(StorageProviderType::OauthFile);
-            request.github_repo = super::DEFAULT_DRIVE_BACKUP_NAME.to_owned();
-            request.oauth_file = StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
-                preset: OauthFilePreset::GoogleDrive,
-                file_name: StoredOAuthRemoteFileName::FileName(file_name.to_owned()),
-                ..OAuthFileConfigData::default()
-            });
-            let snapshot = request.apply().saved()?;
-            snapshot
-                .providers
-                .iter()
-                .find_map(|row| match &row.oauth_file {
-                    StoredOAuthFileConfiguration::Configured(config) => {
-                        Some((row.label.clone(), config.file_name.clone()))
-                    }
-                    StoredOAuthFileConfiguration::NotApplicable => None,
+    fn drive_draft(token: &str, account: OAuthAccountIdentity) -> anyhow::Result<ProviderDraft> {
+        Ok(
+            ProviderDraft::begin(ProviderKind::OauthFile(OAuthFilePreset::GoogleDrive))
+                .with_google_drive_access(GoogleDriveAccess {
+                    authorization: GoogleDriveAuthorization::fixture(token)?,
+                    account,
                 })
-                .ok_or("expected a saved Drive row")
-        };
+                .with_google_drive_folder(GoogleDriveFolderId::parse("folder-1")?)?,
+        )
+    }
 
-        assert_eq!(
-            named(" team-events ")?,
+    #[test]
+    fn a_new_provider_of_each_kind_is_an_unscoped_identity_mount() -> anyhow::Result<()> {
+        for provider in StoredProvider::every_fixture()? {
+            if matches!(provider, StoredProvider::Local {}) {
+                continue;
+            }
+            let draft = ProviderDraft::from(provider.clone());
+            let (snapshot, returned) = saved(ProviderSaveRequest::fixture(draft.clone()).apply())?;
+            let [row] = snapshot.providers.as_slice() else {
+                anyhow::bail!("one row is added");
+            };
+            assert_eq!(row.provider, provider);
+            assert_eq!(row.label, provider.label());
+            assert_eq!(row.store_id, ProviderVaultScope::Unscoped);
+            assert_eq!(returned, draft);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn an_incomplete_draft_of_each_kind_names_its_gap() {
+        for (kind, gap) in [
+            (ProviderKind::LocalFolder, ProviderDraftGap::LocalFolder),
+            (ProviderKind::Github, ProviderDraftGap::GithubToken),
             (
-                "Google Drive · team-events".to_owned(),
-                StoredOAuthRemoteFileName::FileName("team-events".to_owned())
-            )
-        );
-        // An unnamed draft still follows the setup field.
+                ProviderKind::OauthFile(OAuthFilePreset::GoogleDrive),
+                ProviderDraftGap::OAuthSignIn,
+            ),
+            (
+                ProviderKind::OauthFile(OAuthFilePreset::ICloud),
+                ProviderDraftGap::OAuthSignIn,
+            ),
+            (ProviderKind::S3, ProviderDraftGap::S3Connection),
+        ] {
+            assert_eq!(
+                ProviderSaveRequest::fixture(ProviderDraft::begin(kind)).apply(),
+                ProviderSaveOutcome::Incomplete { gap }
+            );
+        }
+    }
+
+    #[test]
+    fn a_duplicate_is_rejected_or_kept_as_the_setup_asks() -> anyhow::Result<()> {
+        let existing = StorageProvider::fixture("s3-a", StoredProvider::s3_fixture()?);
+        let mut request = ProviderSaveRequest::fixture(ProviderDraft::from(StoredProvider::S3(
+            S3Connection::fixture()?,
+        )));
+        request.snapshot.providers = vec![existing.clone()];
+        assert_eq!(request.clone().apply(), ProviderSaveOutcome::Duplicate);
+        request.duplicates = DuplicateProviderHandling::KeepExisting;
+        let (snapshot, _) = saved(request.apply())?;
+        assert_eq!(snapshot.providers, vec![existing]);
+        Ok(())
+    }
+
+    #[test]
+    fn this_browsers_row_is_seeded_once_and_scoped_to_the_vault() -> anyhow::Result<()> {
+        let (snapshot, _) = saved(ProviderSaveRequest::fixture(ProviderDraft::Local {}).apply())?;
+        let [local] = snapshot.providers.as_slice() else {
+            anyhow::bail!("this browser's row is seeded");
+        };
+        assert_eq!(local.provider, StoredProvider::Local {});
         assert_eq!(
-            named("")?.1,
-            StoredOAuthRemoteFileName::FileName(super::DEFAULT_DRIVE_BACKUP_NAME.to_owned())
+            local.store_id,
+            ProviderVaultScope::StoreId("store-a".to_owned())
+        );
+        // Saving the chosen provider scopes the vault's row instead.
+        let mut existing = ProviderSaveRequest::fixture(ProviderDraft::Local {});
+        existing.setup = ProviderSaveSetup::Existing;
+        existing.snapshot.providers = snapshot.providers.clone();
+        existing.provider_store_id = ProviderVaultScope::StoreId("store-a".to_owned());
+        let (scoped, _) = saved(existing.apply())?;
+        assert_eq!(scoped.providers, snapshot.providers);
+        // An existing save for a known vault seeds its row.
+        let mut known = ProviderSaveRequest::fixture(ProviderDraft::Local {});
+        known.setup = ProviderSaveSetup::Existing;
+        known.snapshot.active_vault_store_id = ActiveVaultScope::Unselected;
+        known.provider_store_id = ProviderVaultScope::StoreId("store-b".to_owned());
+        let (seeded, _) = saved(known.apply())?;
+        assert_eq!(
+            seeded.providers.first().map(|row| &row.store_id),
+            Some(&ProviderVaultScope::StoreId("store-b".to_owned()))
         );
         Ok(())
     }
 
     #[test]
-    fn saved_drive_rows_keep_the_shared_vault_folder() -> Result<(), &'static str> {
-        let mut request = ProviderSaveRequest::fixture(StorageProviderType::OauthFile);
-        request.oauth_file = StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
-            preset: OauthFilePreset::GoogleDrive,
-            access_token: StoredOAuthAccessCredential::AccessToken("token".to_owned()),
-            file_id: StoredOAuthRemoteFileId::Unresolved,
-            folder_id: StoredGoogleDriveFolder::FolderId("issuer-folder".to_owned()),
-            ..OAuthFileConfigData::default()
-        });
-        let snapshot = request.apply().saved()?;
-        let folder = snapshot
+    fn an_oauth_sign_in_refreshes_the_saved_row_it_reaches() -> anyhow::Result<()> {
+        let account = OAuthAccountIdentity::Email("owner@example.com".to_owned());
+        let (first, _) = saved(
+            ProviderSaveRequest::fixture(drive_draft("TEST-ONLY-old", account.clone())?).apply(),
+        )?;
+        // The same folder and account reached again with a fresh token.
+        let mut again = ProviderSaveRequest::fixture(drive_draft("TEST-ONLY-new", account)?);
+        again.setup = ProviderSaveSetup::Existing;
+        again.snapshot = first.clone();
+        let (merged, draft) = saved(again.apply())?;
+        // The existing save also seeds this browser's row for the vault.
+        let drive_rows = merged
             .providers
             .iter()
-            .find_map(|row| match &row.oauth_file {
-                StoredOAuthFileConfiguration::Configured(config) => Some(config.folder_id.clone()),
-                StoredOAuthFileConfiguration::NotApplicable => None,
-            })
-            .ok_or("expected a saved Drive row")?;
+            .filter(|row| matches!(row.provider, StoredProvider::OauthFile(_)))
+            .collect::<Vec<_>>();
+        let [row] = drive_rows.as_slice() else {
+            anyhow::bail!("the saved row is refreshed, not duplicated");
+        };
+        let StoredProvider::OauthFile(oauth) = &row.provider else {
+            anyhow::bail!("the row stays a Drive row");
+        };
+        assert_eq!(oauth.token().expose(), "TEST-ONLY-new");
+        assert_eq!(draft, ProviderDraft::from(row.provider.clone()));
+        // A draft that is not signed in merges nothing and comes back as sent.
+        let unsigned = ProviderDraft::begin(ProviderKind::OauthFile(OAuthFilePreset::GoogleDrive));
+        let mut pending = ProviderSaveRequest::fixture(unsigned.clone());
+        pending.setup = ProviderSaveSetup::Existing;
+        pending.snapshot = first;
+        let (kept, returned) = saved(pending.apply())?;
+        assert_eq!(returned, unsigned);
         assert_eq!(
-            folder,
-            StoredGoogleDriveFolder::FolderId("issuer-folder".to_owned())
+            kept.providers
+                .iter()
+                .filter(|row| matches!(row.provider, StoredProvider::OauthFile(_)))
+                .count(),
+            1
         );
         Ok(())
-    }
-
-    #[test]
-    fn creates_scoped_github_provider_from_trimmed_inputs() -> Result<(), &'static str> {
-        let snapshot = ProviderSaveRequest::fixture(StorageProviderType::Github)
-            .apply()
-            .saved()?;
-        let provider = snapshot
-            .providers
-            .first()
-            .unwrap_or_else(|| panic!("saved provider must exist"));
-        assert_eq!(provider.id, "provider-new");
-        assert_eq!(provider.label, "GitHub · owner/repo");
-        assert_eq!(
-            provider.github_pat,
-            StoredGithubPat::Token(("pat").to_owned())
-        );
-        assert_eq!(
-            provider.github_repo,
-            StoredGithubRepository::Repository(("owner/repo").to_owned())
-        );
-        assert_eq!(provider.store_id, ProviderVaultScope::Unscoped);
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_an_explicit_duplicate_provider() {
-        let mut request = ProviderSaveRequest::fixture(StorageProviderType::Github);
-        request.snapshot.providers.push(StorageProviderData::github(
-            "existing",
-            "GitHub",
-            "pat",
-            "owner/repo",
-            "earlier",
-        ));
-        let provider = request
-            .snapshot
-            .providers
-            .first_mut()
-            .unwrap_or_else(|| panic!("save fixture provider must exist"));
-        provider.store_id = ProviderVaultScope::StoreId("vault-1".to_owned());
-        assert_eq!(request.apply(), ProviderSaveOutcome::Duplicate);
-    }
-
-    #[test]
-    fn a_mount_saved_for_another_vault_is_the_same_identity_mount() {
-        let mut request = ProviderSaveRequest::fixture(StorageProviderType::Github);
-        request.snapshot.providers.push(StorageProviderData::github(
-            "saved-earlier",
-            "GitHub · owner/repo",
-            "pat",
-            "owner/repo",
-            "earlier",
-        ));
-        assert_eq!(request.apply(), ProviderSaveOutcome::Duplicate);
-    }
-
-    #[test]
-    fn requires_a_selected_local_folder() {
-        let request = ProviderSaveRequest::fixture(StorageProviderType::LocalFolder);
-        assert_eq!(request.apply(), ProviderSaveOutcome::LocalFolderRequired);
-    }
-
-    #[test]
-    fn creates_a_local_folder_provider_with_its_directory_label() -> Result<(), &'static str> {
-        let mut request = ProviderSaveRequest::fixture(StorageProviderType::LocalFolder);
-        request.local_folder = StoredLocalFolderConfiguration::Configured(LocalFolderConfigData {
-            directory_name: StoredLocalFolderDirectory::DirectoryName("Backups".to_owned()),
-            handle_id: StoredLocalFolderHandle::HandleId("handle-1".to_owned()),
-        });
-        let snapshot = request.apply().saved()?;
-        assert_eq!(
-            snapshot
-                .providers
-                .first()
-                .map(|provider| provider.label.as_str()),
-            Some("Local backup · Backups")
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn existing_flow_seeds_the_local_row_for_a_known_vault() -> Result<(), &'static str> {
-        let mut request = ProviderSaveRequest::fixture(StorageProviderType::Github);
-        request.setup = ProviderSaveSetup::Existing;
-        let snapshot = request.apply().saved()?;
-        assert_eq!(snapshot.providers.len(), 1);
-        assert_eq!(
-            snapshot
-                .providers
-                .first()
-                .map(|provider| provider.provider_type),
-            Some(StorageProviderType::Local)
-        );
-        assert_eq!(
-            snapshot
-                .providers
-                .first()
-                .map(|provider| &provider.store_id),
-            Some(&ProviderVaultScope::StoreId(("vault-1").to_owned()))
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn oauth_provider_creation_adopts_active_remote_identity() -> Result<(), &'static str> {
-        let mut request = ProviderSaveRequest::fixture(StorageProviderType::OauthFile);
-        let active = OAuthFileConfigData {
-            preset: OauthFilePreset::GoogleDrive,
-            access_token: StoredOAuthAccessCredential::AccessToken("fresh-access".to_owned()),
-            file_id: StoredOAuthRemoteFileId::FileId("remote-file".to_owned()),
-            file_name: StoredOAuthRemoteFileName::FileName("events".to_owned()),
-            folder_id: StoredGoogleDriveFolder::FolderId("folder".to_owned()),
-            ..OAuthFileConfigData::default()
-        };
-        request.oauth_file = StoredOAuthFileConfiguration::configured(active);
-        let ProviderSaveOutcome::Saved {
-            snapshot,
-            oauth_file,
-        } = request.apply()
-        else {
-            return Err("expected saved OAuth provider outcome");
-        };
-        let Some(StorageProviderData {
-            oauth_file: StoredOAuthFileConfiguration::Configured(persisted),
-            ..
-        }) = snapshot.providers.first()
-        else {
-            return Err("expected persisted OAuth config");
-        };
-        assert_eq!(
-            persisted.access_token,
-            StoredOAuthAccessCredential::AccessToken(("fresh-access").to_owned())
-        );
-        assert_eq!(
-            persisted.file_id,
-            StoredOAuthRemoteFileId::FileId(("remote-file").to_owned())
-        );
-        assert_eq!(
-            persisted.folder_id,
-            StoredGoogleDriveFolder::FolderId(("folder").to_owned())
-        );
-        assert_eq!(
-            persisted.refresh_token,
-            StoredOAuthRefreshCredential::NotIssued
-        );
-        assert_eq!(
-            *oauth_file,
-            StoredOAuthFileConfiguration::configured(persisted.as_ref().clone())
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn oauth_merge_preserves_a_valid_persisted_token_when_active_token_is_blank() {
-        let persisted_oauth = OAuthFileConfigData {
-            access_token: StoredOAuthAccessCredential::AccessToken("persisted-token".to_owned()),
-            file_id: StoredOAuthRemoteFileId::FileId("remote-file".to_owned()),
-            ..OAuthFileConfigData::default()
-        };
-        let active_oauth = OAuthFileConfigData {
-            access_token: StoredOAuthAccessCredential::AccessToken("   ".to_owned()),
-            file_id: StoredOAuthRemoteFileId::FileId("remote-file".to_owned()),
-            ..OAuthFileConfigData::default()
-        };
-
-        let merged = ActiveOAuthMerge {
-            persisted: &persisted_oauth,
-            active: &active_oauth,
-            drive_file: "nook.yaml",
-        }
-        .merge();
-        assert_eq!(
-            merged.access_token,
-            StoredOAuthAccessCredential::AccessToken(("persisted-token").to_owned())
-        );
-    }
-
-    #[test]
-    fn oauth_merge_preserves_the_persisted_refresh_token() {
-        let persisted_oauth = OAuthFileConfigData {
-            refresh_token: StoredOAuthRefreshCredential::Token("persisted-refresh".to_owned()),
-            ..OAuthFileConfigData::default()
-        };
-        let active_oauth = OAuthFileConfigData {
-            refresh_token: StoredOAuthRefreshCredential::Token("active-refresh".to_owned()),
-            ..OAuthFileConfigData::default()
-        };
-
-        let merged = ActiveOAuthMerge {
-            persisted: &persisted_oauth,
-            active: &active_oauth,
-            drive_file: "nook.yaml",
-        }
-        .merge();
-        assert_eq!(
-            merged.refresh_token,
-            StoredOAuthRefreshCredential::Token(("persisted-refresh").to_owned())
-        );
-    }
-
-    #[test]
-    fn oauth_merge_resolves_blank_file_names_semantically() {
-        let persisted_oauth = OAuthFileConfigData {
-            file_name: StoredOAuthRemoteFileName::FileName("  ".to_owned()),
-            ..OAuthFileConfigData::default()
-        };
-        let active_oauth = OAuthFileConfigData {
-            file_name: StoredOAuthRemoteFileName::FileName("discovered.yaml".to_owned()),
-            ..OAuthFileConfigData::default()
-        };
-
-        let merged = ActiveOAuthMerge {
-            persisted: &persisted_oauth,
-            active: &active_oauth,
-            drive_file: "fallback.yaml",
-        }
-        .merge();
-        assert_eq!(
-            merged.file_name,
-            StoredOAuthRemoteFileName::FileName(("discovered.yaml").to_owned())
-        );
-
-        let blank_active = OAuthFileConfigData {
-            file_name: StoredOAuthRemoteFileName::FileName("\t".to_owned()),
-            ..OAuthFileConfigData::default()
-        };
-        let fallback = ActiveOAuthMerge {
-            persisted: &OAuthFileConfigData::default(),
-            active: &blank_active,
-            drive_file: "fallback.yaml",
-        }
-        .merge();
-        assert_eq!(
-            fallback.file_name,
-            StoredOAuthRemoteFileName::FileName(("fallback.yaml").to_owned())
-        );
-    }
-
-    #[test]
-    fn implicit_duplicate_preserves_rows_and_request() -> Result<(), &'static str> {
-        let mut request = ProviderSaveRequest::fixture(StorageProviderType::Github);
-        request.explicit_add = false;
-        let mut existing = StorageProviderData::github(
-            "existing",
-            "original label",
-            "pat",
-            "owner/repo",
-            "earlier",
-        );
-        existing.store_id = ProviderVaultScope::StoreId("vault-1".to_owned());
-        request.snapshot.providers.push(existing);
-        let before = request.snapshot.clone();
-        let result = request.apply().saved()?;
-        assert_eq!(result, before);
-        assert_eq!(request.snapshot, before);
-        Ok(())
-    }
-
-    #[test]
-    fn active_merge_retains_persisted_metadata_and_adopts_active_targets() {
-        use crate::{StoredICloudShareTarget, StoredOAuthAccountIdentity, StoredOAuthTokenExpiry};
-        let persisted = OAuthFileConfigData {
-            file_name: StoredOAuthRemoteFileName::FileName(" stored ".to_owned()),
-            account_email: StoredOAuthAccountIdentity::Email("stored-account".to_owned()),
-            expires_at: StoredOAuthTokenExpiry::ExpiresAt("stored-expiry".to_owned()),
-            folder_id: StoredGoogleDriveFolder::FolderId("stored-folder".to_owned()),
-            icloud_share_target: StoredICloudShareTarget::SharedTarget("stored-share".to_owned()),
-            ..OAuthFileConfigData::default()
-        };
-        let active = OAuthFileConfigData {
-            access_token: StoredOAuthAccessCredential::AccessToken(" active-token ".to_owned()),
-            file_name: StoredOAuthRemoteFileName::FileName("active".to_owned()),
-            account_email: StoredOAuthAccountIdentity::Email("active-account".to_owned()),
-            expires_at: StoredOAuthTokenExpiry::ExpiresAt("active-expiry".to_owned()),
-            file_id: StoredOAuthRemoteFileId::FileId("active-file".to_owned()),
-            ..OAuthFileConfigData::default()
-        };
-        let merged = ActiveOAuthMerge {
-            persisted: &persisted,
-            active: &active,
-            drive_file: "configured",
-        }
-        .merge();
-        assert_eq!(merged.access_token, active.access_token);
-        assert_eq!(merged.file_id, active.file_id);
-        assert_eq!(merged.file_name, persisted.file_name);
-        assert_eq!(merged.account_email, persisted.account_email);
-        assert_eq!(merged.expires_at, persisted.expires_at);
-        assert_eq!(merged.folder_id, persisted.folder_id);
-        assert_eq!(merged.icloud_share_target, persisted.icloud_share_target);
     }
 }

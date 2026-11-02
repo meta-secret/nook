@@ -76,22 +76,15 @@ impl AuthProviderDatabase {
 pub mod tests {
     use super::super::{ProviderDbWriteSnapshotAt, ProviderSnapshotPublication};
     use super::*;
-    use nook_core::{
-        ActiveVaultScope, AuthProvidersSnapshotData, DeviceIdentity, StorageProviderData,
-    };
+    use crate::test_fixtures::WasmFixture;
+    use nook_core::{ActiveVaultScope, AuthProvidersSnapshot, DeviceIdentity};
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    fn github_snapshot(pat: &str) -> AuthProvidersSnapshotData {
-        AuthProvidersSnapshotData {
-            providers: vec![StorageProviderData::github(
-                "gh-wasm",
-                "GitHub",
-                pat,
-                "nook",
-                "2026-06-24T00:00:00.000Z",
-            )],
+    fn github_snapshot(pat: &str) -> anyhow::Result<AuthProvidersSnapshot> {
+        Ok(AuthProvidersSnapshot {
+            providers: vec![WasmFixture::github_row("gh-wasm", pat, "nook")?],
             active_vault_store_id: ActiveVaultScope::Unselected,
-        }
+        })
     }
 
     #[wasm_bindgen_test]
@@ -101,11 +94,11 @@ pub mod tests {
         let kept = DeviceIdentity::generate()?;
         ProviderSnapshotPublication {
             identity: &retired,
-            snapshot: &github_snapshot("github_pat_retired"),
+            snapshot: &github_snapshot("github_pat_retired")?,
         }
         .save()
         .await?;
-        let sealed = github_snapshot("github_pat_kept")
+        let sealed = github_snapshot("github_pat_kept")?
             .seal_credentials(&kept)
             .map_err(|rejection| rejection.into_cause())?;
         AuthProviderDatabase::write_snapshot_at(ProviderDbWriteSnapshotAt {

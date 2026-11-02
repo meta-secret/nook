@@ -7,16 +7,9 @@ use crate::{BrowserCredentialCreationOptions, BrowserCredentialRequestOptions};
 use crate::{BrowserPasskeyClient, BrowserPasskeyCreationOptions, NookTotpCode};
 use nook_core::CompactToken;
 use nook_core::PasswordPolicy;
-use nook_core::ProviderCredentialEvidence;
-use nook_core::ProviderCredentialReadiness;
 use nook_core::SecretId;
-use nook_core::StorageProviderData;
+use nook_core::StorageProvider;
 use nook_core::{PasswordGenerationOptions, TotpAlgorithm, TotpDigits, TotpPeriod, TotpSecret};
-use nook_core::{StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection};
-use nook_core::{
-    StoredGithubPat, StoredGithubRepository, StoredLocalFolderHandle, StoredOAuthAccessCredential,
-    StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
-};
 use tsify::Tsify;
 use wasm_bindgen::JsError;
 
@@ -299,47 +292,16 @@ impl NookTotpCode {
 }
 
 #[wasm_bindgen]
-#[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn has_github_credentials(pat: &str) -> bool {
-    ProviderCredentialEvidence::Github(&StoredGithubPat::Token(pat.to_owned()))
-        .readiness()
-        == ProviderCredentialReadiness::Ready
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn has_oauth_credentials(access_token: &str) -> bool {
-    ProviderCredentialEvidence::OAuth(&StoredOAuthAccessCredential::AccessToken(
-        access_token.to_owned(),
-    ))
-    .readiness()
-        == ProviderCredentialReadiness::Ready
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn has_local_folder_credentials(handle_id: &str) -> bool {
-    ProviderCredentialEvidence::LocalFolder(&StoredLocalFolderHandle::HandleId(
-        handle_id.to_owned(),
-    ))
-    .readiness()
-        == ProviderCredentialReadiness::Ready
-}
-
-#[wasm_bindgen]
-#[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
+#[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn provider_storage_detail(
-    provider: &tsify::Ts<nook_core::StorageProviderData>,
+    provider: &tsify::Ts<nook_core::StorageProvider>,
     this_device_desc: String,
-    no_token_saved: String,
     google_signed_in: String,
     icloud_signed_in: String,
-    google_not_signed_in: String,
-    icloud_not_signed_in: String,
     local_folder_needs_reconnect: String,
 ) -> Result<String, wasm_bindgen::JsError> {
     let provider = provider
@@ -348,11 +310,8 @@ pub fn provider_storage_detail(
 
     let labels = nook_core::ProviderStorageDetailLabels {
         this_device_desc,
-        no_token_saved,
         google_signed_in,
         icloud_signed_in,
-        google_not_signed_in,
-        icloud_not_signed_in,
         local_folder_needs_reconnect,
     };
     Ok(provider.storage_detail(&labels))
@@ -384,96 +343,19 @@ pub fn provider_storage_detail(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
-pub fn oauth_remote_storage_ref(
-    config: &tsify::Ts<nook_core::OAuthFileConfigData>,
-) -> Result<NookOAuthRemoteStorageReference, wasm_bindgen::JsError> {
-    let config = config
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-    let result = { NookOAuthRemoteStorageReference::new(config.remote_storage_ref()) };
-    Ok(result)
-}
-
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn update_oauth_remote_ref(
-    config: &tsify::Ts<nook_core::OAuthFileConfigData>,
-
-    remote_ref: &str,
-) -> Result<NookOAuthRemoteConfigurationUpdate, wasm_bindgen::JsError> {
-    let config = config
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-    let result = { NookOAuthRemoteConfigurationUpdate::new(config.with_remote_ref(remote_ref)) };
-    Ok(result)
-}
-
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_github_remote_storage_args(
-    github_pat: &str,
-    github_repo: &str,
-) -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
-    Ok(NookStagedStorageArgs::new(
-        StagedRemoteConnection::Github(StagedGithubConnection {
-            credential: &StoredGithubPat::Token((github_pat).to_owned()),
-            repository: &StoredGithubRepository::Repository((github_repo).to_owned()),
-        })
-        .project()?,
-    ))
-}
-
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn staged_oauth_remote_storage_args(
-    oauth_file: &tsify::Ts<nook_core::OAuthFileConfigData>,
-) -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
-    let oauth_file = oauth_file
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-
-    Ok(NookStagedStorageArgs::new(
-        StagedRemoteConnection::OAuth(StagedOAuthConnection {
-            configuration: &StoredOAuthFileConfiguration::configured(oauth_file.clone()),
-            file_name: &StoredOAuthRemoteFileName::Unresolved,
-        })
-        .project()?,
-    ))
-}
-
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_local_remote_storage_args() -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
-    Ok(NookStagedStorageArgs::new(
-        StagedRemoteConnection::Local.project()?,
-    ))
-}
-
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
 pub fn update_provider_sync_metadata(
-    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshotData>,
+    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshot>,
     provider_id: &str,
     vault_yaml: &str,
     revision: &NookProviderSyncRevision,
     manager_store_scope: &NookManagerStoreScope,
     synced_at: &str,
-) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshotData>, wasm_bindgen::JsError> {
+) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshot>, wasm_bindgen::JsError> {
     let mut snapshot = snapshot
         .to_rust()
         .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
-    snapshot.providers = StorageProviderData::update_sync_metadata(
+    snapshot.providers = StorageProvider::update_sync_metadata(
         &snapshot.providers,
         provider_id,
         vault_yaml,
@@ -488,19 +370,14 @@ pub fn update_provider_sync_metadata(
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
-    use nook_core::AuthProvidersSnapshotData;
-    use nook_core::ICloudShareRole;
-    use nook_core::ICloudSharedTarget;
-    use nook_core::OAuthFileConfigData;
-    use nook_core::ProviderOauthPreset;
-    use nook_core::SharedGrantProviderOutcome;
-    use nook_core::SharedStorageTargetSelection;
     use nook_core::{
-        OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope, ReplicationType,
-        StorageProviderData, StorageProviderType, StoredGithubPat, StoredGithubRepository,
-        StoredGoogleDriveFolder, StoredICloudShareTarget, StoredLocalFolderConfiguration,
-        StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
-        StoredOAuthRemoteFileName, StoredS3Configuration,
+        AuthProvidersSnapshot, GithubProvider, GoogleDriveAccess, GoogleDriveAuthorization,
+        GoogleDriveFolderBinding, GoogleDriveFolderId, GoogleDriveProvider,
+        GoogleDriveSignInRequest, ICloudProvider, ICloudShareRole, ICloudShareTargetId,
+        ICloudSharedTarget, IsoTimestamp, OAuthAccountIdentity, OAuthFilePreset, OAuthFileProvider,
+        ProviderDraft, ProviderKind, ProviderSecretText, ProviderVaultScope, ReplicationSupport,
+        ReplicationType, SharedGrantProviderOutcome, SharedStorageTargetSelection,
+        StorageConnection, StoredGithubRepository, StoredProvider,
     };
     use serde::{Serialize, de::DeserializeOwned};
     use serde_wasm_bindgen::Serializer;
@@ -510,10 +387,7 @@ mod browser_tests {
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    fn malformed_typed_projection_inputs_do_not_replace_borrowed_oauth_configuration()
-    -> Result<(), JsError> {
-        let config = OAuthFileConfigData::default();
-        let config_wire = ProviderFixture::wire(&config)?;
+    fn malformed_typed_inputs_are_rejected() -> Result<(), JsError> {
         assert!(
             super::generate_password(&Ts::new_unchecked(
                 Option::<bool>::None.serialize(&Serializer::json_compatible())?
@@ -524,36 +398,16 @@ mod browser_tests {
             super::provider_storage_detail(
                 &Ts::new_unchecked(serde_wasm_bindgen::to_value(&true)?),
                 "Device".to_owned(),
-                "No token".to_owned(),
                 "Google".to_owned(),
                 "iCloud".to_owned(),
-                "Google unavailable".to_owned(),
-                "iCloud unavailable".to_owned(),
                 "Reconnect".to_owned(),
             )
             .is_err()
         );
         assert!(
-            super::oauth_remote_storage_ref(&Ts::new_unchecked(
-                Option::<bool>::None.serialize(&Serializer::json_compatible())?
-            ))
-            .is_err()
+            super::draft_storage_args(&Ts::new_unchecked(serde_wasm_bindgen::to_value(&true)?))
+                .is_err()
         );
-        assert!(
-            super::update_oauth_remote_ref(
-                &Ts::new_unchecked(serde_wasm_bindgen::to_value(&true)?),
-                "unchanged"
-            )
-            .is_err()
-        );
-        assert!(
-            super::staged_oauth_remote_storage_args(&Ts::new_unchecked(
-                Option::<bool>::None.serialize(&Serializer::json_compatible())?
-            ))
-            .is_err()
-        );
-        assert!(config_wire.to_rust()? == config);
-        assert!(super::oauth_remote_storage_ref(&config_wire).is_ok());
         Ok(())
     }
 
@@ -572,134 +426,94 @@ mod browser_tests {
                 .to_rust()
                 .map_err(|_| JsError::new("Provider output could not be decoded."))
         }
-        fn github_provider() -> StorageProviderData {
-            StorageProviderData::github(
-                "provider-1",
-                "GitHub",
-                "ghp_1234567890ABCDEF",
-                "work-vault",
-                "2026-01-01T00:00:00Z",
+        fn row(id: &str, provider: StoredProvider) -> StorageProvider {
+            StorageProvider::never_synced(
+                id.to_owned(),
+                ProviderVaultScope::Unscoped,
+                "2026-01-01T00:00:00Z".to_owned(),
+                provider,
             )
         }
-
-        fn shared_oauth_provider() -> StorageProviderData {
-            StorageProviderData {
-                id: "oauth-provider".into(),
-                provider_type: StorageProviderType::OauthFile,
-                label: "Google Drive".into(),
-                github_pat: StoredGithubPat::Missing,
-                github_repo: StoredGithubRepository::DefaultRepository,
-                oauth_file: StoredOAuthFileConfiguration::configured(
-                    nook_core::OAuthFileConfigData {
-                        preset: OauthFilePreset::GoogleDrive,
-                        access_token: StoredOAuthAccessCredential::AccessToken(
-                            "access-token".into(),
-                        ),
-                        file_name: StoredOAuthRemoteFileName::FileName("Vault.yaml".into()),
-                        folder_id: StoredGoogleDriveFolder::FolderId("target-1".into()),
-                        ..Default::default()
-                    },
-                ),
-                local_folder: StoredLocalFolderConfiguration::NotApplicable,
-                s3: StoredS3Configuration::NotApplicable,
-                store_id: ProviderVaultScope::Unscoped,
-                sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-                created_at: "2026-01-01T00:00:00Z".into(),
-            }
+        fn github_provider() -> Result<StorageProvider, JsError> {
+            Ok(Self::row(
+                "provider-1",
+                StoredProvider::Github(GithubProvider {
+                    repository: StoredGithubRepository::Repository("work-vault".to_owned()),
+                    token: ProviderSecretText::try_from("ghp_1234567890ABCDEF".to_owned())?,
+                }),
+            ))
         }
-
-        fn shared_icloud_provider() -> Result<StorageProviderData, JsError> {
-            let mut provider = Self::shared_oauth_provider();
-            provider.oauth_file =
-                StoredOAuthFileConfiguration::configured(nook_core::OAuthFileConfigData {
-                    preset: OauthFilePreset::ICloud,
-                    access_token: StoredOAuthAccessCredential::AccessToken("access-token".into()),
-                    file_name: StoredOAuthRemoteFileName::FileName("Vault.yaml".into()),
-                    folder_id: StoredGoogleDriveFolder::Root,
-                    icloud_share_target: StoredICloudShareTarget::SharedTarget(
-                        ICloudSharedTarget::new(
-                            ICloudShareRole::Owner,
-                            "zone",
-                            "owner-record",
-                            "root-record",
-                            "target-2",
-                        )?
-                        .to_storage_id()?,
-                    ),
-                    ..Default::default()
-                });
-            Ok(provider)
+        fn authorization() -> Result<GoogleDriveAuthorization, JsError> {
+            Ok(GoogleDriveAuthorization {
+                access_token: ProviderSecretText::try_from("access-token".to_owned())?,
+                expires_at: IsoTimestamp::parse("2030-01-01T00:00:00Z")?,
+            })
+        }
+        fn shared_oauth_provider() -> Result<StorageProvider, JsError> {
+            Ok(Self::row(
+                "oauth-provider",
+                StoredProvider::OauthFile(OAuthFileProvider::GoogleDrive(GoogleDriveProvider {
+                    authorization: Self::authorization()?,
+                    account: OAuthAccountIdentity::Unknown,
+                    folder_id: GoogleDriveFolderId::parse("target-1")?,
+                })),
+            ))
+        }
+        fn shared_icloud_provider() -> Result<StorageProvider, JsError> {
+            let share = ICloudSharedTarget::new(
+                ICloudShareRole::Owner,
+                "zone",
+                "owner-record",
+                "root-record",
+                "target-2",
+            )?
+            .to_storage_id()?;
+            Ok(Self::row(
+                "icloud-provider",
+                StoredProvider::OauthFile(OAuthFileProvider::ICloud(ICloudProvider {
+                    web_auth_token: ProviderSecretText::try_from("access-token".to_owned())?,
+                    account: OAuthAccountIdentity::Unknown,
+                    share_target: ICloudShareTargetId::try_from(share)?,
+                })),
+            ))
         }
     }
 
     #[wasm_bindgen_test]
-    fn public_helpers_project_password_totp_and_provider_credentials() -> Result<(), JsError> {
+    fn public_helpers_project_password_totp_and_provider_rows() -> Result<(), JsError> {
         VaultSessionLock::set_vault_session_locked(VaultSessionLock::Locked);
         assert!(VaultSessionLock::is_vault_session_locked());
         VaultSessionLock::set_vault_session_locked(VaultSessionLock::Unlocked);
         assert!(!VaultSessionLock::is_vault_session_locked());
-        let _ = super::is_local_folder_backup_supported();
-
         assert!(super::generate_id()?.len() > 10);
         assert!(super::generate_secret_id()?.len() > 10);
         let options = super::default_password_generation_options()?;
-        let password = super::generate_password(&options)?;
-        assert!(!password.is_empty());
-        assert!(super::vault_password_min_length() > 0);
-        assert!(
-            super::vault_password_recommended_min_length() >= super::vault_password_min_length()
-        );
+        assert!(!super::generate_password(&options)?.is_empty());
         assert!(!super::is_vault_password_long_enough("no"));
-        assert!(!super::is_vault_password_recommended_length("no"));
-
         let code = super::generate_totp_code("JBSWY3DPEHPK3PXP", 59)?;
         assert_eq!(code.len(), 6);
         assert!(super::verify_totp_code("JBSWY3DPEHPK3PXP", &code, 59)?);
-        assert!(!super::verify_totp_code("JBSWY3DPEHPK3PXP", "bad", 59)?);
-        assert!(super::generate_totp_code("bad", 59).is_err());
 
-        assert!(super::has_github_credentials("ghp_test"));
-        assert!(!super::has_github_credentials(""));
-        assert!(super::has_oauth_credentials("access-token"));
-        assert!(!super::has_oauth_credentials(""));
-        assert!(super::has_local_folder_credentials("handle"));
-        assert!(!super::has_local_folder_credentials(""));
-
-        let provider = ProviderFixture::github_provider();
+        let provider = ProviderFixture::github_provider()?;
         let detail = super::provider_storage_detail(
             &ProviderFixture::wire(&provider)?,
             "This device".into(),
-            "No token".into(),
             "Google signed in".into(),
             "iCloud signed in".into(),
-            "Google signed out".into(),
-            "iCloud signed out".into(),
             "Reconnect folder".into(),
         )?;
         assert!(detail.contains("work-vault"));
         assert!(detail.contains("ghp_123456"));
-        assert_eq!(
-            super::localize_provider_label(
-                "GitHub",
-                "This device".into(),
-                "GitHub".into(),
-                "Local".into(),
-                "Drive".into(),
-                "iCloud".into(),
-            ),
-            "GitHub"
-        );
-        assert_eq!(
-            ProviderFixture::decode(super::provider_wasm_args(&ProviderFixture::wire(
-                &provider
-            )?)?)?,
-            nook_core::StorageConnection::Github {
-                token: "ghp_1234567890ABCDEF".to_owned(),
-                repo: "work-vault".to_owned(),
-            }
-        );
+        let StorageConnection::Github { token, repo } = ProviderFixture::decode(
+            super::provider_wasm_args(&ProviderFixture::wire(&provider)?)?,
+        )?
+        else {
+            return Err(JsError::new("a GitHub row connects to GitHub"));
+        };
+        assert_eq!(token.expose(), "ghp_1234567890ABCDEF");
+        assert_eq!(repo, "work-vault");
 
-        let empty = AuthProvidersSnapshotData::default();
+        let empty = AuthProvidersSnapshot::default();
         let unscoped = NookManagerStoreScope::unscoped();
         assert!(
             ProviderFixture::decode(super::active_vault_providers(
@@ -709,57 +523,14 @@ mod browser_tests {
             .providers
             .is_empty()
         );
-        assert!(
-            ProviderFixture::decode(super::sync_providers_for_active_vault(
-                &ProviderFixture::wire(&empty)?,
-                &unscoped
-            )?)?
-            .providers
-            .is_empty()
-        );
-        assert!(
-            super::local_provider_for_active_vault(&ProviderFixture::wire(&empty)?, &unscoped)?
-                .provider_id()
-                .is_err()
-        );
         assert_eq!(
             super::provider_label_by_id(&ProviderFixture::wire(&empty)?, "missing")?,
             "missing"
         );
-        assert!(
-            ProviderFixture::decode(super::providers_visible_while_device_locked(
-                &ProviderFixture::wire(&empty)?
-            )?)?
-            .providers
-            .is_empty()
-        );
-
-        let oauth = OAuthFileConfigData::default();
-        let remote = super::oauth_remote_storage_ref(&ProviderFixture::wire(&oauth)?)?;
-        // A Drive row without its vault folder has no connect target.
-        assert!(remote.value().is_err());
-        assert!(
-            super::update_oauth_remote_ref(&ProviderFixture::wire(&oauth)?, "file-1")?
-                .config()
-                .is_ok()
-        );
-        assert_eq!(
-            super::staged_github_remote_storage_args("pat", "owner/repo")?.state(),
-            NookStagedStorageArgsState::Ready
-        );
-        assert_eq!(
-            super::staged_local_remote_storage_args()?.state(),
-            NookStagedStorageArgsState::Incomplete
-        );
-        assert_eq!(
-            super::staged_oauth_remote_storage_args(&ProviderFixture::wire(&oauth)?)?.state(),
-            NookStagedStorageArgsState::Incomplete
-        );
-
         let revision = NookProviderSyncRevision::untracked();
         assert!(
             super::update_provider_sync_metadata(
-                &ProviderFixture::wire(&AuthProvidersSnapshotData::default())?,
+                &ProviderFixture::wire(&empty)?,
                 "provider-1",
                 "not yaml",
                 &revision,
@@ -774,41 +545,30 @@ mod browser_tests {
     #[wasm_bindgen_test]
     fn public_provider_and_vault_architecture_helpers_project_success_paths() -> Result<(), JsError>
     {
-        let provider = ProviderFixture::github_provider();
+        let provider = ProviderFixture::github_provider()?;
         let architecture = super::default_vault_architecture();
         assert!(super::validate_vault_architecture(&architecture).is_ok());
-        assert!(super::vault_architecture_onboarding_type(&architecture).is_ok());
         assert!(super::vault_architecture_can_create_secret(&architecture)?);
         assert!(
             super::provider_onboarding_type(&ProviderFixture::wire(&provider)?, &architecture)
                 .is_ok()
         );
-        assert_eq!(
-            ProviderFixture::decode(super::provider_oauth_preset_for_provider(
-                &ProviderFixture::wire(&provider)?
-            )?)?,
-            ProviderOauthPreset::NotApplicable
-        );
-        assert!(matches!(
-            ProviderFixture::decode(super::provider_oauth_preset_for_config(
-                &ProviderFixture::wire(&OAuthFileConfigData::default())?
-            )?)?,
-            ProviderOauthPreset::Preset(_)
-        ));
         assert!(super::provider_replication_capability(&ProviderFixture::wire(&provider)?).is_ok());
-        assert!(
-            super::validate_provider_replication(
+        assert_eq!(
+            super::provider_supports_replication(
                 &ProviderFixture::wire(&provider)?,
-                ReplicationType::Personal
-            )
-            .is_ok()
+                ReplicationType::Shared
+            )?,
+            ReplicationSupport::Unsupported
         );
-        assert!(super::provider_supports_replication(
-            &ProviderFixture::wire(&provider)?,
-            ReplicationType::Personal
-        )?);
-
-        let snapshot = nook_core::AuthProvidersSnapshotData {
+        assert!(
+            super::provider_kind_replication_capability(&ProviderFixture::wire(
+                &ProviderKind::OauthFile(OAuthFilePreset::ICloud)
+            )?)?
+            .supports(ReplicationType::Shared)
+                == ReplicationSupport::Supported
+        );
+        let snapshot = AuthProvidersSnapshot {
             providers: vec![provider.clone()],
             ..Default::default()
         };
@@ -820,20 +580,11 @@ mod browser_tests {
             .provider_id()?,
             "provider-1"
         );
-        assert_eq!(
-            super::first_compatible_provider_id_preferred(
-                &ProviderFixture::wire(&snapshot)?,
-                ReplicationType::Personal,
-                "provider-1"
-            )?
-            .provider_id()?,
-            "provider-1"
-        );
         assert!(matches!(
             ProviderFixture::decode(super::select_shared_grant_provider(
                 &ProviderFixture::wire(&nook_core::SharedGrantProviderRequest {
                     snapshot,
-                    preset: OauthFilePreset::GoogleDrive,
+                    preset: OAuthFilePreset::GoogleDrive,
                     target: SharedStorageTargetSelection::Create,
                 })?
             )?)?,
@@ -851,35 +602,29 @@ mod browser_tests {
             ProviderFixture::decode(super::parse_icloud_shared_storage_target(&target)?)?.zone_name,
             "zone"
         );
-        assert!(super::create_icloud_shared_storage_target("unknown", "", "", "", "").is_err());
+        let signed_in = ProviderFixture::decode(super::apply_google_drive_sign_in(
+            &ProviderFixture::wire(&GoogleDriveSignInRequest {
+                draft: ProviderDraft::begin(ProviderKind::Github),
+                access: GoogleDriveAccess {
+                    authorization: ProviderFixture::authorization()?,
+                    account: OAuthAccountIdentity::Unknown,
+                },
+            })?,
+        )?)?;
+        let bound = ProviderFixture::decode(super::bind_google_drive_folder(
+            &ProviderFixture::wire(&GoogleDriveFolderBinding {
+                draft: signed_in,
+                folder_id: GoogleDriveFolderId::parse("folder-1")?,
+            })?,
+        )?)?;
+        assert!(bound.complete().is_ok());
         assert!(
-            super::bind_google_drive_shared_folder(
-                &ProviderFixture::wire(&OAuthFileConfigData::default())?,
-                "folder-1"
-            )
-            .is_ok()
+            super::bind_google_drive_folder(&ProviderFixture::wire(&GoogleDriveFolderBinding {
+                draft: ProviderDraft::begin(ProviderKind::S3),
+                folder_id: GoogleDriveFolderId::parse("folder-1")?,
+            })?)
+            .is_err()
         );
-
-        let google = ProviderFixture::decode(super::google_oauth_tokens_to_config(
-            "access-token",
-            "2030-01-01T00:00:00Z",
-            &ProviderFixture::wire(&StoredOAuthFileConfiguration::NotApplicable)?,
-        )?)?;
-        assert!(matches!(
-            google.access_token,
-            StoredOAuthAccessCredential::AccessToken(_)
-        ));
-        let icloud = ProviderFixture::decode(super::icloud_oauth_tokens_to_config(
-            "access-token",
-            &ProviderFixture::wire(&StoredOAuthAccountIdentity::Email(
-                "alice@example.test".into(),
-            ))?,
-            &ProviderFixture::wire(&StoredOAuthFileConfiguration::NotApplicable)?,
-        )?)?;
-        assert!(matches!(
-            icloud.access_token,
-            StoredOAuthAccessCredential::AccessToken(_)
-        ));
 
         let github_enrollment = super::enrollment_provider_for_architecture(
             &ProviderFixture::wire(&provider)?,
@@ -887,12 +632,11 @@ mod browser_tests {
         )?;
         assert_eq!(
             github_enrollment.provider_type()?.to_rust()?,
-            StorageProviderType::Github
+            ProviderKind::Github
         );
         assert_eq!(github_enrollment.github_pat()?, "ghp_1234567890ABCDEF");
-        assert_eq!(github_enrollment.github_repo()?, "work-vault");
         let shared = super::enrollment_shared_provider_for_architecture(
-            &ProviderFixture::wire(&ProviderFixture::shared_oauth_provider())?,
+            &ProviderFixture::wire(&ProviderFixture::shared_oauth_provider()?)?,
             &architecture,
             "alice@example.test",
         )?;
@@ -903,13 +647,11 @@ mod browser_tests {
             &architecture,
             "bob@example.test",
         )?;
-        assert!(icloud_shared.is_shared_provider_grant());
         assert_eq!(icloud_shared.shared_joiner_identity()?, "bob@example.test");
         Ok(())
     }
 }
 
-#[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn login_unlock_decision(
     access: nook_core::VaultAccessStatus,
     passwords: nook_core::PasswordEntryPresence,

@@ -409,19 +409,15 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn sync_local_folder_provider_row_js(
         &mut self,
-        provider: &tsify::Ts<nook_core::StorageProviderData>,
+        provider: &tsify::Ts<nook_core::StorageProvider>,
     ) -> Result<String, JsError> {
         let provider = provider
             .to_rust()
             .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-        let nook_core::StoredLocalFolderConfiguration::Configured(config) = &provider.local_folder
-        else {
-            return Err(JsError::new("Local folder provider has no folder."));
+        let nook_core::StoredProvider::LocalFolder(folder) = &provider.provider else {
+            return Err(JsError::new("The provider is not a local folder."));
         };
-        let nook_core::StoredLocalFolderHandle::HandleId(handle_id) = &config.handle_id else {
-            return Err(JsError::new("Local folder provider has no folder."));
-        };
-        self.sync_local_folder_provider(handle_id)
+        self.sync_local_folder_provider(folder.handle_id.as_str())
             .await
             .map_err(Into::into)
     }

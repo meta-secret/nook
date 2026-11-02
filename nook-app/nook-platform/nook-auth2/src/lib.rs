@@ -66,10 +66,10 @@ pub use auth::enrollment::{
     EnrollmentCodeEnvelope, EnrollmentEmail, EnrollmentEntryLabel, EnrollmentIdentityTarget,
     EnrollmentInvite, EnrollmentInviteVault, EnrollmentIssuance, EnrollmentIssueInput,
     EnrollmentLinkInput, EnrollmentProvider, EnrollmentProviderDataRef, EnrollmentState,
-    InviteSigningSeed, OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile,
-    OAuthTokenExpiry, PersonalCredentialTransfer, PersonalEnrollmentProvider,
-    PersonalEnrollmentProviderData, S3EnrollmentConnection, SharedEnrollmentProvider,
-    SharedEnrollmentProviderData, SharedProviderGrant, TypedEnrollmentProvider,
+    InviteSigningSeed, OAuthAccountIdentity, OAuthFileEnrollment, PersonalCredentialTransfer,
+    PersonalEnrollmentProvider, PersonalEnrollmentProviderData, S3EnrollmentConnection,
+    SharedEnrollmentProvider, SharedEnrollmentProviderData, SharedProviderGrant,
+    TypedEnrollmentProvider,
 };
 pub use auth::identity::{
     IdentityId, IdentityInviteId, IdentityLegacyVaultImport, IdentityLegacyVaultReconciliation,

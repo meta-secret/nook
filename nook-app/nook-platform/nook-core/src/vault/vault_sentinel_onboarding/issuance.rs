@@ -1,8 +1,8 @@
 //! Structural issuance admission followed by recipient encryption.
 use super::{OnboardingDelivery, SentinelOnboardingPackage, SentinelOnboardingVersion};
 use crate::{
-    AuthProvidersSnapshotData, MultiDeviceError, SentinelGenesisRequest,
-    SentinelGenesisShareDelivery, StorageProviderData, StorageProviderType,
+    AuthProvidersSnapshot, MultiDeviceError, SentinelGenesisRequest, SentinelGenesisShareDelivery,
+    StorageProvider, StoredProvider,
 };
 
 /// Inputs for one structurally admitted package. This does not verify delivery signatures.
@@ -21,7 +21,7 @@ use crate::{
 pub struct SentinelOnboardingIssuance<'a> {
     pub request: SentinelGenesisRequest,
     pub delivery: SentinelGenesisShareDelivery,
-    pub provider_snapshot: &'a AuthProvidersSnapshotData,
+    pub provider_snapshot: &'a AuthProvidersSnapshot,
 }
 struct PreparedOnboardingIssuance<'a> {
     input: SentinelOnboardingIssuance<'a>,
@@ -58,24 +58,24 @@ impl PreparedOnboardingIssuance<'_> {
         })
     }
 }
-impl AuthProvidersSnapshotData {
+impl AuthProvidersSnapshot {
     /// The one cloud mount an onboarding package hands to the new member.
-    fn onboarding_provider(&self) -> Result<&StorageProviderData, MultiDeviceError> {
+    fn onboarding_provider(&self) -> Result<&StorageProvider, MultiDeviceError> {
         match self.providers.as_slice() {
             [provider] => provider.onboarding_cloud_mount(),
             _ => Err(MultiDeviceError::InvalidSentinelGenesisPayload),
         }
     }
 }
-impl StorageProviderData {
+impl StorageProvider {
     /// An S3 row is refused: each device brings its own S3 key, and Nook
     /// copies one only into the extension's sealed staging or an invite code.
     pub(super) fn onboarding_cloud_mount(&self) -> Result<&Self, MultiDeviceError> {
-        match self.provider_type {
-            StorageProviderType::Github | StorageProviderType::OauthFile => Ok(self),
-            StorageProviderType::Local
-            | StorageProviderType::LocalFolder
-            | StorageProviderType::S3 => Err(MultiDeviceError::InvalidSentinelGenesisPayload),
+        match self.provider {
+            StoredProvider::Github(_) | StoredProvider::OauthFile(_) => Ok(self),
+            StoredProvider::Local {} | StoredProvider::LocalFolder(_) | StoredProvider::S3(_) => {
+                Err(MultiDeviceError::InvalidSentinelGenesisPayload)
+            }
         }
     }
 }
@@ -84,7 +84,7 @@ impl StorageProviderData {
 mod tests {
     use super::super::tests::OnboardingFixture;
     use super::SentinelOnboardingIssuance;
-    use crate::{AuthProvidersSnapshotData, MultiDeviceError, StorageProviderType};
+    use crate::{AuthProvidersSnapshot, MultiDeviceError, StoredProvider};
     use std::ptr;
 
     #[test]
@@ -102,7 +102,7 @@ mod tests {
                 SentinelOnboardingIssuance {
                     request,
                     delivery: fixture.delivery.clone(),
-                    provider_snapshot: &AuthProvidersSnapshotData::default(),
+                    provider_snapshot: &AuthProvidersSnapshot::default(),
                 }
                 .create(),
                 Err(MultiDeviceError::InvalidSentinelGenesisSession)
@@ -123,20 +123,20 @@ mod tests {
         let Some(local_provider) = local.providers.first_mut() else {
             anyhow::bail!("onboarding fixture must contain one provider");
         };
-        local_provider.provider_type = StorageProviderType::Local;
+        local_provider.provider = StoredProvider::Local {};
         let mut folder = fixture.snapshot.clone();
         let Some(folder_provider) = folder.providers.first_mut() else {
             anyhow::bail!("onboarding fixture must contain one provider");
         };
-        folder_provider.provider_type = StorageProviderType::LocalFolder;
+        folder_provider.provider = StoredProvider::local_folder_fixture()?;
         // Each device brings its own S3 key; onboarding never hands one over.
         let mut s3 = fixture.snapshot.clone();
         let Some(s3_provider) = s3.providers.first_mut() else {
             anyhow::bail!("onboarding fixture must contain one provider");
         };
-        s3_provider.provider_type = StorageProviderType::S3;
+        s3_provider.provider = StoredProvider::s3_fixture()?;
         for snapshot in [
-            AuthProvidersSnapshotData::default(),
+            AuthProvidersSnapshot::default(),
             duplicate,
             local,
             folder,

@@ -330,6 +330,7 @@ impl NookPendingSyncConflict {
 #[cfg(test)]
 mod pending_sync_conflict_tests {
     use super::*;
+    use crate::test_fixtures::WasmFixture;
     use nook_core::{
         CurrentVaultReplaceability, IdentityVaultAppGrantKind, ProviderVaultDecision,
         ProviderVaultDecisionReason, ProviderVaultIdentityEligibility, VaultSyncConflictKind,
@@ -342,10 +343,7 @@ mod pending_sync_conflict_tests {
             "GitHub".to_owned(),
             "local".to_owned(),
             String::new(),
-            &Tsify::into_ts(&StorageConnection::Github {
-                token: "token".to_owned(),
-                repo: "owner/repo".to_owned(),
-            })?,
+            &Tsify::into_ts(&WasmFixture::github_connection("token", "owner/repo")?)?,
             &NookProviderSyncRevision::untracked(),
             "store_local12345".to_owned(),
             "store_remote1234".to_owned(),
@@ -592,6 +590,7 @@ mod projection_conflict_tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::test_fixtures::WasmFixture;
     use nook_core::{
         CurrentVaultReplaceability, IdentityVaultAppGrantKind, ProviderVaultDecisionReason,
         ProviderVaultIdentityEligibility, VaultSyncConflictKind,
@@ -603,10 +602,7 @@ mod browser_tests {
     #[wasm_bindgen_test]
     fn conflict_adapters_project_content_store_and_security_paths_in_wasm() -> Result<(), JsError> {
         let revision = NookProviderSyncRevision::tracked("remote-7".into());
-        let github = StorageConnection::Github {
-            token: "pat".into(),
-            repo: "owner/repo".into(),
-        };
+        let github = WasmFixture::github_connection("pat", "owner/repo")?;
         let local = Tsify::into_ts(&StorageConnection::Local)?;
         let content = NookPendingSyncConflict::content(
             "provider".into(),

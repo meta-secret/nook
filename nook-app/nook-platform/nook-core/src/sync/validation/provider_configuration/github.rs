@@ -7,6 +7,7 @@
 use std::fmt;
 
 use super::{DEFAULT_GITHUB_REPO_NAME, ValidationError, ValidationResult};
+use crate::ProviderSecretText;
 
 /// Validated GitHub personal access token.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -33,20 +34,29 @@ impl GithubPat {
 
     #[must_use]
     pub fn mask(raw: &str) -> GithubPatMask {
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            return GithubPatMask::NoToken;
+        match raw.trim() {
+            "" => GithubPatMask::NoToken,
+            token => GithubPatMask::Hint(Self::hint_of(token)),
         }
+    }
+
+    /// The hint of a saved token, which is never blank.
+    #[must_use]
+    pub fn hint(token: &ProviderSecretText) -> String {
+        Self::hint_of(token.expose().trim())
+    }
+
+    fn hint_of(trimmed: &str) -> String {
         let prefix_len = if trimmed.starts_with("github_pat_") {
             GITHUB_PAT_FINE_GRAINED_HINT_LEN
         } else {
             GITHUB_PAT_CLASSIC_HINT_LEN
         };
         if trimmed.chars().count() <= prefix_len {
-            return GithubPatMask::Hint(GITHUB_PAT_FULLY_HIDDEN.to_owned());
+            return GITHUB_PAT_FULLY_HIDDEN.to_owned();
         }
         let hint: String = trimmed.chars().take(prefix_len).collect();
-        GithubPatMask::Hint(format!("{hint}…"))
+        format!("{hint}…")
     }
 }
 

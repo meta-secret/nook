@@ -53,6 +53,7 @@ impl NookError {
 mod tests {
     use super::*;
     use crate::manager::VaultNameState;
+    use crate::test_fixtures::WasmFixture;
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -160,9 +161,8 @@ mod tests {
         manager.storage.access_token = "rejected-token".to_owned();
         manager.sync_outbox.provider_id = "rejected-provider".to_owned();
         manager.sync_outbox.connection = StorageConnection::GoogleDrive {
-            token: "rejected-token".to_owned(),
-            folder_id: "rejected-folder".to_owned(),
-            file_name: "rejected-file".to_owned(),
+            token: WasmFixture::secret("rejected-token")?,
+            folder_id: nook_core::GoogleDriveFolderId::parse("rejected-folder")?,
         };
         manager.vault.vault_name = VaultNameState::Named("Local vault".to_owned());
 

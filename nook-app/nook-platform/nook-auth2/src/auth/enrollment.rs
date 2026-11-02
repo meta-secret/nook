@@ -5,7 +5,7 @@
 )]
 //! Enrollment-code payloads for one-step QR-based device joins.
 
-use crate::{EnrollmentKeyDerivationIterations, ProviderSecretText, S3KeyPrefix};
+use crate::{EnrollmentKeyDerivationIterations, IsoTimestamp, ProviderSecretText, S3KeyPrefix};
 use serde::{Deserialize, Serialize};
 use std::{fmt, marker::PhantomData};
 
@@ -39,34 +39,47 @@ pub trait EnrollmentState:
     type Provider: fmt::Debug + Clone + PartialEq + Eq;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "state", content = "token", rename_all = "snake_case")]
-pub enum OAuthRefreshCredential {
-    NotIssued,
-    Token(String),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "state", content = "expires_at", rename_all = "snake_case")]
-pub enum OAuthTokenExpiry {
-    Unknown,
-    ExpiresAt(String),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "state", rename_all = "snake_case")]
-pub enum OAuthRemoteFile {
-    Unresolved,
-    FileId { file_id: String },
-    FileName { file_name: String },
-    Identified { file_id: String, file_name: String },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// The account an OAuth sign-in names. It outlives the sign-in, so a later
+/// sign-in that names none keeps the one known before.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, tsify::Tsify)]
 #[serde(tag = "state", content = "email", rename_all = "snake_case")]
 pub enum OAuthAccountIdentity {
     Unknown,
     Email(String),
+}
+
+/// The companion handoff of an OAuth provider: this browser's sign-in and the
+/// provider's shared target, as its row holds them. Nook-core validates the
+/// target again when the companion turns the code into its provider.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "preset", rename_all = "kebab-case", deny_unknown_fields)]
+pub enum OAuthFileEnrollment {
+    GoogleDrive {
+        access_token: ProviderSecretText,
+        expires_at: IsoTimestamp,
+        account: OAuthAccountIdentity,
+        folder_id: String,
+    },
+    #[serde(rename = "icloud")]
+    ICloud {
+        web_auth_token: ProviderSecretText,
+        account: OAuthAccountIdentity,
+        share_target: String,
+    },
+}
+
+impl OAuthFileEnrollment {
+    /// The shared target is required; the token is never blank by its type.
+    fn check(&self) -> EnrollmentResult<()> {
+        let target = match self {
+            Self::GoogleDrive { folder_id, .. } => folder_id,
+            Self::ICloud { share_target, .. } => share_target,
+        };
+        match target.trim() {
+            "" => Err(EnrollmentError::MalformedOauthFileProvider),
+            _ => Ok(()),
+        }
+    }
 }
 
 /// The inviter's S3 connection, carried inside the passphrase-encrypted code as
@@ -108,14 +121,7 @@ pub enum PersonalEnrollmentProviderData {
         repo: String,
     },
     #[serde(rename = "oauth-file")]
-    OauthFile {
-        preset: String,
-        access_token: String,
-        refresh: OAuthRefreshCredential,
-        expiry: OAuthTokenExpiry,
-        remote_file: OAuthRemoteFile,
-        account: OAuthAccountIdentity,
-    },
+    OauthFile(OAuthFileEnrollment),
     S3(S3EnrollmentConnection),
 }
 
@@ -199,25 +205,12 @@ impl PersonalEnrollmentProvider {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    /// This browser's OAuth sign-in and the provider's shared target, for the
+    /// same-browser companion only.
     #[must_use]
-    pub fn oauth_file(
-        preset: String,
-        access_token: String,
-        refresh: OAuthRefreshCredential,
-        expiry: OAuthTokenExpiry,
-        remote_file: OAuthRemoteFile,
-        account: OAuthAccountIdentity,
-    ) -> Self {
+    pub fn oauth_file(enrollment: OAuthFileEnrollment) -> Self {
         Self {
-            provider: PersonalEnrollmentProviderData::OauthFile {
-                preset,
-                access_token,
-                refresh,
-                expiry,
-                remote_file,
-                account,
-            },
+            provider: PersonalEnrollmentProviderData::OauthFile(enrollment),
             state: PhantomData,
         }
     }
@@ -488,18 +481,7 @@ impl EnrollmentProvider {
                     "" => Err(EnrollmentError::MalformedGithubProvider),
                     _ => Ok(()),
                 },
-                PersonalEnrollmentProviderData::OauthFile {
-                    preset,
-                    access_token,
-                    ..
-                } => {
-                    if !matches!(preset.as_str(), "google-drive" | "icloud")
-                        || access_token.trim().is_empty()
-                    {
-                        return Err(EnrollmentError::MalformedOauthFileProvider);
-                    }
-                    Ok(())
-                }
+                PersonalEnrollmentProviderData::OauthFile(enrollment) => enrollment.check(),
                 PersonalEnrollmentProviderData::S3(connection) => connection.check(),
             },
             EnrollmentProvider::SharedProviderGrant(provider) => match provider.data() {
@@ -573,11 +555,10 @@ impl EnrollmentEmail<'_> {
 mod tests {
     use super::{
         EnrollmentEmail, EnrollmentProvider, EnrollmentProviderDataRef, EnrollmentProviderPayload,
-        OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry,
-        PersonalEnrollmentProvider, S3EnrollmentConnection, SharedEnrollmentProvider,
-        SharedEnrollmentProviderData,
+        OAuthAccountIdentity, OAuthFileEnrollment, PersonalEnrollmentProvider,
+        S3EnrollmentConnection, SharedEnrollmentProvider, SharedEnrollmentProviderData,
     };
-    use crate::{EnrollmentError, ProviderSecretText, S3KeyPrefix};
+    use crate::{EnrollmentError, IsoTimestamp, ProviderSecretText, S3KeyPrefix};
     use serde_json::json;
 
     #[test]
@@ -648,52 +629,94 @@ mod tests {
         Ok(())
     }
 
-    struct OAuthProviderCase<'a> {
-        preset: &'a str,
-        token: &'a str,
-    }
-    impl OAuthProviderCase<'_> {
+    impl OAuthFileEnrollment {
+        fn google_drive_fixture(folder_id: &str) -> anyhow::Result<Self> {
+            Ok(Self::GoogleDrive {
+                access_token: ProviderSecretText::try_from("TEST-ONLY-drive-token".to_owned())?,
+                expires_at: IsoTimestamp::parse("2030-01-01T00:00:00Z")?,
+                account: OAuthAccountIdentity::Email("owner@example.com".to_owned()),
+                folder_id: folder_id.to_owned(),
+            })
+        }
+
+        fn icloud_fixture(share_target: &str) -> anyhow::Result<Self> {
+            Ok(Self::ICloud {
+                web_auth_token: ProviderSecretText::try_from("TEST-ONLY-icloud-token".to_owned())?,
+                account: OAuthAccountIdentity::Unknown,
+                share_target: share_target.to_owned(),
+            })
+        }
+
         fn provider(self) -> EnrollmentProvider {
-            EnrollmentProvider::personal(PersonalEnrollmentProvider::oauth_file(
-                self.preset.to_owned(),
-                self.token.to_owned(),
-                OAuthRefreshCredential::NotIssued,
-                OAuthTokenExpiry::Unknown,
-                OAuthRemoteFile::Unresolved,
-                OAuthAccountIdentity::Unknown,
-            ))
+            EnrollmentProvider::personal(PersonalEnrollmentProvider::oauth_file(self))
         }
     }
 
     #[test]
-    fn oauth_provider_checks_preserve_case_and_token_whitespace_semantics() -> anyhow::Result<()> {
-        for preset in ["google-drive", "icloud"] {
-            OAuthProviderCase {
-                preset,
-                token: " token ",
-            }
-            .provider()
-            .validate()?;
+    fn an_oauth_handoff_needs_its_shared_target_and_round_trips_by_preset() -> anyhow::Result<()> {
+        for enrollment in [
+            OAuthFileEnrollment::google_drive_fixture("folder-1")?,
+            OAuthFileEnrollment::icloud_fixture("icloud-share-v1:{}")?,
+        ] {
+            let provider = enrollment.provider();
+            provider.validate()?;
+            let wire = serde_json::to_value(&provider)?;
+            assert_eq!(
+                serde_json::from_value::<EnrollmentProvider>(wire)?,
+                provider
+            );
+            assert!(!format!("{provider:?}").contains("TEST-ONLY"));
         }
-        for case in [
-            OAuthProviderCase {
-                preset: "google-drive ",
-                token: "token",
-            },
-            OAuthProviderCase {
-                preset: "Google-drive",
-                token: "token",
-            },
-            OAuthProviderCase {
-                preset: "icloud",
-                token: " \n",
-            },
+        assert_eq!(
+            serde_json::to_value(
+                OAuthFileEnrollment::google_drive_fixture("folder-1")?.provider()
+            )?,
+            json!({
+                "onboardingType": "personal-credential-transfer",
+                "provider": {
+                    "type": "oauth-file",
+                    "preset": "google-drive",
+                    "access_token": "TEST-ONLY-drive-token",
+                    "expires_at": "2030-01-01T00:00:00Z",
+                    "account": { "state": "email", "email": "owner@example.com" },
+                    "folder_id": "folder-1",
+                }
+            })
+        );
+        for missing in [
+            OAuthFileEnrollment::google_drive_fixture(" ")?,
+            OAuthFileEnrollment::icloud_fixture("")?,
         ] {
             assert!(matches!(
-                case.provider().validate(),
+                missing.provider().validate(),
                 Err(EnrollmentError::MalformedOauthFileProvider)
             ));
         }
+        // An older handoff with a refresh token or a file slot is not this shape.
+        let older = json!({
+            "onboardingType": "personal-credential-transfer",
+            "provider": {
+                "type": "oauth-file",
+                "preset": "google-drive",
+                "access_token": "TEST-ONLY-drive-token",
+                "expires_at": "2030-01-01T00:00:00Z",
+                "account": { "state": "unknown" },
+                "folder_id": "folder-1",
+                "refresh": { "state": "not_issued" },
+            }
+        });
+        assert!(serde_json::from_value::<EnrollmentProvider>(older).is_err());
+        let blank_token = json!({
+            "onboardingType": "personal-credential-transfer",
+            "provider": {
+                "type": "oauth-file",
+                "preset": "icloud",
+                "web_auth_token": " ",
+                "account": { "state": "unknown" },
+                "share_target": "icloud-share-v1:{}",
+            }
+        });
+        assert!(serde_json::from_value::<EnrollmentProvider>(blank_token).is_err());
         Ok(())
     }
     #[test]

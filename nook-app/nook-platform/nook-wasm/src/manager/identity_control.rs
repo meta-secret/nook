@@ -20,12 +20,11 @@ mod vault_removal;
 
 use nook_core::i18n_keys;
 use nook_core::{
-    AppKey, AppKeyIdentityMembership, AuthProvidersSnapshotData, EventLogLocation,
-    IdentityControlLog, IdentityControlOperation, IdentityControlSnapshot,
-    IdentityControlSnapshotRequest, IdentityControlState, IdentityEventInsertStatus,
-    IdentityEventSigning, IdentityId, IdentityMemberKeys, IsoTimestamp, MemberLabel,
-    MemberLabelState, ReplicatedIdentityMembership, ReplicatedIdentityStanding,
-    ReplicatedMembershipRequest, StorageConnection, StorageMode,
+    AppKey, AppKeyIdentityMembership, AuthProvidersSnapshot, EventLogLocation, IdentityControlLog,
+    IdentityControlOperation, IdentityControlSnapshot, IdentityControlSnapshotRequest,
+    IdentityControlState, IdentityEventInsertStatus, IdentityEventSigning, IdentityId,
+    IdentityMemberKeys, IsoTimestamp, MemberLabel, MemberLabelState, ReplicatedIdentityMembership,
+    ReplicatedIdentityStanding, ReplicatedMembershipRequest, StorageConnection, StorageMode,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -274,7 +273,7 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn identity_control_snapshot(
         &mut self,
-        snapshot: &tsify::Ts<AuthProvidersSnapshotData>,
+        snapshot: &tsify::Ts<AuthProvidersSnapshot>,
     ) -> Result<tsify::Ts<IdentityControlSnapshot>, JsError> {
         let providers = snapshot
             .to_rust()
@@ -289,7 +288,7 @@ impl NookVaultManager {
     /// Project the current identity's log for this installation.
     pub(in crate::manager) async fn current_identity_snapshot(
         &self,
-        providers: &[nook_core::StorageProviderData],
+        providers: &[nook_core::StorageProvider],
     ) -> Result<IdentityControlSnapshot, NookError> {
         let app_key = self.unlocked_app_key()?;
         let identity_id = Self::current_identity_id(&app_key).await?;
@@ -319,12 +318,11 @@ mod browser_tests {
     use super::invite::InviteJoinOperation;
     use super::log_creation::NookIdentityLogEnsureOutcome;
     use super::*;
+    use crate::test_fixtures::WasmFixture;
     use crate::{NookEnrollmentIssueInput, NookEnrollmentProvider};
     use nook_core::{
-        ActiveVaultScope, CheckedEnrollmentEnvelope, EnrollmentInvite, ProviderSyncCheckpoint,
-        ProviderVaultScope, SigningIdentity, StorageProviderData, StorageProviderType,
-        StoredGithubPat, StoredGithubRepository, StoredLocalFolderConfiguration,
-        StoredOAuthFileConfiguration, StoredS3Configuration,
+        ActiveVaultScope, CheckedEnrollmentEnvelope, EnrollmentInvite, SigningIdentity,
+        StorageProvider, StoredProvider,
     };
     use wasm_bindgen_test::*;
 
@@ -412,21 +410,10 @@ mod browser_tests {
             self.manager.vault.store_id.clone()
         }
 
-        fn providers(&self) -> anyhow::Result<tsify::Ts<AuthProvidersSnapshotData>> {
-            let row = StorageProviderData {
-                id: "github-personal".to_owned(),
-                provider_type: StorageProviderType::Github,
-                label: "GitHub".to_owned(),
-                github_pat: StoredGithubPat::Token("github_pat_fixture".to_owned()),
-                github_repo: StoredGithubRepository::Repository("owner/personal".to_owned()),
-                oauth_file: StoredOAuthFileConfiguration::NotApplicable,
-                local_folder: StoredLocalFolderConfiguration::NotApplicable,
-                s3: StoredS3Configuration::NotApplicable,
-                store_id: ProviderVaultScope::Unscoped,
-                sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-                created_at: "2026-10-13T00:00:00Z".to_owned(),
-            };
-            Tsify::into_ts(&AuthProvidersSnapshotData {
+        fn providers() -> anyhow::Result<tsify::Ts<AuthProvidersSnapshot>> {
+            let row =
+                WasmFixture::github_row("github-personal", "github_pat_fixture", "owner/personal")?;
+            Tsify::into_ts(&AuthProvidersSnapshot {
                 providers: vec![row],
                 active_vault_store_id: ActiveVaultScope::Unselected,
             })
@@ -460,7 +447,7 @@ mod browser_tests {
         }
 
         async fn snapshot(&mut self) -> anyhow::Result<IdentityControlSnapshot> {
-            let providers = self.providers()?;
+            let providers = Self::providers()?;
             Founder::js(self.manager.identity_control_snapshot(&providers).await)?
                 .to_rust()
                 .map_err(|error| anyhow::anyhow!("{error:?}"))
@@ -511,7 +498,7 @@ mod browser_tests {
         assert!(vault.granted_to_current_installation);
 
         // The remote provider becomes a recorded mount once.
-        let providers = founder.providers()?;
+        let providers = Founder::providers()?;
         assert!(Founder::js(
             founder
                 .manager
@@ -554,7 +541,7 @@ mod browser_tests {
                 .is_err()
         );
         // An empty provider snapshot records no mount.
-        let empty = Tsify::into_ts(&AuthProvidersSnapshotData {
+        let empty = Tsify::into_ts(&AuthProvidersSnapshot {
             providers: Vec::new(),
             active_vault_store_id: ActiveVaultScope::Unselected,
         })
@@ -566,8 +553,8 @@ mod browser_tests {
                 .await
         )?);
         // A browser-local row is never an identity mount.
-        let local_row = Tsify::into_ts(&StorageProviderData {
-            provider_type: StorageProviderType::Local,
+        let local_row = Tsify::into_ts(&StorageProvider {
+            provider: StoredProvider::Local {},
             ..vault_row.clone()
         })
         .map_err(|error| anyhow::anyhow!("{error:?}"))?;
@@ -646,7 +633,7 @@ mod browser_tests {
                 .is_err()
         );
 
-        let removal = founder.providers()?;
+        let removal = Founder::providers()?;
         let row = removal
             .to_rust()
             .map_err(|error| anyhow::anyhow!("{error:?}"))?
@@ -710,7 +697,7 @@ mod browser_tests {
             NookVaultManager::current_identity_id(&app_key).await?,
             invited
         );
-        let empty = Tsify::into_ts(&AuthProvidersSnapshotData {
+        let empty = Tsify::into_ts(&AuthProvidersSnapshot {
             providers: Vec::new(),
             active_vault_store_id: ActiveVaultScope::Unselected,
         })

@@ -4,13 +4,11 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
-use crate::ProviderOauthPreset;
+use serde::{Deserialize, Serialize};
 use std::fmt;
+use tsify::Tsify;
 
-use super::{
-    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, OauthFilePreset, StorageMode,
-    StorageProviderType, ValidationError, ValidationResult,
-};
+use super::{DEFAULT_GITHUB_REPO_NAME, ValidationError, ValidationResult};
 
 mod github;
 mod s3;
@@ -18,46 +16,18 @@ mod s3;
 pub use github::*;
 pub use s3::{S3Connection, S3ConnectionDraft, S3DraftField, S3DraftFieldError, S3DraftValidation};
 
-/// Validated Google Drive app-data vault file name.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct DriveBackupName(String);
+/// Validated Google Drive folder id used by shared provider connections.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
+#[serde(try_from = "String")]
+#[tsify(type = "string")]
+pub struct GoogleDriveFolderId(String);
 
-impl DriveBackupName {
-    pub fn parse(raw: &str) -> ValidationResult<Self> {
-        let file_name = if raw.trim().is_empty() {
-            DEFAULT_DRIVE_BACKUP_NAME.to_owned()
-        } else {
-            raw.trim().to_owned()
-        };
-        if file_name.len() > 100 {
-            return Err(ValidationError::DriveFileNameLength);
-        }
-        if file_name == "." || file_name == ".." {
-            return Err(ValidationError::DriveFileNameInvalid);
-        }
-        if !file_name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
-        {
-            return Err(ValidationError::DriveFileNameChars);
-        }
-        Ok(Self(file_name))
-    }
-
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    #[must_use]
-    pub fn into_inner(self) -> String {
-        self.0
+impl TryFrom<String> for GoogleDriveFolderId {
+    type Error = ValidationError;
+    fn try_from(raw: String) -> ValidationResult<Self> {
+        Self::parse(&raw)
     }
 }
-
-/// Validated Google Drive folder id used by shared provider connections.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct GoogleDriveFolderId(String);
 
 impl GoogleDriveFolderId {
     /// A Drive folder id: at most 256 ASCII letters, digits, `-`, and `_`.
@@ -85,18 +55,6 @@ impl GoogleDriveFolderId {
     #[must_use]
     pub fn into_inner(self) -> String {
         self.0
-    }
-}
-
-impl fmt::Display for DriveBackupName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-impl AsRef<str> for DriveBackupName {
-    fn as_ref(&self) -> &str {
-        &self.0
     }
 }
 
@@ -136,9 +94,6 @@ impl AsRef<str> for OauthAccessToken {
     }
 }
 
-/// Prefix used in Drive storage refs for the vault's shareable folder.
-pub const DRIVE_SHARED_FOLDER_REF_PREFIX: &str = "shared:";
-
 /// The shareable My Drive folder that holds a vault's Google Drive event files.
 ///
 /// Every Google Drive provider is shared: Nook writes app-created files with
@@ -167,216 +122,5 @@ impl DriveEventParent {
     }
 }
 
-impl StorageProviderType {
-    #[must_use]
-    pub fn storage_mode(self, oauth_preset: ProviderOauthPreset) -> StorageMode {
-        match self {
-            Self::Local | Self::LocalFolder => StorageMode::Local,
-            Self::Github => StorageMode::Github,
-            Self::S3 => StorageMode::S3,
-            Self::OauthFile => match match oauth_preset {
-                ProviderOauthPreset::NotApplicable => OauthFilePreset::GoogleDrive,
-                ProviderOauthPreset::Preset(preset) => preset,
-            } {
-                OauthFilePreset::GoogleDrive => StorageMode::GoogleDrive,
-                OauthFilePreset::ICloud => StorageMode::ICloud,
-            },
-        }
-    }
-}
-
-mod label;
-pub use label::{
-    OAuthProviderLabel, ProviderCredentialEvidence, ProviderCredentialReadiness, ProviderLabel,
-};
-
 mod target;
-pub use target::{ProviderTargetKey, SyncProviderTargetIdentity};
-
-#[cfg(test)]
-#[allow(clippy::unnecessary_wraps)]
-mod tests {
-    use super::super::{GithubSyncTarget, LocalFolderSyncTarget, OauthFileSyncTarget};
-    use super::*;
-    use crate::{
-        S3Connection, S3KeyPrefix, StoredGithubPat, StoredGithubRepository,
-        StoredGoogleDriveFolder, StoredLocalFolderDirectory, StoredLocalFolderHandle,
-        StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthRemoteFileId,
-        StoredOAuthRemoteFileName, StoredS3Configuration, SyncProviderTarget,
-    };
-
-    #[test]
-    fn storage_mode_for_provider_maps_oauth_presets() -> anyhow::Result<()> {
-        assert_eq!(
-            StorageProviderType::Local.storage_mode(ProviderOauthPreset::NotApplicable),
-            StorageMode::Local
-        );
-        assert_eq!(
-            StorageProviderType::LocalFolder.storage_mode(ProviderOauthPreset::NotApplicable),
-            StorageMode::Local
-        );
-        assert_eq!(
-            StorageProviderType::Github.storage_mode(ProviderOauthPreset::NotApplicable),
-            StorageMode::Github
-        );
-        assert_eq!(
-            StorageProviderType::OauthFile.storage_mode(ProviderOauthPreset::NotApplicable),
-            StorageMode::GoogleDrive
-        );
-        assert_eq!(
-            StorageProviderType::OauthFile
-                .storage_mode(ProviderOauthPreset::Preset(OauthFilePreset::ICloud)),
-            StorageMode::ICloud
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn provider_default_labels_match_sync_provider_ui() {
-        assert_eq!(ProviderLabel::Local.render(), "This device");
-        assert_eq!(
-            ProviderLabel::LocalFolder(&StoredLocalFolderDirectory::DirectoryName(
-                "Nook Backup".to_owned()
-            ))
-            .render(),
-            "Local backup · Nook Backup"
-        );
-        assert_eq!(
-            ProviderLabel::Github(&StoredGithubRepository::Repository(
-                " team-vault ".to_owned()
-            ))
-            .render(),
-            "GitHub · team-vault"
-        );
-        assert_eq!(
-            ProviderLabel::Github(&StoredGithubRepository::Repository("  ".to_owned())).render(),
-            "GitHub"
-        );
-        assert_eq!(
-            ProviderLabel::OAuth(OAuthProviderLabel {
-                preset: OauthFilePreset::GoogleDrive,
-                file_name: &StoredOAuthRemoteFileName::Unresolved
-            })
-            .render(),
-            "Google Drive"
-        );
-        assert_eq!(
-            ProviderLabel::OAuth(OAuthProviderLabel {
-                preset: OauthFilePreset::ICloud,
-                file_name: &StoredOAuthRemoteFileName::FileName("work.yaml".to_owned())
-            })
-            .render(),
-            "iCloud · work.yaml"
-        );
-        assert_eq!(
-            ProviderLabel::LocalFolder(&StoredLocalFolderDirectory::Unnamed).render(),
-            "Local backup"
-        );
-    }
-    #[test]
-    fn s3_labels_name_the_bucket_and_prefix_they_keep_objects_in() -> anyhow::Result<()> {
-        assert_eq!(
-            ProviderLabel::S3(&StoredS3Configuration::NotApplicable).render(),
-            "S3"
-        );
-        let mut config = S3Connection::fixture()?;
-        assert_eq!(
-            ProviderLabel::S3(&StoredS3Configuration::Configured(config.clone())).render(),
-            "S3 · nook-dev/e2e/run-1"
-        );
-        config.key_prefix = S3KeyPrefix::BucketRoot;
-        assert_eq!(
-            ProviderLabel::S3(&StoredS3Configuration::Configured(config)).render(),
-            "S3 · nook-dev"
-        );
-        // A location label alone renders the same way.
-        assert_eq!(
-            ProviderLabel::S3Location(" nook-dev/team ").render(),
-            "S3 · nook-dev/team"
-        );
-        assert_eq!(ProviderLabel::S3Location(" ").render(), "S3");
-        Ok(())
-    }
-
-    #[test]
-    fn provider_credentials_are_classified_by_their_owning_provider() {
-        assert_eq!(
-            ProviderCredentialEvidence::Local.readiness(),
-            ProviderCredentialReadiness::Ready
-        );
-        for (value, expected) in [
-            (" token ", ProviderCredentialReadiness::Ready),
-            (" ", ProviderCredentialReadiness::Required),
-        ] {
-            assert_eq!(
-                ProviderCredentialEvidence::Github(&StoredGithubPat::Token(value.to_owned()))
-                    .readiness(),
-                expected
-            );
-            assert_eq!(
-                ProviderCredentialEvidence::OAuth(&StoredOAuthAccessCredential::AccessToken(
-                    value.to_owned()
-                ))
-                .readiness(),
-                expected
-            );
-            assert_eq!(
-                ProviderCredentialEvidence::LocalFolder(&StoredLocalFolderHandle::HandleId(
-                    value.to_owned()
-                ))
-                .readiness(),
-                expected
-            );
-        }
-        assert_eq!(
-            ProviderCredentialEvidence::OAuth(&StoredOAuthAccessCredential::SignedOut).readiness(),
-            ProviderCredentialReadiness::Required
-        );
-    }
-
-    #[test]
-    fn sync_provider_target_key_matches_duplicates_by_storage_identity() -> anyhow::Result<()> {
-        let github_a = SyncProviderTarget::Github(GithubSyncTarget {
-            repo: "My-Repo".to_owned(),
-            pat: "github_pat_11AAAA".to_owned(),
-        });
-        let github_b = SyncProviderTarget::Github(GithubSyncTarget {
-            repo: "my-repo".to_owned(),
-            pat: "github_pat_11AAAA".to_owned(),
-        });
-        assert_eq!(github_a.stable_key(), github_b.stable_key());
-
-        let drive_by_id = SyncProviderTarget::OauthFile(OauthFileSyncTarget {
-            preset: OauthFilePreset::GoogleDrive,
-            file_id: StoredOAuthRemoteFileId::FileId("file-123".to_owned()),
-            folder_id: StoredGoogleDriveFolder::Root,
-            file_name: StoredOAuthRemoteFileName::FileName("other-name.yaml".to_owned()),
-            account_email: StoredOAuthAccountIdentity::Email("me@example.com".to_owned()),
-            access_token: StoredOAuthAccessCredential::AccessToken("ya29.test".to_owned()),
-        });
-        let drive_by_name = SyncProviderTarget::OauthFile(OauthFileSyncTarget {
-            preset: OauthFilePreset::GoogleDrive,
-            file_id: StoredOAuthRemoteFileId::Unresolved,
-            folder_id: StoredGoogleDriveFolder::Root,
-            file_name: StoredOAuthRemoteFileName::FileName("other-name.yaml".to_owned()),
-            account_email: StoredOAuthAccountIdentity::Email("me@example.com".to_owned()),
-            access_token: StoredOAuthAccessCredential::AccessToken("ya29.test".to_owned()),
-        });
-        assert_ne!(drive_by_id.stable_key(), drive_by_name.stable_key());
-
-        let folder = SyncProviderTarget::LocalFolder(LocalFolderSyncTarget {
-            directory_name: StoredLocalFolderDirectory::DirectoryName("Nook Backup".to_owned()),
-            handle_id: StoredLocalFolderHandle::HandleId("folder-1".to_owned()),
-        });
-        assert_eq!(
-            folder.stable_key(),
-            SyncProviderTargetIdentity::Configured("local-folder:folder-1".to_owned().into())
-        );
-
-        assert_eq!(
-            SyncProviderTarget::Empty.stable_key(),
-            SyncProviderTargetIdentity::Unconfigured
-        );
-        Ok(())
-    }
-}
+pub use target::ProviderTargetKey;

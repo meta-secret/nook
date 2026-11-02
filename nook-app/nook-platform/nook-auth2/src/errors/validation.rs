@@ -38,6 +38,8 @@ const ERRORS_VALIDATION_ISO_TIMESTAMP_INVALID: &str = "errors.validation.iso_tim
 const ERRORS_VALIDATION_PASSWORD_ENTRY_ID_INVALID: &str =
     "errors.validation.password_entry_id_invalid";
 const ERRORS_VALIDATION_SIGNING_SEED_INVALID: &str = "errors.validation.signing_seed_invalid";
+const ERRORS_VALIDATION_LOCAL_FOLDER_HANDLE_INVALID: &str =
+    "errors.validation.local_folder_handle_invalid";
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ValidationError {
@@ -77,13 +79,13 @@ pub enum ValidationError {
     #[error("{}:{replication_type}", ERRORS_VALIDATION_UNKNOWN_REPLICATION_TYPE)]
     UnknownReplicationType { replication_type: String },
 
+    /// The provider is a kind label: `github`, `google-drive`, `s3`, and so on.
     #[error(
-        "{}:{provider_type}:{oauth_preset}:{replication_type}",
+        "{}:{provider}:{replication_type}",
         ERRORS_VALIDATION_UNSUPPORTED_PROVIDER_REPLICATION
     )]
     UnsupportedProviderReplication {
-        provider_type: String,
-        oauth_preset: String,
+        provider: String,
         replication_type: String,
     },
 
@@ -207,6 +209,14 @@ pub enum ValidationError {
     /// A provider credential is blank. Carries no part of the rejected text.
     #[error("{}", i18n_keys::ERRORS_VALIDATION_PROVIDER_SECRET_REQUIRED)]
     ProviderSecretRequired,
+
+    /// A personal invite would carry a credential still sealed at rest.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_PROVIDER_CREDENTIAL_SEALED)]
+    ProviderCredentialSealed,
+
+    /// A stored local-folder row names no folder handle: damaged data.
+    #[error("{}", ERRORS_VALIDATION_LOCAL_FOLDER_HANDLE_INVALID)]
+    LocalFolderHandleInvalid,
 
     #[error("{}", i18n_keys::ERRORS_VALIDATION_SECRET_DATA_REQUIRED)]
     SecretDataRequired,

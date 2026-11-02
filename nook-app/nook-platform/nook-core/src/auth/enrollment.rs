@@ -5,8 +5,8 @@ pub use nook_auth2::{
     EnrollmentCodeEnvelope, EnrollmentEntryLabel, EnrollmentIdentityTarget, EnrollmentInvite,
     EnrollmentInviteVault, EnrollmentIssuance, EnrollmentIssueInput, EnrollmentLinkInput,
     EnrollmentProvider, EnrollmentProviderDataRef, EnrollmentState, InviteSigningSeed,
-    OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry,
-    PersonalCredentialTransfer, PersonalEnrollmentProvider, PersonalEnrollmentProviderData,
-    S3EnrollmentConnection, SharedEnrollmentProvider, SharedEnrollmentProviderData,
-    SharedProviderGrant, TypedEnrollmentProvider,
+    OAuthAccountIdentity, OAuthFileEnrollment, PersonalCredentialTransfer,
+    PersonalEnrollmentProvider, PersonalEnrollmentProviderData, S3EnrollmentConnection,
+    SharedEnrollmentProvider, SharedEnrollmentProviderData, SharedProviderGrant,
+    TypedEnrollmentProvider,
 };

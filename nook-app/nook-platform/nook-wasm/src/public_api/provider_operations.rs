@@ -12,14 +12,14 @@ use wasm_bindgen::JsError;
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn provider_wasm_args(
-    provider: &tsify::Ts<nook_core::StorageProviderData>,
+    provider: &tsify::Ts<nook_core::StorageProvider>,
 ) -> Result<tsify::Ts<NookStorageConnection>, wasm_bindgen::JsError> {
     let provider = provider
         .to_rust()
         .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
-    let result = Ok::<_, wasm_bindgen::JsError>(provider.connection_args()?)?;
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    Tsify::into_ts(&provider.storage_connection())
+        .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
 }
 
 #[wasm_bindgen]
@@ -29,9 +29,9 @@ pub fn provider_wasm_args(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn active_vault_providers(
-    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshotData>,
+    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshot>,
     scope: &NookManagerStoreScope,
-) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshotData>, wasm_bindgen::JsError> {
+) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshot>, wasm_bindgen::JsError> {
     let mut snapshot = snapshot
         .to_rust()
         .map_err(|_| JsError::new("Invalid typed WASM input."))?;
@@ -56,9 +56,9 @@ pub fn active_vault_providers(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn sync_providers_for_active_vault(
-    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshotData>,
+    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshot>,
     scope: &NookManagerStoreScope,
-) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshotData>, wasm_bindgen::JsError> {
+) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshot>, wasm_bindgen::JsError> {
     let mut snapshot = snapshot
         .to_rust()
         .map_err(|_| JsError::new("Invalid typed WASM input."))?;
@@ -83,7 +83,7 @@ pub fn sync_providers_for_active_vault(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn local_provider_for_active_vault(
-    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshotData>,
+    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshot>,
     scope: &NookManagerStoreScope,
 ) -> Result<NookProviderSelection, wasm_bindgen::JsError> {
     let snapshot = snapshot
@@ -116,7 +116,7 @@ pub fn local_provider_for_active_vault(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn provider_label_by_id(
-    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshotData>,
+    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshot>,
     provider_id: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
     let snapshot = snapshot
@@ -136,8 +136,8 @@ pub fn provider_label_by_id(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn providers_visible_while_device_locked(
-    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshotData>,
-) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshotData>, wasm_bindgen::JsError> {
+    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshot>,
+) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshot>, wasm_bindgen::JsError> {
     let mut snapshot = snapshot
         .to_rust()
         .map_err(|_| JsError::new("Invalid typed WASM input."))?;
@@ -158,7 +158,7 @@ pub fn providers_visible_while_device_locked(
 )]
 pub fn select_remote_event_flush_providers(
     request: &tsify::Ts<nook_core::RemoteEventFlushProviderRequest>,
-) -> Result<Vec<tsify::Ts<nook_core::StorageProviderData>>, wasm_bindgen::JsError> {
+) -> Result<Vec<tsify::Ts<nook_core::StorageProvider>>, wasm_bindgen::JsError> {
     let request = request
         .to_rust()
         .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;

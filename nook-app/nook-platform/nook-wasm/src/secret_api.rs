@@ -496,8 +496,7 @@ mod wasm_tests {
     };
     use nook_core::{
         AuthenticationApprovalRequirement, AuthenticationOutcomeVerdict, AuthenticatorIssuerHosts,
-        CreditCardFields, CreditCardSecret, OauthFilePreset, SecretId, SecretValue,
-        StorageProviderType,
+        CreditCardFields, CreditCardSecret, OAuthFilePreset, ProviderKind, SecretId, SecretValue,
     };
     use tsify::Tsify;
     use wasm_bindgen::JsError;
@@ -507,10 +506,7 @@ mod wasm_tests {
     fn provider_storage_modes_round_trip_in_wasm() -> Result<(), wasm_bindgen::JsError> {
         assert_eq!(
             wasm_storage_mode_for_provider(
-                &StorageProviderType::OauthFile
-                    .into_ts()
-                    .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
-                &OauthFilePreset::GoogleDrive
+                &ProviderKind::OauthFile(OAuthFilePreset::GoogleDrive)
                     .into_ts()
                     .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
             )?,
@@ -518,10 +514,7 @@ mod wasm_tests {
         );
         assert_eq!(
             wasm_storage_mode_for_provider(
-                &StorageProviderType::OauthFile
-                    .into_ts()
-                    .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
-                &OauthFilePreset::ICloud
+                &ProviderKind::OauthFile(OAuthFilePreset::ICloud)
                     .into_ts()
                     .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
             )?,

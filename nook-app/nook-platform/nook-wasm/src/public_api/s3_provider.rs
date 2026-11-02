@@ -6,15 +6,13 @@
 //! the typed results. A refused key rejects like every export, with the
 //! message `provider_failure_code` classifies as `S3KeyAccessDenied`.
 use super::wasm_bindgen;
-use super::{NookStagedStorageArgs, NookStorageConnection};
 use crate::NookError;
 use crate::storage::provider_vault_listing::{
     BrowserHeldVaults, LocalVaultClassification, ProviderLocation,
 };
 use crate::storage::s3::{S3Storage, S3VaultListing};
 use nook_core::{
-    LocalVaultOccupancy, ProviderLabel, ProviderVaultListing, S3Connection, S3ConnectionDraft,
-    S3DraftValidation, StagedRemoteConnection, StorageConnection, StoredS3Configuration,
+    LocalVaultOccupancy, ProviderVaultListing, S3Connection, S3ConnectionDraft, S3DraftValidation,
 };
 use tsify::Tsify;
 use wasm_bindgen::JsError;
@@ -33,38 +31,6 @@ const UNENCODABLE_TYPED_OUTPUT: &str = "Typed WASM output could not be encoded."
     Tsify::into_ts(&draft.validate()).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
 }
 
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NookStoredS3ConfigurationState {
-    NotApplicable,
-    Configured,
-}
-
-/// Whether a provider row carries its S3 connection.
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn stored_s3_configuration_state(
-    configuration: &tsify::Ts<StoredS3Configuration>,
-) -> Result<NookStoredS3ConfigurationState, JsError> {
-    let configuration = configuration
-        .to_rust()
-        .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
-    Ok(match configuration {
-        StoredS3Configuration::NotApplicable => NookStoredS3ConfigurationState::NotApplicable,
-        StoredS3Configuration::Configured(_) => NookStoredS3ConfigurationState::Configured,
-    })
-}
-
-/// The label an S3 provider is staged and saved with: `S3 · bucket[/prefix]`.
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_s3_provider_label(
-    configuration: &tsify::Ts<StoredS3Configuration>,
-) -> Result<String, JsError> {
-    let configuration = configuration
-        .to_rust()
-        .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
-    Ok(ProviderLabel::S3(&configuration).render())
-}
-
 /// The detail line of a validated S3 connection, as its saved row shows
 /// it: `host[:port] · accessKeyId`. It never names the secret.
 #[wasm_bindgen]
@@ -75,33 +41,6 @@ pub enum NookStoredS3ConfigurationState {
         .to_rust()
         .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
     Ok(configuration.storage_detail())
-}
-
-/// The storage connection of a validated S3 connection that is not saved yet.
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn draft_s3_storage_args(
-    configuration: &tsify::Ts<S3Connection>,
-) -> Result<tsify::Ts<NookStorageConnection>, JsError> {
-    let connection = configuration
-        .to_rust()
-        .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
-    Tsify::into_ts(&StorageConnection::S3 { connection })
-        .map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
-}
-
-/// The staged storage connection of an S3 block, as the GitHub and OAuth
-/// staged exports give theirs: ready once the block holds its connection,
-/// incomplete before.
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_s3_remote_storage_args(
-    configuration: &tsify::Ts<StoredS3Configuration>,
-) -> Result<NookStagedStorageArgs, JsError> {
-    let configuration = configuration
-        .to_rust()
-        .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
-    Ok(NookStagedStorageArgs::new(
-        StagedRemoteConnection::S3(&configuration).project()?,
-    ))
 }
 
 /// List the vaults at an S3 location without saving or connecting to it,
@@ -154,13 +93,14 @@ impl S3ProviderListing<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        NookStoredS3ConfigurationState, draft_s3_storage_args, staged_s3_provider_detail,
-        staged_s3_provider_label, staged_s3_remote_storage_args, stored_s3_configuration_state,
+    use super::staged_s3_provider_detail;
+    use crate::public_api::{
+        NookAccessCheckSource, NookStagedStorageArgsState, draft_storage_args,
+        provider_draft_label, s3_provider_draft, staged_storage_args,
     };
-    use crate::public_api::NookAccessCheckSource;
-    use crate::public_api::NookStagedStorageArgsState;
-    use nook_core::{S3Connection, S3ConnectionDraft, StoredS3Configuration};
+    use nook_core::{
+        ProviderDraft, ProviderKind, S3Connection, S3ConnectionDraft, StorageConnection,
+    };
     use tsify::Tsify;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -219,11 +159,10 @@ mod tests {
             reason = "framework boundary: wasm-bindgen-test callback"
         )
     )]
-    fn an_s3_block_stages_its_connect_arguments_once_configured() -> anyhow::Result<()> {
-        let staged = staged_s3_remote_storage_args(&typed(&StoredS3Configuration::Configured(
-            configuration()?,
-        ))?)
-        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+    fn an_s3_draft_stages_its_connect_arguments_once_ready() -> anyhow::Result<()> {
+        let ready = s3_provider_draft(&typed(&configuration()?)?)
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        let staged = staged_storage_args(&ready).map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert_eq!(staged.state(), NookStagedStorageArgsState::Ready);
         let args = staged
             .args()
@@ -232,14 +171,13 @@ mod tests {
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert_eq!(
             args,
-            nook_core::StorageConnection::S3 {
+            StorageConnection::S3 {
                 connection: configuration()?
             }
         );
-        let unconfigured =
-            staged_s3_remote_storage_args(&typed(&StoredS3Configuration::NotApplicable)?)
-                .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        assert_eq!(unconfigured.state(), NookStagedStorageArgsState::Incomplete);
+        let awaiting = staged_storage_args(&typed(&ProviderDraft::begin(ProviderKind::S3))?)
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(awaiting.state(), NookStagedStorageArgsState::Incomplete);
         Ok(())
     }
 
@@ -251,36 +189,24 @@ mod tests {
             reason = "framework boundary: wasm-bindgen-test callback"
         )
     )]
-    fn rows_report_their_s3_block_label_and_connect_arguments() -> anyhow::Result<()> {
-        let configured = StoredS3Configuration::Configured(configuration()?);
-        let state = |configuration: &StoredS3Configuration| {
-            stored_s3_configuration_state(&typed(configuration)?)
-                .map_err(|error| anyhow::anyhow!("{error:?}"))
-        };
+    fn an_s3_draft_reports_its_label_detail_and_connect_arguments() -> anyhow::Result<()> {
+        let ready = s3_provider_draft(&typed(&configuration()?)?)
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert_eq!(
-            state(&configured)?,
-            NookStoredS3ConfigurationState::Configured
-        );
-        assert_eq!(
-            state(&StoredS3Configuration::NotApplicable)?,
-            NookStoredS3ConfigurationState::NotApplicable
-        );
-        assert_eq!(
-            staged_s3_provider_label(&typed(&configured)?)
-                .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+            provider_draft_label(&ready).map_err(|error| anyhow::anyhow!("{error:?}"))?,
             "S3 · nook-dev/e2e"
         );
         let detail = staged_s3_provider_detail(&typed(&configuration()?)?)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert_eq!(detail, "127.0.0.1:8333 · device-a");
         assert!(!detail.contains(SECRET));
-        let args = draft_s3_storage_args(&typed(&configuration()?)?)
+        let args = draft_storage_args(&ready)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?
             .to_rust()
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert_eq!(
             args,
-            nook_core::StorageConnection::S3 {
+            StorageConnection::S3 {
                 connection: configuration()?
             }
         );

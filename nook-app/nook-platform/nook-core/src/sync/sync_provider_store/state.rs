@@ -1,146 +1,29 @@
+//! The named states of a provider row's common fields.
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-use super::{LocalFolderConfig, OAuthFileConfig};
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", content = "value", rename_all = "camelCase")]
-pub enum StoredOAuthRefreshCredential {
-    #[default]
-    NotIssued,
-    Token(String),
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", content = "value", rename_all = "camelCase")]
-pub enum StoredOAuthAccessCredential {
-    #[default]
-    SignedOut,
-    AccessToken(String),
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", content = "value", rename_all = "camelCase")]
-pub enum StoredOAuthTokenExpiry {
-    #[default]
-    Unknown,
-    ExpiresAt(String),
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", content = "value", rename_all = "camelCase")]
-pub enum StoredOAuthRemoteFileId {
-    #[default]
-    Unresolved,
-    FileId(String),
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", content = "value", rename_all = "camelCase")]
-pub enum StoredOAuthRemoteFileName {
-    #[default]
-    Unresolved,
-    FileName(String),
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", content = "value", rename_all = "camelCase")]
-pub enum StoredOAuthAccountIdentity {
-    #[default]
-    Unknown,
-    Email(String),
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", content = "value", rename_all = "camelCase")]
-pub enum StoredGoogleDriveFolder {
-    #[default]
-    Root,
-    FolderId(String),
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", content = "value", rename_all = "camelCase")]
-pub enum StoredICloudShareTarget {
-    #[default]
-    Unbound,
-    SharedTarget(String),
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", content = "value", rename_all = "camelCase")]
-pub enum StoredLocalFolderDirectory {
-    #[default]
-    Unnamed,
-    DirectoryName(String),
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", content = "value", rename_all = "camelCase")]
-pub enum StoredLocalFolderHandle {
-    #[default]
-    Unbound,
-    HandleId(String),
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", content = "value", rename_all = "camelCase")]
-pub enum StoredGithubPat {
-    #[default]
-    Missing,
-    Token(String),
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+/// The repository a GitHub provider uses: its own name, or the default one.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
 pub enum StoredGithubRepository {
-    #[default]
     DefaultRepository,
     Repository(String),
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+/// The vault a row belongs to. Only this browser's own store belongs to one;
+/// every remote row is an identity mount that keeps each vault apart.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
 pub enum ProviderVaultScope {
-    #[default]
     Unscoped,
     StoreId(String),
 }
 
+/// The vault the snapshot's browser has selected, if one is.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
 pub enum ActiveVaultScope {
     #[default]
     Unselected,
     StoreId(String),
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", content = "config", rename_all = "camelCase")]
-pub enum StoredOAuthFileConfiguration {
-    #[default]
-    NotApplicable,
-    Configured(Box<OAuthFileConfig>),
-}
-
-impl StoredOAuthFileConfiguration {
-    #[must_use]
-    pub fn configured(config: OAuthFileConfig) -> Self {
-        Self::Configured(Box::new(config))
-    }
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", content = "config", rename_all = "camelCase")]
-pub enum StoredLocalFolderConfiguration {
-    #[default]
-    NotApplicable,
-    Configured(LocalFolderConfig),
-}
-
-impl StoredLocalFolderConfiguration {
-    #[must_use]
-    pub const fn configured(config: LocalFolderConfig) -> Self {
-        Self::Configured(config)
-    }
 }

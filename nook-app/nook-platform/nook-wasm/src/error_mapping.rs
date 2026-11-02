@@ -78,6 +78,8 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::S3SecretAccessKeyRequired
             | ValidationError::S3StorageTargetInvalid
             | ValidationError::ProviderSecretRequired
+            | ValidationError::ProviderCredentialSealed
+            | ValidationError::LocalFolderHandleInvalid
             | ValidationError::UnknownStorageMode { .. }
             | ValidationError::UnknownDeviceMode { .. }
             | ValidationError::UnknownVaultType { .. }

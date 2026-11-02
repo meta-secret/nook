@@ -177,6 +177,7 @@ impl CompletionCheckpoint {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_fixtures::WasmFixture;
     use nook_core::{
         DeviceMode, SentinelGenesisOutput, SentinelUnlockSigning, SentinelVaultUnlockState,
         SigningIdentity, VaultArchitecture,
@@ -282,10 +283,8 @@ mod tests {
             manager.device.identity_private_key = self.identity.secret_string().as_str().to_owned();
             manager.storage.access_token = "configured-test-provider".to_owned();
             manager.event_log.signing_seed = "ephemeral-test-seed".to_owned();
-            manager.sync_outbox.connection = nook_core::StorageConnection::Github {
-                token: "pending-test-token".to_owned(),
-                repo: "owner/repository".to_owned(),
-            };
+            manager.sync_outbox.connection =
+                WasmFixture::github_connection("pending-test-token", "owner/repository")?;
             Ok(manager)
         }
 

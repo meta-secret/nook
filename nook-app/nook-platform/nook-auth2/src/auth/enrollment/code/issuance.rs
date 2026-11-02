@@ -166,11 +166,10 @@ mod tests {
     use crate::auth::enrollment::{
         CheckedEnrollmentEnvelope, EnrollmentEntryLabel, EnrollmentIdentityTarget,
         EnrollmentInvite, EnrollmentIssueInput, EnrollmentProvider, EnrollmentProviderDataRef,
-        OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry,
-        PersonalEnrollmentProvider, S3EnrollmentConnection, SharedEnrollmentProvider,
-        SharedEnrollmentProviderData,
+        OAuthAccountIdentity, OAuthFileEnrollment, PersonalEnrollmentProvider,
+        S3EnrollmentConnection, SharedEnrollmentProvider, SharedEnrollmentProviderData,
     };
-    use crate::{ProviderSecretText, S3KeyPrefix};
+    use crate::{IsoTimestamp, ProviderSecretText, S3KeyPrefix};
     use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     use serde_json::json;
     impl EnrollmentIssueInput {
@@ -449,15 +448,12 @@ mod tests {
     fn personal_oauth_file_provider_roundtrips_inside_encrypted_payload() -> anyhow::Result<()> {
         let input = EnrollmentIssueInput {
             provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::oauth_file(
-                "google-drive".to_owned(),
-                "ya29.secret".to_owned(),
-                OAuthRefreshCredential::Token("refresh.secret".to_owned()),
-                OAuthTokenExpiry::ExpiresAt("2026-07-09T00:00:00Z".to_owned()),
-                OAuthRemoteFile::Identified {
-                    file_id: "drive-file-id".to_owned(),
-                    file_name: "nook-backup.yaml".to_owned(),
+                OAuthFileEnrollment::GoogleDrive {
+                    access_token: ProviderSecretText::try_from("ya29.secret".to_owned())?,
+                    expires_at: IsoTimestamp::parse("2026-07-09T00:00:00Z")?,
+                    account: OAuthAccountIdentity::Email("owner@example.com".to_owned()),
+                    folder_id: "drive-folder-id".to_owned(),
                 },
-                OAuthAccountIdentity::Email("owner@example.com".to_owned()),
             )),
             identity: EnrollmentIdentityTarget::fixture("OAuth vault"),
             invite: EnrollmentInvite::fixture()?,
@@ -472,7 +468,7 @@ mod tests {
         .check()
         .and_then(CheckedEnrollmentIssuance::issue)?;
         assert!(!code.contains("ya29.secret"));
-        assert!(!code.contains("refresh.secret"));
+        assert!(!code.contains("drive-folder-id"));
 
         let decrypted = CheckedEnrollmentEnvelope::parse(&code)?.decrypt("correct horse")?;
         assert_eq!(decrypted.provider, input.provider);
@@ -483,12 +479,11 @@ mod tests {
     fn malformed_oauth_file_provider_has_provider_specific_error() -> anyhow::Result<()> {
         let input = EnrollmentIssueInput {
             provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::oauth_file(
-                "unsupported".to_owned(),
-                String::new(),
-                OAuthRefreshCredential::NotIssued,
-                OAuthTokenExpiry::Unknown,
-                OAuthRemoteFile::Unresolved,
-                OAuthAccountIdentity::Unknown,
+                OAuthFileEnrollment::ICloud {
+                    web_auth_token: ProviderSecretText::try_from("web-auth".to_owned())?,
+                    account: OAuthAccountIdentity::Unknown,
+                    share_target: " ".to_owned(),
+                },
             )),
             identity: EnrollmentIdentityTarget::fixture("OAuth vault"),
             invite: EnrollmentInvite::fixture()?,

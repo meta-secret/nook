@@ -28,10 +28,10 @@ use crate::NookError;
 use crate::VaultMemberProjectionRequest;
 use crate::storage::local_folder::LocalFolderHandles;
 use nook_core::{
-    DeviceIdentity, DeviceIdentitySecret, DriveEventParent, ICloudSharedTarget, MultiDeviceError,
-    SelfRosterSync, SentinelGenesisPhase, StorageConnection, StorageMode, SymmetricKey,
-    VaultCrypto, VaultNameRef, VaultSessionProjection, VaultStoreIdentityRef, VaultType,
-    VaultUnlock, VaultVersionWrite, i18n_keys,
+    DeviceIdentity, DeviceIdentitySecret, DriveEventParent, MultiDeviceError, SelfRosterSync,
+    SentinelGenesisPhase, StorageConnection, StorageMode, SymmetricKey, VaultCrypto, VaultNameRef,
+    VaultSessionProjection, VaultStoreIdentityRef, VaultType, VaultUnlock, VaultVersionWrite,
+    i18n_keys,
 };
 use nook_core::{EnsureSelfInRosterRequest, VaultMetaState, VaultOperation};
 use std::mem;
@@ -536,7 +536,8 @@ impl NookVaultManager {
                 self.storage.s3_connection = PreparedS3Connection::Unprepared;
             }
             StorageConnection::Github { token, repo } => {
-                self.storage.access_token = nook_core::GithubPat::parse(token)?.to_string();
+                self.storage.access_token =
+                    nook_core::GithubPat::parse(token.expose())?.to_string();
                 let repo_name = nook_core::GithubRepoName::parse(repo)?;
                 drop(self.status.tx.send("GITHUB_USER_FETCH".to_owned()));
                 let username = GitHubStorageClient::new(&self.storage.access_token)
@@ -556,16 +557,12 @@ impl NookVaultManager {
                     .ensure_github_repo_exists(&self.storage.remote_ref)
                     .await?;
             }
-            StorageConnection::GoogleDrive {
-                token,
-                folder_id,
-                file_name,
-            } => {
-                self.storage.access_token = nook_core::OauthAccessToken::parse(token)?.to_string();
-                let file_name = nook_core::DriveBackupName::parse(file_name)?;
+            StorageConnection::GoogleDrive { token, folder_id } => {
+                self.storage.access_token =
+                    nook_core::OauthAccessToken::parse(token.expose())?.to_string();
                 // Every Drive provider targets its shareable vault folder.
-                let parent = DriveEventParent::parse_folder_id(folder_id)?;
-                self.storage.remote_path = file_name.to_string();
+                let parent = DriveEventParent::shared_folder_id(folder_id.as_str());
+                self.storage.remote_path.clear();
                 drop(self.status.tx.send("DRIVE_VERIFY".to_owned()));
                 DriveStorageClient::new(&self.storage.access_token)
                     .verify_drive_access()
@@ -578,14 +575,13 @@ impl NookVaultManager {
             StorageConnection::ICloud {
                 token,
                 share_target,
-                file_name,
             } => {
-                self.storage.access_token = nook_core::OauthAccessToken::parse(token)?.to_string();
-                let file_name = nook_core::DriveBackupName::parse(file_name)?;
+                self.storage.access_token =
+                    nook_core::OauthAccessToken::parse(token.expose())?.to_string();
                 // Every iCloud provider targets its `CloudKit` share.
-                let target = ICloudSharedTarget::from_storage_id(share_target)?;
-                self.storage.remote_path = file_name.to_string();
-                self.storage.remote_ref = share_target.trim().to_owned();
+                let target = share_target.target()?;
+                self.storage.remote_path.clear();
+                self.storage.remote_ref = share_target.as_str().to_owned();
                 self.storage.icloud_event_target = PreparedICloudShare::Share(target);
                 self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
                 self.storage.s3_connection = PreparedS3Connection::Unprepared;

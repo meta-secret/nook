@@ -119,10 +119,10 @@ pub use enrollment::{
     EnrollmentCodeEnvelope, EnrollmentEntryLabel, EnrollmentIdentityTarget, EnrollmentInvite,
     EnrollmentInviteVault, EnrollmentIssuance, EnrollmentIssueInput, EnrollmentLinkInput,
     EnrollmentProvider, EnrollmentProviderDataRef, EnrollmentState, InviteSigningSeed,
-    OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry,
-    PersonalCredentialTransfer, PersonalEnrollmentProvider, PersonalEnrollmentProviderData,
-    S3EnrollmentConnection, SharedEnrollmentProvider, SharedEnrollmentProviderData,
-    SharedProviderGrant, TypedEnrollmentProvider,
+    OAuthAccountIdentity, OAuthFileEnrollment, PersonalCredentialTransfer,
+    PersonalEnrollmentProvider, PersonalEnrollmentProviderData, S3EnrollmentConnection,
+    SharedEnrollmentProvider, SharedEnrollmentProviderData, SharedProviderGrant,
+    TypedEnrollmentProvider,
 };
 pub use errors::{
     DatabaseError, DeviceKeyProtectionError, EnrollmentError, EventError, EventResult,
@@ -391,43 +391,37 @@ pub use session::{
     ReplaceSecretInput, VerifiedAuthenticatorReplacementInput,
 };
 pub use sync_provider_credentials::{
-    AGE_ARMOR_MARKER, ProviderCredentialEncoding, ProviderCredentialOpening,
-    ProviderCredentialRejection, ProviderCredentialStorageAdmission,
+    AGE_ARMOR_MARKER, ProviderCredentialEncoding, ProviderCredentialRejection,
+    ProviderCredentialStorageAdmission,
 };
-pub use sync_provider_store::StoredS3Configuration;
 pub use sync_provider_store::{
-    ActiveProviderCredentialDraft, ActiveProviderCredentialsProjection,
     ActiveProviderCredentialsRequest, ActiveProviderLoginSetup, ActiveVaultProviderRows,
-    ActiveVaultScope, AppProviderShare, AuthProvidersSnapshotData, DeviceJoinReach,
-    DraftStorageConnection, DuplicateCandidatePolicy, DuplicateProviderSelection,
-    DuplicateSyncProvider, EnrollmentAudience, GithubStorageDraft, GoogleOAuthTokenInput,
-    ICloudOAuthTokenInput, IdentityMountCapability, LocalFolderConfigData, LocalProviderRowChange,
-    LocalProviderRowOutcome, LocalProviderRowRequest, LocalProviderSelection, ManagerStoreScopeRef,
-    OAuthAccessToken, OAuthAccessTokenRef, OAuthFileConfigData, OAuthRemoteConfigurationUpdate,
-    OAuthRemoteStorageReference, OAuthStorageDraft, OAuthStorageReference,
+    ActiveVaultScope, AppProviderShare, AuthProvidersSnapshot, DeviceJoinReach,
+    DuplicateCandidatePolicy, DuplicateProviderHandling, DuplicateProviderSelection,
+    DuplicateSyncProvider, EnrollmentAudience, GithubDraft, GithubDraftForm, GithubDraftToken,
+    GithubProvider, GoogleDriveAccess, GoogleDriveAuthorization, GoogleDriveDraft,
+    GoogleDriveFolder, GoogleDriveFolderBinding, GoogleDriveProvider, GoogleDriveSignIn,
+    GoogleDriveSignInRequest, ICloudAccess, ICloudDraft, ICloudProvider, ICloudShare,
+    ICloudShareBinding, ICloudSignIn, ICloudSignInRequest, IdentityMountCapability,
+    LocalFolderDraft, LocalFolderHandleId, LocalFolderName, LocalFolderProvider,
+    LocalProviderRowChange, LocalProviderRowOutcome, LocalProviderRowRequest,
+    LocalProviderSelection, ManagerStoreScopeRef, OAuthFileDraft, OAuthFileProvider,
+    ProviderCredentialReadiness, ProviderDraft, ProviderDraftGap, ProviderDraftMismatch,
     ProviderEnrollmentRequest, ProviderEventFlushTarget, ProviderId, ProviderLabelLabels,
-    ProviderReplicationTarget, ProviderRows, ProviderSaveOutcome, ProviderSaveRequest,
-    ProviderSaveSetup, ProviderSelection, ProviderSelectionPolicy, ProviderSelectionRequest,
-    ProviderStorageDetailLabels, ProviderSyncCheckpoint, ProviderSyncRevision,
-    ProviderSyncRevisionRef, ProviderSyncedVaultVersion, ProviderVaultScope,
-    RemoteEventFlushProviderRequest, SharedEnrollmentAudience, SharedGrantProviderSelection,
-    StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection, StagedStorageConnection,
-    StorageConnection, StorageProvider, StorageProviderData, StoredGithubPat,
-    StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
-    StoredLocalFolderConfiguration, StoredLocalFolderDirectory, StoredLocalFolderHandle,
-    StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
-    StoredOAuthRefreshCredential, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
-    StoredOAuthTokenExpiry, VaultStorageConnection,
+    ProviderReplicationTarget, ProviderRowLookup, ProviderRows, ProviderSaveOutcome,
+    ProviderSaveRequest, ProviderSaveSetup, ProviderSelection, ProviderSelectionPolicy,
+    ProviderSelectionRequest, ProviderStorageDetailLabels, ProviderSyncCheckpoint,
+    ProviderSyncRevision, ProviderSyncRevisionRef, ProviderSyncedVaultVersion,
+    ProviderVaultPlacement, ProviderVaultScope, RemoteEventFlushProviderRequest, S3Draft,
+    SharedEnrollmentAudience, SharedGrantProviderSelection, StagedStorageConnection,
+    StorageConnection, StorageProvider, StoredGithubRepository, StoredProvider,
 };
 pub use validation::{
-    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_SHARED_FOLDER_REF_PREFIX,
-    DriveBackupName, DriveEventParent, ExistingVaultProviderReadiness, GithubPat, GithubPatMask,
-    GithubRepoName, GithubSyncTarget, GoogleDriveFolderId, ICloudShareRole, ICloudSharedTarget,
-    LocalFolderSyncTarget, OAuthFilePreset, OAuthProviderLabel, OauthAccessToken, OauthFilePreset,
-    OauthFileSyncTarget, ProviderCredentialEvidence, ProviderCredentialReadiness, ProviderLabel,
+    DEFAULT_GITHUB_REPO_NAME, DriveEventParent, ExistingVaultProviderReadiness, GithubPat,
+    GithubPatMask, GithubRepoName, GoogleDriveFolderId, ICloudShareRole, ICloudShareTargetId,
+    ICloudSharedTarget, OAuthFilePreset, OauthAccessToken, ProviderKind, ProviderSetupNameRequest,
     ProviderTargetKey, S3Connection, S3ConnectionDraft, S3DraftField, S3DraftFieldError,
-    S3DraftValidation, StorageMode, StorageProviderType, SyncProviderTarget,
-    SyncProviderTargetIdentity,
+    S3DraftValidation, StorageMode,
 };
 pub use vault::vault_recovery_options::{
     VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryPassword,
@@ -444,9 +438,10 @@ pub use vault_access_diagnostics::{
     VaultKeyAccessDiagnosticStatus, VaultRecordDecryptabilityStatus, VaultSecretAccessDiagnostic,
 };
 pub use vault_architecture::{
-    DeviceMode, OnboardingType, ProviderJoinerIdentity, ProviderOauthPreset,
-    ProviderReplicationCapability, ReplicationType, SentinelConfiguration, SentinelPolicy,
-    SharedJoinerIdentityKind, VaultApplication, VaultArchitecture, VaultConnectIntent, VaultType,
+    DeviceMode, OnboardingType, ProviderJoinerIdentity, ProviderReplicationCapability,
+    ReplicationSupport, ReplicationType, SentinelConfiguration, SentinelPolicy,
+    SharedJoinerIdentityKind, SharedReplication, VaultApplication, VaultArchitecture,
+    VaultConnectIntent, VaultType,
 };
 pub use vault_client_policy::{
     ActiveVaultStore, DeviceIdentityInitializationMode, DeviceProtectionStatus,
@@ -624,10 +619,6 @@ pub use vault_client_policy::{
 };
 
 pub use sync_provider_store::{AuthProviderPersistenceMode, AuthProviderPersistenceRequest};
-
-pub use sync_provider_store::{
-    EnrollmentOAuthConfigurationError, EnrollmentOAuthConfigurationRequest,
-};
 
 pub use sync_provider_store::{
     SharedGrantProviderOutcome, SharedGrantProviderRequest, SharedStorageTargetSelection,

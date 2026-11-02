@@ -5,23 +5,13 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
-use crate::{
-    OAuthAccessTokenRef, OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile,
-    OAuthTokenExpiry,
-};
-
-use super::{
-    OAuthRemoteStorageReference, SharedGrantProviderOutcome, StorageProviderData, StoredGithubPat,
-    StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
-    StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
-    StoredOAuthRefreshCredential, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
-    StoredOAuthTokenExpiry, StoredS3Configuration,
-};
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{
-    EnrollmentProvider, GithubPat, GithubRepoName, OauthAccessToken, OauthFilePreset,
-    OnboardingType, PersonalEnrollmentProvider, ProviderSecretText, ReplicationType,
-    SharedEnrollmentProvider, SharedStorageTargetSelection, StorageProviderType, VaultArchitecture,
+    EnrollmentProvider, GithubPat, GithubRepoName, OAuthFileEnrollment, OAuthFilePreset,
+    OAuthFileProvider, OnboardingType, PersonalEnrollmentProvider, ProviderCredentialEncoding,
+    ProviderKind, ProviderSecretText, ReplicationType, SharedEnrollmentProvider,
+    SharedGrantProviderOutcome, SharedStorageTargetSelection, StorageProvider, StoredProvider,
+    VaultArchitecture,
 };
 
 /// Borrowed configuration for one enrollment payload construction.
@@ -62,7 +52,7 @@ pub struct SharedEnrollmentAudience<'a> {
     pub joiner_identity: &'a str,
 }
 pub struct ProviderEnrollmentRequest<'a> {
-    pub provider: &'a StorageProviderData,
+    pub provider: &'a StorageProvider,
     pub architecture: &'a VaultArchitecture,
     pub audience: EnrollmentAudience<'a>,
 }
@@ -81,8 +71,8 @@ impl<'a> ProviderEnrollmentRequest<'a> {
     /// credential-free grant. Only the same-browser companion handoff of a
     /// personal-replication vault may transfer this browser's OAuth session.
     fn admit(self) -> ValidationResult<CheckedProviderEnrollment<'a>> {
-        let onboarding = match (&self.audience, self.provider.provider_type) {
-            (EnrollmentAudience::Personal, StorageProviderType::OauthFile)
+        let onboarding = match (&self.audience, self.provider.kind()) {
+            (EnrollmentAudience::Personal, ProviderKind::OauthFile(_))
                 if self.architecture.replication_type == ReplicationType::Personal =>
             {
                 self.architecture.validate()?;
@@ -110,8 +100,8 @@ impl CheckedProviderEnrollment<'_> {
 
 /// Ordered provider observations for an exact shared-target credential selection.
 pub struct SharedGrantProviderSelection<'a> {
-    pub providers: &'a [StorageProviderData],
-    pub preset: OauthFilePreset,
+    pub providers: &'a [StorageProvider],
+    pub preset: OAuthFilePreset,
     pub target: &'a SharedStorageTargetSelection,
 }
 
@@ -127,15 +117,21 @@ impl SharedGrantProviderSelection<'_> {
             target,
         } = self;
         match providers.iter().find(|provider| {
-            if provider.provider_type != StorageProviderType::OauthFile { return false; }
-            let StoredOAuthFileConfiguration::Configured(oauth) = &provider.oauth_file else { return false; };
-            if oauth.preset != preset || !matches!(oauth.usable_access_token(), OAuthAccessTokenRef::Available(_)) { return false; }
-            match target {
-                SharedStorageTargetSelection::Create => true,
-                SharedStorageTargetSelection::Existing(target_id) => {
-                    matches!(&oauth.folder_id, StoredGoogleDriveFolder::FolderId(id) if id == target_id)
-                        || matches!(&oauth.icloud_share_target, StoredICloudShareTarget::SharedTarget(id) if id == target_id)
+            let StoredProvider::OauthFile(oauth) = &provider.provider else {
+                return false;
+            };
+            match (target, oauth) {
+                (SharedStorageTargetSelection::Create, oauth) => oauth.preset() == preset,
+                (
+                    SharedStorageTargetSelection::Existing(target_id),
+                    OAuthFileProvider::GoogleDrive(drive),
+                ) => {
+                    preset == OAuthFilePreset::GoogleDrive && drive.folder_id.as_str() == target_id
                 }
+                (
+                    SharedStorageTargetSelection::Existing(target_id),
+                    OAuthFileProvider::ICloud(icloud),
+                ) => preset == OAuthFilePreset::ICloud && icloud.share_target.as_str() == target_id,
             }
         }) {
             Some(provider) => SharedGrantProviderOutcome::Existing {
@@ -150,34 +146,24 @@ impl SharedGrantProviderSelection<'_> {
 /// Google Drive and iCloud providers are always shared: a new device signs in
 /// with its own authorized account, so their invites never carry the owner's
 /// OAuth credential, whatever the vault's default replication policy.
-impl StorageProviderData {
+impl StorageProvider {
     pub fn onboarding_type(
         &self,
         architecture: &VaultArchitecture,
     ) -> ValidationResult<OnboardingType> {
         architecture.validate()?;
-        let effective_replication = match self.provider_type {
-            StorageProviderType::OauthFile => ReplicationType::Shared,
-            StorageProviderType::Local
-            | StorageProviderType::LocalFolder
-            | StorageProviderType::Github
-            | StorageProviderType::S3 => architecture.replication_type,
+        let effective_replication = match self.kind() {
+            ProviderKind::OauthFile(_) => ReplicationType::Shared,
+            ProviderKind::Local
+            | ProviderKind::LocalFolder
+            | ProviderKind::Github
+            | ProviderKind::S3 => architecture.replication_type,
         };
         self.validate_replication(effective_replication)?;
         Ok(match effective_replication {
             ReplicationType::Personal => OnboardingType::PersonalCredentialTransfer,
             ReplicationType::Shared => OnboardingType::SharedProviderGrant,
         })
-    }
-
-    /// The row's trimmed GitHub token for a personal invite, refused when the row holds none.
-    fn github_enrollment_token(&self) -> ValidationResult<ProviderSecretText> {
-        match &self.github_pat {
-            StoredGithubPat::Token(token) => {
-                ProviderSecretText::try_from(GithubPat::parse(token)?.into_inner())
-            }
-            StoredGithubPat::Missing => Err(ValidationError::GithubPatEmpty),
-        }
     }
 }
 
@@ -199,107 +185,48 @@ impl OnboardingType {
 }
 
 /// Build only the credential-bearing enrollment typestate. Its return value
-/// cannot be wrapped as a shared-provider payload.
+/// cannot be wrapped as a shared-provider payload. A row whose credential is
+/// still sealed at rest fails closed before any payload is built.
 impl CheckedProviderEnrollment<'_> {
     fn personal(self) -> ValidationResult<PersonalEnrollmentProvider> {
         let provider = self.request.provider;
-
         provider.validate_replication(ReplicationType::Personal)?;
-        let provider_type = provider.provider_type;
-        match provider_type {
-            StorageProviderType::Local | StorageProviderType::LocalFolder => {
-                Ok(PersonalEnrollmentProvider::local())
-            }
-            StorageProviderType::Github => Ok(PersonalEnrollmentProvider::github(
-                provider.github_enrollment_token()?,
-                GithubRepoName::parse(match &provider.github_repo {
-                    StoredGithubRepository::Repository(repo) => repo,
-                    StoredGithubRepository::DefaultRepository => "",
-                })?
-                .as_str()
-                .to_owned(),
-            )),
-            // The inviter's connection and key travel like the GitHub token.
-            StorageProviderType::S3 => match &provider.s3 {
-                StoredS3Configuration::Configured(config) => Ok(PersonalEnrollmentProvider::s3(
-                    config.enrollment_connection(),
-                )),
-                StoredS3Configuration::NotApplicable => {
-                    Err(ValidationError::S3StorageTargetInvalid)
-                }
-            },
-            StorageProviderType::OauthFile => {
-                let StoredOAuthFileConfiguration::Configured(oauth) = &provider.oauth_file else {
-                    return Err(ValidationError::OauthAccessTokenEmpty);
-                };
-                let preset = oauth.preset;
-                // The companion connects through the same shared target.
-                let file_id = match oauth.remote_storage_ref() {
-                    OAuthRemoteStorageReference::Resolved(target) => {
-                        StoredOAuthRemoteFileId::FileId(target.as_str().to_owned())
-                    }
-                    OAuthRemoteStorageReference::Unresolved => {
-                        return Err(ValidationError::SharedStorageTargetRequired);
-                    }
-                };
-                Ok(PersonalEnrollmentProvider::oauth_file(
-                    preset.as_str().to_owned(),
-                    OauthAccessToken::parse(match &oauth.access_token {
-                        StoredOAuthAccessCredential::AccessToken(token) => token,
-                        StoredOAuthAccessCredential::SignedOut => {
-                            return Err(ValidationError::OauthAccessTokenEmpty);
-                        }
-                    })?
-                    .as_str()
-                    .to_owned(),
-                    match &oauth.refresh_token {
-                        StoredOAuthRefreshCredential::Token(value) => {
-                            OAuthRefreshCredential::Token(value.clone())
-                        }
-                        StoredOAuthRefreshCredential::NotIssued => {
-                            OAuthRefreshCredential::NotIssued
-                        }
-                    },
-                    match &oauth.expires_at {
-                        StoredOAuthTokenExpiry::ExpiresAt(value) => {
-                            OAuthTokenExpiry::ExpiresAt(value.clone())
-                        }
-                        StoredOAuthTokenExpiry::Unknown => OAuthTokenExpiry::Unknown,
-                    },
-                    match (&file_id, &oauth.file_name) {
-                        (
-                            StoredOAuthRemoteFileId::FileId(file_id),
-                            StoredOAuthRemoteFileName::FileName(file_name),
-                        ) => OAuthRemoteFile::Identified {
-                            file_id: file_id.to_owned(),
-                            file_name: file_name.to_owned(),
-                        },
-                        (
-                            StoredOAuthRemoteFileId::FileId(file_id),
-                            StoredOAuthRemoteFileName::Unresolved,
-                        ) => OAuthRemoteFile::FileId {
-                            file_id: file_id.to_owned(),
-                        },
-                        (
-                            StoredOAuthRemoteFileId::Unresolved,
-                            StoredOAuthRemoteFileName::FileName(file_name),
-                        ) => OAuthRemoteFile::FileName {
-                            file_name: file_name.to_owned(),
-                        },
-                        (
-                            StoredOAuthRemoteFileId::Unresolved,
-                            StoredOAuthRemoteFileName::Unresolved,
-                        ) => OAuthRemoteFile::Unresolved,
-                    },
-                    match &oauth.account_email {
-                        StoredOAuthAccountIdentity::Email(value) => {
-                            OAuthAccountIdentity::Email(value.clone())
-                        }
-                        StoredOAuthAccountIdentity::Unknown => OAuthAccountIdentity::Unknown,
-                    },
-                ))
-            }
+        if provider.provider.secrets().into_iter().any(|secret| {
+            ProviderCredentialEncoding::observe(secret) == ProviderCredentialEncoding::ArmorMarked
+        }) {
+            return Err(ValidationError::ProviderCredentialSealed);
         }
+        Ok(match &provider.provider {
+            StoredProvider::Local {} | StoredProvider::LocalFolder(_) => {
+                PersonalEnrollmentProvider::local()
+            }
+            StoredProvider::Github(github) => PersonalEnrollmentProvider::github(
+                ProviderSecretText::try_from(
+                    GithubPat::parse(github.token.expose())?.into_inner(),
+                )?,
+                GithubRepoName::parse(github.repository.name())?.into_inner(),
+            ),
+            // The inviter's connection and key travel like the GitHub token.
+            StoredProvider::S3(connection) => {
+                PersonalEnrollmentProvider::s3(connection.enrollment_connection())
+            }
+            // The companion connects through the same shared target.
+            StoredProvider::OauthFile(OAuthFileProvider::GoogleDrive(drive)) => {
+                PersonalEnrollmentProvider::oauth_file(OAuthFileEnrollment::GoogleDrive {
+                    access_token: drive.authorization.access_token.clone(),
+                    expires_at: drive.authorization.expires_at.clone(),
+                    account: drive.account.clone(),
+                    folder_id: drive.folder_id.as_str().to_owned(),
+                })
+            }
+            StoredProvider::OauthFile(OAuthFileProvider::ICloud(icloud)) => {
+                PersonalEnrollmentProvider::oauth_file(OAuthFileEnrollment::ICloud {
+                    web_auth_token: icloud.web_auth_token.clone(),
+                    account: icloud.account.clone(),
+                    share_target: icloud.share_target.as_str().to_owned(),
+                })
+            }
+        })
     }
 }
 
@@ -314,50 +241,31 @@ impl CheckedProviderEnrollment<'_> {
             provider, audience, ..
         } = self.request;
         provider.validate_replication(ReplicationType::Shared)?;
-        let StoredOAuthFileConfiguration::Configured(oauth) = &provider.oauth_file else {
+        let StoredProvider::OauthFile(oauth) = &provider.provider else {
             return Err(ValidationError::SharedStorageTargetRequired);
         };
         let EnrollmentAudience::Shared(audience) = audience else {
             return Err(ValidationError::SharedJoinerIdentityRequired);
         };
-        let identity = audience.joiner_identity.trim();
-        if identity.is_empty() {
-            return Err(ValidationError::SharedJoinerIdentityRequired);
-        }
-        match oauth.preset {
-            OauthFilePreset::GoogleDrive => match &oauth.folder_id {
-                StoredGoogleDriveFolder::FolderId(id) if !id.trim().is_empty() => {
-                    Ok(SharedEnrollmentProvider::google_drive(
-                        identity.to_owned(),
-                        id.trim().to_owned(),
-                    ))
-                }
-                StoredGoogleDriveFolder::FolderId(_) | StoredGoogleDriveFolder::Root => {
-                    Err(ValidationError::SharedStorageTargetRequired)
-                }
-            },
-            OauthFilePreset::ICloud => match &oauth.icloud_share_target {
-                StoredICloudShareTarget::SharedTarget(id) if !id.trim().is_empty() => Ok(
-                    SharedEnrollmentProvider::icloud(identity.to_owned(), id.trim().to_owned()),
-                ),
-                StoredICloudShareTarget::SharedTarget(_) | StoredICloudShareTarget::Unbound => {
-                    Err(ValidationError::SharedStorageTargetRequired)
-                }
-            },
-        }
+        let identity = match audience.joiner_identity.trim() {
+            "" => return Err(ValidationError::SharedJoinerIdentityRequired),
+            identity => identity.to_owned(),
+        };
+        Ok(match oauth {
+            OAuthFileProvider::GoogleDrive(drive) => SharedEnrollmentProvider::google_drive(
+                identity,
+                drive.folder_id.as_str().to_owned(),
+            ),
+            OAuthFileProvider::ICloud(icloud) => {
+                SharedEnrollmentProvider::icloud(identity, icloud.share_target.as_str().to_owned())
+            }
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        ProviderVaultScope, StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
-        StoredICloudShareTarget, StoredLocalFolderConfiguration, StoredOAuthAccessCredential,
-        StoredOAuthFileConfiguration, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
-        StoredS3Configuration,
-    };
-
-    use std::io;
+    use std::ptr;
 
     use super::{
         CheckedProviderEnrollment, EnrollmentAudience, ProviderEnrollmentRequest,
@@ -365,464 +273,293 @@ mod tests {
     };
     use crate::errors::ValidationError;
     use crate::{
-        EnrollmentProvider, OauthFilePreset, OnboardingType, ReplicationType,
-        SharedEnrollmentProvider, SharedStorageTargetSelection, StorageProviderData,
-        StorageProviderType, VaultArchitecture,
+        DeviceIdentity, EnrollmentProvider, EnrollmentProviderDataRef, GithubProvider,
+        OAuthFileEnrollment, OAuthFilePreset, OnboardingType, PersonalEnrollmentProvider,
+        PersonalEnrollmentProviderData, ProviderSecretText, ReplicationType,
+        SharedEnrollmentProvider, SharedStorageTargetSelection, StorageProvider, StoredProvider,
+        VaultArchitecture, VaultType,
     };
-    struct ProviderEnrollmentFixture {
-        provider: StorageProviderData,
-    }
-    use crate::{
-        EnrollmentProviderDataRef, OAuthFileConfigData, ProviderSyncCheckpoint,
-        SharedEnrollmentProviderData,
-    };
-
-    impl ProviderEnrollmentFixture {
-        fn github(id: &str, repo: &str, pat: &str) -> Self {
-            Self {
-                provider: StorageProviderData {
-                    id: id.to_owned(),
-                    provider_type: StorageProviderType::Github,
-                    label: "GitHub".to_owned(),
-                    github_pat: StoredGithubPat::Token(pat.to_owned()),
-                    github_repo: StoredGithubRepository::Repository(repo.to_owned()),
-                    oauth_file: StoredOAuthFileConfiguration::NotApplicable,
-                    local_folder: StoredLocalFolderConfiguration::NotApplicable,
-                    s3: StoredS3Configuration::NotApplicable,
-                    store_id: ProviderVaultScope::Unscoped,
-                    sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-                    created_at: "2026-06-24T00:00:00.000Z".to_owned(),
-                },
-            }
-        }
-    }
-
-    impl ProviderEnrollmentFixture {
-        fn oauth(
-            id: &str,
-            preset: OauthFilePreset,
-            file_id: StoredOAuthRemoteFileId,
-            file_name: &str,
-        ) -> Self {
-            Self {
-                provider: StorageProviderData {
-                    id: id.to_owned(),
-                    provider_type: StorageProviderType::OauthFile,
-                    label: "Google Drive".to_owned(),
-                    github_pat: StoredGithubPat::Missing,
-                    github_repo: StoredGithubRepository::DefaultRepository,
-                    oauth_file: StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
-                        preset,
-                        access_token: StoredOAuthAccessCredential::AccessToken(
-                            " token ".to_owned(),
-                        ),
-                        file_id,
-                        file_name: StoredOAuthRemoteFileName::FileName(file_name.to_owned()),
-                        ..OAuthFileConfigData::default()
-                    }),
-                    local_folder: StoredLocalFolderConfiguration::NotApplicable,
-                    s3: StoredS3Configuration::NotApplicable,
-                    store_id: ProviderVaultScope::Unscoped,
-                    sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-                    created_at: "2026-06-24T00:00:00.000Z".to_owned(),
-                },
-            }
-        }
-    }
-
-    impl ProviderEnrollmentFixture {
-        fn with_target(mut self, target: &str) -> anyhow::Result<Self> {
-            let StoredOAuthFileConfiguration::Configured(config) = &mut self.provider.oauth_file
-            else {
-                anyhow::bail!("OAuth config must exist");
-            };
-            match config.preset {
-                OauthFilePreset::GoogleDrive => {
-                    config.folder_id = StoredGoogleDriveFolder::FolderId(target.to_owned());
-                }
-                OauthFilePreset::ICloud => {
-                    config.icloud_share_target =
-                        StoredICloudShareTarget::SharedTarget(target.to_owned());
-                }
-            }
-            Ok(self)
-        }
-    }
 
     fn shared_audience(joiner_identity: &str) -> EnrollmentAudience<'_> {
         EnrollmentAudience::Shared(SharedEnrollmentAudience { joiner_identity })
     }
 
-    #[test]
-    fn device_invites_for_oauth_providers_are_always_credential_free() -> anyhow::Result<()> {
-        let shared = VaultArchitecture {
+    fn shared_architecture() -> VaultArchitecture {
+        VaultArchitecture {
             replication_type: ReplicationType::Shared,
             ..VaultArchitecture::default()
-        };
-        let github = ProviderEnrollmentFixture::github("gh", "nook", "github_pat_123").provider;
-        assert!(
-            ProviderEnrollmentRequest {
-                provider: &github,
-                architecture: &shared,
-                audience: shared_audience("a@b.com"),
-            }
-            .build()
-            .is_err()
-        );
+        }
+    }
 
-        let unbound = ProviderEnrollmentFixture::oauth(
-            "drive",
-            OauthFilePreset::GoogleDrive,
-            StoredOAuthRemoteFileId::FileId("file-123".to_owned()),
-            "nook.yaml",
-        );
-        assert_eq!(
-            ProviderEnrollmentRequest {
-                provider: &unbound.provider,
-                architecture: &shared,
-                audience: shared_audience("joiner@example.com"),
-            }
-            .build(),
-            Err(ValidationError::SharedStorageTargetRequired)
-        );
+    fn build(
+        provider: &StorageProvider,
+        architecture: &VaultArchitecture,
+        audience: EnrollmentAudience<'_>,
+    ) -> Result<EnrollmentProvider, ValidationError> {
+        ProviderEnrollmentRequest {
+            provider,
+            architecture,
+            audience,
+        }
+        .build()
+    }
 
+    fn row(provider: StoredProvider) -> StorageProvider {
+        StorageProvider::fixture("row", provider)
+    }
+
+    #[test]
+    fn device_invites_for_oauth_providers_are_always_credential_free() -> anyhow::Result<()> {
+        let github = row(StoredProvider::github_fixture()?);
+        assert!(build(&github, &shared_architecture(), shared_audience("a@b.com")).is_err());
         // A personal-replication vault still sends Drive invites as grants:
         // the new device signs in with its own authorized account.
-        let drive = unbound.with_target("vault-folder")?.provider;
+        let drive = row(StoredProvider::google_drive_fixture()?);
         assert_eq!(
             drive.onboarding_type(&VaultArchitecture::default()),
             Ok(OnboardingType::SharedProviderGrant)
         );
         assert_eq!(
-            ProviderEnrollmentRequest {
-                provider: &drive,
-                architecture: &VaultArchitecture::default(),
-                audience: shared_audience("joiner@example.com"),
-            }
-            .build()?,
+            build(
+                &drive,
+                &VaultArchitecture::default(),
+                shared_audience(" joiner@example.com ")
+            )?,
             EnrollmentProvider::shared(SharedEnrollmentProvider::google_drive(
                 "joiner@example.com".to_owned(),
-                "vault-folder".to_owned(),
+                "folder-1".to_owned(),
             ))
         );
-
-        let share = crate::ICloudSharedTarget::new(
-            crate::ICloudShareRole::Owner,
-            "zone",
-            "owner",
-            "root",
-            "guid",
-        )?
-        .to_storage_id()?;
-        let icloud = ProviderEnrollmentFixture::oauth(
-            "icloud",
-            OauthFilePreset::ICloud,
-            StoredOAuthRemoteFileId::Unresolved,
-            "nook.yaml",
-        )
-        .with_target(&share)?
-        .provider;
+        let icloud = row(StoredProvider::icloud_fixture()?);
+        let StoredProvider::OauthFile(crate::OAuthFileProvider::ICloud(share)) = &icloud.provider
+        else {
+            anyhow::bail!("the iCloud fixture is an iCloud row");
+        };
+        let payload = build(
+            &icloud,
+            &VaultArchitecture::default(),
+            shared_audience("m@icloud.com"),
+        )?;
         assert_eq!(
-            ProviderEnrollmentRequest {
-                provider: &icloud,
-                architecture: &VaultArchitecture::default(),
-                audience: shared_audience(" member@icloud.com "),
-            }
-            .build()?,
+            payload,
             EnrollmentProvider::shared(SharedEnrollmentProvider::icloud(
-                "member@icloud.com".to_owned(),
-                share,
+                "m@icloud.com".to_owned(),
+                share.share_target.as_str().to_owned(),
             ))
         );
+        assert!(!serde_json::to_string(&payload)?.contains("TEST-ONLY"));
         Ok(())
     }
 
     #[test]
     fn only_the_companion_handoff_transfers_the_oauth_session() -> anyhow::Result<()> {
-        let drive = ProviderEnrollmentFixture::oauth(
-            "drive",
-            OauthFilePreset::GoogleDrive,
-            StoredOAuthRemoteFileId::FileId("vault-file".to_owned()),
-            "nook-events",
-        )
-        .with_target("folder-abc")?
-        .provider;
-        let companion = ProviderEnrollmentRequest {
-            provider: &drive,
-            architecture: &VaultArchitecture::default(),
-            audience: EnrollmentAudience::Personal,
-        }
-        .build()?;
-        let EnrollmentProviderDataRef::Personal(crate::PersonalEnrollmentProviderData::OauthFile {
-            remote_file,
-            ..
-        }) = companion.data()
+        let drive = row(StoredProvider::google_drive_fixture()?);
+        let companion = build(
+            &drive,
+            &VaultArchitecture::default(),
+            EnrollmentAudience::Personal,
+        )?;
+        let EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::OauthFile(
+            OAuthFileEnrollment::GoogleDrive {
+                access_token,
+                folder_id,
+                ..
+            },
+        )) = companion.data()
         else {
             anyhow::bail!("a companion handoff builds a personal OAuth payload");
         };
         // The companion connects through the same shared folder.
-        assert_eq!(
-            remote_file,
-            &crate::OAuthRemoteFile::Identified {
-                file_id: "shared:folder-abc".to_owned(),
-                file_name: "nook-events".to_owned(),
-            }
-        );
-
+        assert_eq!(folder_id, "folder-1");
+        assert_eq!(access_token.expose(), "TEST-ONLY-drive-token");
         // A shared-replication vault never transfers a session, even to the
         // companion; it must name an authorized account instead.
-        let shared = VaultArchitecture {
-            replication_type: ReplicationType::Shared,
-            ..VaultArchitecture::default()
-        };
         assert_eq!(
-            ProviderEnrollmentRequest {
-                provider: &drive,
-                architecture: &shared,
-                audience: EnrollmentAudience::Personal,
-            }
-            .build(),
+            build(&drive, &shared_architecture(), EnrollmentAudience::Personal),
             Err(ValidationError::SharedJoinerIdentityRequired)
         );
         Ok(())
     }
 
     #[test]
-    fn shared_payload_roundtrips_without_owner_credentials() -> anyhow::Result<()> {
-        let shared = EnrollmentProvider::shared(SharedEnrollmentProvider::google_drive(
-            "joiner@example.com".to_owned(),
-            "shared-folder".to_owned(),
-        ));
-        let encoded = serde_json::to_vec(&shared)?;
-        let decoded: EnrollmentProvider = serde_json::from_slice(&encoded)?;
-        assert_eq!(
-            OnboardingType::from_enrollment(&decoded),
-            OnboardingType::SharedProviderGrant
-        );
-        match decoded.data() {
-            EnrollmentProviderDataRef::Shared(SharedEnrollmentProviderData::GoogleDrive {
-                storage_target_id,
-                ..
-            }) => assert_eq!(storage_target_id, "shared-folder"),
-            other => anyhow::bail!("expected shared Google Drive grant, got {other:?}"),
+    fn a_personal_invite_carries_each_providers_own_payload() -> anyhow::Result<()> {
+        let personal = VaultArchitecture::default();
+        for provider in [
+            StoredProvider::Local {},
+            StoredProvider::local_folder_fixture()?,
+        ] {
+            assert_eq!(
+                build(&row(provider), &personal, EnrollmentAudience::Personal)?,
+                EnrollmentProvider::personal(PersonalEnrollmentProvider::local())
+            );
         }
-
-        let serialized = String::from_utf8(encoded)?;
-        assert!(!serialized.contains("access_token"));
-        assert!(!serialized.contains("refresh_token"));
-        assert!(!serialized.contains("pat"));
+        assert_eq!(
+            build(
+                &row(StoredProvider::github_fixture()?),
+                &personal,
+                EnrollmentAudience::Personal
+            )?,
+            EnrollmentProvider::personal(PersonalEnrollmentProvider::github(
+                ProviderSecretText::try_from("github_pat_11TESTONLYNOTREAL".to_owned())?,
+                "team-vault".to_owned(),
+            ))
+        );
+        let s3 = row(StoredProvider::s3_fixture()?);
+        let StoredProvider::S3(connection) = &s3.provider else {
+            anyhow::bail!("the S3 fixture is an S3 row");
+        };
+        assert_eq!(
+            build(&s3, &personal, EnrollmentAudience::Personal)?,
+            EnrollmentProvider::personal(PersonalEnrollmentProvider::s3(
+                connection.enrollment_connection()
+            ))
+        );
+        let icloud = row(StoredProvider::icloud_fixture()?);
+        assert!(matches!(
+            build(&icloud, &personal, EnrollmentAudience::Personal)?.data(),
+            EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::OauthFile(
+                OAuthFileEnrollment::ICloud { .. }
+            ))
+        ));
         Ok(())
     }
 
     #[test]
-    fn shared_grant_provider_selection_is_target_and_credential_scoped() -> anyhow::Result<()> {
-        let private = ProviderEnrollmentFixture::oauth(
-            "private",
-            OauthFilePreset::GoogleDrive,
-            StoredOAuthRemoteFileId::FileId("private-file".to_owned()),
-            "nook.yaml",
-        )
-        .provider;
-        let mut other = ProviderEnrollmentFixture::oauth(
-            "other",
-            OauthFilePreset::GoogleDrive,
-            StoredOAuthRemoteFileId::FileId("other-file".to_owned()),
-            "nook.yaml",
-        )
-        .provider;
-        (match &mut other.oauth_file {
-            StoredOAuthFileConfiguration::Configured(config) => Ok(config),
-            StoredOAuthFileConfiguration::NotApplicable => {
-                Err(io::Error::other("configured provider required"))
-            }
-        })?
-        .folder_id = StoredGoogleDriveFolder::FolderId("folder-other".to_owned());
-        let mut matching = ProviderEnrollmentFixture::oauth(
-            "matching",
-            OauthFilePreset::GoogleDrive,
-            StoredOAuthRemoteFileId::FileId("matching-file".to_owned()),
-            "nook.yaml",
-        )
-        .provider;
-        (match &mut matching.oauth_file {
-            StoredOAuthFileConfiguration::Configured(config) => Ok(config),
-            StoredOAuthFileConfiguration::NotApplicable => {
-                Err(io::Error::other("configured provider required"))
-            }
-        })?
-        .folder_id = StoredGoogleDriveFolder::FolderId("folder-required".to_owned());
-        let providers = vec![private, other, matching];
+    fn a_sealed_row_never_becomes_a_personal_invite() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?;
+        for provider in [
+            StoredProvider::github_fixture()?,
+            StoredProvider::s3_fixture()?,
+        ] {
+            let sealed = row(provider.transition_secrets(|secret| {
+                ProviderSecretText::try_from(
+                    identity
+                        .public_key()
+                        .seal_bytes(secret.expose().as_bytes())?
+                        .into_inner(),
+                )
+                .map_err(anyhow::Error::from)
+            })?);
+            assert_eq!(
+                build(
+                    &sealed,
+                    &VaultArchitecture::default(),
+                    EnrollmentAudience::Personal
+                ),
+                Err(ValidationError::ProviderCredentialSealed)
+            );
+        }
+        Ok(())
+    }
 
-        assert!(matches!(SharedGrantProviderSelection {
-            providers: &providers,
-            preset: OauthFilePreset::GoogleDrive,
-            target: &SharedStorageTargetSelection::Existing("folder-required".to_owned()),
-        }.resolve(), SharedGrantProviderOutcome::Existing { provider } if provider.id == "matching"));
-        assert!(matches!(
-            SharedGrantProviderSelection {
-                providers: &providers,
-                preset: OauthFilePreset::GoogleDrive,
-                target: &SharedStorageTargetSelection::Existing("missing".to_owned()),
-            }
-            .resolve(),
-            SharedGrantProviderOutcome::AuthorizationRequired
-        ));
-        assert!(matches!(SharedGrantProviderSelection {
-            providers: &providers,
-            preset: OauthFilePreset::GoogleDrive,
-            target: &SharedStorageTargetSelection::Create,
-        }.resolve(), SharedGrantProviderOutcome::Existing { provider } if provider.id == "private"));
+    #[test]
+    fn architecture_rejection_precedes_the_payload() -> anyhow::Result<()> {
+        let provider = row(StoredProvider::Github(GithubProvider::fixture(
+            "bad name", "pat",
+        )?));
+        let invalid = VaultArchitecture {
+            vault_type: VaultType::Sentinel,
+            ..VaultArchitecture::default()
+        };
+        assert_eq!(
+            build(&provider, &invalid, EnrollmentAudience::Personal),
+            Err(ValidationError::InvalidSentinelPolicy)
+        );
+        assert_eq!(
+            build(
+                &provider,
+                &VaultArchitecture::default(),
+                EnrollmentAudience::Personal
+            ),
+            Err(ValidationError::GithubRepoChars)
+        );
         Ok(())
     }
 
     #[test]
     fn admitted_selection_retains_original_request_until_consuming_construction()
     -> anyhow::Result<()> {
-        use std::ptr;
-        let fixture = ProviderEnrollmentFixture::oauth(
-            "drive",
-            OauthFilePreset::GoogleDrive,
-            StoredOAuthRemoteFileId::Unresolved,
-            "events",
-        )
-        .with_target(" folder ")?;
-        let architecture = VaultArchitecture {
-            replication_type: ReplicationType::Shared,
-            ..VaultArchitecture::default()
-        };
+        let provider = row(StoredProvider::google_drive_fixture()?);
+        let architecture = shared_architecture();
         let checked: CheckedProviderEnrollment<'_> = ProviderEnrollmentRequest {
-            provider: &fixture.provider,
+            provider: &provider,
             architecture: &architecture,
             audience: shared_audience(" joiner@example.com "),
         }
         .admit()?;
-        assert!(ptr::eq(
-            checked.request.provider,
-            &raw const fixture.provider
-        ));
+        assert!(ptr::eq(checked.request.provider, &raw const provider));
         assert!(ptr::eq(
             checked.request.architecture,
             &raw const architecture
         ));
         assert_eq!(checked.onboarding, OnboardingType::SharedProviderGrant);
-        let payload = checked.build()?;
-        assert_eq!(
-            payload,
-            EnrollmentProvider::shared(SharedEnrollmentProvider::google_drive(
-                "joiner@example.com".to_owned(),
-                "folder".to_owned(),
-            ))
-        );
-        let encoded = serde_json::to_string(&payload)?;
+        let encoded = serde_json::to_string(&checked.build()?)?;
         assert!(!encoded.contains("access_token"));
-        assert!(!encoded.contains("refresh_token"));
         Ok(())
     }
 
     #[test]
-    fn architecture_rejection_precedes_invalid_personal_credentials() {
-        use crate::VaultType;
-        let provider = ProviderEnrollmentFixture::github("gh", "", "").provider;
-        let invalid = VaultArchitecture {
-            vault_type: VaultType::Sentinel,
-            ..VaultArchitecture::default()
-        };
-        assert_eq!(
-            ProviderEnrollmentRequest {
-                provider: &provider,
-                architecture: &invalid,
-                audience: EnrollmentAudience::Personal,
-            }
-            .build(),
-            Err(ValidationError::InvalidSentinelPolicy)
-        );
-        assert_eq!(
-            ProviderEnrollmentRequest {
-                provider: &provider,
-                architecture: &VaultArchitecture::default(),
-                audience: EnrollmentAudience::Personal,
-            }
-            .build(),
-            Err(ValidationError::GithubPatEmpty)
-        );
-    }
-
-    #[test]
     fn device_invites_require_the_authorized_account() -> anyhow::Result<()> {
-        let provider = ProviderEnrollmentFixture::oauth(
-            "drive",
-            OauthFilePreset::GoogleDrive,
-            StoredOAuthRemoteFileId::Unresolved,
-            "events",
-        )
-        .with_target(" persisted ")?
-        .provider;
-        let before = provider.clone();
-        let payload = ProviderEnrollmentRequest {
-            provider: &provider,
-            architecture: &VaultArchitecture::default(),
-            audience: shared_audience(" joiner "),
-        }
-        .build()?;
+        let provider = row(StoredProvider::google_drive_fixture()?);
         assert_eq!(
-            payload,
-            EnrollmentProvider::shared(SharedEnrollmentProvider::google_drive(
-                "joiner".to_owned(),
-                "persisted".to_owned(),
-            ))
-        );
-        assert_eq!(provider, before);
-        assert_eq!(
-            ProviderEnrollmentRequest {
-                provider: &provider,
-                architecture: &VaultArchitecture::default(),
-                audience: shared_audience("  "),
-            }
-            .build(),
+            build(
+                &provider,
+                &VaultArchitecture::default(),
+                shared_audience("  ")
+            ),
             Err(ValidationError::SharedJoinerIdentityRequired)
         );
         Ok(())
     }
 
     #[test]
-    fn grant_selection_skips_unusable_credentials_and_compares_exact_targets() -> anyhow::Result<()>
-    {
-        let mut first = ProviderEnrollmentFixture::oauth(
-            "first",
-            OauthFilePreset::GoogleDrive,
-            StoredOAuthRemoteFileId::Unresolved,
-            "events",
-        )
-        .provider;
-        let config = (match &mut first.oauth_file {
-            StoredOAuthFileConfiguration::Configured(config) => Ok(config),
-            StoredOAuthFileConfiguration::NotApplicable => Err(io::Error::other("OAuth fixture")),
-        })?;
-        config.folder_id = StoredGoogleDriveFolder::FolderId("folder".to_owned());
-        let second = StorageProviderData {
-            id: "second".to_owned(),
-            ..first.clone()
+    fn grant_selection_compares_the_preset_and_the_exact_target() -> anyhow::Result<()> {
+        let drive = row(StoredProvider::google_drive_fixture()?);
+        let icloud = row(StoredProvider::icloud_fixture()?);
+        let providers = [
+            row(StoredProvider::github_fixture()?),
+            drive.clone(),
+            icloud.clone(),
+        ];
+        let select = |preset, target: &SharedStorageTargetSelection| {
+            SharedGrantProviderSelection {
+                providers: &providers,
+                preset,
+                target,
+            }
+            .resolve()
         };
-        (match &mut first.oauth_file {
-            StoredOAuthFileConfiguration::Configured(config) => Ok(config),
-            StoredOAuthFileConfiguration::NotApplicable => Err(io::Error::other("OAuth fixture")),
-        })?
-        .access_token = StoredOAuthAccessCredential::AccessToken(" ".to_owned());
-        let providers = [first, second];
-        for (preset, target, expected) in [
-            (OauthFilePreset::GoogleDrive, "folder", true),
-            (OauthFilePreset::GoogleDrive, " folder ", false),
-            (OauthFilePreset::ICloud, "folder", false),
-        ] {
-            assert_eq!(
-                matches!(SharedGrantProviderSelection {
-                    providers: &providers,
-                    preset,
-                    target: &SharedStorageTargetSelection::Existing(target.to_owned()),
-                }.resolve(), SharedGrantProviderOutcome::Existing { provider } if provider.id == "second"),
-                expected
-            );
-        }
+        let existing = |provider: &StorageProvider| SharedGrantProviderOutcome::Existing {
+            provider: Box::new(provider.clone()),
+        };
+        assert_eq!(
+            select(
+                OAuthFilePreset::GoogleDrive,
+                &SharedStorageTargetSelection::Create
+            ),
+            existing(&drive)
+        );
+        assert_eq!(
+            select(
+                OAuthFilePreset::GoogleDrive,
+                &SharedStorageTargetSelection::Existing("folder-1".to_owned())
+            ),
+            existing(&drive)
+        );
+        assert_eq!(
+            select(
+                OAuthFilePreset::GoogleDrive,
+                &SharedStorageTargetSelection::Existing("folder-2".to_owned())
+            ),
+            SharedGrantProviderOutcome::AuthorizationRequired
+        );
+        assert_eq!(
+            select(
+                OAuthFilePreset::ICloud,
+                &SharedStorageTargetSelection::Create
+            ),
+            existing(&icloud)
+        );
         Ok(())
     }
 }

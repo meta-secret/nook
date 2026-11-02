@@ -211,6 +211,7 @@ impl NookVaultManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_fixtures::WasmFixture;
     use nook_core::StorageMode;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -236,16 +237,14 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn identity_transition_clears_provider_session_state() {
+    fn identity_transition_clears_provider_session_state() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
         manager.storage.mode = StorageMode::Github;
         manager.storage.access_token = "prior-identity-token".to_owned();
         manager.storage.remote_ref = "owner/repository".to_owned();
         manager.storage.remote_path = "events".to_owned();
-        manager.sync_outbox.connection = nook_core::StorageConnection::Github {
-            token: "prior-outbox-token".to_owned(),
-            repo: "owner/repository".to_owned(),
-        };
+        manager.sync_outbox.connection =
+            WasmFixture::github_connection("prior-outbox-token", "owner/repository")?;
 
         manager.reset_local_identity_session();
 
@@ -257,6 +256,7 @@ mod tests {
             manager.sync_outbox.connection,
             nook_core::StorageConnection::Local
         );
+        Ok(())
     }
 }
 

@@ -4,18 +4,18 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
-use crate::{ActiveVaultScope, ProviderVaultScope, StorageProviderType};
-
-use super::{AuthProvidersSnapshotData, StorageProviderData};
+use crate::{
+    ActiveVaultScope, AuthProvidersSnapshot, ProviderVaultScope, StorageProvider, StoredProvider,
+};
 
 /// Borrowed provider rows; projections preserve each selected row verbatim.
 pub struct ProviderRows<'a> {
-    pub providers: &'a [StorageProviderData],
+    pub providers: &'a [StorageProvider],
 }
 
 /// Provider rows paired with an active-vault observation, not an authorization capability.
 pub struct ActiveVaultProviderRows<'a> {
-    providers: &'a [StorageProviderData],
+    providers: &'a [StorageProvider],
     active_store_id: &'a ActiveVaultScope,
 }
 impl<'a> ProviderRows<'a> {
@@ -31,7 +31,7 @@ impl<'a> ProviderRows<'a> {
 /// Provider rows visible for the active vault.
 impl ActiveVaultProviderRows<'_> {
     #[must_use]
-    pub fn active(self) -> Vec<StorageProviderData> {
+    pub fn active(self) -> Vec<StorageProvider> {
         let Self {
             providers,
             active_store_id,
@@ -43,7 +43,7 @@ impl ActiveVaultProviderRows<'_> {
             ActiveVaultScope::StoreId(id) => providers
                 .iter()
                 .filter(|provider| {
-                    provider.provider_type != StorageProviderType::Local
+                    !matches!(provider.provider, StoredProvider::Local {})
                         || matches!(&provider.store_id, ProviderVaultScope::StoreId(stored) if stored == id.trim())
                 })
                 .cloned()
@@ -54,7 +54,7 @@ impl ActiveVaultProviderRows<'_> {
 
 /// Replace the complete provider grant set for `incoming`'s active vault while
 /// preserving provider rows owned by every other vault.
-impl AuthProvidersSnapshotData {
+impl AuthProvidersSnapshot {
     #[must_use]
     pub fn replace_active_vault_grants(&self, incoming: &Self) -> Self {
         let existing = self;
@@ -74,22 +74,22 @@ impl AuthProvidersSnapshotData {
         let mut providers = existing
             .providers
             .iter()
-            .filter(|provider| match provider.provider_type {
-                StorageProviderType::Local => matches!(&provider.store_id, ProviderVaultScope::StoreId(id) if !id.trim().is_empty() && id.trim() != active_store_id),
-                StorageProviderType::Github
-                | StorageProviderType::OauthFile
-                | StorageProviderType::LocalFolder
-                | StorageProviderType::S3 => !incoming_ids.contains(&provider.id.as_str()),
+            .filter(|provider| match provider.provider {
+                StoredProvider::Local {} => matches!(&provider.store_id, ProviderVaultScope::StoreId(id) if !id.trim().is_empty() && id.trim() != active_store_id),
+                StoredProvider::LocalFolder(_)
+                | StoredProvider::Github(_)
+                | StoredProvider::OauthFile(_)
+                | StoredProvider::S3(_) => !incoming_ids.contains(&provider.id.as_str()),
             })
             .cloned()
             .collect::<Vec<_>>();
         providers.extend(incoming.providers.iter().cloned().map(|mut provider| {
-            if provider.provider_type == StorageProviderType::Local {
+            if matches!(provider.provider, StoredProvider::Local {}) {
                 provider.store_id = ProviderVaultScope::StoreId(active_store_id.to_owned());
             }
             provider
         }));
-        AuthProvidersSnapshotData {
+        AuthProvidersSnapshot {
             providers,
             active_vault_store_id: ActiveVaultScope::StoreId(active_store_id.to_owned()),
         }
@@ -98,10 +98,10 @@ impl AuthProvidersSnapshotData {
 
 impl ActiveVaultProviderRows<'_> {
     #[must_use]
-    pub fn sync(self) -> Vec<StorageProviderData> {
+    pub fn sync(self) -> Vec<StorageProvider> {
         self.active()
             .into_iter()
-            .filter(|provider| provider.provider_type != StorageProviderType::Local)
+            .filter(|provider| !matches!(provider.provider, StoredProvider::Local {}))
             .collect()
     }
 }
@@ -109,13 +109,13 @@ impl ActiveVaultProviderRows<'_> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LocalProviderSelection {
     Unseeded,
-    Selected(Box<StorageProviderData>),
+    Selected(Box<StorageProvider>),
 }
 impl ActiveVaultProviderRows<'_> {
     #[must_use]
     pub fn local(self) -> LocalProviderSelection {
         for provider in self.active() {
-            if provider.provider_type == StorageProviderType::Local {
+            if matches!(provider.provider, StoredProvider::Local {}) {
                 return LocalProviderSelection::Selected(Box::new(provider));
             }
         }
@@ -139,12 +139,12 @@ impl ProviderRows<'_> {
 /// Selected rows are copied verbatim; this does not inspect or scrub credential fields.
 impl ProviderRows<'_> {
     #[must_use]
-    pub fn visible_while_locked(self) -> Vec<StorageProviderData> {
+    pub fn visible_while_locked(self) -> Vec<StorageProvider> {
         let providers = self.providers;
 
         providers
             .iter()
-            .filter(|provider| provider.provider_type == StorageProviderType::Local)
+            .filter(|provider| matches!(provider.provider, StoredProvider::Local {}))
             .cloned()
             .collect()
     }
@@ -152,57 +152,38 @@ impl ProviderRows<'_> {
 
 #[cfg(test)]
 mod tests {
+    use super::{LocalProviderSelection, ProviderEventFlushTarget, ProviderRows};
     use crate::{
-        ActiveVaultScope, ProviderSyncCheckpoint, ProviderVaultScope, StoredGithubPat,
-        StoredGithubRepository, StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
-        StoredS3Configuration,
+        ActiveVaultScope, AuthProvidersSnapshot, GithubProvider, ProviderVaultScope,
+        StorageProvider, StoredProvider,
     };
 
-    use crate::StorageProviderType;
-
-    use super::{LocalProviderSelection, ProviderEventFlushTarget, ProviderRows};
-    use crate::{AuthProvidersSnapshotData, StorageProviderData};
-
-    struct ProviderScopeFixture {
-        provider: StorageProviderData,
+    fn github(id: &str, repository: &str, token: &str) -> anyhow::Result<StorageProvider> {
+        Ok(StorageProvider {
+            label: "GitHub".to_owned(),
+            ..StorageProvider::fixture(
+                id,
+                StoredProvider::Github(GithubProvider::fixture(repository, token)?),
+            )
+        })
     }
-    impl ProviderScopeFixture {
-        fn github(id: &str, repo: &str, pat: &str) -> Self {
-            Self {
-                provider: StorageProviderData {
-                    id: id.to_owned(),
-                    provider_type: StorageProviderType::Github,
-                    label: "GitHub".to_owned(),
-                    github_pat: StoredGithubPat::Token(pat.to_owned()),
-                    github_repo: StoredGithubRepository::Repository(repo.to_owned()),
-                    oauth_file: StoredOAuthFileConfiguration::NotApplicable,
-                    local_folder: StoredLocalFolderConfiguration::NotApplicable,
-                    s3: StoredS3Configuration::NotApplicable,
-                    store_id: ProviderVaultScope::Unscoped,
-                    sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-                    created_at: "2026-06-24T00:00:00.000Z".to_owned(),
-                },
-            }
-        }
 
-        fn local(id: &str, store_id: &str) -> Self {
-            let mut fixture = Self::github(id, "ignored", "ignored");
-            fixture.provider.provider_type = StorageProviderType::Local;
-            fixture.provider.store_id = ProviderVaultScope::StoreId(store_id.to_owned());
-            fixture
+    fn local(id: &str, store_id: &str) -> StorageProvider {
+        StorageProvider {
+            store_id: ProviderVaultScope::StoreId(store_id.to_owned()),
+            ..StorageProvider::fixture(id, StoredProvider::Local {})
         }
     }
 
     #[test]
-    fn local_rows_belong_to_one_vault_and_remote_rows_to_the_identity() {
-        let local_a = ProviderScopeFixture::local("local-a", "store-a").provider;
-        let local_b = ProviderScopeFixture::local("local-b", "store-b").provider;
-        let github = ProviderScopeFixture::github("github", "owner/a", "pat-a").provider;
+    fn local_rows_belong_to_one_vault_and_remote_rows_to_the_identity() -> anyhow::Result<()> {
+        let local_a = local("local-a", "store-a");
+        let local_b = local("local-b", "store-b");
+        let github = github("github", "owner-a", "pat-a")?;
         let providers = vec![local_a.clone(), local_b.clone(), github.clone()];
         let rows = || ProviderRows {
             providers: &providers,
         };
-
         assert_eq!(
             rows()
                 .for_vault(&ActiveVaultScope::StoreId(" store-a ".to_owned()))
@@ -230,14 +211,12 @@ mod tests {
         assert_eq!(rows().visible_while_locked(), vec![local_a, local_b]);
         assert_eq!(rows().label("github"), "GitHub");
         assert_eq!(rows().label("removed"), "removed");
+        Ok(())
     }
 
     #[test]
-    fn an_unselected_or_blank_scope_shows_every_row() {
-        let providers = [
-            ProviderScopeFixture::local("local", "vault").provider,
-            ProviderScopeFixture::github("github", "repo", "token").provider,
-        ];
+    fn an_unselected_or_blank_scope_shows_every_row() -> anyhow::Result<()> {
+        let providers = [local("local", "vault"), github("github", "repo", "token")?];
         for scope in [
             ActiveVaultScope::Unselected,
             ActiveVaultScope::StoreId(String::new()),
@@ -252,51 +231,48 @@ mod tests {
                 providers
             );
         }
+        Ok(())
     }
 
     #[test]
-    fn local_folders_sync_while_browser_rows_stay_local() {
-        let local = ProviderScopeFixture::local("local", "vault").provider;
-        let mut folder = ProviderScopeFixture::github("folder", "repo", "token").provider;
-        folder.provider_type = StorageProviderType::LocalFolder;
-        let providers = [local.clone(), folder.clone()];
-        let rows = ProviderRows {
-            providers: &providers,
-        };
+    fn local_folders_sync_while_browser_rows_stay_local() -> anyhow::Result<()> {
+        let folder = StorageProvider::fixture("folder", StoredProvider::local_folder_fixture()?);
+        let providers = [local("local", "vault"), folder.clone()];
         assert_eq!(
-            rows.for_vault(&ActiveVaultScope::StoreId("vault".to_owned()))
-                .sync(),
+            ProviderRows {
+                providers: &providers
+            }
+            .for_vault(&ActiveVaultScope::StoreId("vault".to_owned()))
+            .sync(),
             vec![folder]
         );
+        Ok(())
     }
 
     #[test]
-    fn incoming_pairing_replaces_that_vaults_local_row_and_merges_mounts() {
-        let old_local = ProviderScopeFixture::local("old-local", "store-a").provider;
-        let other_local = ProviderScopeFixture::local("other-local", "store-b").provider;
-        let kept_mount = ProviderScopeFixture::github("kept", "owner/kept", "pat").provider;
-        let replaced_mount = ProviderScopeFixture::github("same", "owner/old", "old").provider;
-        let existing = AuthProvidersSnapshotData {
+    fn incoming_pairing_replaces_that_vaults_local_row_and_merges_mounts() -> anyhow::Result<()> {
+        let other_local = local("other-local", "store-b");
+        let kept_mount = github("kept", "kept", "pat")?;
+        let existing = AuthProvidersSnapshot {
             providers: vec![
-                old_local,
+                local("old-local", "store-a"),
                 other_local.clone(),
                 kept_mount.clone(),
-                replaced_mount,
+                github("same", "old", "old")?,
             ],
             active_vault_store_id: ActiveVaultScope::StoreId("store-a".to_owned()),
         };
-        let mut new_local = ProviderScopeFixture::local("new-local", "ignored").provider;
-        new_local.store_id = ProviderVaultScope::Unscoped;
-        let updated_mount = ProviderScopeFixture::github("same", "owner/new", "new").provider;
-        let incoming = AuthProvidersSnapshotData {
+        let new_local = StorageProvider::fixture("new-local", StoredProvider::Local {});
+        let updated_mount = github("same", "new", "new")?;
+        let incoming = AuthProvidersSnapshot {
             providers: vec![new_local.clone(), updated_mount.clone()],
             active_vault_store_id: ActiveVaultScope::StoreId(" store-a ".to_owned()),
         };
-
         let replaced = existing.replace_active_vault_grants(&incoming);
-
-        let mut bound_local = new_local;
-        bound_local.store_id = ProviderVaultScope::StoreId("store-a".to_owned());
+        let bound_local = StorageProvider {
+            store_id: ProviderVaultScope::StoreId("store-a".to_owned()),
+            ..new_local
+        };
         assert_eq!(
             replaced.providers,
             vec![other_local, kept_mount, bound_local, updated_mount]
@@ -305,12 +281,13 @@ mod tests {
             replaced.active_vault_store_id,
             ActiveVaultScope::StoreId("store-a".to_owned())
         );
+        Ok(())
     }
 
     #[test]
-    fn absent_incoming_scope_returns_incoming_verbatim() {
-        let existing = AuthProvidersSnapshotData {
-            providers: vec![ProviderScopeFixture::local("existing", "vault").provider],
+    fn absent_incoming_scope_returns_incoming_verbatim() -> anyhow::Result<()> {
+        let existing = AuthProvidersSnapshot {
+            providers: vec![local("existing", "vault")],
             active_vault_store_id: ActiveVaultScope::StoreId("vault".to_owned()),
         };
         for scope in [
@@ -318,32 +295,31 @@ mod tests {
             ActiveVaultScope::StoreId(String::new()),
             ActiveVaultScope::StoreId(" ".to_owned()),
         ] {
-            let incoming = AuthProvidersSnapshotData {
-                providers: vec![ProviderScopeFixture::github("incoming", "repo", "token").provider],
+            let incoming = AuthProvidersSnapshot {
+                providers: vec![github("incoming", "repo", "token")?],
                 active_vault_store_id: scope,
             };
             assert_eq!(existing.replace_active_vault_grants(&incoming), incoming);
         }
+        Ok(())
     }
 
     #[test]
-    fn every_remote_mount_receives_every_vaults_events() {
-        let github = ProviderScopeFixture::github("github", "repo", "token").provider;
-        let local = ProviderScopeFixture::local("local", "vault").provider;
-        let mut folder = github.clone();
-        folder.provider_type = StorageProviderType::LocalFolder;
-        let mut s3 = github.clone();
-        s3.provider_type = StorageProviderType::S3;
+    fn every_remote_mount_receives_every_vaults_events() -> anyhow::Result<()> {
+        let local = local("local", "vault");
+        for remote in [
+            StoredProvider::github_fixture()?,
+            StoredProvider::google_drive_fixture()?,
+            StoredProvider::s3_fixture()?,
+        ] {
+            assert_eq!(
+                StorageProvider::fixture("remote", remote).event_flush_target("any-vault"),
+                ProviderEventFlushTarget::Remote
+            );
+        }
         assert_eq!(
-            github.event_flush_target("any-vault"),
-            ProviderEventFlushTarget::Remote
-        );
-        assert_eq!(
-            s3.event_flush_target("any-vault"),
-            ProviderEventFlushTarget::Remote
-        );
-        assert_eq!(
-            folder.event_flush_target("any-vault"),
+            StorageProvider::fixture("folder", StoredProvider::local_folder_fixture()?)
+                .event_flush_target("any-vault"),
             ProviderEventFlushTarget::LocalOnly
         );
         assert_eq!(
@@ -354,13 +330,14 @@ mod tests {
             local.event_flush_target("other"),
             ProviderEventFlushTarget::OtherVault
         );
+        Ok(())
     }
 }
 
 #[derive(Debug, Clone, serde::Deserialize, tsify::Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoteEventFlushProviderRequest {
-    pub snapshot: AuthProvidersSnapshotData,
+    pub snapshot: AuthProvidersSnapshot,
     pub vault_store_id: String,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -369,11 +346,11 @@ pub enum ProviderEventFlushTarget {
     LocalOnly,
     Remote,
 }
-impl StorageProviderData {
+impl StorageProvider {
     #[must_use]
     pub fn event_flush_target(&self, vault_store_id: &str) -> ProviderEventFlushTarget {
-        match self.provider_type {
-            StorageProviderType::Local => match &self.store_id {
+        match self.provider {
+            StoredProvider::Local {} => match &self.store_id {
                 ProviderVaultScope::StoreId(id) if id == vault_store_id => {
                     ProviderEventFlushTarget::LocalOnly
                 }
@@ -381,16 +358,16 @@ impl StorageProviderData {
                     ProviderEventFlushTarget::OtherVault
                 }
             },
-            StorageProviderType::LocalFolder => ProviderEventFlushTarget::LocalOnly,
-            StorageProviderType::Github
-            | StorageProviderType::OauthFile
-            | StorageProviderType::S3 => ProviderEventFlushTarget::Remote,
+            StoredProvider::LocalFolder(_) => ProviderEventFlushTarget::LocalOnly,
+            StoredProvider::Github(_) | StoredProvider::OauthFile(_) | StoredProvider::S3(_) => {
+                ProviderEventFlushTarget::Remote
+            }
         }
     }
 }
 impl RemoteEventFlushProviderRequest {
     #[must_use]
-    pub fn select(self) -> Vec<StorageProviderData> {
+    pub fn select(self) -> Vec<StorageProvider> {
         self.snapshot
             .providers
             .into_iter()

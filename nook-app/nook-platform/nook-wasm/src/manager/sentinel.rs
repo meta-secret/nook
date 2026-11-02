@@ -787,7 +787,7 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
-    use nook_core::AuthProvidersSnapshotData;
+    use nook_core::AuthProvidersSnapshot;
     #[cfg(test)]
     #[cfg(test)]
     use nook_core::SentinelShareVersion;
@@ -959,7 +959,7 @@ mod browser_tests {
                 .create_sentinel_onboarding_package(
                     "{}",
                     "{}",
-                    &AuthProvidersSnapshotData::default().into_ts()?
+                    &AuthProvidersSnapshot::default().into_ts()?
                 )
                 .is_err()
         );

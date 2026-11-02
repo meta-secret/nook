@@ -10,8 +10,8 @@
 use std::mem;
 
 use nook_core::{
-    ActiveVaultScope, AppId, AppKeyIdentityMembership, AuthProvidersSnapshotData,
-    IdentityControlState, IdentityId, ProviderCredentialRejection, StorageProvider,
+    ActiveVaultScope, AppId, AppKeyIdentityMembership, AuthProvidersSnapshot, IdentityControlState,
+    IdentityId, ProviderCredentialRejection, StorageProvider,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -46,17 +46,6 @@ pub struct NookKeyringProviderShares {
 #[serde(transparent)]
 #[tsify(type = "unknown")]
 pub struct NookKeyringProviderSharesAdmission(pub NookKeyringProviderShares);
-
-impl Drop for NookKeyringProviderSharesAdmission {
-    fn drop(&mut self) {
-        for share in &mut self.0.apps {
-            share
-                .providers
-                .iter_mut()
-                .for_each(StorageProvider::zeroize_credentials);
-        }
-    }
-}
 
 #[wasm_bindgen]
 impl NookVaultManager {
@@ -122,7 +111,7 @@ impl NookVaultManager {
             ) {
                 continue;
             }
-            let mut snapshot = AuthProvidersSnapshotData {
+            let snapshot = AuthProvidersSnapshot {
                 providers: mem::take(&mut share.providers),
                 active_vault_store_id: ActiveVaultScope::Unselected,
             };
@@ -133,10 +122,6 @@ impl NookVaultManager {
             }
             .save()
             .await;
-            snapshot
-                .providers
-                .iter_mut()
-                .for_each(StorageProvider::zeroize_credentials);
             saved?;
             taken += snapshot.providers.len();
         }
@@ -151,7 +136,7 @@ impl NookVaultManager {
     pub async fn save_added_identity_providers(
         &self,
         identity_id: String,
-        snapshot: &tsify::Ts<AuthProvidersSnapshotData>,
+        snapshot: &tsify::Ts<AuthProvidersSnapshot>,
     ) -> Result<(), JsError> {
         let identity_id = IdentityId::parse(&identity_id)?;
         let snapshot = snapshot
@@ -197,7 +182,8 @@ impl NookVaultManager {
 mod browser_tests {
     use super::*;
     use crate::storage::auth_providers::ProviderSnapshotPublication;
-    use nook_core::{AppKey, SigningIdentity, StoredGithubPat};
+    use crate::test_fixtures::WasmFixture;
+    use nook_core::{AppKey, ProviderVaultScope, SigningIdentity, StoredProvider};
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -206,14 +192,28 @@ mod browser_tests {
         result.map_err(|error| anyhow::anyhow!("{error:?}"))
     }
 
-    fn github(id: &str, pat: &str) -> StorageProvider {
-        StorageProvider::github(id, "GitHub", pat, "owner/nook", "2026-10-29T00:00:00Z")
+    fn github(id: &str, pat: &str) -> anyhow::Result<StorageProvider> {
+        Ok(WasmFixture::github_row(id, pat, "nook")?)
     }
 
     fn local_row() -> StorageProvider {
-        let mut row = github("local", "");
-        row.provider_type = nook_core::StorageProviderType::Local;
-        row
+        StorageProvider::never_synced(
+            "local".to_owned(),
+            ProviderVaultScope::Unscoped,
+            "2026-10-29T00:00:00Z".to_owned(),
+            StoredProvider::Local {},
+        )
+    }
+
+    /// The text of the one credential the row at `index` holds.
+    fn token(rows: &[StorageProvider], index: usize) -> anyhow::Result<String> {
+        let row = rows
+            .get(index)
+            .ok_or_else(|| anyhow::anyhow!("expected a row at {index}"))?;
+        match row.provider.secrets().as_slice() {
+            [secret] => Ok(secret.expose().to_owned()),
+            other => anyhow::bail!("expected one credential, found {}", other.len()),
+        }
     }
 
     async fn unlocked_web_app() -> anyhow::Result<NookVaultManager> {
@@ -231,7 +231,7 @@ mod browser_tests {
     ) -> anyhow::Result<()> {
         ProviderSnapshotPublication {
             identity: &manager.device_identity()?,
-            snapshot: &AuthProvidersSnapshotData {
+            snapshot: &AuthProvidersSnapshot {
                 providers,
                 active_vault_store_id: ActiveVaultScope::Unselected,
             },
@@ -253,7 +253,7 @@ mod browser_tests {
         let mut manager = unlocked_web_app().await?;
         save(
             &manager,
-            vec![local_row(), github("github", "github_pat_11SHARE")],
+            vec![local_row(), github("github", "github_pat_11SHARE")?],
         )
         .await?;
         // A key with no keyring log yet has no other apps.
@@ -275,20 +275,14 @@ mod browser_tests {
         let share = &shared.apps[0];
         assert_eq!(share.app_id, extension.app_id().as_str());
         assert_eq!(share.providers.len(), 1);
-        assert_ne!(
-            share.providers[0].github_pat,
-            StoredGithubPat::Token("github_pat_11SHARE".to_owned())
-        );
-        let opened = AuthProvidersSnapshotData {
+        assert_ne!(token(&share.providers, 0)?, "github_pat_11SHARE");
+        let opened = AuthProvidersSnapshot {
             providers: share.providers.clone(),
             active_vault_store_id: ActiveVaultScope::Unselected,
         }
         .open_credentials(&extension)
         .map_err(ProviderCredentialRejection::into_cause)?;
-        assert_eq!(
-            opened.providers[0].github_pat,
-            StoredGithubPat::Token("github_pat_11SHARE".to_owned())
-        );
+        assert_eq!(token(&opened.providers, 0)?, "github_pat_11SHARE");
         js(manager.delete_local_browser_data().await)?;
         Ok(())
     }
@@ -298,10 +292,14 @@ mod browser_tests {
     {
         let mut manager = unlocked_web_app().await?;
         let held = manager.device_identity()?;
-        save(&manager, vec![local_row(), github("old", "github_pat_old")]).await?;
+        save(
+            &manager,
+            vec![local_row(), github("old", "github_pat_old")?],
+        )
+        .await?;
         let other = AppKey::generate()?;
         let sealed_to = |key: &AppKey, providers: Vec<StorageProvider>| {
-            AuthProvidersSnapshotData {
+            AuthProvidersSnapshot {
                 providers,
                 active_vault_store_id: ActiveVaultScope::Unselected,
             }
@@ -313,11 +311,11 @@ mod browser_tests {
             apps: vec![
                 NookAppProviderShare {
                     app_id: other.app_id().as_str().to_owned(),
-                    providers: sealed_to(&other, vec![github("drive", "for-the-other-app")])?,
+                    providers: sealed_to(&other, vec![github("drive", "for-the-other-app")?])?,
                 },
                 NookAppProviderShare {
                     app_id: held.app_id().as_str().to_owned(),
-                    providers: sealed_to(&held, vec![github("added", "github_pat_added")])?,
+                    providers: sealed_to(&held, vec![github("added", "github_pat_added")?])?,
                 },
             ],
         };
@@ -334,10 +332,7 @@ mod browser_tests {
         let stored = AuthProviderDatabase::load_auth_providers(&held).await?;
         let ids: Vec<&str> = stored.providers.iter().map(|row| row.id.as_str()).collect();
         assert_eq!(ids, vec!["local", "added"]);
-        assert_eq!(
-            stored.providers[1].github_pat,
-            StoredGithubPat::Token("github_pat_added".to_owned())
-        );
+        assert_eq!(token(&stored.providers, 1)?, "github_pat_added");
         assert!(
             AuthProviderDatabase::load_auth_providers(&other)
                 .await?
@@ -374,7 +369,7 @@ mod browser_tests {
         let plaintext = NookKeyringProviderShares {
             apps: vec![NookAppProviderShare {
                 app_id: held.app_id().as_str().to_owned(),
-                providers: vec![github("github", "github_pat_plaintext")],
+                providers: vec![github("github", "github_pat_plaintext")?],
             }],
         };
 

@@ -7,10 +7,10 @@
 //! current key epoch for every active member.
 
 use nook_core::{
-    AuthProvidersSnapshotData, EventId, IdentityControlState, IdentityNameStatus,
+    AuthProvidersSnapshot, EventId, IdentityControlState, IdentityNameStatus,
     IdentityVaultEpochAction, IdentityVaultEpochStatus, IdentityVaultKeyOpening,
     IdentityVaultRegistration, MultiDeviceError, OpenedVaultDek, ProviderRows, SecretTypeFilter,
-    StorageProviderData, StoreId, SymmetricKey, VaultKeys, VaultMetaState, VaultRevocationDue,
+    StorageProvider, StoreId, SymmetricKey, VaultKeys, VaultMetaState, VaultRevocationDue,
     VaultType, VaultUnlock,
 };
 use tsify::Tsify;
@@ -125,9 +125,9 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub fn identity_vault_provider(
         &self,
-        snapshot: &tsify::Ts<AuthProvidersSnapshotData>,
+        snapshot: &tsify::Ts<AuthProvidersSnapshot>,
         store_id: &str,
-    ) -> Result<tsify::Ts<StorageProviderData>, JsError> {
+    ) -> Result<tsify::Ts<StorageProvider>, JsError> {
         let providers = snapshot
             .to_rust()
             .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?
@@ -136,9 +136,11 @@ impl NookVaultManager {
         let rows = ProviderRows {
             providers: &providers,
         };
-        let row = rows.vault_row(&store_id).ok_or_else(|| {
-            NookError::Database("No saved provider replicates this vault.".to_owned())
-        })?;
+        let nook_core::ProviderRowLookup::Found(row) = rows.vault_row(&store_id) else {
+            return Err(
+                NookError::Database("No saved provider replicates this vault.".to_owned()).into(),
+            );
+        };
         Tsify::into_ts(row).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
     }
 

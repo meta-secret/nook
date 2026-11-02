@@ -4,6 +4,7 @@ use crate::VaultSnapshotLookup;
 use crate::identity_record::NookIdentityDirectorySelectionKind;
 use crate::storage::identity_record::StoredIdentityProtection;
 use crate::storage::indexed_db::ImportVaultLabel;
+use crate::test_fixtures::WasmFixture;
 use crate::{
     DeviceProtectionDeviceModeState, IdbPutStringRequest, ImportVaultBlobRequest, NookDatabase,
 };
@@ -575,10 +576,8 @@ async fn replacement_manager(
     replacement.event_log.signing_seed = "previous-signing-seed".to_owned();
     replacement.event_log.key_epoch = "previous-key-epoch".to_owned();
     replacement.sync_outbox.provider_id = "previous-provider".to_owned();
-    replacement.sync_outbox.connection = nook_core::StorageConnection::Github {
-        token: "previous-access-token".to_owned(),
-        repo: "previous/repository".to_owned(),
-    };
+    replacement.sync_outbox.connection =
+        WasmFixture::github_connection("previous-access-token", "previous/repository")?;
     Ok((replacement, previous_store_id))
 }
 
@@ -593,10 +592,7 @@ async fn assert_rollback(
     assert_eq!(manager.event_log.key_epoch, "previous-key-epoch");
     assert_eq!(
         manager.sync_outbox.connection,
-        nook_core::StorageConnection::Github {
-            token: "previous-access-token".to_owned(),
-            repo: "previous/repository".to_owned(),
-        }
+        WasmFixture::github_connection("previous-access-token", "previous/repository")?
     );
     assert_eq!(
         NookDatabase::get_active_vault_id().await?,

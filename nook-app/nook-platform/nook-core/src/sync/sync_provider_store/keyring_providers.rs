@@ -13,24 +13,19 @@
 use nook_auth2::AppId;
 use nook_event_log::IdentityControlState;
 
-use super::{ActiveVaultScope, AuthProvidersSnapshotData, StorageProviderData};
-use crate::{ProviderCredentialRejection, StorageProviderType};
+use crate::{
+    ActiveVaultScope, AuthProvidersSnapshot, ProviderCredentialRejection, StorageProvider,
+    StoredProvider,
+};
 
 /// The keyring's remote providers, sealed to one other app of the keyring.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppProviderShare {
     pub app_id: AppId,
-    pub providers: Vec<StorageProviderData>,
+    pub providers: Vec<StorageProvider>,
 }
 
-impl StorageProviderData {
-    /// Whether this is a browser-local cache row of the installation holding it.
-    fn is_browser_local(&self) -> bool {
-        matches!(self.provider_type, StorageProviderType::Local)
-    }
-}
-
-impl AuthProvidersSnapshotData {
+impl AuthProvidersSnapshot {
     /// The keyring's remote providers sealed to each member app but `own`,
     /// with the member's key from the keyring's log.
     pub fn shares_for_keyring_apps(
@@ -42,7 +37,7 @@ impl AuthProvidersSnapshotData {
             providers: self
                 .providers
                 .iter()
-                .filter(|provider| !provider.is_browser_local())
+                .filter(|provider| !matches!(provider.provider, StoredProvider::Local {}))
                 .cloned()
                 .collect(),
             active_vault_store_id: ActiveVaultScope::Unselected,
@@ -68,17 +63,17 @@ impl AuthProvidersSnapshotData {
     /// gone here too. This installation's browser-local rows stay, and
     /// handed-over ones, another installation's, are not taken.
     #[must_use]
-    pub fn replace_keyring_providers(&self, incoming: &[StorageProviderData]) -> Self {
-        let mut providers: Vec<StorageProviderData> = self
+    pub fn replace_keyring_providers(&self, incoming: &[StorageProvider]) -> Self {
+        let mut providers: Vec<StorageProvider> = self
             .providers
             .iter()
-            .filter(|provider| provider.is_browser_local())
+            .filter(|provider| matches!(provider.provider, StoredProvider::Local {}))
             .cloned()
             .collect();
         providers.extend(
             incoming
                 .iter()
-                .filter(|provider| !provider.is_browser_local())
+                .filter(|provider| !matches!(provider.provider, StoredProvider::Local {}))
                 .cloned(),
         );
         Self {
@@ -92,39 +87,49 @@ impl AuthProvidersSnapshotData {
 mod tests {
     use super::*;
     use crate::{
-        DeviceIdentity, EventId, IdentityControlMember, IdentityId, IdentityMemberKeys,
-        MemberDevice, MemberLabel, ProviderSyncCheckpoint, ProviderVaultScope, S3Connection,
-        SigningIdentity, StorageProviderType, StoredGithubPat, StoredGithubRepository,
-        StoredLocalFolderConfiguration, StoredOAuthFileConfiguration, StoredS3Configuration,
+        DeviceIdentity, EventId, GithubProvider, IdentityControlMember, IdentityId,
+        IdentityMemberKeys, MemberDevice, MemberLabel, SigningIdentity,
     };
+    use std::slice;
 
-    fn row(id: &str, provider_type: StorageProviderType, pat: &str) -> StorageProviderData {
-        StorageProviderData {
-            id: id.to_owned(),
-            provider_type,
+    fn row(id: &str, provider: StoredProvider) -> StorageProvider {
+        StorageProvider {
             label: id.to_owned(),
-            github_pat: StoredGithubPat::Token(pat.to_owned()),
-            github_repo: StoredGithubRepository::Repository("owner/nook".to_owned()),
-            oauth_file: StoredOAuthFileConfiguration::NotApplicable,
-            local_folder: StoredLocalFolderConfiguration::NotApplicable,
-            s3: StoredS3Configuration::NotApplicable,
-            store_id: ProviderVaultScope::Unscoped,
-            sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-            created_at: "2026-10-29T00:00:00Z".to_owned(),
+            ..StorageProvider::fixture(id, provider)
         }
     }
 
-    fn snapshot(providers: Vec<StorageProviderData>) -> AuthProvidersSnapshotData {
-        AuthProvidersSnapshotData {
+    fn github(id: &str, token: &str) -> anyhow::Result<StorageProvider> {
+        Ok(row(
+            id,
+            StoredProvider::Github(GithubProvider::fixture("nook", token)?),
+        ))
+    }
+
+    fn local(id: &str) -> StorageProvider {
+        row(id, StoredProvider::Local {})
+    }
+
+    fn snapshot(providers: Vec<StorageProvider>) -> AuthProvidersSnapshot {
+        AuthProvidersSnapshot {
             providers,
             active_vault_store_id: ActiveVaultScope::Unselected,
         }
     }
 
-    fn ids(providers: &[StorageProviderData]) -> Vec<&str> {
+    fn ids(providers: &[StorageProvider]) -> Vec<&str> {
         providers
             .iter()
             .map(|provider| provider.id.as_str())
+            .collect()
+    }
+
+    /// The texts of every credential the rows hold.
+    fn secrets(providers: &[StorageProvider]) -> Vec<String> {
+        providers
+            .iter()
+            .flat_map(|provider| provider.provider.secrets())
+            .map(|secret| secret.expose().to_owned())
             .collect()
     }
 
@@ -166,12 +171,8 @@ mod tests {
         let phone = DeviceIdentity::generate()?;
         let state = keyring(&[&web, &extension, &phone])?;
         let providers = snapshot(vec![
-            row("local", StorageProviderType::Local, ""),
-            row(
-                "github",
-                StorageProviderType::Github,
-                "github_pat_11KEYRING",
-            ),
+            local("local"),
+            github("github", "github_pat_11KEYRING")?,
         ]);
 
         let shares = providers
@@ -182,18 +183,11 @@ mod tests {
         assert_eq!(recipients, vec![extension.app_id(), phone.app_id()]);
         for (share, app) in shares.iter().zip([&extension, &phone]) {
             assert_eq!(ids(&share.providers), vec!["github"]);
-            assert!(!share.providers.iter().any(|provider| provider.github_pat
-                == StoredGithubPat::Token("github_pat_11KEYRING".to_owned())));
+            assert_ne!(secrets(&share.providers), vec!["github_pat_11KEYRING"]);
             let opened = snapshot(share.providers.clone())
                 .open_credentials(app)
                 .map_err(ProviderCredentialRejection::into_cause)?;
-            assert_eq!(
-                opened
-                    .providers
-                    .first()
-                    .map(|provider| &provider.github_pat),
-                Some(&StoredGithubPat::Token("github_pat_11KEYRING".to_owned()))
-            );
+            assert_eq!(secrets(&opened.providers), vec!["github_pat_11KEYRING"]);
         }
         // Another app's copy does not open with this key.
         let phone_copy = shares
@@ -212,13 +206,8 @@ mod tests {
         let web = DeviceIdentity::generate()?;
         let extension = DeviceIdentity::generate()?;
         let state = keyring(&[&web, &extension])?;
-        let mut s3 = row("s3", StorageProviderType::S3, "");
-        s3.github_pat = StoredGithubPat::Missing;
-        s3.s3 = StoredS3Configuration::Configured(S3Connection::fixture()?);
-        let providers = snapshot(vec![
-            row("local", StorageProviderType::Local, ""),
-            s3.clone(),
-        ]);
+        let s3 = row("s3", StoredProvider::s3_fixture()?);
+        let providers = snapshot(vec![local("local"), s3.clone()]);
 
         let shares = providers
             .shares_for_keyring_apps(&state, web.app_id())
@@ -240,7 +229,7 @@ mod tests {
     fn a_keyring_with_no_other_app_shares_nothing() -> anyhow::Result<()> {
         let web = DeviceIdentity::generate()?;
         let state = keyring(&[&web])?;
-        let providers = snapshot(vec![row("github", StorageProviderType::Github, "pat")]);
+        let providers = snapshot(vec![github("github", "pat")?]);
 
         let shares = providers
             .shares_for_keyring_apps(&state, web.app_id())
@@ -251,37 +240,39 @@ mod tests {
     }
 
     #[test]
-    fn handed_over_providers_replace_the_remote_ones_and_keep_local_rows() {
+    fn handed_over_providers_replace_the_remote_ones_and_keep_local_rows() -> anyhow::Result<()> {
         let held = snapshot(vec![
-            row("local", StorageProviderType::Local, ""),
-            row("github", StorageProviderType::Github, "old"),
-            row("removed", StorageProviderType::OauthFile, "gone"),
+            local("local"),
+            github("github", "old")?,
+            row("removed", StoredProvider::google_drive_fixture()?),
         ]);
         let incoming = vec![
-            row("other-browser", StorageProviderType::Local, ""),
-            row("github", StorageProviderType::Github, "new"),
-            row("drive", StorageProviderType::OauthFile, "added"),
+            local("other-browser"),
+            github("github", "new")?,
+            row("drive", StoredProvider::google_drive_fixture()?),
         ];
 
         let taken = held.replace_keyring_providers(&incoming);
 
         assert_eq!(ids(&taken.providers), vec!["local", "github", "drive"]);
         assert_eq!(
-            taken.providers.get(1).map(|provider| &provider.github_pat),
-            Some(&StoredGithubPat::Token("new".to_owned()))
+            taken
+                .providers
+                .get(1)
+                .map(|provider| secrets(slice::from_ref(provider))),
+            Some(vec!["new".to_owned()])
         );
         assert_eq!(taken.active_vault_store_id, held.active_vault_store_id);
+        Ok(())
     }
 
     #[test]
-    fn an_empty_hand_over_removes_every_remote_provider() {
-        let held = snapshot(vec![
-            row("local", StorageProviderType::Local, ""),
-            row("github", StorageProviderType::Github, "old"),
-        ]);
+    fn an_empty_hand_over_removes_every_remote_provider() -> anyhow::Result<()> {
+        let held = snapshot(vec![local("local"), github("github", "old")?]);
 
         let taken = held.replace_keyring_providers(&[]);
 
         assert_eq!(ids(&taken.providers), vec!["local"]);
+        Ok(())
     }
 }

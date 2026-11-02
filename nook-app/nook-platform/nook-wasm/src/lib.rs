@@ -40,6 +40,8 @@ mod passkey_browser;
 mod passkey_observation;
 mod storage;
 mod sync_io;
+#[cfg(test)]
+mod test_fixtures;
 mod types;
 
 pub use device_access::*;
@@ -146,7 +148,7 @@ pub fn extension_sync_provider_credentials_scope()
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn companion_pairing_provider_manifest_digest(
-    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshotData>,
+    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshot>,
 ) -> Result<String, wasm_bindgen::JsError> {
     let snapshot = snapshot
         .to_rust()

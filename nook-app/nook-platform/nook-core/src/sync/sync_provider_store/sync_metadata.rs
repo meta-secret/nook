@@ -4,14 +4,12 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use crate::ProviderVaultScope;
-
-use super::{
+use crate::{
     ManagerStoreScopeRef, ProviderSyncCheckpoint, ProviderSyncRevision, ProviderSyncRevisionRef,
-    ProviderSyncedVaultVersion, StorageProviderData,
+    ProviderSyncedVaultVersion, ProviderVaultScope, StorageProvider,
 };
 
-impl StorageProviderData {
+impl StorageProvider {
     /// Apply successful provider-sync metadata without duplicating vault parsing
     /// or hashing in host code.
     #[must_use]
@@ -77,48 +75,29 @@ impl StorageProviderData {
 #[cfg(test)]
 mod tests {
     use crate::{
-        ProviderVaultScope, StoredGithubPat, StoredGithubRepository,
-        StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
-    };
-
-    use crate::{
         ManagerStoreScopeRef, ProviderSyncCheckpoint, ProviderSyncRevision,
-        ProviderSyncRevisionRef, ProviderSyncedVaultVersion, StorageProviderData,
-        StorageProviderType, StoredS3Configuration,
+        ProviderSyncRevisionRef, ProviderSyncedVaultVersion, StorageProvider, StoredProvider,
     };
 
-    impl StorageProviderData {
-        fn sync_metadata_github_provider(id: &str, repo: &str, pat: &str) -> Self {
-            Self {
-                id: id.to_owned(),
-                provider_type: StorageProviderType::Github,
-                label: "GitHub".to_owned(),
-                github_pat: StoredGithubPat::Token(pat.to_owned()),
-                github_repo: StoredGithubRepository::Repository(repo.to_owned()),
-                oauth_file: StoredOAuthFileConfiguration::NotApplicable,
-                local_folder: StoredLocalFolderConfiguration::NotApplicable,
-                s3: StoredS3Configuration::NotApplicable,
-                store_id: ProviderVaultScope::Unscoped,
-                sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-                created_at: "2026-06-24T00:00:00.000Z".to_owned(),
-            }
-        }
+    fn github(id: &str) -> anyhow::Result<StorageProvider> {
+        Ok(StorageProvider::fixture(
+            id,
+            StoredProvider::github_fixture()?,
+        ))
     }
 
     #[test]
-    fn provider_sync_metadata_update_preserves_unreported_fields() {
-        let mut provider =
-            StorageProviderData::sync_metadata_github_provider("github", "owner/repo", "pat");
+    fn provider_sync_metadata_update_preserves_unreported_fields() -> anyhow::Result<()> {
+        let mut provider = github("github")?;
         provider.sync_checkpoint = ProviderSyncCheckpoint::Synced {
             version: ProviderSyncedVaultVersion::Version(9.into()),
             synced_at: "earlier".to_owned(),
             revision: ProviderSyncRevision::Revision("old-revision".to_owned()),
             common_content_hash: "old-hash".to_owned(),
         };
-        let untouched =
-            StorageProviderData::sync_metadata_github_provider("other", "owner/other", "other-pat");
+        let untouched = github("other")?;
 
-        let updated = StorageProviderData::update_sync_metadata(
+        let updated = StorageProvider::update_sync_metadata(
             &[provider, untouched.clone()],
             "github",
             "",
@@ -140,5 +119,6 @@ mod tests {
             Some(&crate::ProviderVaultScope::StoreId(("store-1").to_owned()))
         );
         assert_eq!(updated.get(1), Some(&untouched));
+        Ok(())
     }
 }

@@ -4,25 +4,10 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
-use crate::ProviderLabel;
 use crate::{
-    ActiveVaultScope, DuplicateSyncProvider, ProviderId, ProviderSyncCheckpoint,
-    StoredICloudShareTarget, StoredLocalFolderDirectory, StoredOAuthAccessCredential,
-    StoredOAuthAccountIdentity, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
-    SyncProviderTargetIdentity,
-};
-
-use crate::{
-    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GithubPat, GithubPatMask,
-    GithubSyncTarget, LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget,
-    ProviderVaultScope, StorageProviderType, StoredGithubPat, StoredGithubRepository,
-    StoredLocalFolderConfiguration, StoredOAuthFileConfiguration, StoredS3Configuration,
-    SyncProviderTarget,
-};
-
-use super::{
-    AuthProvidersSnapshotData, ProviderLabelLabels, ProviderStorageDetailLabels,
-    StorageProviderData,
+    ActiveVaultScope, AuthProvidersSnapshot, DuplicateSyncProvider, ProviderId,
+    ProviderLabelLabels, ProviderStorageDetailLabels, ProviderTargetKey, ProviderVaultScope,
+    StorageProvider, StoredProvider,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -32,10 +17,11 @@ pub enum DuplicateCandidatePolicy {
 }
 
 pub struct DuplicateProviderSelection<'a> {
-    pub providers: &'a [StorageProviderData],
-    pub candidate: &'a StorageProviderData,
+    pub providers: &'a [StorageProvider],
+    pub candidate: &'a StorageProvider,
     pub policy: DuplicateCandidatePolicy,
 }
+
 #[derive(Clone, Copy)]
 pub struct LocalProviderRowRequest<'a> {
     pub active_store_id: &'a ActiveVaultScope,
@@ -43,105 +29,15 @@ pub struct LocalProviderRowRequest<'a> {
     pub created_at: &'a str,
 }
 
-impl StorageProviderData {
+impl StorageProvider {
     #[must_use]
     pub fn storage_detail(&self, labels: &ProviderStorageDetailLabels) -> String {
-        let provider = self;
-        let provider_type = provider.provider_type;
-        match provider_type {
-            StorageProviderType::Local => labels.this_device_desc.clone(),
-            StorageProviderType::LocalFolder => match &provider.local_folder {
-                StoredLocalFolderConfiguration::Configured(folder) => {
-                    match &folder.directory_name {
-                        StoredLocalFolderDirectory::DirectoryName(name)
-                            if !name.trim().is_empty() =>
-                        {
-                            name.trim().to_owned()
-                        }
-                        StoredLocalFolderDirectory::DirectoryName(_)
-                        | StoredLocalFolderDirectory::Unnamed => {
-                            labels.local_folder_needs_reconnect.clone()
-                        }
-                    }
-                }
-                StoredLocalFolderConfiguration::NotApplicable => {
-                    labels.local_folder_needs_reconnect.clone()
-                }
-            },
-            StorageProviderType::OauthFile => {
-                let (file, account, preset) = match &provider.oauth_file {
-                    StoredOAuthFileConfiguration::Configured(oauth) => {
-                        let file = match &oauth.file_name {
-                            StoredOAuthRemoteFileName::FileName(name)
-                                if !name.trim().is_empty() =>
-                            {
-                                name.trim()
-                            }
-                            StoredOAuthRemoteFileName::FileName(_)
-                            | StoredOAuthRemoteFileName::Unresolved => DEFAULT_DRIVE_BACKUP_NAME,
-                        };
-                        let account = match &oauth.account_email {
-                            StoredOAuthAccountIdentity::Email(email)
-                                if !email.trim().is_empty() =>
-                            {
-                                email.trim()
-                            }
-                            StoredOAuthAccountIdentity::Email(_)
-                            | StoredOAuthAccountIdentity::Unknown => {
-                                match (&oauth.access_token, oauth.preset) {
-                                    (
-                                        StoredOAuthAccessCredential::AccessToken(token),
-                                        OauthFilePreset::ICloud,
-                                    ) if !token.trim().is_empty() => &labels.icloud_signed_in,
-                                    (
-                                        StoredOAuthAccessCredential::AccessToken(token),
-                                        OauthFilePreset::GoogleDrive,
-                                    ) if !token.trim().is_empty() => &labels.google_signed_in,
-                                    (_, OauthFilePreset::ICloud) => &labels.icloud_not_signed_in,
-                                    (_, OauthFilePreset::GoogleDrive) => {
-                                        &labels.google_not_signed_in
-                                    }
-                                }
-                            }
-                        };
-                        (file, account, oauth.preset)
-                    }
-                    StoredOAuthFileConfiguration::NotApplicable => (
-                        DEFAULT_DRIVE_BACKUP_NAME,
-                        labels.google_not_signed_in.as_str(),
-                        OauthFilePreset::GoogleDrive,
-                    ),
-                };
-                // Google Drive keeps one Nook folder per account, so its row
-                // names the account alone; an iCloud record keeps its name.
-                match preset {
-                    OauthFilePreset::GoogleDrive => account.to_owned(),
-                    OauthFilePreset::ICloud => format!("{file} · {account}"),
-                }
-            }
-            StorageProviderType::Github => {
-                let repo = match &provider.github_repo {
-                    StoredGithubRepository::Repository(repo) if !repo.trim().is_empty() => {
-                        repo.trim()
-                    }
-                    StoredGithubRepository::Repository(_)
-                    | StoredGithubRepository::DefaultRepository => DEFAULT_GITHUB_REPO_NAME,
-                };
-                let masked = match &provider.github_pat {
-                    StoredGithubPat::Token(token) => GithubPat::mask(token),
-                    StoredGithubPat::Missing => GithubPatMask::NoToken,
-                };
-                let pat = match masked {
-                    GithubPatMask::Hint(hint) => hint,
-                    GithubPatMask::NoToken => labels.no_token_saved.clone(),
-                };
-                format!("{repo} · {pat}")
-            }
-            StorageProviderType::S3 => match &provider.s3 {
-                StoredS3Configuration::Configured(config) => config.storage_detail(),
-                StoredS3Configuration::NotApplicable => labels.no_token_saved.clone(),
-            },
-        }
+        self.provider.storage_detail(labels)
+    }
+
+    #[must_use]
+    pub fn target_key(&self) -> ProviderTargetKey {
+        self.provider.target_key()
     }
 }
 
@@ -180,82 +76,8 @@ impl ProviderLabelLabels {
     }
 }
 
-impl StorageProviderData {
-    fn catalog_target(&self) -> SyncProviderTarget {
-        let provider = self;
-        match provider.provider_type {
-            StorageProviderType::Local => SyncProviderTarget::Local,
-            StorageProviderType::LocalFolder => {
-                let folder = match &provider.local_folder {
-                    StoredLocalFolderConfiguration::Configured(folder) => LocalFolderSyncTarget {
-                        directory_name: folder.directory_name.clone(),
-                        handle_id: folder.handle_id.clone(),
-                    },
-                    StoredLocalFolderConfiguration::NotApplicable => {
-                        LocalFolderSyncTarget::default()
-                    }
-                };
-                SyncProviderTarget::LocalFolder(folder)
-            }
-            StorageProviderType::Github => SyncProviderTarget::Github(GithubSyncTarget {
-                repo: match &provider.github_repo {
-                    StoredGithubRepository::Repository(repo) if !repo.trim().is_empty() => {
-                        repo.trim().to_owned()
-                    }
-                    StoredGithubRepository::Repository(_)
-                    | StoredGithubRepository::DefaultRepository => {
-                        DEFAULT_GITHUB_REPO_NAME.to_owned()
-                    }
-                },
-                pat: match &provider.github_pat {
-                    StoredGithubPat::Token(pat) if !pat.trim().is_empty() => pat.trim().to_owned(),
-                    StoredGithubPat::Token(_) | StoredGithubPat::Missing => {
-                        return SyncProviderTarget::Empty;
-                    }
-                },
-            }),
-            StorageProviderType::OauthFile => match &provider.oauth_file {
-                StoredOAuthFileConfiguration::Configured(oauth) => {
-                    let preset = oauth.preset;
-                    SyncProviderTarget::OauthFile(OauthFileSyncTarget {
-                        preset,
-                        file_id: if preset == OauthFilePreset::ICloud {
-                            match &oauth.icloud_share_target {
-                                StoredICloudShareTarget::SharedTarget(target) => {
-                                    StoredOAuthRemoteFileId::FileId(target.clone())
-                                }
-                                StoredICloudShareTarget::Unbound => {
-                                    StoredOAuthRemoteFileId::Unresolved
-                                }
-                            }
-                        } else {
-                            oauth.file_id.clone()
-                        },
-                        folder_id: oauth.folder_id.clone(),
-                        file_name: oauth.file_name.clone(),
-                        account_email: oauth.account_email.clone(),
-                        access_token: oauth.access_token.clone(),
-                    })
-                }
-                StoredOAuthFileConfiguration::NotApplicable => SyncProviderTarget::Empty,
-            },
-            StorageProviderType::S3 => match &provider.s3 {
-                StoredS3Configuration::Configured(config) => {
-                    SyncProviderTarget::S3(config.location_identity())
-                }
-                StoredS3Configuration::NotApplicable => SyncProviderTarget::Empty,
-            },
-        }
-    }
-
-    #[must_use]
-    pub fn target_key(&self) -> SyncProviderTargetIdentity {
-        let provider = self;
-        provider.catalog_target().stable_key()
-    }
-}
-
 impl DuplicateProviderSelection<'_> {
+    /// The first row, outside the excluded one, with the candidate's target.
     #[must_use]
     pub fn find(self) -> DuplicateSyncProvider {
         let Self {
@@ -264,9 +86,6 @@ impl DuplicateProviderSelection<'_> {
             policy,
         } = self;
         let candidate_key = candidate.target_key();
-        if matches!(candidate_key, SyncProviderTargetIdentity::Unconfigured) {
-            return DuplicateSyncProvider::Unique;
-        }
         match providers.iter().find(|provider| {
             if let DuplicateCandidatePolicy::Exclude(excluded) = &policy
                 && provider.id == excluded.as_str()
@@ -288,12 +107,14 @@ pub enum LocalProviderRowChange {
     Present,
     Inserted,
 }
+
 pub struct LocalProviderRowOutcome {
-    pub snapshot: AuthProvidersSnapshotData,
+    pub snapshot: AuthProvidersSnapshot,
     pub change: LocalProviderRowChange,
 }
 
-impl AuthProvidersSnapshotData {
+impl AuthProvidersSnapshot {
+    /// Seed this browser's row for the active vault unless one is there.
     #[must_use]
     pub fn ensure_local_row(
         mut self,
@@ -320,7 +141,7 @@ impl AuthProvidersSnapshotData {
             }
         };
         let has_local_for_vault = self.providers.iter().any(|provider| {
-            provider.provider_type == StorageProviderType::Local
+            matches!(provider.provider, StoredProvider::Local {})
                 && match (&store_id, &provider.store_id) {
                     (ProviderVaultScope::Unscoped, _) | (_, ProviderVaultScope::Unscoped) => true,
                     (
@@ -335,20 +156,15 @@ impl AuthProvidersSnapshotData {
                 change: LocalProviderRowChange::Present,
             };
         }
-        let local = StorageProviderData {
-            id: new_id.to_owned(),
-            provider_type: StorageProviderType::Local,
-            label: ProviderLabel::Local.render(),
-            github_pat: StoredGithubPat::Missing,
-            github_repo: StoredGithubRepository::DefaultRepository,
-            oauth_file: StoredOAuthFileConfiguration::NotApplicable,
-            local_folder: StoredLocalFolderConfiguration::NotApplicable,
-            s3: StoredS3Configuration::NotApplicable,
-            store_id,
-            sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-            created_at: created_at.to_owned(),
-        };
-        self.providers.insert(0, local);
+        self.providers.insert(
+            0,
+            StorageProvider::never_synced(
+                new_id.to_owned(),
+                store_id,
+                created_at.to_owned(),
+                StoredProvider::Local {},
+            ),
+        );
         LocalProviderRowOutcome {
             snapshot: self,
             change: LocalProviderRowChange::Inserted,
@@ -358,166 +174,21 @@ impl AuthProvidersSnapshotData {
 
 #[cfg(test)]
 mod tests {
-    struct GithubCatalogFixture<'a> {
-        id: &'a str,
-        repo: &'a str,
-        pat: &'a str,
-    }
-    struct LocalFolderCatalogFixture<'a> {
-        id: &'a str,
-        handle_id: &'a str,
-    }
-    struct OAuthCatalogFixture<'a> {
-        id: &'a str,
-        preset: OauthFilePreset,
-        file_id: StoredOAuthRemoteFileId,
-        file_name: &'a str,
-    }
-
-    use crate::{
-        ActiveVaultScope, ProviderVaultScope, StoredGithubPat, StoredGithubRepository,
-        StoredGoogleDriveFolder, StoredLocalFolderConfiguration, StoredLocalFolderDirectory,
-        StoredLocalFolderHandle, StoredOAuthAccessCredential, StoredOAuthFileConfiguration,
-        StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
-    };
-
-    use std::io::Error as IoError;
     use std::slice;
 
-    use crate::{
-        AuthProvidersSnapshotData, DEFAULT_DRIVE_BACKUP_NAME, LocalFolderConfigData,
-        OAuthFileConfigData, OauthFilePreset, ProviderLabelLabels, ProviderStorageDetailLabels,
-        ProviderSyncCheckpoint, S3Connection, S3ConnectionDraft, StorageProviderData,
-        StorageProviderType, StoredS3Configuration,
-    };
-
     use super::{
-        DuplicateCandidatePolicy, DuplicateProviderSelection, DuplicateSyncProvider,
-        LocalProviderRowChange, LocalProviderRowOutcome, LocalProviderRowRequest,
+        DuplicateCandidatePolicy, DuplicateProviderSelection, LocalProviderRowChange,
+        LocalProviderRowOutcome, LocalProviderRowRequest,
     };
-    use crate::SyncProviderTargetIdentity;
-
-    impl GithubCatalogFixture<'_> {
-        fn build(self) -> StorageProviderData {
-            let Self { id, repo, pat } = self;
-
-            StorageProviderData {
-                id: id.to_owned(),
-                provider_type: StorageProviderType::Github,
-                label: "GitHub".to_owned(),
-                github_pat: StoredGithubPat::Token(pat.to_owned()),
-                github_repo: StoredGithubRepository::Repository(repo.to_owned()),
-                oauth_file: StoredOAuthFileConfiguration::NotApplicable,
-                local_folder: StoredLocalFolderConfiguration::NotApplicable,
-                s3: StoredS3Configuration::NotApplicable,
-                store_id: ProviderVaultScope::Unscoped,
-                sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-                created_at: "2026-06-24T00:00:00.000Z".to_owned(),
-            }
-        }
-    }
-
-    impl LocalFolderCatalogFixture<'_> {
-        fn build(self) -> StorageProviderData {
-            let Self { id, handle_id } = self;
-
-            StorageProviderData {
-                id: id.to_owned(),
-                provider_type: StorageProviderType::LocalFolder,
-                label: "Local backup".to_owned(),
-                github_pat: StoredGithubPat::Missing,
-                github_repo: StoredGithubRepository::DefaultRepository,
-                oauth_file: StoredOAuthFileConfiguration::NotApplicable,
-                local_folder: StoredLocalFolderConfiguration::configured(LocalFolderConfigData {
-                    directory_name: StoredLocalFolderDirectory::DirectoryName(
-                        "Nook Backup".to_owned(),
-                    ),
-                    handle_id: StoredLocalFolderHandle::HandleId(handle_id.to_owned()),
-                }),
-                s3: StoredS3Configuration::NotApplicable,
-                store_id: ProviderVaultScope::Unscoped,
-                sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-                created_at: "2026-06-24T00:00:00.000Z".to_owned(),
-            }
-        }
-    }
-
-    struct S3CatalogFixture<'a> {
-        id: &'a str,
-        key_prefix: &'a str,
-        access_key_id: &'a str,
-        region: &'a str,
-    }
-
-    impl S3CatalogFixture<'_> {
-        fn build(self) -> anyhow::Result<StorageProviderData> {
-            let mut draft = S3ConnectionDraft::fixture();
-            draft.key_prefix = self.key_prefix.to_owned();
-            draft.access_key_id = self.access_key_id.to_owned();
-            draft.region = self.region.to_owned();
-            let config = S3Connection::try_from(draft)?;
-            let mut row = GithubCatalogFixture {
-                id: self.id,
-                repo: "",
-                pat: "",
-            }
-            .build();
-            row.provider_type = StorageProviderType::S3;
-            row.label = "S3".to_owned();
-            row.github_pat = StoredGithubPat::Missing;
-            row.s3 = StoredS3Configuration::Configured(config);
-            Ok(row)
-        }
-    }
-
-    impl OAuthCatalogFixture<'_> {
-        fn build(self) -> StorageProviderData {
-            let Self {
-                id,
-                preset,
-                file_id,
-                file_name,
-            } = self;
-
-            StorageProviderData {
-                id: id.to_owned(),
-                provider_type: StorageProviderType::OauthFile,
-                label: "Google Drive".to_owned(),
-                github_pat: StoredGithubPat::Missing,
-                github_repo: StoredGithubRepository::DefaultRepository,
-                oauth_file: StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
-                    preset,
-                    access_token: StoredOAuthAccessCredential::AccessToken(" token ".to_owned()),
-                    file_id,
-                    file_name: StoredOAuthRemoteFileName::FileName(file_name.to_owned()),
-                    ..OAuthFileConfigData::default()
-                }),
-                local_folder: StoredLocalFolderConfiguration::NotApplicable,
-                s3: StoredS3Configuration::NotApplicable,
-                store_id: ProviderVaultScope::Unscoped,
-                sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-                created_at: "2026-06-24T00:00:00.000Z".to_owned(),
-            }
-        }
-    }
-
-    impl ProviderStorageDetailLabels {
-        fn catalog_fixture() -> Self {
-            ProviderStorageDetailLabels {
-                this_device_desc: "This device desc".to_owned(),
-                no_token_saved: "No token saved".to_owned(),
-                google_signed_in: "Signed in with Google".to_owned(),
-                icloud_signed_in: "Signed in with iCloud".to_owned(),
-                google_not_signed_in: "Not signed in".to_owned(),
-                icloud_not_signed_in: "Not signed in with iCloud".to_owned(),
-                local_folder_needs_reconnect: "Choose folder".to_owned(),
-            }
-        }
-    }
+    use crate::{
+        ActiveVaultScope, AuthProvidersSnapshot, DuplicateSyncProvider, GithubProvider,
+        OAuthAccountIdentity, OAuthFileProvider, ProviderLabelLabels, ProviderStorageDetailLabels,
+        ProviderVaultScope, S3Connection, S3ConnectionDraft, StorageProvider, StoredProvider,
+    };
 
     impl ProviderLabelLabels {
         fn catalog_fixture() -> Self {
-            ProviderLabelLabels {
+            Self {
                 this_device: "This device localized".to_owned(),
                 github: "GitHub localized".to_owned(),
                 local_folder: "Local folder localized".to_owned(),
@@ -527,300 +198,116 @@ mod tests {
         }
     }
 
-    #[test]
-    fn duplicate_selection_returns_first_nonexcluded_row_without_mutation() {
-        let first = GithubCatalogFixture {
-            id: "first",
-            repo: "repo",
-            pat: "pat",
+    fn github(id: &str, repository: &str, token: &str) -> anyhow::Result<StorageProvider> {
+        Ok(StorageProvider::fixture(
+            id,
+            StoredProvider::Github(GithubProvider::fixture(repository, token)?),
+        ))
+    }
+
+    fn s3(
+        id: &str,
+        key_prefix: &str,
+        access_key_id: &str,
+        region: &str,
+    ) -> anyhow::Result<StorageProvider> {
+        let mut draft = S3ConnectionDraft::fixture();
+        draft.key_prefix = key_prefix.to_owned();
+        draft.access_key_id = access_key_id.to_owned();
+        draft.region = region.to_owned();
+        Ok(StorageProvider::fixture(
+            id,
+            StoredProvider::S3(S3Connection::try_from(draft)?),
+        ))
+    }
+
+    fn duplicate_of(
+        providers: &[StorageProvider],
+        candidate: &StorageProvider,
+    ) -> DuplicateSyncProvider {
+        DuplicateProviderSelection {
+            providers,
+            candidate,
+            policy: DuplicateCandidatePolicy::IncludeAll,
         }
-        .build();
-        let second = StorageProviderData {
-            id: "second".to_owned(),
-            ..first.clone()
-        };
-        let rows = vec![first.clone(), second];
-        let original = rows.clone();
-        for (policy, expected) in [
-            (DuplicateCandidatePolicy::IncludeAll, "first"),
-            (DuplicateCandidatePolicy::Exclude("first".into()), "second"),
-            (DuplicateCandidatePolicy::Exclude("absent".into()), "first"),
-        ] {
-            let found = DuplicateProviderSelection {
-                providers: &rows,
-                candidate: &first,
-                policy,
-            }
-            .find();
-            assert!(
-                matches!(found, DuplicateSyncProvider::Duplicate { provider } if provider.id == expected)
-            );
-            assert_eq!(rows, original);
-        }
+        .find()
     }
 
     #[test]
-    fn duplicate_detection_uses_stable_provider_targets() {
-        let existing = GithubCatalogFixture {
-            id: "gh-existing",
-            repo: "nook-crdt-test-1",
-            pat: "github_pat_11AAAA",
-        }
-        .build();
-        let candidate = GithubCatalogFixture {
-            id: "gh-new",
-            repo: "nook-crdt-test-1",
-            pat: "github_pat_11AAAA",
-        }
-        .build();
-        assert!(matches!(DuplicateProviderSelection {
-                providers: &[existing],
-                candidate: &candidate,
-                policy: DuplicateCandidatePolicy::IncludeAll
-            }
-            .find(), DuplicateSyncProvider::Duplicate { provider } if provider.id == "gh-existing"));
-
-        let no_pat = StorageProviderData {
-            github_pat: StoredGithubPat::Missing,
-            ..GithubCatalogFixture {
-                id: "gh-draft",
-                repo: "nook",
-                pat: "github_pat_11AAAA",
-            }
-            .build()
-        };
+    fn duplicate_selection_returns_the_first_row_outside_the_excluded_one() -> anyhow::Result<()> {
+        let first = github("gh-1", "Team-Vault", "token")?;
+        let second = github("gh-2", "team-vault", "token")?;
+        let providers = vec![first.clone(), second.clone()];
         assert_eq!(
-            no_pat.target_key(),
-            SyncProviderTargetIdentity::Unconfigured
-        );
-
-        let self_row = GithubCatalogFixture {
-            id: "gh-self",
-            repo: "nook",
-            pat: "github_pat_11AAAA",
-        }
-        .build();
-        assert_eq!(
-            DuplicateProviderSelection {
-                providers: slice::from_ref(&self_row),
-                candidate: &self_row,
-                policy: DuplicateCandidatePolicy::Exclude("gh-self".into())
+            duplicate_of(&providers, &second),
+            DuplicateSyncProvider::Duplicate {
+                provider: Box::new(first)
             }
-            .find(),
-            DuplicateSyncProvider::Unique
         );
         assert_eq!(
             DuplicateProviderSelection {
-                providers: &[GithubCatalogFixture {
-                    id: "gh-a",
-                    repo: "alpha",
-                    pat: "github_pat_11AAAA"
-                }
-                .build()],
-                candidate: &GithubCatalogFixture {
-                    id: "gh-b",
-                    repo: "beta",
-                    pat: "github_pat_11AAAA"
-                }
-                .build(),
-                policy: DuplicateCandidatePolicy::IncludeAll
+                providers: &providers,
+                candidate: &second,
+                policy: DuplicateCandidatePolicy::Exclude("gh-1".into()),
             }
             .find(),
+            DuplicateSyncProvider::Duplicate {
+                provider: Box::new(second.clone())
+            }
+        );
+        assert_eq!(
+            duplicate_of(&providers, &github("gh-3", "team-vault", "other-token")?),
             DuplicateSyncProvider::Unique
         );
-    }
-
-    #[test]
-    fn duplicate_detection_preserves_folder_and_oauth_targets() -> anyhow::Result<()> {
-        let folder = LocalFolderCatalogFixture {
-            id: "folder-a",
-            handle_id: "handle-1",
-        }
-        .build();
-        assert!(matches!(DuplicateProviderSelection {
-                providers: &[folder],
-                candidate: &LocalFolderCatalogFixture {
-                    id: "folder-b",
-                    handle_id: "handle-1"
-                }
-                .build(),
-                policy: DuplicateCandidatePolicy::IncludeAll
-            }
-            .find(), DuplicateSyncProvider::Duplicate { provider } if provider.id == "folder-a"));
-
-        let mut private = OAuthCatalogFixture {
-            id: "drive-personal",
-            preset: OauthFilePreset::GoogleDrive,
-            file_id: StoredOAuthRemoteFileId::Unresolved,
-            file_name: "events",
-        }
-        .build();
-        (match &mut private.oauth_file {
-            StoredOAuthFileConfiguration::Configured(config) => Ok(config),
-            StoredOAuthFileConfiguration::NotApplicable => {
-                Err(IoError::other("personal OAuth config must exist"))
-            }
-        })?
-        .folder_id = StoredGoogleDriveFolder::FolderId("folder-personal".to_owned());
-        let mut shared = OAuthCatalogFixture {
-            id: "drive-shared",
-            preset: OauthFilePreset::GoogleDrive,
-            file_id: StoredOAuthRemoteFileId::Unresolved,
-            file_name: "events",
-        }
-        .build();
-        let shared_oauth = (match &mut shared.oauth_file {
-            StoredOAuthFileConfiguration::Configured(config) => Ok(config),
-            StoredOAuthFileConfiguration::NotApplicable => {
-                Err(IoError::other("shared OAuth config must exist"))
-            }
-        })?;
-        shared_oauth.folder_id = StoredGoogleDriveFolder::FolderId("folder-team".to_owned());
-        let providers = vec![private.clone(), shared.clone()];
-        assert!(matches!(DuplicateProviderSelection {
-                providers: &providers,
-                candidate: &private,
-                policy: DuplicateCandidatePolicy::IncludeAll
-            }
-            .find(), DuplicateSyncProvider::Duplicate { provider } if provider.id == "drive-personal"));
-        assert!(matches!(DuplicateProviderSelection {
-                providers: &providers,
-                candidate: &shared,
-                policy: DuplicateCandidatePolicy::IncludeAll
-            }
-            .find(), DuplicateSyncProvider::Duplicate { provider } if provider.id == "drive-shared"));
         Ok(())
     }
 
     #[test]
-    fn provider_storage_details_match_persisted_rows() {
-        let labels = ProviderStorageDetailLabels::catalog_fixture();
-        let local = StorageProviderData {
-            id: "local".to_owned(),
-            provider_type: StorageProviderType::Local,
-            label: "This device".to_owned(),
-            github_pat: StoredGithubPat::Missing,
-            github_repo: StoredGithubRepository::DefaultRepository,
-            oauth_file: StoredOAuthFileConfiguration::NotApplicable,
-            local_folder: StoredLocalFolderConfiguration::NotApplicable,
-            s3: StoredS3Configuration::NotApplicable,
-            store_id: ProviderVaultScope::Unscoped,
-            sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-            created_at: "2026-06-24T00:00:00.000Z".to_owned(),
+    fn oauth_rows_match_by_target_and_account_and_folders_by_handle() -> anyhow::Result<()> {
+        let drive = |folder: &str, account: &str| -> anyhow::Result<StorageProvider> {
+            Ok(StorageProvider::fixture(
+                "drive",
+                StoredProvider::OauthFile(OAuthFileProvider::google_drive_fixture(
+                    folder,
+                    OAuthAccountIdentity::Email(account.to_owned()),
+                )?),
+            ))
         };
-        assert_eq!(local.storage_detail(&labels), "This device desc");
-        assert_eq!(
-            (GithubCatalogFixture {
-                id: "gh",
-                repo: " team-vault ",
-                pat: " github_pat_11AAAAbbbbCCCC "
-            }
-            .build())
-            .storage_detail(&labels),
-            "team-vault · github_pat_11A…"
-        );
-        assert_eq!(
-            (LocalFolderCatalogFixture {
-                id: "folder",
-                handle_id: "handle-1"
-            }
-            .build())
-            .storage_detail(&labels),
-            "Nook Backup"
-        );
-        assert_eq!(
-            (StorageProviderData {
-                local_folder: StoredLocalFolderConfiguration::NotApplicable,
-                ..LocalFolderCatalogFixture {
-                    id: "folder",
-                    handle_id: "handle-1"
-                }
-                .build()
-            })
-            .storage_detail(&labels),
-            "Choose folder"
-        );
-        assert_eq!(
-            (OAuthCatalogFixture {
-                id: "icloud",
-                preset: OauthFilePreset::ICloud,
-                file_id: StoredOAuthRemoteFileId::Unresolved,
-                file_name: " "
-            }
-            .build())
-            .storage_detail(&labels),
-            format!("{DEFAULT_DRIVE_BACKUP_NAME} · Signed in with iCloud")
-        );
-        // A Google Drive row names its account, not a file in the folder.
-        assert_eq!(
-            (OAuthCatalogFixture {
-                id: "drive",
-                preset: OauthFilePreset::GoogleDrive,
-                file_id: StoredOAuthRemoteFileId::Unresolved,
-                file_name: "nook-events"
-            }
-            .build())
-            .storage_detail(&labels),
-            labels.google_signed_in
-        );
+        let saved = drive("folder-1", "a@b.c")?;
+        let rows = slice::from_ref(&saved);
+        assert!(matches!(
+            duplicate_of(rows, &drive("folder-1", "a@b.c")?),
+            DuplicateSyncProvider::Duplicate { .. }
+        ));
+        for other in [drive("folder-2", "a@b.c")?, drive("folder-1", "b@b.c")?] {
+            assert_eq!(duplicate_of(rows, &other), DuplicateSyncProvider::Unique);
+        }
+        let folder = StorageProvider::fixture("folder", StoredProvider::local_folder_fixture()?);
+        assert!(matches!(
+            duplicate_of(slice::from_ref(&folder), &folder),
+            DuplicateSyncProvider::Duplicate { .. }
+        ));
+        Ok(())
     }
 
     #[test]
     fn s3_rows_are_one_target_per_location_whatever_key_or_region() -> anyhow::Result<()> {
-        let existing = S3CatalogFixture {
-            id: "s3-a",
-            key_prefix: "team",
-            access_key_id: "device-a",
-            region: "us-east-1",
-        }
-        .build()?;
-        let same_location = S3CatalogFixture {
-            id: "s3-b",
-            key_prefix: "team/",
-            access_key_id: "device-b",
-            region: "eu-west-1",
-        }
-        .build()?;
+        let existing = s3("s3-a", "team", "device-a", "us-east-1")?;
+        let same_location = s3("s3-b", "team/", "device-b", "eu-west-1")?;
         assert!(matches!(
-            DuplicateProviderSelection {
-                providers: slice::from_ref(&existing),
-                candidate: &same_location,
-                policy: DuplicateCandidatePolicy::IncludeAll
-            }
-            .find(),
+            duplicate_of(slice::from_ref(&existing), &same_location),
             DuplicateSyncProvider::Duplicate { provider } if provider.id == "s3-a"
         ));
-        let other_prefix = S3CatalogFixture {
-            id: "s3-c",
-            key_prefix: "",
-            access_key_id: "device-a",
-            region: "us-east-1",
-        }
-        .build()?;
+        let bucket_root = s3("s3-c", "", "device-a", "us-east-1")?;
         assert_eq!(
-            DuplicateProviderSelection {
-                providers: slice::from_ref(&existing),
-                candidate: &other_prefix,
-                policy: DuplicateCandidatePolicy::IncludeAll
-            }
-            .find(),
+            duplicate_of(slice::from_ref(&existing), &bucket_root),
             DuplicateSyncProvider::Unique
         );
-        let unconfigured = StorageProviderData {
-            s3: StoredS3Configuration::NotApplicable,
-            ..existing.clone()
-        };
-        assert_eq!(
-            unconfigured.target_key(),
-            SyncProviderTargetIdentity::Unconfigured
-        );
-
         let labels = ProviderStorageDetailLabels::catalog_fixture();
         assert_eq!(
             existing.storage_detail(&labels),
             "127.0.0.1:8333 · device-a"
         );
-        assert_eq!(unconfigured.storage_detail(&labels), "No token saved");
         Ok(())
     }
 
@@ -840,24 +327,14 @@ mod tests {
             labels.localize("Google Drive · work.yaml"),
             "Google Drive localized · work.yaml"
         );
-        assert_eq!(
-            labels.localize("iCloud · home.yaml"),
-            "iCloud localized · home.yaml"
-        );
+        assert_eq!(labels.localize("iCloud"), "iCloud localized");
         assert_eq!(labels.localize("Custom provider"), "Custom provider");
     }
 
     #[test]
-    fn local_row_is_seeded_once_per_vault() {
-        let snapshot = AuthProvidersSnapshotData {
-            providers: vec![
-                GithubCatalogFixture {
-                    id: "gh",
-                    repo: "nook",
-                    pat: "pat",
-                }
-                .build(),
-            ],
+    fn local_row_is_seeded_once_per_vault() -> anyhow::Result<()> {
+        let snapshot = AuthProvidersSnapshot {
+            providers: vec![github("gh", "nook", "pat")?],
             active_vault_store_id: ActiveVaultScope::Unselected,
         };
         let LocalProviderRowOutcome {
@@ -870,63 +347,57 @@ mod tests {
         });
         assert_eq!(change, LocalProviderRowChange::Inserted);
         assert_eq!(next.providers.len(), 2);
-        let first = next
-            .providers
-            .first()
-            .unwrap_or_else(|| panic!("catalog fixture must contain local provider"));
-        assert_eq!(first.provider_type, StorageProviderType::Local);
+        let Some(first) = next.providers.first() else {
+            anyhow::bail!("the seeded row comes first");
+        };
+        assert_eq!(first.provider, StoredProvider::Local {});
         assert_eq!(first.label, "This device");
 
-        let existing = AuthProvidersSnapshotData {
-            providers: vec![StorageProviderData {
+        let existing = AuthProvidersSnapshot {
+            providers: vec![StorageProvider {
                 store_id: ProviderVaultScope::StoreId("vault-1".to_owned()),
                 ..first.clone()
             }],
             active_vault_store_id: ActiveVaultScope::StoreId("vault-1".to_owned()),
         };
-        let LocalProviderRowOutcome {
-            snapshot: existing,
-            change,
-        } = existing.ensure_local_row(LocalProviderRowRequest {
-            active_store_id: &ActiveVaultScope::StoreId("vault-1".to_owned()),
-            new_id: "local-2",
-            created_at: "x",
-        });
-        assert_eq!(change, LocalProviderRowChange::Present);
-        assert_eq!(existing.providers.len(), 1);
-
-        for active_store_id in [
-            ActiveVaultScope::Unselected,
-            ActiveVaultScope::StoreId(" ".to_owned()),
-            ActiveVaultScope::StoreId(" vault-1 ".to_owned()),
-            ActiveVaultScope::StoreId("vault-2".to_owned()),
+        for (active_store_id, change) in [
+            (
+                ActiveVaultScope::Unselected,
+                LocalProviderRowChange::Present,
+            ),
+            (
+                ActiveVaultScope::StoreId(" ".to_owned()),
+                LocalProviderRowChange::Present,
+            ),
+            (
+                ActiveVaultScope::StoreId(" vault-1 ".to_owned()),
+                LocalProviderRowChange::Present,
+            ),
+            (
+                ActiveVaultScope::StoreId("vault-2".to_owned()),
+                LocalProviderRowChange::Inserted,
+            ),
         ] {
-            let LocalProviderRowOutcome {
-                snapshot: next,
-                change,
-            } = existing.clone().ensure_local_row(LocalProviderRowRequest {
+            let outcome = existing.clone().ensure_local_row(LocalProviderRowRequest {
                 active_store_id: &active_store_id,
                 new_id: "new",
                 created_at: "time",
             });
-            assert_eq!(next.active_vault_store_id, existing.active_vault_store_id);
+            assert_eq!(outcome.change, change);
             assert_eq!(
-                change,
-                if active_store_id == ActiveVaultScope::StoreId("vault-2".to_owned()) {
-                    LocalProviderRowChange::Inserted
-                } else {
-                    LocalProviderRowChange::Present
-                }
+                outcome.snapshot.active_vault_store_id,
+                existing.active_vault_store_id
             );
-            if change == LocalProviderRowChange::Inserted {
-                assert_eq!(
-                    next.providers.first().map(|provider| &provider.store_id),
-                    Some(&ProviderVaultScope::StoreId(("vault-2").to_owned()))
-                );
-                assert_eq!(next.providers.get(1), existing.providers.first());
-            } else {
-                assert_eq!(next, existing);
+            match change {
+                LocalProviderRowChange::Inserted => {
+                    assert_eq!(
+                        outcome.snapshot.providers.first().map(|row| &row.store_id),
+                        Some(&ProviderVaultScope::StoreId("vault-2".to_owned()))
+                    );
+                }
+                LocalProviderRowChange::Present => assert_eq!(outcome.snapshot, existing),
             }
         }
+        Ok(())
     }
 }

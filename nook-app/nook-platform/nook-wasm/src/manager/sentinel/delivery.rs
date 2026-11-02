@@ -68,7 +68,7 @@ impl NookVaultManager {
         &self,
         request_json: &str,
         delivery_json: &str,
-        provider_snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshotData>,
+        provider_snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshot>,
     ) -> Result<String, wasm_bindgen::JsError> {
         let provider_snapshot = provider_snapshot
             .to_rust()
@@ -281,7 +281,7 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
-    use nook_core::AuthProvidersSnapshotData;
+    use nook_core::AuthProvidersSnapshot;
     use tsify::Tsify;
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::*;
@@ -303,7 +303,7 @@ mod browser_tests {
                 .create_sentinel_onboarding_package(
                     &request_json,
                     "{}",
-                    &AuthProvidersSnapshotData::default().into_ts()?
+                    &AuthProvidersSnapshot::default().into_ts()?
                 )
                 .is_err()
         );
@@ -312,7 +312,7 @@ mod browser_tests {
                 .create_sentinel_onboarding_package(
                     &request_json,
                     &delivery_json,
-                    &AuthProvidersSnapshotData::default().into_ts()?
+                    &AuthProvidersSnapshot::default().into_ts()?
                 )
                 .is_err()
         );

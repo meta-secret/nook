@@ -833,6 +833,8 @@ pub const ERRORS_VALIDATION_PERSON_NAME_REQUIRED: &str = "errors.validation.pers
 pub const ERRORS_VALIDATION_PERSON_PHONE_INVALID: &str = "errors.validation.person_phone_invalid";
 pub const ERRORS_VALIDATION_PERSONAL_DATA_TEXT_INVALID: &str =
     "errors.validation.personal_data_text_invalid";
+pub const ERRORS_VALIDATION_PROVIDER_CREDENTIAL_SEALED: &str =
+    "errors.validation.provider_credential_sealed";
 pub const ERRORS_VALIDATION_PROVIDER_SECRET_REQUIRED: &str =
     "errors.validation.provider_secret_required";
 pub const ERRORS_VALIDATION_ROUTING_NUMBER_INVALID: &str =

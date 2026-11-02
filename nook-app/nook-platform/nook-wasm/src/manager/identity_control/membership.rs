@@ -1,9 +1,9 @@
 //! Identity-level membership: revocation, renaming, and mounts.
 
 use nook_core::{
-    AppId, AuthProvidersSnapshotData, IdentityControlOperation, IdentityControlState,
-    IdentityMountCapability, IdentityVaultDekLookup, MemberLabel, ProviderRows,
-    StorageProviderData, VaultKeys,
+    AppId, AuthProvidersSnapshot, IdentityControlOperation, IdentityControlState,
+    IdentityMountCapability, IdentityVaultDekLookup, MemberLabel, ProviderRows, StorageProvider,
+    VaultKeys,
 };
 use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
@@ -95,7 +95,7 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn record_identity_provider_mounts(
         &mut self,
-        snapshot: &tsify::Ts<AuthProvidersSnapshotData>,
+        snapshot: &tsify::Ts<AuthProvidersSnapshot>,
     ) -> Result<bool, JsError> {
         let providers = snapshot
             .to_rust()
@@ -123,7 +123,7 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn remove_identity_provider_mount(
         &mut self,
-        provider: &tsify::Ts<StorageProviderData>,
+        provider: &tsify::Ts<StorageProvider>,
     ) -> Result<bool, JsError> {
         let provider = provider
             .to_rust()
@@ -152,15 +152,15 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn identity_replication_providers(
         &self,
-        snapshot: &tsify::Ts<AuthProvidersSnapshotData>,
-    ) -> Result<tsify::Ts<AuthProvidersSnapshotData>, JsError> {
+        snapshot: &tsify::Ts<AuthProvidersSnapshot>,
+    ) -> Result<tsify::Ts<AuthProvidersSnapshot>, JsError> {
         let providers = snapshot
             .to_rust()
             .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?
             .providers;
         let app_key = self.unlocked_app_key()?;
         let identity_id = Self::current_identity_id(&app_key).await?;
-        let rows = AuthProvidersSnapshotData {
+        let rows = AuthProvidersSnapshot {
             providers: ProviderRows {
                 providers: &providers,
             }
