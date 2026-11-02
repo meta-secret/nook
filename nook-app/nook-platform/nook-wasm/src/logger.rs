@@ -19,7 +19,8 @@
 //! and reproduce — nothing below the threshold is stored.
 //!
 //! Appends are buffered in memory and written behind a JS-driven flush so
-//! logging never blocks or throws into callers.
+//! logging never blocks callers. Levels are `tracing`'s own [`Level`]; a level
+//! string that names none of the five is refused, never read as another.
 
 use crate::NookError;
 use crate::TypedOutput;
@@ -28,6 +29,7 @@ use nook_core::IsoTimestamp;
 use rexie::{ObjectStore, Rexie, TransactionMode};
 use serde_wasm_bindgen::from_value;
 use std::cell::{Cell, RefCell};
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::{fmt, mem};
 use tracing::field::{Field, Visit};
@@ -56,72 +58,6 @@ extern "C" {
     fn console_echo_js(level: &str, text: &str) -> Result<(), js_sys::Error>;
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum LogLevel {
-    Error,
-    Warn,
-    Info,
-    Debug,
-    Trace,
-}
-
-impl LogLevel {
-    fn rank(self) -> u8 {
-        match self {
-            LogLevel::Error => 0,
-            LogLevel::Warn => 1,
-            LogLevel::Info => 2,
-            LogLevel::Debug => 3,
-            LogLevel::Trace => 4,
-        }
-    }
-
-    fn as_str(self) -> &'static str {
-        match self {
-            LogLevel::Error => "error",
-            LogLevel::Warn => "warn",
-            LogLevel::Info => "info",
-            LogLevel::Debug => "debug",
-            LogLevel::Trace => "trace",
-        }
-    }
-
-    fn parse(raw: &str) -> Result<Self, UnrecognizedLogLevel> {
-        match raw.trim().to_ascii_lowercase().as_str() {
-            "error" => Ok(LogLevel::Error),
-            "warn" => Ok(LogLevel::Warn),
-            "info" => Ok(LogLevel::Info),
-            "debug" => Ok(LogLevel::Debug),
-            "trace" => Ok(LogLevel::Trace),
-            _ => Err(UnrecognizedLogLevel),
-        }
-    }
-
-    /// Map to the `tracing` level filter used by the reloadable global filter.
-    fn to_filter(self) -> LevelFilter {
-        match self {
-            LogLevel::Error => LevelFilter::ERROR,
-            LogLevel::Warn => LevelFilter::WARN,
-            LogLevel::Info => LevelFilter::INFO,
-            LogLevel::Debug => LevelFilter::DEBUG,
-            LogLevel::Trace => LevelFilter::TRACE,
-        }
-    }
-
-    fn from_tracing(level: tracing::Level) -> LogLevel {
-        match level {
-            Level::ERROR => LogLevel::Error,
-            Level::WARN => LogLevel::Warn,
-            Level::INFO => LogLevel::Info,
-            Level::DEBUG => LogLevel::Debug,
-            Level::TRACE => LogLevel::Trace,
-        }
-    }
-}
-
-#[derive(Debug)]
-struct UnrecognizedLogLevel;
-
 /// Metadata retains the existing omitted-property/string wire representation.
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
@@ -147,7 +83,26 @@ enum LogScope {
 }
 pub(crate) enum LogThreshold {
     AllLevels,
-    Minimum(LogLevel),
+    Minimum(Level),
+}
+impl LogThreshold {
+    /// The entries this threshold keeps: every one, or those at or above the
+    /// minimum. An entry whose stored level names none of the five fails the
+    /// read instead of being kept.
+    fn admitted(&self, entries: Vec<LogEntry>) -> Result<Vec<LogEntry>, NookError> {
+        entries.into_iter().try_fold(Vec::new(), |mut kept, entry| {
+            let level = LogEntry::parse_level(&entry.level)?;
+            match self {
+                Self::AllLevels => kept.push(entry),
+                // `tracing` orders more verbose levels as greater.
+                Self::Minimum(minimum) => match level.cmp(minimum) {
+                    Ordering::Greater => {}
+                    Ordering::Less | Ordering::Equal => kept.push(entry),
+                },
+            }
+            Ok(kept)
+        })
+    }
 }
 pub(crate) enum LogPageLimit {
     AllEntries,
@@ -181,7 +136,7 @@ impl NookLogEntries {
 }
 
 pub(crate) struct LoggerState {
-    level: LogLevel,
+    level: Level,
     /// Write-behind queue drained by [`log_flush`].
     pending: Vec<LogEntry>,
     /// Setter that moves the reloadable global `tracing` level filter. Boxed to
@@ -191,7 +146,7 @@ pub(crate) struct LoggerState {
 
 thread_local! {
     static LOGGER: RefCell<LoggerState> = const { RefCell::new(LoggerState {
-        level: LogLevel::Info,
+        level: Level::INFO,
         pending: Vec::new(),
         set_filter: LogFilterInstallation::NotInstalled,
     }) };
@@ -203,6 +158,25 @@ thread_local! {
 impl LogEntry {
     fn now_iso() -> nook_core::IsoTimestamp {
         IsoTimestamp::from_trusted(Date::new_0().to_iso_string().into())
+    }
+
+    /// The level a page or a stored entry names: one of the five by name in
+    /// any case, or "1" (error) to "5" (trace), as `tracing` reads them.
+    fn parse_level(raw: &str) -> Result<Level, NookError> {
+        raw.trim()
+            .parse::<Level>()
+            .map_err(|_| NookError::UnknownLogLevel)
+    }
+
+    /// The lowercase name the log store and the log viewer keep.
+    fn stored_level(level: Level) -> &'static str {
+        match level {
+            Level::ERROR => "error",
+            Level::WARN => "warn",
+            Level::INFO => "info",
+            Level::DEBUG => "debug",
+            Level::TRACE => "trace",
+        }
     }
 }
 
@@ -313,7 +287,7 @@ impl<S: tracing::Subscriber> Layer<S> for IndexedDbLayer {
         let mut visitor = FieldVisitor::default();
         event.record(&mut visitor);
 
-        let level = LogLevel::from_tracing(*meta.level()).as_str();
+        let level = LogEntry::stored_level(*meta.level());
         let scope = match &visitor.scope {
             LogScope::EventTarget => meta.target().to_owned(),
             LogScope::Explicit(scope) => scope.clone(),
@@ -428,19 +402,12 @@ impl LoggerState {
             .await
             .map_err(|e| NookError::IndexedDb(format!("logs transaction done error: {:?}", e)))?;
 
-        let max_rank = match min_level {
-            LogThreshold::AllLevels => LogLevel::Trace.rank(),
-            LogThreshold::Minimum(level) => level.rank(),
-        };
-
-        let filtered: Vec<LogEntry> = values
-            .into_iter()
-            .filter_map(|value| from_value::<LogEntry>(value).ok())
-            .filter(|entry| match LogLevel::parse(&entry.level) {
-                Ok(level) => level.rank() <= max_rank,
-                Err(_) => true,
-            })
-            .collect();
+        let filtered = min_level.admitted(
+            values
+                .into_iter()
+                .filter_map(|value| from_value::<LogEntry>(value).ok())
+                .collect(),
+        )?;
 
         // Paginate from the newest end: `offset` skips the most recent entries,
         // `limit` caps how many older ones follow.
@@ -478,7 +445,7 @@ impl LoggerState {
         INIT_DONE.with(|done| done.set(true));
 
         let active = LOGGER.with(|logger| logger.borrow().level);
-        let (filter, handle) = ReloadLayer::new(active.to_filter());
+        let (filter, handle) = ReloadLayer::new(LevelFilter::from_level(active));
 
         let perf = tracing_web::performance_layer().with_details_from_fields(DefaultFields::new());
         // The S3 signer traces every request it signs, URL included; none of
@@ -514,20 +481,21 @@ impl LoggerState {
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
-pub fn log_set_level(level: &str) {
-    LoggerState::log_set_level(level);
+pub fn log_set_level(level: &str) -> Result<(), wasm_bindgen::JsError> {
+    Ok(LoggerState::log_set_level(level)?)
 }
 impl LoggerState {
-    fn log_set_level(level: &str) {
-        if let Ok(level) = LogLevel::parse(level) {
-            LOGGER.with(|logger| {
-                let mut state = logger.borrow_mut();
-                state.level = level;
-                if let LogFilterInstallation::Installed(set_filter) = &state.set_filter {
-                    set_filter(level.to_filter());
-                }
-            });
-        }
+    /// An unknown level changes nothing and is refused.
+    fn log_set_level(level: &str) -> Result<(), NookError> {
+        let level = LogEntry::parse_level(level)?;
+        LOGGER.with(|logger| {
+            let mut state = logger.borrow_mut();
+            state.level = level;
+            if let LogFilterInstallation::Installed(set_filter) = &state.set_filter {
+                set_filter(LevelFilter::from_level(level));
+            }
+        });
+        Ok(())
     }
 }
 
@@ -543,25 +511,26 @@ pub fn log_get_level() -> String {
 }
 impl LoggerState {
     fn log_get_level() -> String {
-        LOGGER.with(|logger| logger.borrow().level.as_str().to_owned())
+        LOGGER.with(|logger| LogEntry::stored_level(logger.borrow().level).to_owned())
     }
 }
 
 /// Record one log entry from the web layer (persist-only). Dropped when below
 /// the active level; the web layer owns console echo, so nothing is printed
-/// here. Otherwise queued for the next [`log_flush`].
+/// here. Otherwise queued for the next [`log_flush`]. An unknown level is
+/// refused, not recorded as another.
 #[wasm_bindgen]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
-pub fn log_record(level: &str, scope: &str, message: &str) {
-    LoggerState::log_record_entry(LoggerLogRecordEntry {
+pub fn log_record(level: &str, scope: &str, message: &str) -> Result<(), wasm_bindgen::JsError> {
+    Ok(LoggerState::log_record_entry(LoggerLogRecordEntry {
         level,
         scope,
         message,
         data: LogMetadata::NoFields,
-    });
+    })?)
 }
 
 #[wasm_bindgen]
@@ -569,35 +538,42 @@ pub fn log_record(level: &str, scope: &str, message: &str) {
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
-pub fn log_record_with_data(level: &str, scope: &str, message: &str, data: String) {
-    LoggerState::log_record_entry(LoggerLogRecordEntry {
+pub fn log_record_with_data(
+    level: &str,
+    scope: &str,
+    message: &str,
+    data: String,
+) -> Result<(), wasm_bindgen::JsError> {
+    Ok(LoggerState::log_record_entry(LoggerLogRecordEntry {
         level,
         scope,
         message,
         data: LogMetadata::Json(data),
-    });
+    })?)
 }
 
 impl LoggerState {
-    fn log_record_entry(request: LoggerLogRecordEntry<'_>) {
+    fn log_record_entry(request: LoggerLogRecordEntry<'_>) -> Result<(), NookError> {
         let LoggerLogRecordEntry {
             level,
             scope,
             message,
             data,
         } = request;
-        let level = LogLevel::parse(level).unwrap_or(LogLevel::Info);
+        let level = LogEntry::parse_level(level)?;
         let active = LOGGER.with(|logger| logger.borrow().level);
-        if level.rank() > active.rank() {
-            return;
+        // `tracing` orders more verbose levels as greater.
+        match level.cmp(&active) {
+            Ordering::Greater => {}
+            Ordering::Less | Ordering::Equal => LoggerState::queue(LogEntry {
+                ts: LogEntry::now_iso(),
+                level: LogEntry::stored_level(level).to_owned(),
+                scope: scope.to_owned(),
+                message: message.to_owned(),
+                data,
+            }),
         }
-        LoggerState::queue(LogEntry {
-            ts: LogEntry::now_iso(),
-            level: level.as_str().to_owned(),
-            scope: scope.to_owned(),
-            message: message.to_owned(),
-            data,
-        });
+        Ok(())
     }
 }
 
@@ -673,10 +649,7 @@ impl LoggerState {
             offset,
         } = request;
         let entries = LoggerState::dump_entries(LoggerDumpEntries {
-            min_level: match LogLevel::parse(&min_level) {
-                Ok(level) => LogThreshold::Minimum(level),
-                Err(_) => LogThreshold::AllLevels,
-            },
+            min_level: LogThreshold::Minimum(LogEntry::parse_level(&min_level)?),
             limit: LogPageLimit::Limited(limit),
             offset,
         })
@@ -786,12 +759,12 @@ mod browser_tests {
     #[wasm_bindgen_test]
     async fn logger_persists_filters_pages_and_clears_entries() -> Result<(), JsError> {
         log_clear().await?;
-        log_set_level("debug");
+        log_set_level("debug")?;
         assert_eq!(log_get_level(), "debug");
 
-        log_record("trace", "filtered", "not persisted");
-        log_record("info", "sync", "started");
-        log_record_with_data("warn", "sync", "retrying", r#"{"attempt":2}"#.to_owned());
+        log_record("trace", "filtered", "not persisted")?;
+        log_record("info", "sync", "started")?;
+        log_record_with_data("warn", "sync", "retrying", r#"{"attempt":2}"#.to_owned())?;
         log_flush().await?;
 
         assert_eq!(log_count().await?, 2);
@@ -807,5 +780,78 @@ mod browser_tests {
         log_clear().await?;
         assert_eq!(log_count().await?, 0);
         Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn unknown_levels_are_refused_at_every_export() -> Result<(), JsError> {
+        log_set_level("info")?;
+        assert!(log_set_level("verbose").is_err());
+        assert_eq!(log_get_level(), "info");
+        assert!(log_record("verbose", "scope", "message").is_err());
+        assert!(log_record_with_data("verbose", "scope", "message", "{}".to_owned()).is_err());
+        assert!(log_dump_page("verbose".to_owned(), 1, 0).await.is_err());
+        Ok(())
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32"))]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    fn entry(level: &str) -> LogEntry {
+        LogEntry {
+            ts: IsoTimestamp::from_trusted("2026-11-01T00:00:00.000Z".to_owned()),
+            level: level.to_owned(),
+            scope: "test".to_owned(),
+            message: level.to_owned(),
+            data: LogMetadata::NoFields,
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn levels_parse_by_name_in_any_case_or_by_tracing_number() -> anyhow::Result<()> {
+        assert_eq!(LogEntry::parse_level(" Warn ")?, Level::WARN);
+        assert_eq!(LogEntry::parse_level("TRACE")?, Level::TRACE);
+        // `tracing` also reads "1" (error) to "5" (trace).
+        assert_eq!(LogEntry::parse_level("1")?, Level::ERROR);
+        assert_eq!(LogEntry::parse_level("5")?, Level::TRACE);
+        for unknown in ["verbose", "", "0", "6", "warning"] {
+            assert!(matches!(
+                LogEntry::parse_level(unknown),
+                Err(NookError::UnknownLogLevel)
+            ));
+        }
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn each_level_is_stored_by_its_lowercase_name() -> anyhow::Result<()> {
+        for name in ["error", "warn", "info", "debug", "trace"] {
+            assert_eq!(LogEntry::stored_level(LogEntry::parse_level(name)?), name);
+        }
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn a_minimum_keeps_its_level_and_the_less_verbose_ones() -> anyhow::Result<()> {
+        let entries: Vec<LogEntry> = ["error", "warn", "info", "debug", "trace"]
+            .into_iter()
+            .map(entry)
+            .collect();
+        let kept = LogThreshold::Minimum(Level::INFO).admitted(entries.clone())?;
+        let levels: Vec<&str> = kept.iter().map(|kept| kept.level.as_str()).collect();
+        assert_eq!(levels, ["error", "warn", "info"]);
+        assert_eq!(LogThreshold::AllLevels.admitted(entries)?.len(), 5);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn an_entry_with_an_unknown_stored_level_fails_the_read() {
+        let entries = vec![entry("info"), entry("verbose")];
+        assert!(matches!(
+            LogThreshold::AllLevels.admitted(entries),
+            Err(NookError::UnknownLogLevel)
+        ));
     }
 }

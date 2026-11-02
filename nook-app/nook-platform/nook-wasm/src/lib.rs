@@ -224,6 +224,10 @@ pub enum NookError {
 
     #[error(transparent)]
     TypedBoundary(#[from] TypedBoundaryError),
+
+    /// A log level string that names none of the five levels.
+    #[error("Unknown log level.")]
+    UnknownLogLevel,
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
