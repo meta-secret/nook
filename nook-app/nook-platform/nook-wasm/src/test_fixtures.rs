@@ -3,6 +3,9 @@
 
 #[cfg(feature = "browser-wasm-tests")]
 use nook_core::AuthProvidersSnapshot;
+
+#[cfg(feature = "browser-wasm-tests")]
+use crate::NookError;
 use nook_core::{
     GithubProvider, ProviderSecretText, ProviderVaultScope, S3Connection, S3ConnectionDraft,
     StorageConnection, StorageProvider, StoredGithubRepository, StoredProvider, ValidationError,
@@ -52,12 +55,16 @@ impl WasmFixture {
     #[cfg(feature = "browser-wasm-tests")]
     pub(crate) fn first_github_token(
         snapshot: &AuthProvidersSnapshot,
-    ) -> anyhow::Result<&ProviderSecretText> {
+    ) -> Result<&ProviderSecretText, NookError> {
         let [row, ..] = snapshot.providers.as_slice() else {
-            anyhow::bail!("the snapshot should hold a row");
+            return Err(NookError::Database(
+                "the snapshot should hold a row".to_owned(),
+            ));
         };
         let StoredProvider::Github(github) = &row.provider else {
-            anyhow::bail!("the first row should be a GitHub row");
+            return Err(NookError::Database(
+                "the first row should be a GitHub row".to_owned(),
+            ));
         };
         Ok(&github.token)
     }

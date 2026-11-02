@@ -22,6 +22,8 @@ use crate::storage::s3::{S3EventStore, S3Storage, S3VaultListing};
 #[cfg(test)]
 use crate::test_fixtures::WasmFixture;
 use crate::{DriveStorageClient, GitHubStorageClient};
+#[cfg(test)]
+use nook_core::ValidationError;
 
 /// The storage this session reads and writes.
 #[derive(Default)]
@@ -398,7 +400,7 @@ impl PreparedProvider {
     pub(in crate::manager) fn github_fixture(
         token: &str,
         repository: &str,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, ValidationError> {
         Ok(Self::remote_fixture(RemoteProvider::Github(
             PreparedGithub {
                 token: WasmFixture::secret(token)?,
@@ -408,7 +410,10 @@ impl PreparedProvider {
     }
 
     /// A prepared Google Drive Nook root.
-    pub(in crate::manager) fn drive_fixture(token: &str, root: &str) -> anyhow::Result<Self> {
+    pub(in crate::manager) fn drive_fixture(
+        token: &str,
+        root: &str,
+    ) -> Result<Self, ValidationError> {
         Ok(Self::remote_fixture(RemoteProvider::GoogleDrive(
             PreparedGoogleDrive {
                 token: WasmFixture::secret(token)?,
