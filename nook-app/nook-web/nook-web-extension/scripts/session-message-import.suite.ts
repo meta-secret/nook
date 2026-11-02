@@ -12,35 +12,22 @@ import {
   ExtensionSessionRequestParseKind,
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
   decodeProviders,
-  githubProvider,
   parseExtensionSessionRequest,
   sessionMessageWireFixture,
   vaultImportRequest,
   type StorageProvider,
 } from './session-message-dispatch-test-support'
-import { S3ProviderFixture } from './s3-provider-fixture'
+import type { BrowserRuntimeMessageValue } from '../src/lib/browser-runtime-message'
+import { ProviderRowFixture, type ProviderRows } from './provider-row-fixture'
 
-describe('ExtensionSessionMessageDispatcher vault import', () => {
-  test('stages provider credentials before awaiting cold WASM', async () => {
-    const providers = [
-      {
-        id: 'github',
-        type: 'github' as const,
-        label: 'GitHub',
-        githubPat: {
-          state: 'token' as const,
-          value: '-----BEGIN AGE ENCRYPTED FILE-----\nfixture',
-        },
-        githubRepo: { state: 'defaultRepository' as const },
-        oauthFile: { state: 'notApplicable' as const },
-        localFolder: { state: 'notApplicable' as const },
-        s3: { state: 'notApplicable' as const },
-        storeId: { state: 'unscoped' as const },
-        syncCheckpoint: { state: 'neverSynced' as const },
-        createdAt: '2026-06-24T00:00:00.000Z',
-      },
-    ]
-    const payload = {
+/** A raw vault import as the offscreen session receives it. */
+class RawVaultImport {
+  readonly payload: {
+    readonly [key: string]: BrowserRuntimeMessageValue
+  }
+
+  constructor(providers: BrowserRuntimeMessageValue[]) {
+    this.payload = {
       vaultStoreId: 'store_abcdefghijk',
       deviceId: 'device',
       devicePublicKey: 'public',
@@ -49,62 +36,127 @@ describe('ExtensionSessionMessageDispatcher vault import', () => {
       eventLogRecords: [],
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     }
-    const parsing = parseExtensionSessionRequest({
+  }
+
+  parse() {
+    return parseExtensionSessionRequest({
       type: ExtensionSessionMessageType.ImportVault,
-      payload,
+      payload: this.payload,
     })
+  }
+}
 
-    expect(payload.providers).not.toHaveProperty('0.githubPat.value')
-    expect(providers[0]).toHaveProperty('githubPat.state', 'missing')
-    const parsed = await parsing
-    expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
-  })
+/** One raw row with a damage the Rust decoder must refuse. */
+class DamagedRows {
+  static withoutProvider(): BrowserRuntimeMessageValue {
+    const row = ProviderRowFixture.github(ProviderRowFixture.SEALED)
+    Reflect.deleteProperty(row, 'provider')
+    return row
+  }
 
-  test('wipes an S3 row’s key from the raw payload before awaiting cold WASM', async () => {
-    const providers = [S3ProviderFixture.row(S3ProviderFixture.SEALED_SECRET)]
-    const parsing = parseExtensionSessionRequest({
-      type: ExtensionSessionMessageType.ImportVault,
-      payload: {
-        vaultStoreId: 'store_abcdefghijk',
-        deviceId: 'device',
-        devicePublicKey: 'public',
-        deviceSigningPublicKey: 'signing',
-        providers,
-        eventLogRecords: [],
-        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
-      },
-    })
+  static githubWithoutToken(): BrowserRuntimeMessageValue {
+    const row = ProviderRowFixture.github(ProviderRowFixture.SEALED)
+    Reflect.deleteProperty(row.provider, 'token')
+    return row
+  }
 
-    expect(providers[0]).toHaveProperty('s3.config.secretAccessKey', '')
+  static githubWithS3Secret(): BrowserRuntimeMessageValue {
+    const row = ProviderRowFixture.github(ProviderRowFixture.SEALED)
+    Reflect.set(row.provider, 'secretAccessKey', ProviderRowFixture.SEALED)
+    return row
+  }
+
+  static localWithToken(): BrowserRuntimeMessageValue {
+    const row = ProviderRowFixture.local()
+    Reflect.set(row.provider, 'token', ProviderRowFixture.SEALED)
+    return row
+  }
+
+  static unknownType(): BrowserRuntimeMessageValue {
+    const row = ProviderRowFixture.github(ProviderRowFixture.SEALED)
+    Reflect.set(row.provider, 'type', 'ftp')
+    return row
+  }
+
+  /** The row shape before the tagged provider: no reader accepts it. */
+  static flatLegacy(): BrowserRuntimeMessageValue {
+    return {
+      id: 'github',
+      type: 'github',
+      label: 'GitHub',
+      githubPat: { state: 'token', value: ProviderRowFixture.SEALED },
+      githubRepo: { state: 'defaultRepository' },
+      storeId: { state: 'unscoped' },
+      syncCheckpoint: { state: 'neverSynced' },
+      createdAt: ProviderRowFixture.CREATED_AT,
+    }
+  }
+
+  static plaintextToken(): BrowserRuntimeMessageValue {
+    return ProviderRowFixture.github(ProviderRowFixture.PLAINTEXT)
+  }
+}
+
+describe('ExtensionSessionMessageDispatcher vault import', () => {
+  test('empties the caller’s raw rows before awaiting cold WASM', async () => {
+    const providers: BrowserRuntimeMessageValue[] = ProviderRowFixture.every(
+      ProviderRowFixture.SEALED,
+    )
+    const message = new RawVaultImport(providers)
+    const parsing = message.parse()
+
+    expect(providers).toEqual([{}, {}, {}, {}, {}, {}])
+    expect(message.payload.providers).toEqual([])
     const parsed = await parsing
     expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
     if (parsed.kind !== ExtensionSessionRequestParseKind.Parsed) return
-    // The staged request keeps the key for the import itself.
-    expect(
-      sessionMessageWireFixture.providers(parsed.request)[0],
-    ).toHaveProperty(
-      's3.config.secretAccessKey',
-      S3ProviderFixture.SEALED_SECRET,
+    // The staged request keeps every row whole for the import itself.
+    expect(sessionMessageWireFixture.providers(parsed.request)).toEqual(
+      ProviderRowFixture.every(ProviderRowFixture.SEALED),
     )
   })
 
-  test('rejects non-serialized providers before dispatching a vault import', async () => {
-    const providers = [
-      {
-        githubPat: 'github_pat_rejected_secret',
-        metadata: new Date(),
-      },
+  test('refuses damaged raw rows and still empties every one', async () => {
+    const providers: BrowserRuntimeMessageValue[] = [
+      'not-a-row',
+      7,
+      { provider: 'malformed' },
+      DamagedRows.flatLegacy(),
+      ProviderRowFixture.github(ProviderRowFixture.SEALED),
     ]
+    const parsed = await new RawVaultImport(providers).parse()
+
+    expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
+    expect(providers).toEqual(['not-a-row', 7, {}, {}, {}])
+  })
+
+  test('refuses each incomplete, mixed or unsealed row, as Rust does', async () => {
+    for (const row of [
+      DamagedRows.withoutProvider(),
+      DamagedRows.githubWithoutToken(),
+      DamagedRows.githubWithS3Secret(),
+      DamagedRows.localWithToken(),
+      DamagedRows.unknownType(),
+      DamagedRows.flatLegacy(),
+      DamagedRows.plaintextToken(),
+    ]) {
+      const parsed = await new RawVaultImport([row]).parse()
+      expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
+    }
+  })
+
+  test('rejects non-serialized providers before dispatching a vault import', async () => {
+    const row = ProviderRowFixture.github(ProviderRowFixture.PLAINTEXT)
     const admission = BrowserRuntimeMessage.from({
       type: ExtensionSessionMessageType.ImportVault,
       payload: {
-        providers,
+        providers: [{ ...row, metadata: new Date() }],
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     })
 
     expect(admission.kind).toBe(BrowserRuntimeMessageAdmissionKind.Rejected)
-    expect(providers[0]?.githubPat).toBe('github_pat_rejected_secret')
+    expect(row).toEqual(ProviderRowFixture.github(ProviderRowFixture.PLAINTEXT))
   })
 
   test('rejects a vault import without a provider array', async () => {
@@ -119,49 +171,34 @@ describe('ExtensionSessionMessageDispatcher vault import', () => {
     expect(response.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
   })
 
-  test('scrubs an accepted caller provider array after staging', async () => {
-    const providers = [githubProvider('github_pat_accepted_secret')]
-    const payload = {
-      providers,
-      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
-    }
-    let handledGithubPat = ''
+  test('wipes an accepted caller provider array after staging', async () => {
+    const providers = [ProviderRowFixture.github(ProviderRowFixture.PLAINTEXT)]
+    let handled: ProviderRows = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
       decodeProviders,
       handleMessage: async (message) => {
         if (message.type === ExtensionSessionMessageType.ImportVault) {
-          const handledProviders = sessionMessageWireFixture.providers(message)
-          const provider = handledProviders[0]
-          if (
-            provider &&
-            typeof provider === 'object' &&
-            'githubPat' in provider
-          ) {
-            const githubPat = provider.githubPat
-            if (
-              githubPat &&
-              typeof githubPat === 'object' &&
-              'state' in githubPat &&
-              githubPat.state === 'token' &&
-              'value' in githubPat
-            ) {
-              handledGithubPat = String(githubPat.value)
-            }
-          }
+          handled = structuredClone(
+            sessionMessageWireFixture.providers(message),
+          )
         }
         return ok({ ok: true })
       },
     })
 
-    const request = vaultImportRequest(payload.providers, payload.queue)
+    const request = vaultImportRequest(providers)
     const response = dispatcher.enqueue(request)
 
     expect(request.payload.providers).toEqual([])
-    expect(payload.providers).toHaveLength(1)
-    expect(payload.providers).not.toHaveProperty('0.githubPat.value')
-    expect(providers[0]?.githubPat.state).toBe('missing')
+    expect(providers).toEqual(
+      ProviderRowFixture.afterWipe([
+        ProviderRowFixture.github(ProviderRowFixture.OTHER),
+      ]),
+    )
     expect(await response).toEqual(ok({ ok: true }))
-    expect(handledGithubPat).toBe('github_pat_accepted_secret')
+    expect(handled).toEqual([
+      ProviderRowFixture.github(ProviderRowFixture.PLAINTEXT),
+    ])
   })
 
   test('reserves import ordering before provider decoding completes', async () => {
@@ -206,7 +243,7 @@ describe('ExtensionSessionMessageDispatcher vault import', () => {
     ])
   })
 
-  test('scrubs decoded provider credentials when a pending import is canceled', async () => {
+  test('wipes decoded provider credentials when a pending import is canceled', async () => {
     let finishDecode: (providers: StorageProvider[]) => void = () => {
       throw new Error('provider decoder was not initialized')
     }
@@ -220,7 +257,7 @@ describe('ExtensionSessionMessageDispatcher vault import', () => {
       releaseBlocker = resolve
     })
     const stagedProviders = [
-      githubProvider('github_pat_canceled_staged_secret'),
+      ProviderRowFixture.github(ProviderRowFixture.PLAINTEXT),
     ]
     const dispatcher = new ExtensionSessionMessageDispatcher({
       decodeProviders: () => decodedProviders,
@@ -242,7 +279,9 @@ describe('ExtensionSessionMessageDispatcher vault import', () => {
       },
     })
     const importResponse = dispatcher.enqueue(
-      vaultImportRequest([githubProvider('caller-secret')]),
+      vaultImportRequest([
+        ProviderRowFixture.github(ProviderRowFixture.SEALED),
+      ]),
     )
 
     dispatcher.replaceOperations(
@@ -254,20 +293,26 @@ describe('ExtensionSessionMessageDispatcher vault import', () => {
     )
     await decodedProviders
     await Promise.resolve()
-    expect(stagedProviders[0]?.githubPat).toEqual({ state: 'missing' })
+    expect(stagedProviders).toEqual(
+      ProviderRowFixture.afterWipe([
+        ProviderRowFixture.github(ProviderRowFixture.OTHER),
+      ]),
+    )
 
     releaseBlocker()
     expect(await blockerResponse).toEqual(ok({ ok: true }))
   })
 
-  test('honors a vault-import deadline and scrubs expired staging', async () => {
+  test('honors a vault-import deadline and wipes expired staging', async () => {
     let releaseBlocker: () => void = () => {
       throw new Error('queue blocker was not initialized')
     }
     const blocker = new Promise<void>((resolve) => {
       releaseBlocker = resolve
     })
-    const stagedProviders = [githubProvider('github_pat_expired_queue_secret')]
+    const stagedProviders = [
+      ProviderRowFixture.github(ProviderRowFixture.PLAINTEXT),
+    ]
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
       decodeProviders: async () => stagedProviders,
@@ -288,11 +333,14 @@ describe('ExtensionSessionMessageDispatcher vault import', () => {
       },
     })
     const importResponse = dispatcher.enqueue(
-      vaultImportRequest([githubProvider('caller-secret')], {
-        kind: 'deadline',
-        expiresAt: Date.now() + 10,
-        priority: 'interactive',
-      }),
+      vaultImportRequest(
+        [ProviderRowFixture.github(ProviderRowFixture.SEALED)],
+        {
+          kind: 'deadline',
+          expiresAt: Date.now() + 10,
+          priority: 'interactive',
+        },
+      ),
     )
     const importSettlement = importResponse
 
@@ -304,6 +352,10 @@ describe('ExtensionSessionMessageDispatcher vault import', () => {
     )
     await Promise.resolve()
     expect(handledTypes).toEqual([ExtensionSessionMessageType.CreatePin])
-    expect(stagedProviders[0]?.githubPat).toEqual({ state: 'missing' })
+    expect(stagedProviders).toEqual(
+      ProviderRowFixture.afterWipe([
+        ProviderRowFixture.github(ProviderRowFixture.OTHER),
+      ]),
+    )
   })
 })

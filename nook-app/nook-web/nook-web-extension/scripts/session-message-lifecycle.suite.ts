@@ -5,7 +5,6 @@ import {
   ExtensionSessionMessageDispatcher,
   ExtensionSessionMessageType,
   decodeProviders,
-  githubProvider,
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
   vaultImportRequest,
   type StorageProvider,
@@ -14,6 +13,7 @@ import {
   SessionOperationFailure,
   SessionOperationFailureKind,
 } from '../src/lib/session-operation-queue'
+import { ProviderRowFixture } from './provider-row-fixture'
 
 describe('ExtensionSessionMessageDispatcher lifecycle cancellation', () => {
   test('cancels a running import when the session generation changes', async () => {
@@ -23,7 +23,9 @@ describe('ExtensionSessionMessageDispatcher lifecycle cancellation', () => {
     const decodedProviders = new Promise<StorageProvider[]>((resolve) => {
       finishDecode = resolve
     })
-    const stagedProviders = [githubProvider('github_pat_expired_staged_secret')]
+    const stagedProviders = [
+      ProviderRowFixture.github(ProviderRowFixture.PLAINTEXT),
+    ]
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
       decodeProviders: () => decodedProviders,
@@ -38,7 +40,9 @@ describe('ExtensionSessionMessageDispatcher lifecycle cancellation', () => {
     })
 
     const importResponse = dispatcher.enqueue(
-      vaultImportRequest([githubProvider('caller-secret')]),
+      vaultImportRequest([
+        ProviderRowFixture.github(ProviderRowFixture.SEALED),
+      ]),
     )
     await Promise.resolve()
     dispatcher.replaceOperations(
@@ -50,7 +54,11 @@ describe('ExtensionSessionMessageDispatcher lifecycle cancellation', () => {
       err(new SessionOperationFailure(SessionOperationFailureKind.Expired)),
     )
     expect(handledTypes).toEqual([])
-    expect(stagedProviders[0]?.githubPat).toEqual({ state: 'missing' })
+    expect(stagedProviders).toEqual(
+      ProviderRowFixture.afterWipe([
+        ProviderRowFixture.github(ProviderRowFixture.OTHER),
+      ]),
+    )
   })
 
   test('a session activated mid-operation starts the next message only after that operation ends', async () => {

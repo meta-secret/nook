@@ -118,7 +118,9 @@ export async function refreshExtensionIdentityVaults({
       }
       const plan = await manager.identity_vault_pairing_plan(providers, paired)
       // The extension opens vaults only through these.
-      const readable = mounts.filter((mount) => mount.type !== 'local-folder')
+      const readable = mounts.filter(
+        (mount) => mount.provider.type !== 'local-folder',
+      )
       if (plan.toPair.length > 0 && readable.length === 0) {
         console.error('Extension identity has vaults to pair but no provider')
         return err(failed())
