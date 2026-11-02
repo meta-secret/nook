@@ -1,11 +1,11 @@
 use super::{NookStorageConnection, wasm_bindgen};
 use crate::NookLocalFolderConfig;
+use crate::{TypedInput, TypedOutput};
 use nook_core::{
     DraftStorageConnection, ExistingVaultProviderReadiness, GithubDraft, GithubPat, GithubPatMask,
     LocalFolderDraft, ProviderDraft, ProviderSelection, S3Draft, StagedStorageConnection,
     StorageConnection,
 };
-use tsify::Tsify;
 use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
@@ -33,9 +33,7 @@ impl From<nook_core::ExistingVaultProviderReadiness> for NookExistingVaultProvid
 pub fn existing_vault_provider_readiness(
     draft: &tsify::Ts<ProviderDraft>,
 ) -> Result<NookExistingVaultProviderReadiness, wasm_bindgen::JsError> {
-    let draft = draft
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    let draft = draft.decode()?;
     Ok(draft.existing_vault_readiness().into())
 }
 
@@ -96,7 +94,7 @@ impl NookStagedStorageArgs {
                 Err(JsError::new("staged storage is incomplete"))
             }
         }?;
-        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        Ok(result.encode()?)
     }
 }
 
@@ -142,8 +140,7 @@ impl NookGithubPatHint {
 )]
 pub fn local_vault_storage_args() -> Result<tsify::Ts<NookStorageConnection>, wasm_bindgen::JsError>
 {
-    Tsify::into_ts(&StorageConnection::Local)
-        .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    Ok(StorageConnection::Local.encode()?)
 }
 
 #[wasm_bindgen]
@@ -154,11 +151,8 @@ pub fn local_vault_storage_args() -> Result<tsify::Ts<NookStorageConnection>, wa
 pub fn authenticated_vault_storage_args(
     provider: &tsify::Ts<nook_core::StorageProvider>,
 ) -> Result<tsify::Ts<NookStorageConnection>, wasm_bindgen::JsError> {
-    let provider = provider
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-    Tsify::into_ts(&provider.storage_connection())
-        .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    let provider = provider.decode()?;
+    Ok(provider.storage_connection().encode()?)
 }
 
 /// Where the manager opens a vault through the draft being set up, or the
@@ -171,11 +165,8 @@ pub fn authenticated_vault_storage_args(
 pub fn draft_storage_args(
     draft: &tsify::Ts<ProviderDraft>,
 ) -> Result<tsify::Ts<DraftStorageConnection>, wasm_bindgen::JsError> {
-    let draft = draft
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-    Tsify::into_ts(&draft.storage_connection())
-        .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    let draft = draft.decode()?;
+    Ok(draft.storage_connection().encode()?)
 }
 
 /// The kind of provider the draft sets up.
@@ -187,11 +178,8 @@ pub fn draft_storage_args(
 pub fn provider_draft_kind(
     draft: &tsify::Ts<ProviderDraft>,
 ) -> Result<tsify::Ts<nook_core::ProviderKind>, wasm_bindgen::JsError> {
-    let draft = draft
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-    Tsify::into_ts(&draft.kind())
-        .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    let draft = draft.decode()?;
+    Ok(draft.kind().encode()?)
 }
 
 /// A saved row as the draft of its complete setup.
@@ -203,11 +191,8 @@ pub fn provider_draft_kind(
 pub fn provider_row_draft(
     row: &tsify::Ts<nook_core::StorageProvider>,
 ) -> Result<tsify::Ts<ProviderDraft>, wasm_bindgen::JsError> {
-    let row = row
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-    Tsify::into_ts(&ProviderDraft::from(row.provider))
-        .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    let row = row.decode()?;
+    Ok(ProviderDraft::from(row.provider).encode()?)
 }
 
 /// The folder the local-folder chooser returned, as the draft it sets up.
@@ -220,10 +205,7 @@ pub fn local_folder_provider_draft(
     folder: &NookLocalFolderConfig,
 ) -> Result<tsify::Ts<ProviderDraft>, wasm_bindgen::JsError> {
     let folder = folder.provider()?;
-    Tsify::into_ts(&ProviderDraft::LocalFolder(LocalFolderDraft::Selected(
-        folder,
-    )))
-    .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    Ok(ProviderDraft::LocalFolder(LocalFolderDraft::Selected(folder)).encode()?)
 }
 
 /// The saved rows after the draft's fresh sign-in: every row of its target
@@ -236,11 +218,8 @@ pub fn local_folder_provider_draft(
 pub fn put_provider_sign_in(
     request: &tsify::Ts<nook_core::ProviderSignInUpdate>,
 ) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshot>, wasm_bindgen::JsError> {
-    let request = request
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-    Tsify::into_ts(&request.apply())
-        .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    let request = request.decode()?;
+    Ok(request.apply().encode()?)
 }
 
 /// The remote connection a staged setup can open, if it is complete.
@@ -252,9 +231,7 @@ pub fn put_provider_sign_in(
 pub fn staged_storage_args(
     draft: &tsify::Ts<ProviderDraft>,
 ) -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
-    let draft = draft
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    let draft = draft.decode()?;
     Ok(NookStagedStorageArgs::new(draft.staged_connection()))
 }
 
@@ -267,9 +244,7 @@ pub fn staged_storage_args(
 pub fn provider_draft_label(
     draft: &tsify::Ts<ProviderDraft>,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let draft = draft
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    let draft = draft.decode()?;
     Ok(draft.label())
 }
 
@@ -282,11 +257,8 @@ pub fn provider_draft_label(
 pub fn provider_draft_credential_readiness(
     draft: &tsify::Ts<ProviderDraft>,
 ) -> Result<tsify::Ts<nook_core::ProviderCredentialReadiness>, wasm_bindgen::JsError> {
-    let draft = draft
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-    Tsify::into_ts(&draft.credential_readiness())
-        .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    let draft = draft.decode()?;
+    Ok(draft.credential_readiness().encode()?)
 }
 
 /// A new setup of `kind`, with every dimension still awaiting.
@@ -298,11 +270,8 @@ pub fn provider_draft_credential_readiness(
 pub fn begin_provider_draft(
     kind: &tsify::Ts<nook_core::ProviderKind>,
 ) -> Result<tsify::Ts<ProviderDraft>, wasm_bindgen::JsError> {
-    let kind = kind
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-    Tsify::into_ts(&ProviderDraft::begin(kind))
-        .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    let kind = kind.decode()?;
+    Ok(ProviderDraft::begin(kind).encode()?)
 }
 
 /// The GitHub setup form as its draft: trimmed once, a blank token not
@@ -315,11 +284,8 @@ pub fn begin_provider_draft(
 pub fn github_provider_draft(
     form: &tsify::Ts<nook_core::GithubDraftForm>,
 ) -> Result<tsify::Ts<ProviderDraft>, wasm_bindgen::JsError> {
-    let form = form
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-    Tsify::into_ts(&ProviderDraft::Github(GithubDraft::from(form)))
-        .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    let form = form.decode()?;
+    Ok(ProviderDraft::Github(GithubDraft::from(form)).encode()?)
 }
 
 /// A validated S3 connection as a ready S3 draft.
@@ -331,11 +297,8 @@ pub fn github_provider_draft(
 pub fn s3_provider_draft(
     connection: &tsify::Ts<nook_core::S3Connection>,
 ) -> Result<tsify::Ts<ProviderDraft>, wasm_bindgen::JsError> {
-    let connection = connection
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-    Tsify::into_ts(&ProviderDraft::S3(S3Draft::Ready(connection)))
-        .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    let connection = connection.decode()?;
+    Ok(ProviderDraft::S3(S3Draft::Ready(connection)).encode()?)
 }
 
 /// The message a connect or save that the gap stops reports.
@@ -347,9 +310,7 @@ pub fn s3_provider_draft(
 pub fn provider_draft_gap_translation_key(
     gap: &tsify::Ts<nook_core::ProviderDraftGap>,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let gap = gap
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    let gap = gap.decode()?;
     Ok(gap.translation_key().to_owned())
 }
 
@@ -362,9 +323,7 @@ pub fn provider_draft_gap_translation_key(
 pub fn provider_draft_gap_unlock_translation_key(
     gap: &tsify::Ts<nook_core::ProviderDraftGap>,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let gap = gap
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    let gap = gap.decode()?;
     Ok(gap.unlock_translation_key().to_owned())
 }
 
@@ -386,10 +345,11 @@ mod tests {
         ProviderKind, ProviderSignInUpdate, ProviderVaultScope, StorageProvider, i18n_keys,
     };
     use serde::Serialize;
+    use tsify::Tsify;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     fn ts<T: Tsify + Serialize>(value: &T) -> Result<tsify::Ts<T>, JsError> {
-        Tsify::into_ts(value).map_err(|_| JsError::new("fixture"))
+        Ok(value.encode()?)
     }
 
     /// A request as the host sends it, for the request types that only decode.

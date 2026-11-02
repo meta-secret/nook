@@ -7,6 +7,7 @@
 use super::NookVaultManager;
 use super::session::VaultKeyMaterial;
 use crate::BrowserTimestamp;
+use crate::TypedInput;
 use crate::VaultSnapshotLookup;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use crate::storage::indexed_db::ImportVaultLabel;
@@ -40,9 +41,7 @@ impl NookVaultManager {
         &mut self,
         connection: &tsify::Ts<NookStorageConnection>,
     ) -> Result<Vec<NookPasswordEntrySummary>, JsError> {
-        let connection = connection
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        let connection = connection.decode()?;
         // Reading password envelopes from another provider is still a
         // same-vault operation. Preserve the active vault metadata while the
         // storage target changes; clearing it here used to erase vault_name
@@ -624,6 +623,7 @@ mod metadata_tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod wasm_tests {
     use super::*;
+    use crate::TypedOutput;
     use crate::manager::VaultNameState;
     use crate::test_fixtures::WasmFixture;
 
@@ -818,8 +818,7 @@ mod wasm_tests {
         let mut manager = NookVaultManager::new();
         let result = manager
             .connect_with_password(
-                &tsify::Tsify::into_ts(&nook_core::StorageConnection::Local)
-                    .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+                &nook_core::StorageConnection::Local.encode()?,
                 password_entry.id.clone(),
                 "correct horse battery staple".to_owned(),
                 50,
@@ -863,8 +862,7 @@ mod wasm_tests {
         let mut recovered = NookVaultManager::new();
         let page = recovered
             .connect_with_password(
-                &tsify::Tsify::into_ts(&nook_core::StorageConnection::Local)
-                    .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+                &nook_core::StorageConnection::Local.encode()?,
                 password_entry.id,
                 "correct horse battery staple".to_owned(),
                 50,
@@ -908,10 +906,7 @@ mod wasm_tests {
 
         let mut recovered = NookVaultManager::new();
         let listed = recovered
-            .fetch_vault_password_entries(
-                &tsify::Tsify::into_ts(&nook_core::StorageConnection::Local)
-                    .map_err(|error| anyhow::anyhow!("{error:?}"))?,
-            )
+            .fetch_vault_password_entries(&nook_core::StorageConnection::Local.encode()?)
             .await
             .map_err(|error| anyhow::anyhow!("password listing failed: {error:?}"))?;
 

@@ -10,6 +10,7 @@ use super::verified_access::VerifiedVaultAccessFlow;
 use crate::BrowserTimestamp;
 use crate::LoadedVaultUnlockRequest;
 use crate::NookError;
+use crate::TypedInput;
 use crate::conversion::LoadedVault;
 use crate::{NookJoinRequest, NookVaultMember};
 use nook_core::{
@@ -59,9 +60,7 @@ impl NookVaultManager {
         connection: &tsify::Ts<crate::NookStorageConnection>,
         _requested_at: String,
     ) -> Result<(), JsError> {
-        let connection = connection
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        let connection = connection.decode()?;
         self.prepare_storage(&connection).await?;
         let identity = self.ensure_device_identity()?;
         let mut vault_missing = false;
@@ -113,9 +112,7 @@ impl NookVaultManager {
         secrets_key: String,
         members_key: String,
     ) -> Result<(), JsError> {
-        let connection = connection
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        let connection = connection.decode()?;
         self.prepare_storage(&connection).await?;
         let identity = self.ensure_device_identity()?;
         let mut vault_missing = false;
@@ -615,6 +612,7 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::TypedOutput;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -902,8 +900,7 @@ mod browser_tests {
         let identity = nook_core::DeviceIdentity::generate()?;
         manager.device.id = identity.device_id().to_string();
         manager.device.identity_private_key = identity.secret_string().into_inner();
-        let local = tsify::Tsify::into_ts(&nook_core::StorageConnection::Local)
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        let local = nook_core::StorageConnection::Local.encode()?;
 
         assert!(
             manager

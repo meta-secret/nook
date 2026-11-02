@@ -1,13 +1,13 @@
 use super::{
     NookError, NookJoinRequest, NookSecretRecord, NookVaultManager, NookVaultMember, wasm_bindgen,
 };
+use crate::TypedOutput;
 use nook_core::OnboardingType;
 use nook_core::{
     EnrollmentProvider, EnrollmentProviderDataRef, OAuthFileEnrollment, OAuthFilePreset,
     PersonalEnrollmentProvider, PersonalEnrollmentProviderData, ProviderDraft, ProviderKind,
     ProviderSecretText, SharedEnrollmentProvider, SharedEnrollmentProviderData,
 };
-use tsify::Tsify;
 use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
@@ -82,7 +82,7 @@ impl NookEnrollmentProvider {
                 ProviderKind::S3
             }
         };
-        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        Ok(result.encode()?)
     }
 
     #[wasm_bindgen(getter, js_name = isSharedProviderGrant)]
@@ -126,8 +126,7 @@ impl NookEnrollmentProvider {
         &self,
     ) -> Result<tsify::Ts<nook_core::S3Connection>, wasm_bindgen::JsError> {
         let connection = nook_core::S3Connection::try_from(&self.0)?;
-        Tsify::into_ts(&connection)
-            .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        Ok(connection.encode()?)
     }
 
     /// The draft the invite gives the joiner: the provider complete for a
@@ -136,7 +135,7 @@ impl NookEnrollmentProvider {
     #[wasm_bindgen(js_name = providerDraft)]
     pub fn provider_draft(&self) -> Result<tsify::Ts<ProviderDraft>, wasm_bindgen::JsError> {
         let draft = ProviderDraft::try_from(&self.0)?;
-        Tsify::into_ts(&draft).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        Ok(draft.encode()?)
     }
 
     #[wasm_bindgen(getter, js_name = oauthPreset)]

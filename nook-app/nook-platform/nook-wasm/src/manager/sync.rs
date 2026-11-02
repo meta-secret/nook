@@ -7,6 +7,7 @@
 use super::NookVaultManager;
 use crate::NookDatabase;
 use crate::SyncResultSessionRequest;
+use crate::TypedInput;
 
 use crate::{NookError, NookStorageConnection, NookVaultSyncResult};
 use nook_core::{StorageConnection, StorageMode, VaultAccessStatus};
@@ -19,9 +20,7 @@ impl NookVaultManager {
         &mut self,
         connection: &tsify::Ts<NookStorageConnection>,
     ) -> Result<NookVaultSyncResult, JsError> {
-        let connection = connection
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        let connection = connection.decode()?;
         let storage_mode = connection.mode();
         tracing::debug!(
             scope = "wasm-sync",

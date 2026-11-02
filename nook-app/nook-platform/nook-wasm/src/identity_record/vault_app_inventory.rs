@@ -54,6 +54,7 @@ impl NookIdentitySnapshot {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub mod tests {
     use super::*;
+    use crate::TypedOutput;
     use crate::identity_record::NookIdentityMemberLabelKind;
     use crate::manager::NookVaultManager;
     use nook_core::{AppKey, DeviceAccessIdentityState, DeviceAccessProtectionKind};
@@ -74,10 +75,7 @@ pub mod tests {
             .await
             .map_err(|error| anyhow::anyhow!("protect browser: {error:?}"))?;
         manager
-            .connect_fresh(
-                &tsify::Tsify::into_ts(&nook_core::StorageConnection::Local)
-                    .map_err(|error| anyhow::anyhow!("{error:?}"))?,
-            )
+            .connect_fresh(&nook_core::StorageConnection::Local.encode()?)
             .await
             .map_err(|error| anyhow::anyhow!("create vault: {error:?}"))?;
         let extension = AppKey::generate()?;

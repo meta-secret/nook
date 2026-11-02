@@ -1,7 +1,7 @@
 use super::{NookError, NookProviderSyncRevision, NookStorageConnection, wasm_bindgen};
+use crate::{TypedInput, TypedOutput};
 use nook_core::{StorageConnection, VaultSyncConflict};
 use std::collections::BTreeMap;
-use tsify::Tsify;
 use wasm_bindgen::JsError;
 
 /// Pending browser sync resolution state.
@@ -150,9 +150,7 @@ impl NookPendingSyncConflict {
             provider_label,
             local_yaml,
             remote_yaml,
-            connection: connection
-                .to_rust()
-                .map_err(|_| JsError::new("Invalid typed WASM input."))?,
+            connection: connection.decode()?,
             remote_revision: remote_revision.clone(),
             conflict: VaultSyncConflict::Content(nook_core::ContentSyncConflict {
                 local_version: u64::from(local_version).into(),
@@ -178,9 +176,7 @@ impl NookPendingSyncConflict {
             provider_label,
             local_yaml,
             remote_yaml,
-            connection: connection
-                .to_rust()
-                .map_err(|_| JsError::new("Invalid typed WASM input."))?,
+            connection: connection.decode()?,
             remote_revision: remote_revision.clone(),
             conflict: VaultSyncConflict::StoreId(nook_core::StoreIdSyncConflict {
                 local_store_id,
@@ -244,8 +240,7 @@ impl NookPendingSyncConflict {
 
     #[wasm_bindgen(getter)]
     pub fn connection(&self) -> Result<tsify::Ts<NookStorageConnection>, wasm_bindgen::JsError> {
-        Tsify::into_ts(&self.connection)
-            .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        Ok(self.connection.encode()?)
     }
 
     #[wasm_bindgen(getter, js_name = remoteRevision)]
@@ -335,6 +330,7 @@ mod pending_sync_conflict_tests {
         CurrentVaultReplaceability, IdentityVaultAppGrantKind, ProviderVaultDecision,
         ProviderVaultDecisionReason, ProviderVaultIdentityEligibility, VaultSyncConflictKind,
     };
+    use tsify::Tsify;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -595,6 +591,7 @@ mod browser_tests {
         CurrentVaultReplaceability, IdentityVaultAppGrantKind, ProviderVaultDecisionReason,
         ProviderVaultIdentityEligibility, VaultSyncConflictKind,
     };
+    use tsify::Tsify;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);

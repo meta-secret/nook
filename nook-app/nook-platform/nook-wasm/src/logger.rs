@@ -22,6 +22,7 @@
 //! logging never blocks or throws into callers.
 
 use crate::NookError;
+use crate::TypedOutput;
 use js_sys::Date;
 use nook_core::IsoTimestamp;
 use rexie::{ObjectStore, Rexie, TransactionMode};
@@ -37,8 +38,6 @@ use tracing_subscriber::fmt::format::DefaultFields;
 use tracing_subscriber::layer::{Context, SubscriberExt};
 use tracing_subscriber::registry::Registry;
 use tracing_subscriber::reload::Layer as ReloadLayer;
-use tsify::Tsify;
-use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 const LOG_DB_NAME: &str = "nook_logs";
@@ -174,11 +173,10 @@ impl NookLogEntries {
     #[wasm_bindgen]
     pub fn to_array(&self) -> Result<Vec<tsify::Ts<LogEntry>>, wasm_bindgen::JsError> {
         let result = { self.0.clone() };
-        result
+        Ok(result
             .iter()
-            .map(Tsify::into_ts)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+            .map(TypedOutput::encode)
+            .collect::<Result<Vec<_>, _>>()?)
     }
 }
 

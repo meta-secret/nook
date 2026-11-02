@@ -1,3 +1,4 @@
+use crate::{TypedInput, TypedOutput};
 use nook_core::{ProviderCredentialStorageAdmission, StorageProvider};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -43,14 +44,12 @@ pub struct ExtensionPairingStorageProviderPayload(StorageProvider);
 pub fn decode_extension_pairing_storage_provider(
     admission: &tsify::Ts<ExtensionPairingStorageProviderAdmission>,
 ) -> Result<tsify::Ts<ExtensionPairingStorageProviderPayload>, wasm_bindgen::JsError> {
-    let admission = admission
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let admission = admission.decode()?;
 
     let result = admission.decode().map_err(|_| {
         JsError::new("Extension pairing provider credentials are not storage-safe.")
     })?;
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+    Ok(result.encode()?)
 }
 
 /// Decode external provider snapshots through the Rust-owned serde contract.
@@ -66,11 +65,9 @@ pub fn decode_extension_pairing_storage_provider(
 pub fn decode_storage_providers(
     snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshot>,
 ) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshot>, wasm_bindgen::JsError> {
-    let snapshot = snapshot
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    let snapshot = snapshot.decode()?;
     let result = { snapshot };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    Ok(result.encode()?)
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
@@ -126,9 +123,7 @@ mod wasm_tests {
     fn provider_decoder_normalizes_legacy_javascript_snapshot() -> Result<(), wasm_bindgen::JsError>
     {
         let snapshot = decode_snapshot_json(LEGACY_PROVIDER_SNAPSHOT)?;
-        let decoded = decode_storage_providers(&snapshot)?
-            .to_rust()
-            .map_err(|_| JsError::new("Typed test output could not be decoded."))?;
+        let decoded = decode_storage_providers(&snapshot)?.decode()?;
 
         assert_eq!(
             decoded

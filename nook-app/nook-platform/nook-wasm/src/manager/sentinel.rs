@@ -8,6 +8,7 @@ use crate::LoadedVaultUnlockRequest;
 use crate::NookDatabase;
 use crate::SentinelDbLoadSentinelGenesisShareDelivery;
 use crate::SentinelDbSaveSentinelGenesisShareDelivery;
+use crate::TypedInput;
 use crate::manager::session::VaultKeyMaterial;
 use crate::storage::indexed_db::{SentinelFinalizationJournal, StoredSentinelShareDelivery};
 use nook_core::CheckedSentinelGenesisDelivery;
@@ -55,9 +56,7 @@ impl NookVaultManager {
         &mut self,
         args: &tsify::Ts<nook_core::StartSentinelGenesisArgs>,
     ) -> Result<NookSentinelGenesisStatus, wasm_bindgen::JsError> {
-        let mut args = args
-            .to_rust()
-            .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+        let mut args = args.decode()?;
 
         let pending = NookDatabase::load_sentinel_genesis_finalization_pending().await;
         if let SentinelFinalizationJournal::Pending(_) =

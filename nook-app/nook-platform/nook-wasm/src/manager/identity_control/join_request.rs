@@ -14,6 +14,7 @@
 //! request: one tap of that key's passkey protects a new key for the
 //! identity, and the key in use adds it (`add_identity_with_passkey_in_use`).
 
+use crate::{TypedInput, TypedOutput};
 use nook_core::{
     AppId, AppKey, DriveEventParent, EventId, EventLogLocation, EventStorageBytes,
     IdentityConnectionKey, IdentityControlLog, IdentityControlState, IdentityId,
@@ -31,7 +32,6 @@ use zeroize::Zeroizing;
 
 use super::connection::NookIdentityConnectionStart;
 use super::passkey_addition::NookIdentityAdded;
-use super::{INVALID_TYPED_INPUT, UNENCODABLE_TYPED_OUTPUT};
 use crate::manager::NookVaultManager;
 use crate::manager::access_check::NookProviderSource;
 use crate::storage::identity_log::IdentityLogWrite;
@@ -295,7 +295,7 @@ impl NookVaultManager {
                 NookIdentityConnectionStart::NewKeyStaged
             }
         };
-        Tsify::into_ts(&start).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        Ok(start.encode()?)
     }
 
     /// Ask an identity found at a source to let this browser in. The unlocked
@@ -309,9 +309,7 @@ impl NookVaultManager {
         source: &tsify::Ts<NookProviderSource>,
         identity_id: String,
     ) -> Result<tsify::Ts<NookIdentityJoinRequested>, JsError> {
-        let source = source
-            .to_rust()
-            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
+        let source = source.decode()?;
         let identity_id = IdentityId::parse(&identity_id)?;
         let app_key = self.unlocked_app_key()?;
         let local_log = Self::local_identity_log(&app_key).await?;
@@ -362,7 +360,7 @@ impl NookVaultManager {
             app_id: app_key.app_id().as_str().to_owned(),
             requested_at: requested_at.as_str().to_owned(),
         };
-        Tsify::into_ts(&requested).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        Ok(requested.encode()?)
     }
 
     /// Read the identity's log at the source again. Once a device approved
@@ -376,9 +374,7 @@ impl NookVaultManager {
         source: &tsify::Ts<NookProviderSource>,
         identity_id: String,
     ) -> Result<tsify::Ts<NookIdentityJoinCompletion>, JsError> {
-        let source = source
-            .to_rust()
-            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
+        let source = source.decode()?;
         let identity_id = IdentityId::parse(&identity_id)?;
         let app_key = self.unlocked_app_key()?;
         let opened = self.open_identity_source(&source).await?;
@@ -400,7 +396,7 @@ impl NookVaultManager {
             events: &events,
         })
         .await?;
-        Tsify::into_ts(&completion).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        Ok(completion.encode()?)
     }
 
     /// Join the keyring the web app just added this app to, from the
@@ -462,9 +458,7 @@ impl NookVaultManager {
         identity_id: String,
         rp_id: &str,
     ) -> Result<tsify::Ts<NookIdentityAdded>, JsError> {
-        let source = source
-            .to_rust()
-            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
+        let source = source.decode()?;
         let identity_id = IdentityId::parse(&identity_id)?;
         let key_in_use = self.unlocked_app_key()?;
         let in_use_member = self.own_identity_member_keys(&key_in_use).await?;
@@ -549,11 +543,11 @@ impl NookVaultManager {
                 identity_logs: &identity_logs,
             })
             .await?;
-        Tsify::into_ts(&NookIdentityAdded {
+        Ok(NookIdentityAdded {
             identity_id,
             selection,
-        })
-        .map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        }
+        .encode()?)
     }
 
     /// Approve a device asking to join this identity: it becomes a member
@@ -607,7 +601,7 @@ mod browser_tests {
         let source = NookProviderSource::LocalFolder {
             handle_id: handle_id.to_owned(),
         };
-        Tsify::into_ts(&source).map_err(|error| anyhow::anyhow!("{error:?}"))
+        Ok(source.encode()?)
     }
 
     /// The identity in use and its control log, as this browser stores it.
@@ -694,30 +688,26 @@ mod browser_tests {
         let start = js(manager
             .begin_identity_join(family.as_str().to_owned(), "Family")
             .await)?
-        .to_rust()
-        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        .decode()?;
         assert_eq!(start, NookIdentityConnectionStart::CurrentKey);
         let source = folder_source(&folder)?;
         let requested = js(manager
             .request_identity_join(&source, family.as_str().to_owned())
             .await)?
-        .to_rust()
-        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        .decode()?;
         assert_eq!(requested.identity_id, family.as_str());
         // Asking again reports the first request instead of writing another.
         let again = js(manager
             .request_identity_join(&source, family.as_str().to_owned())
             .await)?
-        .to_rust()
-        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        .decode()?;
         assert_eq!(again, requested);
 
         // No device answered yet: completing changes nothing.
         let completion = js(manager
             .complete_identity_join(&source, family.as_str().to_owned())
             .await)?
-        .to_rust()
-        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        .decode()?;
         assert_eq!(completion, NookIdentityJoinCompletion::Pending);
         // An identity the folder holds no log for cannot be completed.
         assert!(

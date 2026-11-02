@@ -7,6 +7,7 @@
 //! (`take_keyring_provider_shares`), locked or not: those providers replace
 //! its remote ones, so an added provider arrives and a removed one goes.
 
+use crate::{TypedInput, TypedOutput};
 use std::mem;
 
 use nook_core::{
@@ -17,7 +18,6 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
-use super::{INVALID_TYPED_INPUT, UNENCODABLE_TYPED_OUTPUT};
 use crate::manager::NookVaultManager;
 use crate::storage::auth_providers::{
     PresealedProviderMerge, PresealedProviderSnapshotPublication,
@@ -79,8 +79,7 @@ impl NookVaultManager {
                     .collect();
             }
         }
-        Tsify::into_ts(&NookKeyringProviderShares { apps })
-            .map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        Ok(NookKeyringProviderShares { apps }.encode()?)
     }
 
     /// Take the copies sealed to an app key this installation holds; the
@@ -99,9 +98,7 @@ impl NookVaultManager {
         &self,
         shares: &tsify::Ts<NookKeyringProviderSharesAdmission>,
     ) -> Result<u32, JsError> {
-        let mut shares = shares
-            .to_rust()
-            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
+        let mut shares = shares.decode()?;
         let mut taken = 0_usize;
         for share in &mut shares.0.apps {
             let app_id = AppId::parse(&share.app_id)?;
@@ -125,7 +122,7 @@ impl NookVaultManager {
             saved?;
             taken += snapshot.providers.len();
         }
-        u32::try_from(taken).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        Ok(u32::try_from(taken).map_err(|_| crate::TypedBoundaryError::Output)?)
     }
 
     /// Save sync providers for an identity added beside the one in use,
@@ -139,9 +136,7 @@ impl NookVaultManager {
         snapshot: &tsify::Ts<AuthProvidersSnapshot>,
     ) -> Result<(), JsError> {
         let identity_id = IdentityId::parse(&identity_id)?;
-        let snapshot = snapshot
-            .to_rust()
-            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
+        let snapshot = snapshot.decode()?;
         let keyring = NookDatabase::load_keyring().await?;
         let entry = keyring
             .entry(&identity_id)
@@ -242,9 +237,7 @@ mod browser_tests {
     }
 
     async fn shares(manager: &NookVaultManager) -> anyhow::Result<NookKeyringProviderShares> {
-        js(manager.keyring_provider_shares().await)?
-            .to_rust()
-            .map_err(|error| anyhow::anyhow!("{error:?}"))
+        Ok(js(manager.keyring_provider_shares().await)?.decode()?)
     }
 
     #[wasm_bindgen_test]

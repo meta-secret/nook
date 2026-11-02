@@ -18,6 +18,7 @@ mod provider_share;
 mod vault_access;
 mod vault_removal;
 
+use crate::{TypedInput, TypedOutput};
 use nook_core::i18n_keys;
 use nook_core::{
     AppKey, AppKeyIdentityMembership, AuthProvidersSnapshot, EventLogLocation, IdentityControlLog,
@@ -29,9 +30,6 @@ use nook_core::{
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
-
-const INVALID_TYPED_INPUT: &str = "Invalid typed WASM input.";
-const UNENCODABLE_TYPED_OUTPUT: &str = "Typed WASM output could not be encoded.";
 
 use super::NookVaultManager;
 use crate::storage::identity_log::IdentityLogWrite;
@@ -243,9 +241,7 @@ impl NookVaultManager {
         &mut self,
         connection: &tsify::Ts<crate::NookStorageConnection>,
     ) -> Result<tsify::Ts<NookIdentityLogSyncOutcome>, JsError> {
-        let connection = connection
-            .to_rust()
-            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
+        let connection = connection.decode()?;
         let app_key = self.unlocked_app_key()?;
         let identity_id = Self::current_identity_id(&app_key).await?;
         let restore_local = self.storage.mode == StorageMode::Local;
@@ -266,7 +262,7 @@ impl NookVaultManager {
             self.prepare_storage_preserving_vault_metadata(&StorageConnection::Local)
                 .await?;
         }
-        Tsify::into_ts(&result?).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        Ok(result?.encode()?)
     }
 
     /// The current identity as the Devices and Sync pages present it.
@@ -275,12 +271,9 @@ impl NookVaultManager {
         &mut self,
         snapshot: &tsify::Ts<AuthProvidersSnapshot>,
     ) -> Result<tsify::Ts<IdentityControlSnapshot>, JsError> {
-        let providers = snapshot
-            .to_rust()
-            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?
-            .providers;
+        let providers = snapshot.decode()?.providers;
         let snapshot = self.current_identity_snapshot(&providers).await?;
-        Tsify::into_ts(&snapshot).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        Ok(snapshot.encode()?)
     }
 }
 
@@ -393,10 +386,7 @@ mod browser_tests {
             Founder::js(manager.finish_pin_device_protection(pin.to_owned()).await)?;
             Founder::js(
                 manager
-                    .connect_fresh(
-                        &Tsify::into_ts(&StorageConnection::Local)
-                            .map_err(|error| anyhow::anyhow!("{error:?}"))?,
-                    )
+                    .connect_fresh(&StorageConnection::Local.encode()?)
                     .await,
             )?;
             Ok(Self { manager })
@@ -413,11 +403,11 @@ mod browser_tests {
         fn providers() -> anyhow::Result<tsify::Ts<AuthProvidersSnapshot>> {
             let row =
                 WasmFixture::github_row("github-personal", "github_pat_fixture", "owner/personal")?;
-            Tsify::into_ts(&AuthProvidersSnapshot {
+            Ok(AuthProvidersSnapshot {
                 providers: vec![row],
                 active_vault_store_id: ActiveVaultScope::Unselected,
-            })
-            .map_err(|error| anyhow::anyhow!("{error:?}"))
+            }
+            .encode()?)
         }
 
         async fn issue_code(&mut self, identity_id: &IdentityId) -> anyhow::Result<String> {
@@ -448,9 +438,7 @@ mod browser_tests {
 
         async fn snapshot(&mut self) -> anyhow::Result<IdentityControlSnapshot> {
             let providers = Self::providers()?;
-            Founder::js(self.manager.identity_control_snapshot(&providers).await)?
-                .to_rust()
-                .map_err(|error| anyhow::anyhow!("{error:?}"))
+            Ok(Founder::js(self.manager.identity_control_snapshot(&providers).await)?.decode()?)
         }
     }
 
@@ -464,13 +452,10 @@ mod browser_tests {
     )]
     async fn founder_replicates_its_identity_and_manages_member_apps() -> anyhow::Result<()> {
         let mut founder = Founder::new("identity founder pin").await?;
-        let created = Founder::js(founder.manager.ensure_identity_control_log().await)?
-            .to_rust()
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        let created = Founder::js(founder.manager.ensure_identity_control_log().await)?.decode()?;
         assert_eq!(created, NookIdentityLogEnsureOutcome::Created);
-        let existing = Founder::js(founder.manager.ensure_identity_control_log().await)?
-            .to_rust()
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        let existing =
+            Founder::js(founder.manager.ensure_identity_control_log().await)?.decode()?;
         assert_eq!(existing, NookIdentityLogEnsureOutcome::Existing);
 
         // The new log lists only its founder; the open vault joins it when
@@ -522,16 +507,14 @@ mod browser_tests {
                 .identity_replication_providers(&providers)
                 .await,
         )?
-        .to_rust()
-        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        .decode()?;
         assert_eq!(replicating.providers.len(), 1);
         let vault_row = Founder::js(
             founder
                 .manager
                 .identity_vault_provider(&providers, &founder.store_id()),
         )?
-        .to_rust()
-        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        .decode()?;
         assert_eq!(vault_row.id, "github-personal");
         // Every identity mount replicates each of its vaults; a malformed id names none.
         assert!(
@@ -541,11 +524,11 @@ mod browser_tests {
                 .is_err()
         );
         // An empty provider snapshot records no mount.
-        let empty = Tsify::into_ts(&AuthProvidersSnapshot {
+        let empty = AuthProvidersSnapshot {
             providers: Vec::new(),
             active_vault_store_id: ActiveVaultScope::Unselected,
-        })
-        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        }
+        .encode()?;
         assert!(!Founder::js(
             founder
                 .manager
@@ -553,11 +536,11 @@ mod browser_tests {
                 .await
         )?);
         // A browser-local row is never an identity mount.
-        let local_row = Tsify::into_ts(&StorageProvider {
+        let local_row = StorageProvider {
             provider: StoredProvider::Local {},
             ..vault_row.clone()
-        })
-        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        }
+        .encode()?;
         assert!(!Founder::js(
             founder
                 .manager
@@ -617,10 +600,7 @@ mod browser_tests {
         Founder::js(
             founder
                 .manager
-                .sync_identity_log_with_provider(
-                    &Tsify::into_ts(&StorageConnection::Local)
-                        .map_err(|error| anyhow::anyhow!("{error:?}"))?,
-                )
+                .sync_identity_log_with_provider(&StorageConnection::Local.encode()?)
                 .await,
         )?;
 
@@ -635,13 +615,12 @@ mod browser_tests {
 
         let removal = Founder::providers()?;
         let row = removal
-            .to_rust()
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?
+            .decode()?
             .providers
             .into_iter()
             .next()
             .ok_or_else(|| anyhow::anyhow!("fixture row"))?;
-        let row = Tsify::into_ts(&row).map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        let row = row.encode()?;
         assert!(Founder::js(
             founder.manager.remove_identity_provider_mount(&row).await
         )?);
@@ -655,8 +634,7 @@ mod browser_tests {
                 .join_identity_with_invite(
                     code,
                     INVITE_PASSPHRASE.to_owned(),
-                    &Tsify::into_ts(&StorageConnection::Local)
-                        .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+                    &StorageConnection::Local.encode()?,
                 )
                 .await,
         )?;
@@ -697,14 +675,12 @@ mod browser_tests {
             NookVaultManager::current_identity_id(&app_key).await?,
             invited
         );
-        let empty = Tsify::into_ts(&AuthProvidersSnapshot {
+        let empty = AuthProvidersSnapshot {
             providers: Vec::new(),
             active_vault_store_id: ActiveVaultScope::Unselected,
-        })
-        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        let snapshot = Founder::js(manager.identity_control_snapshot(&empty).await)?
-            .to_rust()
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        }
+        .encode()?;
+        let snapshot = Founder::js(manager.identity_control_snapshot(&empty).await)?.decode()?;
         assert_eq!(snapshot.identity_id, invited.as_str());
         assert!(snapshot.members.is_empty());
         Founder::js(manager.delete_local_browser_data().await)?;

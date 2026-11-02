@@ -1,6 +1,7 @@
 use super::NookVaultManager;
 use crate::BrowserTimestamp;
 use crate::IdentityDbValidateVaultIdentityEnrollment;
+use crate::TypedInput;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use crate::storage::indexed_db::ImportVaultLabel;
 
@@ -43,9 +44,7 @@ impl NookVaultManager {
         password: String,
         page_limit: u32,
     ) -> Result<NookSecretPage, JsError> {
-        let connection = connection
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        let connection = connection.decode()?;
         drop(self.status.tx.send("CONNECT_START".to_owned()));
         self.prepare_storage(&connection).await?;
         // A backup password is an alternate vault-key credential. After an
@@ -139,6 +138,7 @@ impl NookVaultManager {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::TypedOutput;
 
     use nook_core::{
         Database, DeviceIdentity, DeviceMode, SecretId, SecretValue, SentinelPolicy,
@@ -213,8 +213,7 @@ mod browser_tests {
         let mut manager = NookVaultManager::new();
         let result = manager
             .connect_with_password(
-                &tsify::Tsify::into_ts(&nook_core::StorageConnection::Local)
-                    .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+                &nook_core::StorageConnection::Local.encode()?,
                 password_entry.id,
                 "correct horse battery staple".to_owned(),
                 50,
@@ -264,8 +263,7 @@ mod browser_tests {
         let mut manager = NookVaultManager::new();
         let result = manager
             .connect_with_password(
-                &tsify::Tsify::into_ts(&nook_core::StorageConnection::Local)
-                    .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+                &nook_core::StorageConnection::Local.encode()?,
                 String::new(),
                 "correct horse battery staple".to_owned(),
                 50,
@@ -307,8 +305,7 @@ mod browser_tests {
         let mut recovered = NookVaultManager::new();
         let page = recovered
             .connect_with_password(
-                &tsify::Tsify::into_ts(&nook_core::StorageConnection::Local)
-                    .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+                &nook_core::StorageConnection::Local.encode()?,
                 "unknown-entry-id".to_owned(),
                 "correct horse battery staple".to_owned(),
                 50,

@@ -1,4 +1,5 @@
 use super::wasm_bindgen;
+use crate::TypedOutput;
 use nook_core::{AuthenticationWorkflowMatch, SecretId, WebsiteLoginSaveDecision};
 use tsify::Tsify;
 use wasm_bindgen::JsError;
@@ -282,7 +283,7 @@ impl NookAuthenticationWorkflowSnapshot {
     ) -> Result<tsify::Ts<nook_core::AuthenticationApprovalRequirement>, wasm_bindgen::JsError>
     {
         let result = { self.0.approval_requirement };
-        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        Ok(result.encode()?)
     }
 
     #[wasm_bindgen(getter, js_name = savedLoginCapability)]
@@ -291,7 +292,7 @@ impl NookAuthenticationWorkflowSnapshot {
     ) -> Result<tsify::Ts<nook_core::AuthenticationSavedLoginCapability>, wasm_bindgen::JsError>
     {
         let result = { self.0.saved_login_capability() };
-        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        Ok(result.encode()?)
     }
 
     #[wasm_bindgen(getter, js_name = observationIndex)]

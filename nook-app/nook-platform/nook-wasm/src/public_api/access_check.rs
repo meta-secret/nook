@@ -10,6 +10,7 @@ use crate::storage::local_folder::LocalFolderHandles;
 use crate::storage::provider_vault_listing::{DriveVaultListing, ProviderLocation};
 use crate::storage::s3::{S3Storage, S3VaultListing};
 use crate::{BrowserPasskeyClient, DriveStorageClient, NookDatabase, NookError};
+use crate::{TypedInput, TypedOutput};
 use nook_core::{
     BackupPasswordAccessCheck, CheckedVaultEvents, CredentialCheckReport, DeviceIdentity, EventId,
     EventLogNamespaceKind, EventStorageBytes, LocalEventWrite, PasskeyAccessCheck,
@@ -60,7 +61,7 @@ impl SourceContents {
             vaults: self.vaults,
         }
         .report()?;
-        Tsify::into_ts(&report).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        Ok(report.encode()?)
     }
 
     /// Check what a typed backup password opens here.
@@ -73,7 +74,7 @@ impl SourceContents {
             vaults: self.vaults,
         }
         .report()?;
-        Tsify::into_ts(&report).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        Ok(report.encode()?)
     }
 }
 
@@ -243,9 +244,7 @@ impl CheckedPasskey<'_> {
     source: &tsify::Ts<NookAccessCheckSource>,
     rp_id: &str,
 ) -> Result<tsify::Ts<CredentialCheckReport>, JsError> {
-    let source = source
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let source = source.decode()?;
     source.contents().await?.check_passkey(rp_id).await
 }
 
@@ -255,9 +254,7 @@ impl CheckedPasskey<'_> {
     source: &tsify::Ts<NookAccessCheckSource>,
     password: String,
 ) -> Result<tsify::Ts<CredentialCheckReport>, JsError> {
-    let source = source
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let source = source.decode()?;
     let password = zeroize::Zeroizing::new(password);
     source.contents().await?.check_backup_password(&password)
 }
@@ -314,11 +311,10 @@ mod browser_tests {
                 handle_id: folder.clone(),
             },
         ] {
-            let source = Tsify::into_ts(&source).map_err(|error| anyhow::anyhow!("{error:?}"))?;
+            let source = source.encode()?;
             let report =
                 js(check_backup_password_access(&source, "not a backup".to_owned()).await)?
-                    .to_rust()
-                    .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+                    .decode()?;
             assert!(report.identities.is_empty());
         }
         js(manager.delete_local_browser_data().await)?;

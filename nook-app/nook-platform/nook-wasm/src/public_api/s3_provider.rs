@@ -11,14 +11,11 @@ use crate::storage::provider_vault_listing::{
     BrowserHeldVaults, LocalVaultClassification, ProviderLocation,
 };
 use crate::storage::s3::{S3Storage, S3VaultListing};
+use crate::{TypedInput, TypedOutput};
 use nook_core::{
     LocalVaultOccupancy, ProviderVaultListing, S3Connection, S3ConnectionDraft, S3DraftValidation,
 };
-use tsify::Tsify;
 use wasm_bindgen::JsError;
-
-const INVALID_TYPED_INPUT: &str = "Typed WASM value could not be converted.";
-const UNENCODABLE_TYPED_OUTPUT: &str = "Typed WASM output could not be encoded.";
 
 /// Validate the S3 setup form field by field. A valid form yields the
 /// connection a new S3 row is saved with and an S3 source reads; an invalid
@@ -27,8 +24,8 @@ const UNENCODABLE_TYPED_OUTPUT: &str = "Typed WASM output could not be encoded."
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn validate_s3_connection_draft(
     draft: &tsify::Ts<S3ConnectionDraft>,
 ) -> Result<tsify::Ts<S3DraftValidation>, JsError> {
-    let draft = draft.to_rust().map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
-    Tsify::into_ts(&draft.validate()).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+    let draft = draft.decode()?;
+    Ok(draft.validate().encode()?)
 }
 
 /// The detail line of a validated S3 connection, as its saved row shows
@@ -37,9 +34,7 @@ const UNENCODABLE_TYPED_OUTPUT: &str = "Typed WASM output could not be encoded."
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_s3_provider_detail(
     configuration: &tsify::Ts<S3Connection>,
 ) -> Result<String, JsError> {
-    let configuration = configuration
-        .to_rust()
-        .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
+    let configuration = configuration.decode()?;
     Ok(configuration.storage_detail())
 }
 
@@ -50,19 +45,15 @@ const UNENCODABLE_TYPED_OUTPUT: &str = "Typed WASM output could not be encoded."
     configuration: &tsify::Ts<S3Connection>,
     local_vault: &tsify::Ts<LocalVaultOccupancy>,
 ) -> Result<tsify::Ts<ProviderVaultListing>, JsError> {
-    let configuration = configuration
-        .to_rust()
-        .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
-    let local_vault = local_vault
-        .to_rust()
-        .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
+    let configuration = configuration.decode()?;
+    let local_vault = local_vault.decode()?;
     let listing = S3ProviderListing {
         connection: &configuration,
         local_vault: &local_vault,
     }
     .listing()
     .await?;
-    Tsify::into_ts(&listing).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+    Ok(listing.encode()?)
 }
 
 /// One S3 location and the vault open on this device.
@@ -99,12 +90,13 @@ mod tests {
         provider_draft_label, s3_provider_draft, staged_storage_args,
     };
     use crate::test_fixtures::WasmFixture;
+    use crate::{TypedInput, TypedOutput};
     use nook_core::{DraftStorageConnection, ProviderDraft, ProviderKind, StorageConnection};
     use tsify::Tsify;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     fn typed<T: Tsify + serde::Serialize>(value: &T) -> anyhow::Result<tsify::Ts<T>> {
-        Tsify::into_ts(value).map_err(|error| anyhow::anyhow!("{error:?}"))
+        Ok(value.encode()?)
     }
 
     #[wasm_bindgen_test]
@@ -153,8 +145,7 @@ mod tests {
         let args = staged
             .args()
             .map_err(|error| anyhow::anyhow!("{error:?}"))?
-            .to_rust()
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+            .decode()?;
         assert_eq!(
             args,
             StorageConnection::S3 {
@@ -188,8 +179,7 @@ mod tests {
         assert!(!detail.contains(WasmFixture::S3_SECRET));
         let args = draft_storage_args(&ready)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?
-            .to_rust()
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+            .decode()?;
         assert_eq!(
             args,
             DraftStorageConnection::Ready {
@@ -205,11 +195,11 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::list_s3_vaults;
+    use crate::TypedOutput;
     use crate::public_api::provider_failure_code;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
     use crate::test_fixtures::WasmFixture;
     use nook_core::{LocalVaultOccupancy, ProviderFailureCode};
-    use tsify::Tsify;
     use wasm_bindgen::JsCast;
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
@@ -228,9 +218,8 @@ mod browser_tests {
             .map_err(|error| anyhow::anyhow!("{error}"))?;
         let configuration = WasmFixture::s3_connection()?;
         let rejected = list_s3_vaults(
-            &Tsify::into_ts(&configuration).map_err(|error| anyhow::anyhow!("{error:?}"))?,
-            &Tsify::into_ts(&LocalVaultOccupancy::Closed)
-                .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+            &configuration.encode()?,
+            &LocalVaultOccupancy::Closed.encode()?,
         )
         .await;
         let Err(failure) = rejected else {

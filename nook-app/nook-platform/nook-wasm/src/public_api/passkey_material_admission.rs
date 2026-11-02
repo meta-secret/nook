@@ -1,4 +1,5 @@
 //! Unknown extension messages enter typed passkey schemas at this JS boundary.
+use crate::{TypedInput, TypedOutput};
 use nook_companion_core::{
     PasskeyByteMaterial, PasskeySetupAvailability, PasskeySetupMaterial,
     PasskeySetupMaterialResponse, PasskeyUnlockAvailability, PasskeyUnlockMaterial,
@@ -36,9 +37,7 @@ pub struct ExtensionSessionOperationAdmission(
 pub fn decode_passkey_setup_material_response(
     value: &tsify::Ts<PasskeySetupMaterialAdmission>,
 ) -> Result<tsify::Ts<PasskeySetupMaterial>, wasm_bindgen::JsError> {
-    let value = value
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let value = value.decode()?;
 
     let PasskeySetupMaterialAdmission(value) = value;
     let result = match value.setup {
@@ -47,7 +46,7 @@ pub fn decode_passkey_setup_material_response(
             "Extension session returned a malformed setup response.",
         )),
     }?;
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+    Ok(result.encode()?)
 }
 #[wasm_bindgen]
 #[cfg_attr(
@@ -57,9 +56,7 @@ pub fn decode_passkey_setup_material_response(
 pub fn decode_passkey_unlock_material_response(
     value: &tsify::Ts<PasskeyUnlockMaterialAdmission>,
 ) -> Result<tsify::Ts<PasskeyUnlockMaterial>, wasm_bindgen::JsError> {
-    let value = value
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let value = value.decode()?;
 
     let PasskeyUnlockMaterialAdmission(value) = value;
     let result = match value.material {
@@ -68,7 +65,7 @@ pub fn decode_passkey_unlock_material_response(
             "Extension session returned a malformed unlock response.",
         )),
     }?;
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+    Ok(result.encode()?)
 }
 #[wasm_bindgen]
 #[cfg_attr(
@@ -78,11 +75,9 @@ pub fn decode_passkey_unlock_material_response(
 pub fn admit_passkey_byte_material(
     value: &tsify::Ts<PasskeyByteMaterial>,
 ) -> Result<tsify::Ts<PasskeyByteMaterial>, wasm_bindgen::JsError> {
-    let value = value
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let value = value.decode()?;
     let result = { value };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+    Ok(result.encode()?)
 }
 
 /// Admit the full session device response at the unknown Chrome message boundary.
@@ -94,13 +89,11 @@ pub fn admit_passkey_byte_material(
 pub fn decode_extension_session_device_response(
     value: &tsify::Ts<ExtensionSessionOperationAdmission>,
 ) -> Result<tsify::Ts<nook_companion_core::ExtensionSessionDeviceResponse>, wasm_bindgen::JsError> {
-    let value = value
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let value = value.decode()?;
 
     let ExtensionSessionOperationAdmission(value) = value;
     let result = value.into_device().map_err(|error| JsError::new(&error))?;
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+    Ok(result.encode()?)
 }
 #[wasm_bindgen]
 #[cfg_attr(
@@ -110,13 +103,11 @@ pub fn decode_extension_session_device_response(
 pub fn decode_extension_session_status_details(
     value: &tsify::Ts<ExtensionSessionOperationAdmission>,
 ) -> Result<tsify::Ts<nook_companion_core::ExtensionSessionStatus>, wasm_bindgen::JsError> {
-    let value = value
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let value = value.decode()?;
 
     let ExtensionSessionOperationAdmission(value) = value;
     let result = value.into_status().map_err(|error| JsError::new(&error))?;
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+    Ok(result.encode()?)
 }
 
 /// Full configurations, not the identity-only metadata request projection.
@@ -130,15 +121,13 @@ pub fn admit_extension_storage_providers(
 ) -> Result<Vec<tsify::Ts<nook_core::StorageProvider>>, wasm_bindgen::JsError> {
     let value = value
         .into_iter()
-        .map(|value| value.to_rust())
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+        .map(|value| value.decode())
+        .collect::<Result<Vec<_>, _>>()?;
     let result = { value };
-    result
+    Ok(result
         .iter()
-        .map(Tsify::into_ts)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        .map(TypedOutput::encode)
+        .collect::<Result<Vec<_>, _>>()?)
 }
 
 #[cfg(test)]

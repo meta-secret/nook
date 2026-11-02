@@ -2,10 +2,11 @@
 //! files, as a sync provider does. Prepared storage reaches only network
 //! providers, so a local-folder mount is unioned through its own handle.
 
+use crate::TypedOutput;
 use nook_core::{EventStorageBytes, IdentityControlState, PlacedNamespace};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
-use super::{NookIdentityLogSyncOutcome, UNENCODABLE_TYPED_OUTPUT};
+use super::NookIdentityLogSyncOutcome;
 use crate::manager::NookVaultManager;
 use crate::storage::identity_log::IdentityLogWrite;
 use crate::storage::local_folder::{LocalFolderEventWrite, LocalFolderHandles};
@@ -68,13 +69,14 @@ impl NookVaultManager {
             pulled_new_events: !pulled.is_empty(),
             pushed_new_events: !writes.is_empty(),
         };
-        tsify::Tsify::into_ts(&outcome).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        Ok(outcome.encode()?)
     }
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::TypedInput;
     use nook_core::IdentityId;
     use wasm_bindgen_test::*;
 
@@ -88,11 +90,10 @@ mod browser_tests {
         manager: &mut NookVaultManager,
         handle_id: &str,
     ) -> anyhow::Result<NookIdentityLogSyncOutcome> {
-        js(manager
+        let outcome = js(manager
             .sync_identity_log_with_local_folder(handle_id.to_owned())
-            .await)?
-        .to_rust()
-        .map_err(|error| anyhow::anyhow!("{error:?}"))
+            .await)?;
+        Ok(outcome.decode()?)
     }
 
     #[wasm_bindgen_test]

@@ -4,12 +4,12 @@
 //! identity log, the directory entry under the original id, and the
 //! passkey-protected keyring entry are written in one transaction.
 
+use crate::{TypedInput, TypedOutput};
 use nook_core::{AddedIdentitySelection, IdentityId};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
-use super::{INVALID_TYPED_INPUT, UNENCODABLE_TYPED_OUTPUT};
 use crate::NookDatabase;
 use crate::manager::NookVaultManager;
 use crate::manager::access_check::NookProviderSource;
@@ -40,9 +40,7 @@ impl NookVaultManager {
         identity_id: String,
         rp_id: &str,
     ) -> Result<tsify::Ts<NookIdentityAdded>, JsError> {
-        let source = source
-            .to_rust()
-            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
+        let source = source.decode()?;
         let identity_id = IdentityId::parse(&identity_id)?;
         let contents = self.provider_source_contents(&source).await?;
         let passkey = CheckedPasskey { rp_id }.derive().await?;
@@ -55,11 +53,11 @@ impl NookVaultManager {
                 identity_logs: &contents.identity_logs,
             })
             .await?;
-        Tsify::into_ts(&NookIdentityAdded {
+        Ok(NookIdentityAdded {
             identity_id,
             selection,
-        })
-        .map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        }
+        .encode()?)
     }
 }
 

@@ -3,6 +3,7 @@
 use crate::NookDatabase;
 use crate::SentinelDbLoadSentinelGenesisShareDelivery;
 use crate::SentinelDbSaveSentinelGenesisShareDelivery;
+use crate::TypedInput;
 use crate::storage::indexed_db::StoredSentinelShareDelivery;
 use nook_core::CheckedSentinelGenesisDelivery;
 use nook_core::{
@@ -70,9 +71,7 @@ impl NookVaultManager {
         delivery_json: &str,
         provider_snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshot>,
     ) -> Result<String, wasm_bindgen::JsError> {
-        let provider_snapshot = provider_snapshot
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        let provider_snapshot = provider_snapshot.decode()?;
 
         let request: nook_core::SentinelGenesisRequest = serde_json::from_str(request_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;

@@ -24,8 +24,6 @@
     clippy::items_after_statements
 )]
 
-use tsify::Tsify;
-
 use nook_companion_core::ExtensionConnectScope;
 use nook_core::{WebsiteHostError, i18n_keys};
 mod application;
@@ -99,7 +97,7 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 pub fn extension_vault_access_scope()
 -> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
     let result = { ExtensionConnectScope::VaultAccess };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+    Ok(result.encode()?)
 }
 
 #[wasm_bindgen]
@@ -110,7 +108,7 @@ pub fn extension_vault_access_scope()
 pub fn extension_password_filling_scope()
 -> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
     let result = { ExtensionConnectScope::PasswordFilling };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+    Ok(result.encode()?)
 }
 
 #[wasm_bindgen]
@@ -121,7 +119,7 @@ pub fn extension_password_filling_scope()
 pub fn extension_passkey_management_scope()
 -> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
     let result = { ExtensionConnectScope::PasskeyManagement };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+    Ok(result.encode()?)
 }
 
 #[wasm_bindgen]
@@ -132,7 +130,7 @@ pub fn extension_passkey_management_scope()
 pub fn extension_sync_provider_credentials_scope()
 -> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
     let result = { ExtensionConnectScope::SyncProviderCredentials };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+    Ok(result.encode()?)
 }
 
 #[wasm_bindgen]
@@ -150,9 +148,7 @@ pub fn extension_sync_provider_credentials_scope()
 pub fn companion_pairing_provider_manifest_digest(
     snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshot>,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let snapshot = snapshot
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    let snapshot = snapshot.decode()?;
 
     Ok(snapshot
         .companion_pairing_manifest_digest()
@@ -225,6 +221,9 @@ pub enum NookError {
 
     #[error("Serialization error: {0}")]
     Serialization(String),
+
+    #[error(transparent)]
+    TypedBoundary(#[from] TypedBoundaryError),
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
@@ -316,6 +315,8 @@ pub(crate) use storage::indexed_db::{
 pub(crate) use storage::indexed_db::{IndexedDbUpdate, StoredStringRecord};
 
 pub(crate) use conversion::BrowserTimestamp;
+pub use types::TypedBoundaryError;
+pub(crate) use types::{TypedInput, TypedOutput};
 
 pub(crate) use conversion::{
     LoadedVaultUnlockRequest, SyncResultSessionRequest, VaultMemberProjectionRequest,

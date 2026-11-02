@@ -2,6 +2,7 @@
 
 use super::NookVaultManager;
 use crate::NookError;
+use crate::TypedInput;
 use crate::types::{NookFocusedLoginFillCredential, NookFocusedLoginFillRequest};
 use crate::types::{NookLoginAccount, NookLoginFillCredential};
 use nook_core::{LoginHostMatch, LoginWebsiteHost, SecretId, SecretValue};
@@ -595,9 +596,7 @@ impl NookVaultManager {
         &mut self,
         request: tsify::Ts<NookFocusedLoginFillRequest>,
     ) -> Result<NookFocusedLoginFillCredential, JsError> {
-        let request = request
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid focused login fill request."))?;
+        let request = request.decode()?;
         self.ensure_login_fill_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
         self.reveal_matching_login_for_focused_fill(request)

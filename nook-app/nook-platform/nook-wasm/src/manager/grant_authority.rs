@@ -1,8 +1,8 @@
 //! Live in-memory vault scope for queued extension authority checks.
 use super::{NookVaultManager, VaultCryptoState};
+use crate::TypedOutput;
 use nook_companion_core::{ActiveExtensionVault, ExtensionActiveVaultScope};
 use nook_core::StoreId;
-use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[wasm_bindgen]
@@ -11,8 +11,7 @@ impl NookVaultManager {
         &self,
     ) -> Result<tsify::Ts<ExtensionActiveVaultScope>, wasm_bindgen::JsError> {
         let VaultCryptoState::Unlocked(_) = &self.vault.crypto else {
-            return Tsify::into_ts(&ExtensionActiveVaultScope::NoActiveVault)
-                .map_err(|_| JsError::new("Typed WASM output could not be encoded."));
+            return Ok(ExtensionActiveVaultScope::NoActiveVault.encode()?);
         };
         if self.vault.store_id.trim().is_empty() {
             return Err(JsError::new(
@@ -23,13 +22,14 @@ impl NookVaultManager {
             vault_store_id: StoreId::parse(&self.vault.store_id)
                 .map_err(|error| JsError::new(&error.to_string()))?,
         });
-        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        Ok(result.encode()?)
     }
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::*;
+    use crate::TypedInput;
     use nook_core::StoreId;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -38,28 +38,19 @@ mod tests {
         let mut manager = NookVaultManager::new();
         manager.vault.store_id = StoreId::before_genesis_placeholder().into_inner();
         assert_eq!(
-            manager
-                .active_extension_vault_scope()?
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
+            manager.active_extension_vault_scope()?.decode()?,
             ExtensionActiveVaultScope::NoActiveVault
         );
         manager.apply_vault_keys(&"a".repeat(64), &"b".repeat(64))?;
         assert_eq!(
-            manager
-                .active_extension_vault_scope()?
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
+            manager.active_extension_vault_scope()?.decode()?,
             ExtensionActiveVaultScope::Active(ActiveExtensionVault {
                 vault_store_id: StoreId::before_genesis_placeholder()
             })
         );
         manager.reset_vault_session();
         assert_eq!(
-            manager
-                .active_extension_vault_scope()?
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
+            manager.active_extension_vault_scope()?.decode()?,
             ExtensionActiveVaultScope::NoActiveVault
         );
         manager.apply_vault_keys(&"a".repeat(64), &"b".repeat(64))?;

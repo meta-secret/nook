@@ -6,6 +6,7 @@
 //! revocations rotate the vault first, then the identity records the vault's
 //! current key epoch for every active member.
 
+use crate::{TypedInput, TypedOutput};
 use nook_core::{
     AuthProvidersSnapshot, EventId, IdentityControlState, IdentityNameStatus,
     IdentityVaultEpochAction, IdentityVaultEpochStatus, IdentityVaultKeyOpening,
@@ -13,10 +14,7 @@ use nook_core::{
     StorageProvider, StoreId, SymmetricKey, VaultKeys, VaultMetaState, VaultRevocationDue,
     VaultType, VaultUnlock,
 };
-use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
-
-use super::{INVALID_TYPED_INPUT, UNENCODABLE_TYPED_OUTPUT};
 
 use crate::manager::NookExternalEventLogRecords;
 use crate::manager::NookVaultManager;
@@ -128,10 +126,7 @@ impl NookVaultManager {
         snapshot: &tsify::Ts<AuthProvidersSnapshot>,
         store_id: &str,
     ) -> Result<tsify::Ts<StorageProvider>, JsError> {
-        let providers = snapshot
-            .to_rust()
-            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?
-            .providers;
+        let providers = snapshot.decode()?.providers;
         let store_id = StoreId::parse(store_id)?;
         let rows = ProviderRows {
             providers: &providers,
@@ -141,7 +136,7 @@ impl NookVaultManager {
                 NookError::Database("No saved provider replicates this vault.".to_owned()).into(),
             );
         };
-        Tsify::into_ts(row).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        Ok(row.encode()?)
     }
 
     /// Open a vault of the current identity from one of its mounts with the
@@ -160,9 +155,7 @@ impl NookVaultManager {
         store_id: String,
         page_limit: u32,
     ) -> Result<NookSecretPage, JsError> {
-        let connection = connection
-            .to_rust()
-            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
+        let connection = connection.decode()?;
         drop(self.status.tx.send("CONNECT_START".to_owned()));
         let store_id = StoreId::parse(&store_id)?;
         self.prepare_storage(&connection).await?;

@@ -4,6 +4,7 @@ use super::NookVaultManager;
 use super::provider_sync::VaultDiscovery;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use crate::SaveVaultBlobRequest;
+use crate::TypedInput;
 use crate::VaultSnapshotLookup;
 use crate::{NookDatabase, NookError};
 use wasm_bindgen::JsError;
@@ -129,9 +130,7 @@ impl NookVaultManager {
         &mut self,
         connection: &tsify::Ts<crate::NookStorageConnection>,
     ) -> Result<String, JsError> {
-        let connection = connection
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        let connection = connection.decode()?;
         let (prior_store_id, prior_blob_existed) =
             Self::snapshot_prior_local_vault(&self.vault.store_id).await?;
         self.reset_vault_session();

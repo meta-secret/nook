@@ -1,6 +1,7 @@
 //! Create the replicated identity control log, or bind a new installation to
 //! the identity an enrollment code invites it into.
 
+use crate::TypedOutput;
 use nook_core::{
     FreshIdentityNaming, IdentityControlLog, IdentityControlState, IdentityEvent,
     IdentityEventSigning, IdentityGenesisRequest, IdentityId, IdentityInvitationBinding,
@@ -10,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
-use super::UNENCODABLE_TYPED_OUTPUT;
 use crate::manager::NookVaultManager;
 use crate::storage::identity_log::IdentityLogWrite;
 use crate::storage::identity_record::{IdentityDirectoryWrite, KeyringDbRebindLocalIdentity};
@@ -86,7 +86,7 @@ impl NookVaultManager {
         } else {
             NookIdentityLogEnsureOutcome::Existing
         };
-        Tsify::into_ts(&outcome).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        Ok(outcome.encode()?)
     }
 
     /// Bind a freshly protected local identity to the identity an enrollment

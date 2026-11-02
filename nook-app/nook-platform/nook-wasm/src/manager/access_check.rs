@@ -9,6 +9,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use crate::TypedInput;
 use nook_core::{
     CheckedVaultEvents, CredentialCheckReport, EventLogLocation, IdentityId, LocalEventWrite,
     ProviderIdentityLogEvents, VaultPlacement,
@@ -138,9 +139,7 @@ impl NookVaultManager {
         source: &tsify::Ts<NookProviderSource>,
         rp_id: &str,
     ) -> Result<tsify::Ts<CredentialCheckReport>, JsError> {
-        let source = source
-            .to_rust()
-            .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+        let source = source.decode()?;
         self.provider_source_contents(&source)
             .await?
             .check_passkey(rp_id)
@@ -153,9 +152,7 @@ impl NookVaultManager {
         source: &tsify::Ts<NookProviderSource>,
         password: String,
     ) -> Result<tsify::Ts<CredentialCheckReport>, JsError> {
-        let source = source
-            .to_rust()
-            .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+        let source = source.decode()?;
         let password = Zeroizing::new(password);
         self.provider_source_contents(&source)
             .await?
@@ -166,13 +163,13 @@ impl NookVaultManager {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::TypedOutput;
     use crate::public_api::{NookAccessCheckSource, check_backup_password_access};
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
     use nook_core::{
         CheckedCredential, DriveVaultFolderLookup, IdentityCheckOutcome, StorageMode,
         VaultCheckOutcome,
     };
-    use tsify::Tsify;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -183,13 +180,11 @@ mod browser_tests {
     impl ThisBrowserCheck {
         /// Check them with one backup password.
         async fn with_password(password: &str) -> anyhow::Result<CredentialCheckReport> {
-            let source = Tsify::into_ts(&NookAccessCheckSource::ThisBrowser)
-                .map_err(|_| anyhow::anyhow!("encode the check source"))?;
-            check_backup_password_access(&source, password.to_owned())
+            let source = NookAccessCheckSource::ThisBrowser.encode()?;
+            Ok(check_backup_password_access(&source, password.to_owned())
                 .await
                 .map_err(|error| anyhow::anyhow!("check backup password: {error:?}"))?
-                .to_rust()
-                .map_err(|_| anyhow::anyhow!("decode the check report"))
+                .decode()?)
         }
     }
 
@@ -263,16 +258,15 @@ mod browser_tests {
             FetchRoute::ok("GET", LIST, empty),
             FetchRoute::ok("GET", LIST, empty),
         ])?;
-        let source = Tsify::into_ts(&NookAccessCheckSource::GoogleDrive {
+        let source = NookAccessCheckSource::GoogleDrive {
             access_token: "drive-access-token".to_owned(),
-        })
-        .map_err(|_| anyhow::anyhow!("encode the check source"))?;
+        }
+        .encode()?;
 
         let report: CredentialCheckReport = check_backup_password_access(&source, "any".to_owned())
             .await
             .map_err(|error| anyhow::anyhow!("check backup password: {error:?}"))?
-            .to_rust()
-            .map_err(|_| anyhow::anyhow!("decode the check report"))?;
+            .decode()?;
 
         assert_eq!(report.credential, CheckedCredential::BackupPassword);
         assert!(report.identities.is_empty());
@@ -287,14 +281,12 @@ mod browser_tests {
         let mut manager = NookVaultManager::new();
         manager.storage.mode = StorageMode::Local;
 
-        let source = Tsify::into_ts(&NookProviderSource::CurrentProvider)
-            .map_err(|_| anyhow::anyhow!("encode the check source"))?;
+        let source = NookProviderSource::CurrentProvider.encode()?;
         let report: CredentialCheckReport = manager
             .check_backup_password_access_from(&source, "any".to_owned())
             .await
             .map_err(|error| anyhow::anyhow!("check backup password: {error:?}"))?
-            .to_rust()
-            .map_err(|_| anyhow::anyhow!("decode the check report"))?;
+            .decode()?;
 
         assert!(report.identities.is_empty());
         Ok(())

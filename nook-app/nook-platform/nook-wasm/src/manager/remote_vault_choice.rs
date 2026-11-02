@@ -11,6 +11,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use crate::{TypedInput, TypedOutput};
 use nook_core::{
     EventLogLocation, EventStorageBytes, IdentityId, ListedIdentityLog, LocalEventWrite,
     LocalVaultOccupancy, PlacedNamespace, ProviderIdentityLogEvents, ProviderVaultObservation,
@@ -258,9 +259,7 @@ impl NookVaultManager {
         &mut self,
         connection: &tsify::Ts<crate::NookStorageConnection>,
     ) -> Result<tsify::Ts<NookRemoteVaultDiscovery>, JsError> {
-        let connection = connection
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        let connection = connection.decode()?;
         self.reset_vault_session();
         self.prepare_storage(&connection).await?;
         let discovery = if self.storage.mode == StorageMode::Local {
@@ -283,8 +282,7 @@ impl NookVaultManager {
                 }
             }
         };
-        Tsify::into_ts(&discovery)
-            .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        Ok(discovery.encode()?)
     }
 
     /// Discover the vault a chosen backup folder holds without requiring or
@@ -311,8 +309,7 @@ impl NookVaultManager {
                 .await?
             }
         };
-        Tsify::into_ts(&discovery)
-            .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        Ok(discovery.encode()?)
     }
 
     /// Open this vault when the provider an import discovers holds several.

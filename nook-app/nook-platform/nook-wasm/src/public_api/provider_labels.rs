@@ -1,5 +1,5 @@
 use super::wasm_bindgen;
-use wasm_bindgen::JsError;
+use crate::TypedInput;
 
 #[wasm_bindgen]
 #[must_use]
@@ -15,9 +15,7 @@ use wasm_bindgen::JsError;
 pub fn wasm_storage_mode_for_provider(
     kind: &tsify::Ts<nook_core::ProviderKind>,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let kind = kind
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    let kind = kind.decode()?;
     Ok(kind.storage_mode().as_str().to_owned())
 }
 
@@ -32,9 +30,7 @@ pub fn provider_default_label(
     kind: &tsify::Ts<nook_core::ProviderKind>,
     detail: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let kind = kind
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    let kind = kind.decode()?;
     Ok(kind.label_with_detail(detail))
 }
 
@@ -46,9 +42,7 @@ pub fn provider_default_label(
 pub fn provider_default_label_without_detail(
     kind: &tsify::Ts<nook_core::ProviderKind>,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let kind = kind
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    let kind = kind.decode()?;
     Ok(kind.bare_label())
 }
 
@@ -61,9 +55,7 @@ pub fn provider_default_label_without_detail(
 pub fn provider_connected_toast_key(
     kind: &tsify::Ts<nook_core::ProviderKind>,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let kind = kind
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    let kind = kind.decode()?;
     Ok(kind.connected_toast_key().to_owned())
 }
 
@@ -77,9 +69,7 @@ pub fn provider_connected_toast_key(
 pub fn provider_setup_name_key(
     request: &tsify::Ts<nook_core::ProviderSetupNameRequest>,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let request = request
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    let request = request.decode()?;
     Ok(request.translation_key().to_owned())
 }
 

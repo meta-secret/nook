@@ -1,9 +1,9 @@
 use super::wasm_bindgen;
+use crate::TypedOutput;
 use nook_core::{
     ManagerStoreScopeRef, ProviderJoinerIdentity, ProviderSyncRevision, ProviderSyncRevisionRef,
     SentinelConfiguration, SharedReplication, TotpDigits, VaultArchitecture, VaultType,
 };
-use tsify::Tsify;
 use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
@@ -262,8 +262,7 @@ impl NookProviderReplicationCapability {
     /// The provider kind the capability belongs to.
     #[wasm_bindgen(getter)]
     pub fn kind(&self) -> Result<tsify::Ts<nook_core::ProviderKind>, wasm_bindgen::JsError> {
-        Tsify::into_ts(&self.0.kind)
-            .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        Ok(self.0.kind.encode()?)
     }
 
     /// Whether the provider replicates vaults of `replication`.

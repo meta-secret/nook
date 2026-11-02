@@ -1,6 +1,7 @@
 //! Deleting a vault everywhere: the identity log records its removal, and
 //! every device (this one first) drops its local copy.
 
+use crate::TypedInput;
 use nook_core::{
     EventLogLocation, IdentityControlOperation, StorageMode, StoreId, VaultDeletionPlan,
     VaultDeletionRequest,
@@ -55,9 +56,7 @@ impl NookVaultManager {
         store_id: String,
         connection: &tsify::Ts<crate::NookStorageConnection>,
     ) -> Result<bool, JsError> {
-        let connection = connection
-            .to_rust()
-            .map_err(|_| JsError::new(super::INVALID_TYPED_INPUT))?;
+        let connection = connection.decode()?;
         let store_id = StoreId::parse(&store_id)?;
         let state = self.current_identity_state().await?;
         if !state.removed_vaults.contains(&store_id) {

@@ -7,8 +7,8 @@ use super::wasm_bindgen;
 use crate::DriveStorageClient;
 use crate::DriveStorageClientShareFolderWithEmail;
 use crate::NookGoogleDriveFolder;
+use crate::{TypedInput, TypedOutput};
 use nook_core::{AuthorizedAccountList, JoinerAccountCheck};
-use tsify::Tsify;
 use wasm_bindgen::JsError;
 
 impl DriveStorageClient<'_> {
@@ -27,7 +27,7 @@ struct AccountListOutput<'a>(&'a AuthorizedAccountList);
 
 impl AccountListOutput<'_> {
     fn encode(self) -> Result<tsify::Ts<AuthorizedAccountList>, JsError> {
-        Tsify::into_ts(self.0).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        Ok(self.0.encode()?)
     }
 }
 
@@ -104,9 +104,7 @@ impl AccountListOutput<'_> {
 pub fn icloud_authorized_accounts(
     share: &tsify::Ts<nook_core::ICloudShareObservation>,
 ) -> Result<tsify::Ts<AuthorizedAccountList>, wasm_bindgen::JsError> {
-    let share = share
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let share = share.decode()?;
     AccountListOutput(&AuthorizedAccountList::from_icloud_participants(
         &share.participants,
     ))
@@ -124,9 +122,7 @@ pub fn authorized_invite_account(
     accounts: &tsify::Ts<AuthorizedAccountList>,
     email: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let accounts = accounts
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let accounts = accounts.decode()?;
     Ok(accounts.invite_account(email)?.email.as_str().to_owned())
 }
 
@@ -145,6 +141,7 @@ mod tests {
     use nook_core::{
         DrivePermissionObservation, ICloudParticipantObservation, ICloudShareObservation,
     };
+    use tsify::Tsify;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]

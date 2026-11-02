@@ -9,6 +9,7 @@ use crate::DriveStorageClient;
 use crate::storage::provider_vault_listing::{
     BrowserHeldVaults, DriveVaultListing, LocalVaultClassification, ProviderLocation,
 };
+use crate::{TypedInput, TypedOutput};
 use futures_util::future::try_join;
 use nook_core::{
     DriveEventParent, DriveVaultFolderSelection, LocalVaultOccupancy, ProviderVaultListing,
@@ -35,9 +36,7 @@ pub enum NookGoogleDriveVaultListing {
     access_token: &str,
     local_vault: &tsify::Ts<LocalVaultOccupancy>,
 ) -> Result<tsify::Ts<NookGoogleDriveVaultListing>, JsError> {
-    let local_vault = local_vault
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let local_vault = local_vault.decode()?;
     let listing = match DriveStorageClient::new(access_token)
         .find_vault_folder()
         .await?
@@ -67,7 +66,7 @@ pub enum NookGoogleDriveVaultListing {
             }
         }
     };
-    Tsify::into_ts(&listing).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    Ok(listing.encode()?)
 }
 
 /// The fixed name of every provider account's Nook root.

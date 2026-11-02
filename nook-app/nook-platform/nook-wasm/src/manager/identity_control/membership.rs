@@ -1,14 +1,13 @@
 //! Identity-level membership: revocation, renaming, and mounts.
 
+use crate::{TypedInput, TypedOutput};
 use nook_core::{
     AppId, AuthProvidersSnapshot, IdentityControlOperation, IdentityControlState,
     IdentityMountCapability, IdentityVaultDekLookup, MemberLabel, ProviderRows, StorageProvider,
     VaultKeys,
 };
-use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
-use super::{INVALID_TYPED_INPUT, UNENCODABLE_TYPED_OUTPUT};
 use crate::manager::NookVaultManager;
 use crate::{NookDatabase, NookError};
 
@@ -97,10 +96,7 @@ impl NookVaultManager {
         &mut self,
         snapshot: &tsify::Ts<AuthProvidersSnapshot>,
     ) -> Result<bool, JsError> {
-        let providers = snapshot
-            .to_rust()
-            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?
-            .providers;
+        let providers = snapshot.decode()?.providers;
         let state = self.current_identity_state().await?;
         let mounts = ProviderRows {
             providers: &providers,
@@ -125,9 +121,7 @@ impl NookVaultManager {
         &mut self,
         provider: &tsify::Ts<StorageProvider>,
     ) -> Result<bool, JsError> {
-        let provider = provider
-            .to_rust()
-            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
+        let provider = provider.decode()?;
         let IdentityMountCapability::Mountable(target) = provider.identity_mount_capability()
         else {
             return Ok(false);
@@ -154,10 +148,7 @@ impl NookVaultManager {
         &self,
         snapshot: &tsify::Ts<AuthProvidersSnapshot>,
     ) -> Result<tsify::Ts<AuthProvidersSnapshot>, JsError> {
-        let providers = snapshot
-            .to_rust()
-            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?
-            .providers;
+        let providers = snapshot.decode()?.providers;
         let app_key = self.unlocked_app_key()?;
         let identity_id = Self::current_identity_id(&app_key).await?;
         let rows = AuthProvidersSnapshot {
@@ -170,6 +161,6 @@ impl NookVaultManager {
             .collect(),
             active_vault_store_id: nook_core::ActiveVaultScope::Unselected,
         };
-        Tsify::into_ts(&rows).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        Ok(rows.encode()?)
     }
 }

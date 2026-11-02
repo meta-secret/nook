@@ -2,6 +2,7 @@
 //! that carries the invite key and every owned vault's DEK; its holder signs
 //! itself into the identity with them. No member approves the join.
 
+use crate::TypedInput;
 use js_sys::Date;
 use nook_core::{
     CheckedEnrollmentEnvelope, CheckedEnrollmentIssuance, EnrollmentInvite, EnrollmentInviteVault,
@@ -13,7 +14,6 @@ use nook_core::{
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
-use super::INVALID_TYPED_INPUT;
 use crate::manager::NookVaultManager;
 use crate::storage::identity_log::IdentityLogWrite;
 use crate::{NookDatabase, NookEnrollmentIssueInput, NookError};
@@ -214,9 +214,7 @@ impl NookVaultManager {
         passphrase: String,
         connection: &tsify::Ts<crate::NookStorageConnection>,
     ) -> Result<(), JsError> {
-        let connection = connection
-            .to_rust()
-            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
+        let connection = connection.decode()?;
         let normalized = EnrollmentLinkInput { input: &code }.normalize();
         let payload = CheckedEnrollmentEnvelope::parse(&normalized)?.decrypt(&passphrase)?;
         let restore_local = self.storage.mode == StorageMode::Local;

@@ -18,6 +18,7 @@ use super::verified_access::VerifiedVaultAccessFlow;
 use super::{NookVaultManager, VaultNameState};
 use crate::IdentityDbEnsureLocalIdentityForAppKey;
 use crate::NookDatabase;
+use crate::TypedInput;
 use crate::VaultSnapshotLookup;
 use crate::conversion::LoadedVault;
 use crate::storage::identity_record::SimpleGenesisProgress;
@@ -52,6 +53,7 @@ impl NookError {
 #[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
+    use crate::TypedOutput;
     use crate::manager::VaultNameState;
     use crate::test_fixtures::WasmFixture;
     use wasm_bindgen::JsError;
@@ -119,8 +121,7 @@ mod tests {
         let identity = nook_core::DeviceIdentity::generate()?;
         manager.device.id = identity.device_id().as_str().to_owned();
         manager.device.identity_private_key = identity.secret_string().into_inner();
-        let connection =
-            tsify::Tsify::into_ts(&connection).map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        let connection = connection.encode()?;
         let Err(failure) = manager.assess_vault_connect(&connection).await else {
             anyhow::bail!("a refused key fails the assessment");
         };
@@ -441,8 +442,8 @@ impl NookVaultManager {
         connection: &tsify::Ts<NookStorageConnection>,
     ) -> Result<nook_core::VaultAccessStatus, JsNativeError> {
         let connection = connection
-            .to_rust()
-            .map_err(|_| JsNativeError::new("Invalid typed WASM input."))?;
+            .decode()
+            .map_err(|error| JsNativeError::new(&error.to_string()))?;
         self.assess_vault_connect_inner(&connection)
             .await
             .map_err(|error| JsNativeError::new(&error.to_string()))
@@ -466,9 +467,7 @@ impl NookVaultManager {
         &mut self,
         connection: &tsify::Ts<NookStorageConnection>,
     ) -> Result<(), JsError> {
-        let connection = connection
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        let connection = connection.decode()?;
         self.connect_internal(&connection, nook_core::VaultGenesisIntent::DetectExisting)
             .await
     }
@@ -478,9 +477,7 @@ impl NookVaultManager {
         &mut self,
         connection: &tsify::Ts<NookStorageConnection>,
     ) -> Result<(), JsError> {
-        let connection = connection
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        let connection = connection.decode()?;
         self.connect_internal(&connection, nook_core::VaultGenesisIntent::ForceFresh)
             .await
     }

@@ -3,6 +3,7 @@ use crate::{
     NookAuthenticationOutcomeObservation, NookAuthenticationOutcomeVerdict,
     NookAuthenticationPageObservations, NookAuthenticationWorkflowMatch, NookIdentityHealth,
 };
+use crate::{TypedInput, TypedOutput};
 use nook_core::AuthenticationWorkflowMatch;
 use nook_core::SupportedAppLocale;
 use nook_core::{
@@ -16,7 +17,6 @@ use nook_core::{
     TranslateWithReplacementsRequest, TranslationCatalog,
 };
 use nook_core::{TranslationCatalogSource, TranslationLookup};
-use tsify::Tsify;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -72,9 +72,7 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
 /// refusal's own, or the operation's failure key for every other failure.
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn provider_failure_translation_key(request: &tsify::Ts<ProviderFailureMessageRequest>) -> Result<String, JsError> {
-    let request = request
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    let request = request.decode()?;
     Ok(request.translation_key().to_owned())
 }
 
@@ -170,7 +168,7 @@ pub fn resolve_app_locale_from_tags(
     tags: Vec<String>,
 ) -> Result<tsify::Ts<NookAppLocale>, wasm_bindgen::JsError> {
     let result = { SupportedAppLocale::resolve(tags.iter().map(String::as_str)) };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    Ok(result.encode()?)
 }
 
 #[wasm_bindgen]
@@ -188,7 +186,7 @@ pub fn supported_app_locale_code(
             "unsupported locale does not have an application locale code",
         )),
     }?;
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    Ok(result.encode()?)
 }
 
 #[wasm_bindgen]
@@ -283,6 +281,7 @@ pub fn supported_app_locale_code(
 mod tests {
     use super::*;
     use nook_core::i18n_keys;
+    use tsify::Tsify;
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -346,33 +345,25 @@ mod tests {
         );
         assert_eq!(
             resolve_app_locale_from_tags(vec!["xx".into(), "ru".into()])
-                .and_then(|value| value
-                    .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
+                .and_then(|value| Ok(value.decode()?))?
                 .code(),
             "ru"
         );
         assert_eq!(
             supported_app_locale_code(NookAppLocaleParse::English)
-                .and_then(|value| value
-                    .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
+                .and_then(|value| Ok(value.decode()?))?
                 .code(),
             "en"
         );
         assert_eq!(
             supported_app_locale_code(NookAppLocaleParse::Russian)
-                .and_then(|value| value
-                    .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
+                .and_then(|value| Ok(value.decode()?))?
                 .code(),
             "ru"
         );
         assert!(
             supported_app_locale_code(NookAppLocaleParse::Unsupported)
-                .and_then(|value| value
-                    .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))
+                .and_then(|value| Ok(value.decode()?))
                 .is_err()
         );
 

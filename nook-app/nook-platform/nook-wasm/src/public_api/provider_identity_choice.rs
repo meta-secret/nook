@@ -4,6 +4,7 @@
 //! standing from the listing and the checks run on the page, and names the
 //! decisions it allows. The setup and recovery screens only render them.
 use super::wasm_bindgen;
+use crate::{TypedInput, TypedOutput};
 use nook_core::{
     CredentialCheckReport, IdentitySession, ProviderIdentityChoice, ProviderIdentityChoices,
     ProviderVaultSummary,
@@ -33,9 +34,7 @@ pub struct NookProviderIdentityChoices {
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn provider_identity_choices(
     request: &tsify::Ts<NookProviderIdentityChoicesRequest>,
 ) -> Result<tsify::Ts<NookProviderIdentityChoices>, JsError> {
-    let request = request
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let request = request.decode()?;
     let choices = NookProviderIdentityChoices {
         identities: ProviderIdentityChoices {
             vaults: &request.vaults,
@@ -44,7 +43,7 @@ pub struct NookProviderIdentityChoices {
         }
         .choices(),
     };
-    Tsify::into_ts(&choices).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    Ok(choices.encode()?)
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
@@ -64,16 +63,15 @@ mod browser_tests {
     )]
     fn an_empty_listing_has_no_identity_to_decide_in_either_session() -> anyhow::Result<()> {
         for session in [IdentitySession::IdentityInUse, IdentitySession::NoIdentity] {
-            let request = Tsify::into_ts(&NookProviderIdentityChoicesRequest {
+            let request = NookProviderIdentityChoicesRequest {
                 vaults: Vec::new(),
                 checks: Vec::new(),
                 session,
-            })
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+            }
+            .encode()?;
             let choices = provider_identity_choices(&request)
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?
-                .to_rust()
-                .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+                .decode()?;
             assert!(choices.identities.is_empty());
         }
         Ok(())

@@ -7,6 +7,7 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::types::{NookPersonalFillRequest, NookPersonalFillResponse};
+use crate::{TypedInput, TypedOutput};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroizing;
 
@@ -40,15 +41,12 @@ impl NookVaultManager {
         &mut self,
         request: tsify::Ts<NookPersonalFillRequest>,
     ) -> Result<tsify::Ts<NookPersonalFillResponse>, JsError> {
-        let request = request
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid personal data fill request."))?;
+        let request = request.decode()?;
         // Same extension Simple Vault boundary as website login fill.
         self.ensure_passkey_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
         let response = Zeroizing::new(self.reveal_personal_fill_values(&request)?);
-        tsify::Ts::from_rust(&*response)
-            .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        Ok(response.encode()?)
     }
 }
 

@@ -5,12 +5,12 @@ use crate::storage::local_folder::LocalFolderHandles;
 use crate::types::{NookManagerStoreScope, NookProviderSyncRevision};
 use crate::{BrowserCredentialCreationOptions, BrowserCredentialRequestOptions};
 use crate::{BrowserPasskeyClient, BrowserPasskeyCreationOptions, NookTotpCode};
+use crate::{TypedInput, TypedOutput};
 use nook_core::CompactToken;
 use nook_core::PasswordPolicy;
 use nook_core::SecretId;
 use nook_core::StorageProvider;
 use nook_core::{PasswordGenerationOptions, TotpAlgorithm, TotpDigits, TotpPeriod, TotpSecret};
-use tsify::Tsify;
 use wasm_bindgen::JsError;
 
 mod localization;
@@ -152,7 +152,7 @@ pub use s3_provider::*;
 pub fn default_password_generation_options()
 -> Result<tsify::Ts<nook_core::PasswordGenerationOptions>, wasm_bindgen::JsError> {
     let result = { PasswordGenerationOptions::default() };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+    Ok(result.encode()?)
 }
 
 #[wasm_bindgen]
@@ -164,9 +164,7 @@ pub fn default_password_generation_options()
 pub fn generate_password(
     options: &tsify::Ts<nook_core::PasswordGenerationOptions>,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let options = options
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let options = options.decode()?;
 
     Ok::<_, wasm_bindgen::JsError>(PasswordGenerationOptions::generate(options)?)
 }
@@ -304,9 +302,7 @@ pub fn provider_storage_detail(
     icloud_signed_in: String,
     local_folder_needs_reconnect: String,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let provider = provider
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    let provider = provider.decode()?;
 
     let labels = nook_core::ProviderStorageDetailLabels {
         this_device_desc,
@@ -351,9 +347,7 @@ pub fn update_provider_sync_metadata(
     manager_store_scope: &NookManagerStoreScope,
     synced_at: &str,
 ) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshot>, wasm_bindgen::JsError> {
-    let mut snapshot = snapshot
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    let mut snapshot = snapshot.decode()?;
 
     snapshot.providers = StorageProvider::update_sync_metadata(
         &snapshot.providers,
@@ -364,7 +358,7 @@ pub fn update_provider_sync_metadata(
         synced_at,
     );
     let result = Ok::<_, wasm_bindgen::JsError>(snapshot)?;
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    Ok(result.encode()?)
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
@@ -414,17 +408,13 @@ mod browser_tests {
     struct ProviderFixture;
     impl ProviderFixture {
         fn wire<T: Tsify + Serialize>(value: &T) -> Result<Ts<T>, JsError> {
-            value
-                .into_ts()
-                .map_err(|_| JsError::new("Provider fixture could not be encoded."))
+            Ok(value.encode()?)
         }
         fn decode<T: Tsify + DeserializeOwned>(value: Ts<T>) -> Result<T, JsError>
         where
             T::JsType: Clone,
         {
-            value
-                .to_rust()
-                .map_err(|_| JsError::new("Provider output could not be decoded."))
+            Ok(value.decode()?)
         }
         fn row(id: &str, provider: StoredProvider) -> StorageProvider {
             StorageProvider::never_synced(

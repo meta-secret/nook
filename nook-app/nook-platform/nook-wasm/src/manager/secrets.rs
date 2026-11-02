@@ -3,6 +3,7 @@
 
 use super::NookVaultManager;
 use crate::NookError;
+use crate::TypedInput;
 use crate::{NookSecretPage, NookSecretRecord, NookSecretTypeFilter, NookTotpCode};
 use nook_core::{
     SecretId, SecretValue, StorageConnection, StorageMode, StoredRecordPayload, SymmetricKey,
@@ -347,9 +348,7 @@ impl NookVaultManager {
         &mut self,
         connection: &tsify::Ts<crate::NookStorageConnection>,
     ) -> Result<Vec<crate::NookJoinRequest>, JsError> {
-        let connection = connection
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        let connection = connection.decode()?;
         let restore_local = self.storage.mode == StorageMode::Local;
         self.prepare_storage_preserving_vault_metadata(&connection)
             .await?;
@@ -366,9 +365,7 @@ impl NookVaultManager {
         &mut self,
         connection: &tsify::Ts<crate::NookStorageConnection>,
     ) -> Result<(), JsError> {
-        let connection = connection
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        let connection = connection.decode()?;
         let restore_local = self.storage.mode == StorageMode::Local;
         let flush_result = async {
             self.prepare_storage_preserving_vault_metadata(&connection)
@@ -385,9 +382,7 @@ impl NookVaultManager {
         &mut self,
         connection: &tsify::Ts<crate::NookStorageConnection>,
     ) -> Result<(), JsError> {
-        let connection = connection
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        let connection = connection.decode()?;
         self.prepare_storage_preserving_vault_metadata(&connection)
             .await?;
         self.sync_events_from_current_provider().await?;
@@ -411,9 +406,7 @@ impl NookVaultManager {
         &mut self,
         provider: &tsify::Ts<nook_core::StorageProvider>,
     ) -> Result<String, JsError> {
-        let provider = provider
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        let provider = provider.decode()?;
         let nook_core::StoredProvider::LocalFolder(folder) = &provider.provider else {
             return Err(JsError::new("The provider is not a local folder."));
         };
