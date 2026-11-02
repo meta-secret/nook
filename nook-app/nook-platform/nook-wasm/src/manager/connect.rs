@@ -109,18 +109,11 @@ mod tests {
         use crate::public_api::provider_failure_code;
         use crate::storage::fetch_stub::{FetchRoute, FetchStub};
         use js_sys::Reflect;
-        use nook_core::{ProviderFailureCode, S3Connection, S3ConnectionDraft};
+        use nook_core::ProviderFailureCode;
         let _stub = FetchStub::install(vec![FetchRoute::failing("GET", "127.0.0.1:8333", 403)])
             .map_err(|error| anyhow::anyhow!("{error}"))?;
         let connection = StorageConnection::S3 {
-            connection: S3Connection::try_from(S3ConnectionDraft {
-                endpoint: "http://127.0.0.1:8333".to_owned(),
-                region: "us-east-1".to_owned(),
-                bucket: "nook-dev".to_owned(),
-                key_prefix: "e2e".to_owned(),
-                access_key_id: "device-a".to_owned(),
-                secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned(),
-            })?,
+            connection: WasmFixture::s3_connection()?,
         };
         let mut manager = NookVaultManager::new();
         let identity = nook_core::DeviceIdentity::generate()?;

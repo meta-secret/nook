@@ -121,7 +121,8 @@ mod browser_tests {
     use super::{ProviderLocation, S3VaultListing};
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
     use crate::storage::s3::S3Storage;
-    use nook_core::{EventId, IdentityId, S3Connection, S3ConnectionDraft, StoreId};
+    use crate::test_fixtures::WasmFixture;
+    use nook_core::{EventId, IdentityId, StoreId};
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -130,17 +131,6 @@ mod browser_tests {
     const ROOT: &str = "e2e/meta-secret-nook";
     /// The query value of a listing prefix below the root.
     const ROOT_QUERY: &str = "prefix=e2e%2Fmeta-secret-nook%2F";
-
-    fn connection() -> anyhow::Result<S3Connection> {
-        Ok(S3Connection::try_from(S3ConnectionDraft {
-            endpoint: "http://127.0.0.1:8333".to_owned(),
-            region: "us-east-1".to_owned(),
-            bucket: "nook-dev".to_owned(),
-            key_prefix: "e2e".to_owned(),
-            access_key_id: "device-a".to_owned(),
-            secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned(),
-        })?)
-    }
 
     /// A listing page with these keys and folders.
     fn page(keys: &[String], folders: &[String]) -> String {
@@ -184,7 +174,7 @@ mod browser_tests {
         )
     )]
     async fn an_identity_log_is_read_only_where_the_location_holds_it() -> anyhow::Result<()> {
-        let connection = connection()?;
+        let connection = WasmFixture::s3_connection()?;
         let location = S3VaultListing {
             storage: S3Storage {
                 connection: &connection,
@@ -240,7 +230,7 @@ mod browser_tests {
         )
     )]
     async fn each_vault_is_observed_by_its_event_count() -> anyhow::Result<()> {
-        let connection = connection()?;
+        let connection = WasmFixture::s3_connection()?;
         let store_id = StoreId::parse("store_abcdefghijk")?;
         let vault = format!("{ROOT}/idn_abcdefghijk/store_abcdefghijk/");
         let _stub = FetchStub::install(vec![
@@ -285,7 +275,7 @@ mod browser_tests {
         )
     )]
     async fn a_vault_filed_under_two_identities_fails_closed() -> anyhow::Result<()> {
-        let connection = connection()?;
+        let connection = WasmFixture::s3_connection()?;
         let _stub = FetchStub::install(vec![
             identity_folders(&["idn_abcdefghijk", "idn_strangerabc"]),
             listed(

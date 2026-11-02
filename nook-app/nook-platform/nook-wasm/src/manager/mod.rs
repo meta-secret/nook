@@ -666,6 +666,7 @@ impl NookVaultManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_fixtures::WasmFixture;
     use nook_core::{VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite};
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -801,14 +802,7 @@ mod tests {
     #[wasm_bindgen_test]
     async fn s3_storage_is_prepared_from_its_connection_alone() -> anyhow::Result<()> {
         let connection = StorageConnection::S3 {
-            connection: nook_core::S3Connection::try_from(nook_core::S3ConnectionDraft {
-                endpoint: "http://127.0.0.1:8333".to_owned(),
-                region: "us-east-1".to_owned(),
-                bucket: "nook-dev".to_owned(),
-                key_prefix: "e2e".to_owned(),
-                access_key_id: "device-a".to_owned(),
-                secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned(),
-            })?,
+            connection: WasmFixture::s3_connection()?,
         };
         let mut manager = NookVaultManager::new();
         // Preparing S3 reads nothing yet: the first request signs with the key.

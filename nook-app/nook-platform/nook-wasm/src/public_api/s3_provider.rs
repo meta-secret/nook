@@ -98,25 +98,10 @@ mod tests {
         NookAccessCheckSource, NookStagedStorageArgsState, draft_storage_args,
         provider_draft_label, s3_provider_draft, staged_storage_args,
     };
-    use nook_core::{
-        DraftStorageConnection, ProviderDraft, ProviderKind, S3Connection, S3ConnectionDraft,
-        StorageConnection,
-    };
+    use crate::test_fixtures::WasmFixture;
+    use nook_core::{DraftStorageConnection, ProviderDraft, ProviderKind, StorageConnection};
     use tsify::Tsify;
     use wasm_bindgen_test::wasm_bindgen_test;
-
-    const SECRET: &str = "TEST-ONLY-device-a-secret-not-real";
-
-    fn configuration() -> anyhow::Result<S3Connection> {
-        Ok(S3Connection::try_from(S3ConnectionDraft {
-            endpoint: "http://127.0.0.1:8333".to_owned(),
-            region: "us-east-1".to_owned(),
-            bucket: "nook-dev".to_owned(),
-            key_prefix: "e2e".to_owned(),
-            access_key_id: "device-a".to_owned(),
-            secret_access_key: SECRET.to_owned(),
-        })?)
-    }
 
     fn typed<T: Tsify + serde::Serialize>(value: &T) -> anyhow::Result<tsify::Ts<T>> {
         Tsify::into_ts(value).map_err(|error| anyhow::anyhow!("{error:?}"))
@@ -133,7 +118,7 @@ mod tests {
     fn an_s3_source_names_its_validated_configuration() -> anyhow::Result<()> {
         // The provider source of setup, recovery, and joins has the same shape.
         let source = serde_json::to_value(NookAccessCheckSource::S3 {
-            configuration: configuration()?,
+            configuration: WasmFixture::s3_connection()?,
         })?;
         assert_eq!(
             source,
@@ -145,7 +130,7 @@ mod tests {
                     "bucket": "nook-dev",
                     "keyPrefix": { "state": "prefix", "value": "e2e" },
                     "accessKeyId": "device-a",
-                    "secretAccessKey": SECRET,
+                    "secretAccessKey": WasmFixture::S3_SECRET,
                 },
             })
         );
@@ -161,7 +146,7 @@ mod tests {
         )
     )]
     fn an_s3_draft_stages_its_connect_arguments_once_ready() -> anyhow::Result<()> {
-        let ready = s3_provider_draft(&typed(&configuration()?)?)
+        let ready = s3_provider_draft(&typed(&WasmFixture::s3_connection()?)?)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         let staged = staged_storage_args(&ready).map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert_eq!(staged.state(), NookStagedStorageArgsState::Ready);
@@ -173,7 +158,7 @@ mod tests {
         assert_eq!(
             args,
             StorageConnection::S3 {
-                connection: configuration()?
+                connection: WasmFixture::s3_connection()?
             }
         );
         let awaiting = staged_storage_args(&typed(&ProviderDraft::begin(ProviderKind::S3))?)
@@ -191,16 +176,16 @@ mod tests {
         )
     )]
     fn an_s3_draft_reports_its_label_detail_and_connect_arguments() -> anyhow::Result<()> {
-        let ready = s3_provider_draft(&typed(&configuration()?)?)
+        let ready = s3_provider_draft(&typed(&WasmFixture::s3_connection()?)?)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert_eq!(
             provider_draft_label(&ready).map_err(|error| anyhow::anyhow!("{error:?}"))?,
             "S3 · nook-dev/e2e"
         );
-        let detail = staged_s3_provider_detail(&typed(&configuration()?)?)
+        let detail = staged_s3_provider_detail(&typed(&WasmFixture::s3_connection()?)?)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert_eq!(detail, "127.0.0.1:8333 · device-a");
-        assert!(!detail.contains(SECRET));
+        assert!(!detail.contains(WasmFixture::S3_SECRET));
         let args = draft_storage_args(&ready)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?
             .to_rust()
@@ -209,7 +194,7 @@ mod tests {
             args,
             DraftStorageConnection::Ready {
                 connection: StorageConnection::S3 {
-                    connection: configuration()?
+                    connection: WasmFixture::s3_connection()?
                 }
             }
         );
@@ -222,7 +207,8 @@ mod browser_tests {
     use super::list_s3_vaults;
     use crate::public_api::provider_failure_code;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
-    use nook_core::{LocalVaultOccupancy, ProviderFailureCode, S3Connection, S3ConnectionDraft};
+    use crate::test_fixtures::WasmFixture;
+    use nook_core::{LocalVaultOccupancy, ProviderFailureCode};
     use tsify::Tsify;
     use wasm_bindgen::JsCast;
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
@@ -240,14 +226,7 @@ mod browser_tests {
     async fn a_403_from_the_server_rejects_the_listing_as_a_refused_key() -> anyhow::Result<()> {
         let _stub = FetchStub::install(vec![FetchRoute::failing("GET", "127.0.0.1:8333", 403)])
             .map_err(|error| anyhow::anyhow!("{error}"))?;
-        let configuration = S3Connection::try_from(S3ConnectionDraft {
-            endpoint: "http://127.0.0.1:8333".to_owned(),
-            region: "us-east-1".to_owned(),
-            bucket: "nook-dev".to_owned(),
-            key_prefix: "e2e".to_owned(),
-            access_key_id: "device-a".to_owned(),
-            secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned(),
-        })?;
+        let configuration = WasmFixture::s3_connection()?;
         let rejected = list_s3_vaults(
             &Tsify::into_ts(&configuration).map_err(|error| anyhow::anyhow!("{error:?}"))?,
             &Tsify::into_ts(&LocalVaultOccupancy::Closed)

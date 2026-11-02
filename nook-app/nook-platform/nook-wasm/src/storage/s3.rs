@@ -229,9 +229,10 @@ mod browser_tests {
     use crate::NookError;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
     use crate::storage::remote_event::RemoteEventRead;
+    use crate::test_fixtures::WasmFixture;
     use nook_core::{
         EventId, EventLogNamespaceKind, IdentityId, PlacedNamespace, S3Connection,
-        S3ConnectionDraft, S3RequestFailure, StoreId,
+        S3RequestFailure, StoreId,
     };
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
@@ -249,14 +250,7 @@ mod browser_tests {
     impl Fixture {
         fn new() -> anyhow::Result<Self> {
             Ok(Self {
-                connection: S3Connection::try_from(S3ConnectionDraft {
-                    endpoint: "http://127.0.0.1:8333".to_owned(),
-                    region: "us-east-1".to_owned(),
-                    bucket: "nook-dev".to_owned(),
-                    key_prefix: "e2e".to_owned(),
-                    access_key_id: "device-a".to_owned(),
-                    secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned(),
-                })?,
+                connection: WasmFixture::s3_connection()?,
                 vault: PlacedNamespace::vault(
                     IdentityId::parse("idn_abcdefghijk")?,
                     StoreId::parse("store_abcdefghijk")?,
