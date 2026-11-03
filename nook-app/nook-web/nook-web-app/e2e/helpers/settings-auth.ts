@@ -139,7 +139,6 @@ export function deviceProtectionAuthorizationGateState({
   return DeviceProtectionAuthorizationGateState.Waiting
 }
 
-
 /** Open the sync providers page (the admin surface that owns providers). */
 export async function openStorageSettings(page: Page) {
   await keepVaultIdleLockDisabled(page)
