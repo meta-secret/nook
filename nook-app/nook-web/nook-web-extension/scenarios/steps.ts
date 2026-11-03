@@ -12,7 +12,12 @@ import {
   openVaultAfterIdentityJoin,
   startFirstRun,
   submitOnboardEnrollmentCode,
+  waitForVaultOperationsIdle,
 } from '../../nook-web-app/e2e/helpers'
+import {
+  flushNookLogPersistQueue,
+  readPersistedAppLogs,
+} from '../../nook-web-app/e2e/helpers/app-logs'
 import {
   firstPage,
   launchDevBrowser,
@@ -22,25 +27,97 @@ import {
 
 const PAIRING_GRANT_PREFIX = 'nook:extension-pairing-grant:'
 
+/** One device's window and how much of its logs the audit has read. */
+type OpenedDevice = {
+  readonly name: string
+  readonly browser: DevBrowser
+  consoleRead: number
+  appLogReadUntil: string
+}
+
+/** Console lines that report a problem: errors, warnings, and uncaught
+ * page errors. */
+const CONSOLE_PROBLEM = /^\[(error|warning|pageerror)\]/
+const CONSOLE_ERROR = /^\[(error|pageerror)\]/
+
+/** One console line or app log entry the audit reports. */
+type LogProblem = { readonly error: boolean; readonly text: string }
+
 /**
  * The devices of one scenario: each is a Brave window on its own profile,
  * a folder named after the device under the task's scenario folder, so the
- * task reopens every device a scenario opened.
+ * task reopens every device a scenario opened. After each step, every
+ * device's new console lines and app log entries are audited; an error on
+ * any device fails the scenario once its steps are done.
  */
 export class ScenarioDevices {
-  private readonly opened: DevBrowser[] = []
+  private readonly opened: OpenedDevice[] = []
+  private readonly errors: string[] = []
 
   constructor(private readonly root: string) {}
 
   /** Open the named device's Brave window. */
   async open(name: string): Promise<DevBrowser> {
     const browser = await launchDevBrowser(path.join(this.root, name))
-    this.opened.push(browser)
+    this.opened.push({ name, browser, consoleRead: 0, appLogReadUntil: '' })
     return browser
   }
 
   get browsers(): readonly DevBrowser[] {
-    return this.opened
+    return this.opened.map((device) => device.browser)
+  }
+
+  /** Every error the audit found, by step and device. */
+  get auditErrors(): readonly string[] {
+    return this.errors
+  }
+
+  /** Run one step, then audit what every device logged during it. */
+  async step(title: string, run: () => Promise<void>): Promise<void> {
+    await run()
+    const problems: LogProblem[] = []
+    for (const device of this.opened) {
+      problems.push(...(await this.newProblems(device)))
+    }
+    const errors = problems.filter((problem) => problem.error)
+    this.errors.push(...errors.map((problem) => `${title}: ${problem.text}`))
+    const listed = problems.map((problem) => problem.text).join('\n  ')
+    console.log(
+      problems.length === 0
+        ? `✓ ${title}: no errors or warnings`
+        : `${errors.length === 0 ? '!' : '✗'} ${title}\n  ${listed}`,
+    )
+  }
+
+  /** A device's console problems and app log warnings and errors since the
+   * last audit. */
+  private async newProblems(device: OpenedDevice): Promise<LogProblem[]> {
+    const problems: LogProblem[] = []
+    const lines = device.browser.consoleLines.slice(device.consoleRead)
+    device.consoleRead = device.browser.consoleLines.length
+    for (const line of lines) {
+      if (!CONSOLE_PROBLEM.test(line)) continue
+      problems.push({
+        error: CONSOLE_ERROR.test(line),
+        text: `${device.name} console ${line}`,
+      })
+    }
+    const page = device.browser.context
+      .pages()
+      .find((candidate) => candidate.url().startsWith('https://localhost:5173'))
+    if (!page) return problems
+    await flushNookLogPersistQueue(page)
+    const entries = await readPersistedAppLogs(page)
+    const fresh = entries.filter((entry) => entry.ts > device.appLogReadUntil)
+    for (const entry of fresh) {
+      if (entry.ts > device.appLogReadUntil) device.appLogReadUntil = entry.ts
+      if (entry.level !== 'warn' && entry.level !== 'error') continue
+      problems.push({
+        error: entry.level === 'error',
+        text: `${device.name} app-log ${entry.level} [${entry.scope}] ${entry.message} ${entry.data ? entry.data : ''}`,
+      })
+    }
+    return problems
   }
 }
 
@@ -61,6 +138,11 @@ export async function runScenario(steps: ScenarioSteps): Promise<void> {
   const devices = new ScenarioDevices(root)
   try {
     await steps(devices)
+    if (devices.auditErrors.length > 0) {
+      throw new Error(
+        `The scenario logged errors:\n${devices.auditErrors.join('\n')}`,
+      )
+    }
   } catch (failure) {
     for (const [index, browser] of devices.browsers.entries()) {
       await reportLogs(browser, (name) =>
@@ -216,4 +298,28 @@ export async function joinWithInvite(page: Page, link: string): Promise<void> {
   await expect(
     page.getByTestId('vault-group-login').getByTestId('secret-row').first(),
   ).toBeVisible()
+}
+
+/** Reload the vault and unlock its keyring with the scenario PIN, as a
+ * person does after reopening the browser, open its vault, and let its
+ * first sync run. */
+export async function reloadAndUnlockWithPin(page: Page): Promise<void> {
+  await page.goto('/app/')
+  const pin = page.getByTestId('card-pin-input')
+  const unlock = page.getByTestId('identity-unlock').first()
+  await expect(pin.or(unlock).first()).toBeVisible()
+  if (!(await pin.isVisible())) await unlock.click()
+  await pin.fill(MOCK_AUTH_DEFAULT_PIN)
+  await page.getByTestId('card-pin-submit').click()
+  await expect(pin).toHaveCount(0)
+  // The unlocked keyring keeps its vault selected but closed: its row opens
+  // the vault panel, whose Open enters the vault.
+  await page.getByTestId('identity-vault-row').first().click()
+  const open = page
+    .getByTestId('vault-panel-open')
+    .or(page.getByTestId('vault-panel-open-away'))
+    .first()
+  await open.click()
+  await expect(page.getByTestId('vault-panel')).toBeVisible()
+  await waitForVaultOperationsIdle(page)
 }

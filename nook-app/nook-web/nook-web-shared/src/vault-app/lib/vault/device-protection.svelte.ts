@@ -389,14 +389,27 @@ export class DeviceProtectionActions {
     failure: PasskeyCeremonyFailure | StorageOperationFailure,
   ): void {
     if (failure instanceof PasskeyCeremonyFailure) {
-      if (failure.fallback === PasskeyFallback.OfferPin) {
-        this.state.deviceProtectionStatus = DeviceProtectionStatus.PinSetup;
+      switch (failure.fallback) {
+        case PasskeyFallback.OfferPin: {
+          // A browser without usable passkeys is a setting, not a fault: the
+          // PIN form it falls back to is the expected path.
+          this.state.deviceProtectionStatus = DeviceProtectionStatus.PinSetup;
+          const pinOffered: Parameters<typeof log.infoWithContext>[0] = {
+            message: "passkeys unavailable; PIN offered",
+            serializedContext: JSON.stringify(failure.diagnostic),
+          };
+          log.infoWithContext(pinOffered);
+          break;
+        }
+        case PasskeyFallback.Unchanged: {
+          const ceremonyLogEntry: PasskeyCeremonyLogEntry = {
+            message: "passkey ceremony did not complete",
+            data: failure.diagnostic,
+          };
+          this.logPasskeyCeremony(ceremonyLogEntry);
+          break;
+        }
       }
-      const ceremonyLogEntry: PasskeyCeremonyLogEntry = {
-        message: "passkey ceremony did not complete",
-        data: failure.diagnostic,
-      };
-      this.logPasskeyCeremony(ceremonyLogEntry);
     }
     this.state.errorMsg = this.state.t(failure.translationKey);
   }

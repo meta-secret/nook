@@ -851,8 +851,8 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('device-protection-setup-btn')).toBeHidden()
     const entry = await waitForPersistedAppLog(page, {
       scope: 'vault-device-protection',
-      level: 'warn',
-      messageIncludes: 'passkey ceremony did not complete',
+      level: 'info',
+      messageIncludes: 'passkeys unavailable; PIN offered',
     })
     expect(((v) => (v ? v : ''))(entry.data)).toContain('passkey_unavailable')
   })
