@@ -66,15 +66,15 @@ runs; the sections already name every connected identity and vault.
     />
   {:else}
     <SidePanelIdentitySync {i18n} {identitySync} />
-    <div class="side-panel-action-bar side-panel-action-row">
-      <button
-        type="button"
-        data-testid="side-panel-connect"
-        onclick={onconnect}
-      >
-        <Plus size={14} aria-hidden="true" />
-        {translatePlain(I18N_KEYS.ExtensionActionConnectAnother)}
-      </button>
-    </div>
+    <!-- Secondary to everything above it: a quiet text action. -->
+    <button
+      type="button"
+      class="side-panel-quiet-action"
+      data-testid="side-panel-connect"
+      onclick={onconnect}
+    >
+      <Plus size={14} aria-hidden="true" />
+      {translatePlain(I18N_KEYS.ExtensionActionConnectAnother)}
+    </button>
   {/if}
 </div>

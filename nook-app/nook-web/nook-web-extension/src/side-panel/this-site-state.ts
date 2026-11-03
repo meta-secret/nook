@@ -39,6 +39,14 @@ export enum ThisSiteHostKind {
   Unnamed = 'unnamed',
 }
 
+/** How This site's heading line reads: the site's host, or the state of
+ * a tab Nook has no site in. */
+export enum ThisSiteHeadlineTone {
+  Host = 'host',
+  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
+  State = 'state',
+}
+
 export type ThisSiteHost =
   | { readonly kind: ThisSiteHostKind.Named; readonly host: string }
   | { readonly kind: ThisSiteHostKind.NoWebsite }

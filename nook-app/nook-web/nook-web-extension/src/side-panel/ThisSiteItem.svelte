@@ -88,11 +88,22 @@ are shown for reference only.
     }
   }
 
-  /** "account · saved host", leaving out whichever the item does not have. */
+  /** The row leads with who it signs in as; an item saved without an
+   * account leads with its title. */
+  function name(): string {
+    return row.account ? row.account : row.title
+  }
+
+  /** Where the item is saved, under its name: its title and saved host,
+   * each once and neither repeating the name. */
   function subtitle(): string {
-    return [row.account, row.saved_host]
-      .filter((part) => part !== '')
-      .join(' · ')
+    const parts: string[] = []
+    for (const part of [row.title, row.saved_host]) {
+      if (part !== '' && part !== name() && !parts.includes(part)) {
+        parts.push(part)
+      }
+    }
+    return parts.join(' · ')
   }
 
   /** Distinct names, so two rows with the same account stay apart. */
@@ -126,10 +137,10 @@ are shown for reference only.
     <Icon size={16} />
   </span>
   <div class="side-panel-login-copy">
-    <span class="side-panel-login-type" data-testid="side-panel-item-type">
+    <span class="side-panel-sr-only" data-testid="side-panel-item-type">
       {translateSelected(row.type_label_key)}
     </span>
-    <span class="side-panel-login-name" title={row.title}>{row.title}</span>
+    <span class="side-panel-login-name" title={name()}>{name()}</span>
     {#if subtitle() !== ''}
       <span
         class="side-panel-login-vault"
