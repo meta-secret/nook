@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { deviceProtectionButtonReady } from '../../../e2e/helpers/settings-auth'
+import { deviceProtectionButtonReady } from '../../../e2e/helpers/device-protection-readiness'
 
 afterEach(() => {
   document.body.replaceChildren()

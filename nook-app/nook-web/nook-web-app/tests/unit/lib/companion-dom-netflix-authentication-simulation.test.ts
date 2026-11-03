@@ -86,7 +86,6 @@ function netflixHtml({
     </form>
     <div class="grecaptcha-badge" style="visibility:hidden;overflow:hidden;height:60px" data-testid="netflix-invisible-recaptcha">
       <div class="grecaptcha-logo" style="visibility:hidden">
-        <iframe title="reCAPTCHA" src="about:blank#recaptcha-enterprise-size-invisible" style="visibility:hidden;width:256px;height:60px"></iframe>
       </div>
     </div>
     <p data-testid="netflix-recaptcha-disclosure">This page is protected by reCAPTCHA to ensure you're not a bot.</p>

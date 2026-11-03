@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test'
+import { deviceProtectionButtonReady } from './device-protection-readiness'
 import type { ProviderLoadOptions } from '$lib/vault/providers.svelte'
 import { parseVaultYamlSnapshot, type VaultYamlSnapshot } from '../vault-yaml'
 import { E2E_OAUTH_ONBOARD_PROVIDER } from './auth-providers'
@@ -138,18 +139,6 @@ export function deviceProtectionAuthorizationGateState({
   return DeviceProtectionAuthorizationGateState.Waiting
 }
 
-/** Observe a disposable login control in one browser turn. */
-export function deviceProtectionButtonReady(testId: string): boolean {
-  const button = document.querySelector(`[data-testid="${testId}"]`)
-  if (!(button instanceof HTMLButtonElement)) return false
-  const style = window.getComputedStyle(button)
-  return (
-    button.getClientRects().length > 0 &&
-    style.visibility !== 'hidden' &&
-    style.visibility !== 'collapse' &&
-    !button.disabled
-  )
-}
 
 /** Open the sync providers page (the admin surface that owns providers). */
 export async function openStorageSettings(page: Page) {
