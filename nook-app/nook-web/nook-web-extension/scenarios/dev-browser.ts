@@ -29,14 +29,16 @@ export type DevBrowser = {
 function recordConsole(context: BrowserContext): string[] {
   const lines: string[] = []
   context.on('console', (message) => {
-    const source = message.page()?.url() ?? 'worker'
+    const page = message.page()
+    const source = page ? page.url() : 'worker'
     lines.push(`[${message.type()}] ${source} ${message.text()}`)
   })
   context.on('weberror', (failure) => {
-    const source = failure.page()?.url() ?? 'worker'
-    lines.push(
-      `[pageerror] ${source} ${failure.error().stack ?? failure.error().message}`,
-    )
+    const page = failure.page()
+    const source = page ? page.url() : 'worker'
+    const error = failure.error()
+    const detail = error.stack ? error.stack : error.message
+    lines.push(`[pageerror] ${source} ${detail}`)
   })
   return lines
 }
@@ -49,7 +51,7 @@ function recordConsole(context: BrowserContext): string[] {
  * missing PublicKeyCredential the same way.
  */
 function withoutPasskeys(): void {
-  if (globalThis.location?.protocol === 'chrome-extension:') {
+  if (globalThis.location.protocol === 'chrome-extension:') {
     Object.defineProperty(globalThis, 'PublicKeyCredential', {
       configurable: true,
       get() {
@@ -79,7 +81,6 @@ export async function launchDevBrowser(): Promise<DevBrowser> {
   const context = await chromium.launchPersistentContext(profile, {
     executablePath: BRAVE_EXECUTABLE,
     headless: false,
-    viewport: null,
     args: [
       `--disable-extensions-except=${extensionDir}`,
       `--load-extension=${extensionDir}`,
@@ -90,7 +91,7 @@ export async function launchDevBrowser(): Promise<DevBrowser> {
   const consoleLines = recordConsole(context)
   await context.addInitScript(withoutPasskeys)
   const [known] = context.serviceWorkers()
-  const worker = known ?? (await context.waitForEvent('serviceworker'))
+  const worker = known ? known : await context.waitForEvent('serviceworker')
   const extensionId = new URL(worker.url()).host
   return {
     context,
@@ -134,5 +135,5 @@ export async function reportLogs(
 /** The scenario's first tab, reused for the vault. */
 export async function firstPage(browser: DevBrowser): Promise<Page> {
   const [page] = browser.context.pages()
-  return page ?? (await browser.context.newPage())
+  return page ? page : await browser.context.newPage()
 }

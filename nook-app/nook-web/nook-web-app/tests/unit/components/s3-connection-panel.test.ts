@@ -130,7 +130,7 @@ describe('S3 connection form', () => {
     const fixture = new PanelFixture()
     const view = fixture.render('')
 
-    expect(view.queryByTestId('s3-create-key-link')).toBeNull()
+    expect(view.queryAllByTestId('s3-create-key-link')).toHaveLength(0)
 
     await fireEvent.change(view.getByTestId('s3-service-select'), {
       target: { value: 'wasabi' },
