@@ -5,14 +5,69 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
+use serde::{Deserialize, Serialize};
+use tsify::Tsify;
+
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{
-    EnrollmentProvider, GithubPat, GithubRepoName, OAuthFileEnrollment, OAuthFilePreset,
-    OAuthFileProvider, OnboardingType, PersonalEnrollmentProvider, ProviderCredentialEncoding,
-    ProviderKind, ProviderSecretText, ReplicationType, SharedEnrollmentProvider,
-    SharedGrantProviderOutcome, SharedStorageTargetSelection, StorageProvider, StoredProvider,
-    VaultArchitecture,
+    EnrollmentProvider, GithubEnrollmentToken, GithubPat, GithubProvider, GithubRepoName,
+    OAuthFileEnrollment, OAuthFilePreset, OAuthFileProvider, OnboardingType,
+    PersonalEnrollmentProvider, ProviderCredentialEncoding, ProviderKind, ProviderSecretText,
+    ReplicationType, S3Connection, S3EnrollmentConnection, S3EnrollmentKey,
+    SharedEnrollmentProvider, SharedGrantProviderOutcome, SharedStorageTargetSelection,
+    StorageProvider, StoredProvider, VaultArchitecture,
 };
+
+/// Whose key or token a credential-bearing device invite hands the new
+/// device. A GitHub invite carries this device's token or none; an S3 invite
+/// carries this device's key, one of the row's saved spare keys, or none.
+/// Every other personal invite carries the row's own data.
+#[derive(Serialize, Deserialize, Tsify)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum EnrollmentCredentialChoice {
+    /// This device's own key or token, as its row holds it.
+    Inviter,
+    /// A spare key the S3 row saves, named by its access key id.
+    SavedKey { access_key_id: String },
+    /// The location alone: the new device adds its own key.
+    JoinerProvides,
+}
+
+impl EnrollmentCredentialChoice {
+    /// The token a GitHub invite carries for this choice.
+    fn github_token(&self, row: &GithubProvider) -> ValidationResult<GithubEnrollmentToken> {
+        match self {
+            Self::Inviter => Ok(GithubEnrollmentToken::Included {
+                pat: ProviderSecretText::try_from(
+                    GithubPat::parse(row.token.expose())?.into_inner(),
+                )?,
+            }),
+            Self::SavedKey { .. } => Err(ValidationError::EnrollmentCredentialMismatch),
+            Self::JoinerProvides => Ok(GithubEnrollmentToken::JoinerProvides),
+        }
+    }
+
+    /// The key an S3 invite carries for this choice.
+    fn s3_key(&self, row: &S3Connection) -> ValidationResult<S3EnrollmentKey> {
+        match self {
+            Self::Inviter => Ok(row.enrollment_key()),
+            Self::SavedKey { access_key_id } => row.spare_enrollment_key(access_key_id),
+            Self::JoinerProvides => Ok(S3EnrollmentKey::JoinerProvides),
+        }
+    }
+
+    /// Whether the invite reads a secret the row saves.
+    const fn reads_row_secret(&self) -> bool {
+        match self {
+            Self::Inviter | Self::SavedKey { .. } => true,
+            Self::JoinerProvides => false,
+        }
+    }
+}
 
 /// Borrowed configuration for one enrollment payload construction.
 /// Admission selects the existing personal or shared payload boundary, not provider authorization.
@@ -40,9 +95,10 @@ use crate::{
 /// }
 /// ```
 pub enum EnrollmentAudience<'a> {
-    /// Same-browser companion handoff (the paired extension), sealed to that
-    /// device's key. It may carry this browser's provider credentials.
-    Personal,
+    /// A credential-bearing invite: a new device's, or the same-browser
+    /// companion handoff (the paired extension), sealed to that device's key.
+    /// The choice says whose key a GitHub or S3 invite carries.
+    Personal(EnrollmentCredentialChoice),
     /// A new device that signs in with one of the provider's authorized
     /// accounts. The invite names that account and carries no credential.
     Shared(SharedEnrollmentAudience<'a>),
@@ -72,7 +128,7 @@ impl<'a> ProviderEnrollmentRequest<'a> {
     /// personal-replication vault may transfer this browser's OAuth session.
     fn admit(self) -> ValidationResult<CheckedProviderEnrollment<'a>> {
         let onboarding = match (&self.audience, self.provider.kind()) {
-            (EnrollmentAudience::Personal, ProviderKind::OauthFile(_))
+            (EnrollmentAudience::Personal(_), ProviderKind::OauthFile(_))
                 if self.architecture.replication_type == ReplicationType::Personal =>
             {
                 self.architecture.validate()?;
@@ -189,43 +245,64 @@ impl OnboardingType {
 /// still sealed at rest fails closed before any payload is built.
 impl CheckedProviderEnrollment<'_> {
     fn personal(self) -> ValidationResult<PersonalEnrollmentProvider> {
-        let provider = self.request.provider;
+        let ProviderEnrollmentRequest {
+            provider, audience, ..
+        } = self.request;
         provider.validate_replication(ReplicationType::Personal)?;
-        if provider.provider.secrets().into_iter().any(|secret| {
-            ProviderCredentialEncoding::observe(secret) == ProviderCredentialEncoding::ArmorMarked
-        }) {
+        let EnrollmentAudience::Personal(choice) = audience else {
+            return Err(ValidationError::EnrollmentCredentialMismatch);
+        };
+        // A key left to the joiner reads no saved secret: a sealed row still
+        // names its location.
+        if choice.reads_row_secret()
+            && provider.provider.secrets().into_iter().any(|secret| {
+                ProviderCredentialEncoding::observe(secret)
+                    == ProviderCredentialEncoding::ArmorMarked
+            })
+        {
             return Err(ValidationError::ProviderCredentialSealed);
         }
-        Ok(match &provider.provider {
-            StoredProvider::Local {} | StoredProvider::LocalFolder(_) => {
-                PersonalEnrollmentProvider::local()
-            }
-            StoredProvider::Github(github) => PersonalEnrollmentProvider::github(
-                ProviderSecretText::try_from(
-                    GithubPat::parse(github.token.expose())?.into_inner(),
-                )?,
+        Ok(match (&provider.provider, &choice) {
+            (
+                StoredProvider::Local {} | StoredProvider::LocalFolder(_),
+                EnrollmentCredentialChoice::Inviter,
+            ) => PersonalEnrollmentProvider::local(),
+            (StoredProvider::Github(github), choice) => PersonalEnrollmentProvider::github(
+                choice.github_token(github)?,
                 GithubRepoName::parse(github.repository.name())?.into_inner(),
             ),
-            // The inviter's connection and key travel like the GitHub token.
-            StoredProvider::S3(connection) => {
-                PersonalEnrollmentProvider::s3(connection.enrollment_connection())
+            // The location travels with the chosen key, like the GitHub token.
+            (StoredProvider::S3(connection), choice) => {
+                PersonalEnrollmentProvider::s3(S3EnrollmentConnection {
+                    location: connection.enrollment_location(),
+                    key: choice.s3_key(connection)?,
+                })
             }
+            (
+                StoredProvider::Local {}
+                | StoredProvider::LocalFolder(_)
+                | StoredProvider::OauthFile(_),
+                EnrollmentCredentialChoice::SavedKey { .. }
+                | EnrollmentCredentialChoice::JoinerProvides,
+            ) => return Err(ValidationError::EnrollmentCredentialMismatch),
             // The companion connects through the same shared target.
-            StoredProvider::OauthFile(OAuthFileProvider::GoogleDrive(drive)) => {
-                PersonalEnrollmentProvider::oauth_file(OAuthFileEnrollment::GoogleDrive {
-                    access_token: drive.authorization.access_token.clone(),
-                    expires_at: drive.authorization.expires_at.clone(),
-                    account: drive.account.clone(),
-                    folder_id: drive.folder_id.as_str().to_owned(),
-                })
-            }
-            StoredProvider::OauthFile(OAuthFileProvider::ICloud(icloud)) => {
-                PersonalEnrollmentProvider::oauth_file(OAuthFileEnrollment::ICloud {
-                    web_auth_token: icloud.web_auth_token.clone(),
-                    account: icloud.account.clone(),
-                    share_target: icloud.share_target.as_str().to_owned(),
-                })
-            }
+            (
+                StoredProvider::OauthFile(OAuthFileProvider::GoogleDrive(drive)),
+                EnrollmentCredentialChoice::Inviter,
+            ) => PersonalEnrollmentProvider::oauth_file(OAuthFileEnrollment::GoogleDrive {
+                access_token: drive.authorization.access_token.clone(),
+                expires_at: drive.authorization.expires_at.clone(),
+                account: drive.account.clone(),
+                folder_id: drive.folder_id.as_str().to_owned(),
+            }),
+            (
+                StoredProvider::OauthFile(OAuthFileProvider::ICloud(icloud)),
+                EnrollmentCredentialChoice::Inviter,
+            ) => PersonalEnrollmentProvider::oauth_file(OAuthFileEnrollment::ICloud {
+                web_auth_token: icloud.web_auth_token.clone(),
+                account: icloud.account.clone(),
+                share_target: icloud.share_target.as_str().to_owned(),
+            }),
         })
     }
 }
@@ -268,17 +345,45 @@ mod tests {
     use std::ptr;
 
     use super::{
-        CheckedProviderEnrollment, EnrollmentAudience, ProviderEnrollmentRequest,
-        SharedEnrollmentAudience, SharedGrantProviderOutcome, SharedGrantProviderSelection,
+        CheckedProviderEnrollment, EnrollmentAudience, EnrollmentCredentialChoice,
+        ProviderEnrollmentRequest, SharedEnrollmentAudience, SharedGrantProviderOutcome,
+        SharedGrantProviderSelection,
     };
     use crate::errors::ValidationError;
     use crate::{
-        DeviceIdentity, EnrollmentProvider, EnrollmentProviderDataRef, GithubProvider,
-        OAuthFileEnrollment, OAuthFilePreset, OnboardingType, PersonalEnrollmentProvider,
-        PersonalEnrollmentProviderData, ProviderSecretText, ReplicationType,
-        SharedEnrollmentProvider, SharedStorageTargetSelection, StorageProvider, StoredProvider,
-        VaultArchitecture, VaultType,
+        DeviceIdentity, EnrollmentProvider, EnrollmentProviderDataRef, GithubEnrollmentToken,
+        GithubProvider, OAuthFileEnrollment, OAuthFilePreset, OnboardingType,
+        PersonalEnrollmentProvider, PersonalEnrollmentProviderData, ProviderSecretText,
+        ReplicationType, S3EnrollmentConnection, S3EnrollmentKey, S3KeyDraft, S3SpareKeyAddition,
+        S3SpareKeyRequest, SharedEnrollmentProvider, SharedStorageTargetSelection, StorageProvider,
+        StoredProvider, VaultArchitecture, VaultType,
     };
+
+    fn inviter() -> EnrollmentAudience<'static> {
+        EnrollmentAudience::Personal(EnrollmentCredentialChoice::Inviter)
+    }
+
+    fn saved_key(access_key_id: &str) -> EnrollmentAudience<'static> {
+        EnrollmentAudience::Personal(EnrollmentCredentialChoice::SavedKey {
+            access_key_id: access_key_id.to_owned(),
+        })
+    }
+
+    /// The S3 fixture row with a spare key `device-b` saved beside its own.
+    fn s3_row_with_spare() -> anyhow::Result<StorageProvider> {
+        let addition = S3SpareKeyRequest {
+            provider: row(StoredProvider::s3_fixture()?),
+            key: S3KeyDraft {
+                access_key_id: "device-b".to_owned(),
+                secret_access_key: "TEST-ONLY-device-b-secret".to_owned(),
+            },
+        }
+        .add()?;
+        match addition {
+            S3SpareKeyAddition::Added { provider } => Ok(*provider),
+            S3SpareKeyAddition::Invalid { fields } => anyhow::bail!("refused: {fields:?}"),
+        }
+    }
 
     fn shared_audience(joiner_identity: &str) -> EnrollmentAudience<'_> {
         EnrollmentAudience::Shared(SharedEnrollmentAudience { joiner_identity })
@@ -354,11 +459,7 @@ mod tests {
     #[test]
     fn only_the_companion_handoff_transfers_the_oauth_session() -> anyhow::Result<()> {
         let drive = row(StoredProvider::google_drive_fixture()?);
-        let companion = build(
-            &drive,
-            &VaultArchitecture::default(),
-            EnrollmentAudience::Personal,
-        )?;
+        let companion = build(&drive, &VaultArchitecture::default(), inviter())?;
         let EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::OauthFile(
             OAuthFileEnrollment::GoogleDrive {
                 access_token,
@@ -375,7 +476,7 @@ mod tests {
         // A shared-replication vault never transfers a session, even to the
         // companion; it must name an authorized account instead.
         assert_eq!(
-            build(&drive, &shared_architecture(), EnrollmentAudience::Personal),
+            build(&drive, &shared_architecture(), inviter()),
             Err(ValidationError::SharedJoinerIdentityRequired)
         );
         Ok(())
@@ -389,7 +490,7 @@ mod tests {
             StoredProvider::local_folder_fixture()?,
         ] {
             assert_eq!(
-                build(&row(provider), &personal, EnrollmentAudience::Personal)?,
+                build(&row(provider), &personal, inviter())?,
                 EnrollmentProvider::personal(PersonalEnrollmentProvider::local())
             );
         }
@@ -397,10 +498,12 @@ mod tests {
             build(
                 &row(StoredProvider::github_fixture()?),
                 &personal,
-                EnrollmentAudience::Personal
+                inviter()
             )?,
             EnrollmentProvider::personal(PersonalEnrollmentProvider::github(
-                ProviderSecretText::try_from("github_pat_11TESTONLYNOTREAL".to_owned())?,
+                GithubEnrollmentToken::Included {
+                    pat: ProviderSecretText::try_from("github_pat_11TESTONLYNOTREAL".to_owned())?,
+                },
                 "team-vault".to_owned(),
             ))
         );
@@ -409,14 +512,15 @@ mod tests {
             anyhow::bail!("the S3 fixture is an S3 row");
         };
         assert_eq!(
-            build(&s3, &personal, EnrollmentAudience::Personal)?,
-            EnrollmentProvider::personal(PersonalEnrollmentProvider::s3(
-                connection.enrollment_connection()
-            ))
+            build(&s3, &personal, inviter())?,
+            EnrollmentProvider::personal(PersonalEnrollmentProvider::s3(S3EnrollmentConnection {
+                location: connection.enrollment_location(),
+                key: connection.enrollment_key(),
+            }))
         );
         let icloud = row(StoredProvider::icloud_fixture()?);
         assert!(matches!(
-            build(&icloud, &personal, EnrollmentAudience::Personal)?.data(),
+            build(&icloud, &personal, inviter())?.data(),
             EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::OauthFile(
                 OAuthFileEnrollment::ICloud { .. }
             ))
@@ -441,14 +545,166 @@ mod tests {
                 .map_err(anyhow::Error::from)
             })?);
             assert_eq!(
-                build(
-                    &sealed,
-                    &VaultArchitecture::default(),
-                    EnrollmentAudience::Personal
-                ),
+                build(&sealed, &VaultArchitecture::default(), inviter()),
                 Err(ValidationError::ProviderCredentialSealed)
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn a_saved_spare_key_travels_in_place_of_the_row_key() -> anyhow::Result<()> {
+        let personal = VaultArchitecture::default();
+        let s3 = s3_row_with_spare()?;
+        let StoredProvider::S3(connection) = &s3.provider else {
+            anyhow::bail!("the S3 fixture is an S3 row");
+        };
+        assert_eq!(
+            build(&s3, &personal, saved_key(" device-b "))?,
+            EnrollmentProvider::personal(PersonalEnrollmentProvider::s3(S3EnrollmentConnection {
+                location: connection.enrollment_location(),
+                key: S3EnrollmentKey::Included {
+                    access_key_id: "device-b".to_owned(),
+                    secret_access_key: ProviderSecretText::try_from(
+                        "TEST-ONLY-device-b-secret".to_owned()
+                    )?,
+                },
+            }))
+        );
+        // The row's own key is not a spare, and an unsaved one is refused.
+        for missing in ["device-a", "device-c"] {
+            assert_eq!(
+                build(&s3, &personal, saved_key(missing)),
+                Err(ValidationError::S3AccessKeyNotSaved)
+            );
+        }
+        // A sealed spare never travels.
+        let identity = DeviceIdentity::generate()?;
+        let sealed = row(s3.provider.transition_secrets(|secret| {
+            ProviderSecretText::try_from(
+                identity
+                    .public_key()
+                    .seal_bytes(secret.expose().as_bytes())?
+                    .into_inner(),
+            )
+            .map_err(anyhow::Error::from)
+        })?);
+        assert_eq!(
+            build(&sealed, &personal, saved_key("device-b")),
+            Err(ValidationError::ProviderCredentialSealed)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_key_of_the_wrong_kind_is_refused() -> anyhow::Result<()> {
+        let personal = VaultArchitecture::default();
+        let mismatched = [
+            (StoredProvider::github_fixture()?, saved_key("device-b")),
+            (StoredProvider::Local {}, saved_key("device-b")),
+            (
+                StoredProvider::google_drive_fixture()?,
+                saved_key("device-b"),
+            ),
+            (
+                StoredProvider::google_drive_fixture()?,
+                EnrollmentAudience::Personal(EnrollmentCredentialChoice::JoinerProvides),
+            ),
+        ];
+        for (provider, audience) in mismatched {
+            assert_eq!(
+                build(&row(provider), &personal, audience),
+                Err(ValidationError::EnrollmentCredentialMismatch)
+            );
+        }
+        // A personal invite names whose key it carries; a shared audience does not.
+        assert_eq!(
+            build(
+                &row(StoredProvider::github_fixture()?),
+                &personal,
+                shared_audience("joiner@example.com")
+            ),
+            Err(ValidationError::EnrollmentCredentialMismatch)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn the_key_choice_reads_back_in_its_tagged_shape() -> anyhow::Result<()> {
+        for (wire, choice) in [
+            (
+                serde_json::json!({ "kind": "inviter" }),
+                EnrollmentCredentialChoice::Inviter,
+            ),
+            (
+                serde_json::json!({ "kind": "savedKey", "accessKeyId": "device-b" }),
+                EnrollmentCredentialChoice::SavedKey {
+                    access_key_id: "device-b".to_owned(),
+                },
+            ),
+            (
+                serde_json::json!({ "kind": "joinerProvides" }),
+                EnrollmentCredentialChoice::JoinerProvides,
+            ),
+        ] {
+            assert_eq!(serde_json::to_value(&choice)?, wire);
+            assert_eq!(
+                serde_json::to_value(serde_json::from_value::<EnrollmentCredentialChoice>(wire)?)?,
+                serde_json::to_value(&choice)?
+            );
+        }
+        assert!(
+            serde_json::from_value::<EnrollmentCredentialChoice>(
+                serde_json::json!({ "kind": "replacement" })
+            )
+            .is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_key_left_to_the_joiner_carries_only_the_location() -> anyhow::Result<()> {
+        let joiner = || EnrollmentAudience::Personal(EnrollmentCredentialChoice::JoinerProvides);
+        let personal = VaultArchitecture::default();
+        let s3 = row(StoredProvider::s3_fixture()?);
+        let StoredProvider::S3(connection) = &s3.provider else {
+            anyhow::bail!("the S3 fixture is an S3 row");
+        };
+        let payload = build(&s3, &personal, joiner())?;
+        assert_eq!(
+            payload,
+            EnrollmentProvider::personal(PersonalEnrollmentProvider::s3(S3EnrollmentConnection {
+                location: connection.enrollment_location(),
+                key: S3EnrollmentKey::JoinerProvides,
+            }))
+        );
+        let github = build(&row(StoredProvider::github_fixture()?), &personal, joiner())?;
+        assert_eq!(
+            github,
+            EnrollmentProvider::personal(PersonalEnrollmentProvider::github(
+                GithubEnrollmentToken::JoinerProvides,
+                "team-vault".to_owned(),
+            ))
+        );
+        for wire in [
+            serde_json::to_string(&payload)?,
+            serde_json::to_string(&github)?,
+        ] {
+            assert!(!wire.contains("TEST-ONLY"), "{wire}");
+            assert!(!wire.contains("device-a"), "{wire}");
+        }
+        // A sealed row still names its location: its secret is not read.
+        let identity = DeviceIdentity::generate()?;
+        let sealed = row(StoredProvider::s3_fixture()?.transition_secrets(|secret| {
+            ProviderSecretText::try_from(
+                identity
+                    .public_key()
+                    .seal_bytes(secret.expose().as_bytes())?
+                    .into_inner(),
+            )
+            .map_err(anyhow::Error::from)
+        })?);
+        assert!(build(&sealed, &personal, joiner()).is_ok());
         Ok(())
     }
 
@@ -462,15 +718,11 @@ mod tests {
             ..VaultArchitecture::default()
         };
         assert_eq!(
-            build(&provider, &invalid, EnrollmentAudience::Personal),
+            build(&provider, &invalid, inviter()),
             Err(ValidationError::InvalidSentinelPolicy)
         );
         assert_eq!(
-            build(
-                &provider,
-                &VaultArchitecture::default(),
-                EnrollmentAudience::Personal
-            ),
+            build(&provider, &VaultArchitecture::default(), inviter()),
             Err(ValidationError::GithubRepoChars)
         );
         Ok(())

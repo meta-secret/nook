@@ -19,11 +19,14 @@ use url::{Host, Url};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::errors::{ValidationError, ValidationResult};
-use crate::{ProviderSecretText, S3EnrollmentConnection, S3KeyPrefix};
+use crate::{
+    ProviderSecretText, S3EnrollmentConnection, S3EnrollmentKey, S3EnrollmentLocation, S3KeyPrefix,
+};
 
-/// One device's validated connection: where the objects live and the key it
-/// signs with. The endpoint is a canonical origin, `scheme://host[:port]`, and
-/// the objects start at the bucket root or below a key prefix.
+/// One device's validated connection: where the objects live, the key it
+/// signs with, and the spare keys saved beside it for invites. The endpoint is
+/// a canonical origin, `scheme://host[:port]`, and the objects start at the
+/// bucket root or below a key prefix. No spare key is a real state.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase", try_from = "S3ConnectionRecord")]
 pub struct S3Connection {
@@ -33,6 +36,34 @@ pub struct S3Connection {
     pub(crate) key_prefix: S3KeyPrefix,
     pub(crate) access_key_id: String,
     pub(crate) secret_access_key: ProviderSecretText,
+    pub(crate) spare_keys: Vec<S3AccessKey>,
+}
+
+/// A saved access key: its id and secret. A spare key's secret is sealed at
+/// rest and wiped like the row's own.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase", try_from = "S3AccessKeyRecord")]
+pub struct S3AccessKey {
+    pub(crate) access_key_id: String,
+    pub(crate) secret_access_key: ProviderSecretText,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct S3AccessKeyRecord {
+    access_key_id: String,
+    secret_access_key: ProviderSecretText,
+}
+
+/// A saved key's id goes through the form's validator again.
+impl TryFrom<S3AccessKeyRecord> for S3AccessKey {
+    type Error = ValidationError;
+    fn try_from(record: S3AccessKeyRecord) -> ValidationResult<Self> {
+        Ok(Self {
+            access_key_id: S3Connection::parse_access_key_id(&record.access_key_id)?,
+            secret_access_key: record.secret_access_key,
+        })
+    }
 }
 
 /// A stored or carried connection as it reads back. The prefix and the secret
@@ -47,6 +78,37 @@ struct S3ConnectionRecord {
     key_prefix: S3KeyPrefix,
     access_key_id: String,
     secret_access_key: ProviderSecretText,
+    spare_keys: Vec<S3AccessKey>,
+}
+
+/// Where an S3 provider's objects live, validated, without the key that
+/// reaches them: what an invite whose key the new device adds gives it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase", try_from = "S3LocationRecord")]
+pub struct S3Location {
+    pub(crate) endpoint: String,
+    pub(crate) region: String,
+    pub(crate) bucket: String,
+    pub(crate) key_prefix: S3KeyPrefix,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct S3LocationRecord {
+    endpoint: String,
+    region: String,
+    bucket: String,
+    key_prefix: S3KeyPrefix,
+}
+
+/// The key half of the S3 setup form: what a location the invite named
+/// still needs. The typed secret is wiped when the draft is dropped.
+#[derive(Deserialize, Tsify, Zeroize, ZeroizeOnDrop)]
+#[serde(rename_all = "camelCase")]
+pub struct S3KeyDraft {
+    #[zeroize(skip)]
+    pub access_key_id: String,
+    pub secret_access_key: String,
 }
 
 /// What the S3 setup form holds, field by field, before validation. The
@@ -145,6 +207,97 @@ impl S3ConnectionDraft {
     }
 }
 
+impl S3KeyDraft {
+    /// Each wrong field of the key, once, in form order.
+    pub(crate) fn field_errors(&self) -> Vec<S3DraftFieldError> {
+        [
+            S3DraftField::AccessKeyId.check(S3Connection::parse_access_key_id(&self.access_key_id)),
+            S3DraftField::SecretAccessKey.check(S3Connection::parse_secret_access_key(
+                &self.secret_access_key,
+            )),
+        ]
+        .into_iter()
+        .fold(Vec::new(), |mut fields, check| {
+            if let S3DraftFieldCheck::Invalid(error) = check {
+                fields.push(error);
+            }
+            fields
+        })
+    }
+
+    /// The validated key id and secret, the id first.
+    pub(crate) fn parse(&self) -> ValidationResult<(String, ProviderSecretText)> {
+        Ok((
+            S3Connection::parse_access_key_id(&self.access_key_id)?,
+            S3Connection::parse_secret_access_key(&self.secret_access_key)?,
+        ))
+    }
+}
+
+impl S3Location {
+    /// Validate a key typed for this location, field by field as the whole
+    /// form is: a valid key yields the connection the new row is saved with.
+    #[must_use]
+    pub fn with_key(self, key: &S3KeyDraft) -> S3DraftValidation {
+        match key.parse() {
+            Ok((access_key_id, secret_access_key)) => S3DraftValidation::Valid {
+                configuration: self.connection(access_key_id, secret_access_key),
+            },
+            Err(_) => S3DraftValidation::Invalid {
+                fields: key.field_errors(),
+            },
+        }
+    }
+
+    pub(crate) fn connection(
+        self,
+        access_key_id: String,
+        secret_access_key: ProviderSecretText,
+    ) -> S3Connection {
+        S3Connection {
+            endpoint: self.endpoint,
+            region: self.region,
+            bucket: self.bucket,
+            key_prefix: self.key_prefix,
+            access_key_id,
+            secret_access_key,
+            spare_keys: Vec::new(),
+        }
+    }
+
+    /// `S3 · bucket[/prefix]`, as the connection it becomes is labelled.
+    #[must_use]
+    pub fn label(&self) -> String {
+        format!("S3 · {}", self.key_prefix.below(&self.bucket))
+    }
+}
+
+/// Validate a read-back location's strings as the form's are validated.
+impl TryFrom<S3LocationRecord> for S3Location {
+    type Error = ValidationError;
+    fn try_from(record: S3LocationRecord) -> ValidationResult<Self> {
+        Ok(Self {
+            endpoint: S3Connection::parse_endpoint(&record.endpoint)?,
+            region: S3Connection::parse_region(&record.region)?,
+            bucket: S3Connection::parse_bucket(&record.bucket)?,
+            key_prefix: record.key_prefix,
+        })
+    }
+}
+
+/// An invite's location, validated again as a stored one is.
+impl TryFrom<&S3EnrollmentLocation> for S3Location {
+    type Error = ValidationError;
+    fn try_from(carried: &S3EnrollmentLocation) -> ValidationResult<Self> {
+        Self::try_from(S3LocationRecord {
+            endpoint: carried.endpoint.clone(),
+            region: carried.region.clone(),
+            bucket: carried.bucket.clone(),
+            key_prefix: carried.key_prefix.clone(),
+        })
+    }
+}
+
 /// Validate the fields in form order, so the first wrong one is reported.
 impl TryFrom<S3ConnectionDraft> for S3Connection {
     type Error = ValidationError;
@@ -156,6 +309,7 @@ impl TryFrom<S3ConnectionDraft> for S3Connection {
             key_prefix: S3KeyPrefix::parse(&draft.key_prefix)?,
             access_key_id: Self::parse_access_key_id(&draft.access_key_id)?,
             secret_access_key: Self::parse_secret_access_key(&draft.secret_access_key)?,
+            spare_keys: Vec::new(),
         })
     }
 }
@@ -171,21 +325,33 @@ impl TryFrom<S3ConnectionRecord> for S3Connection {
             key_prefix: record.key_prefix,
             access_key_id: Self::parse_access_key_id(&record.access_key_id)?,
             secret_access_key: record.secret_access_key,
+            spare_keys: record.spare_keys,
         })
     }
 }
 
-/// An invite's connection, validated again as a stored one is.
+/// An invite's connection with the key it carries, validated again as a
+/// stored one is. An invite that leaves the key to the joiner has no
+/// connection until the joiner adds one.
 impl TryFrom<&S3EnrollmentConnection> for S3Connection {
     type Error = ValidationError;
     fn try_from(carried: &S3EnrollmentConnection) -> ValidationResult<Self> {
+        let S3EnrollmentKey::Included {
+            access_key_id,
+            secret_access_key,
+        } = &carried.key
+        else {
+            return Err(ValidationError::S3AccessKeyIdRequired);
+        };
+        let location = &carried.location;
         Self::try_from(S3ConnectionRecord {
-            endpoint: carried.endpoint.clone(),
-            region: carried.region.clone(),
-            bucket: carried.bucket.clone(),
-            key_prefix: carried.key_prefix.clone(),
-            access_key_id: carried.access_key_id.clone(),
-            secret_access_key: carried.secret_access_key.clone(),
+            endpoint: location.endpoint.clone(),
+            region: location.region.clone(),
+            bucket: location.bucket.clone(),
+            key_prefix: location.key_prefix.clone(),
+            access_key_id: access_key_id.clone(),
+            secret_access_key: secret_access_key.clone(),
+            spare_keys: Vec::new(),
         })
     }
 }
@@ -241,12 +407,12 @@ impl S3Connection {
 
     /// Required, and kept exactly as written: sealed text is armor whose line
     /// breaks matter. A blank key is this field's own error.
-    fn parse_secret_access_key(raw: &str) -> ValidationResult<ProviderSecretText> {
+    pub(crate) fn parse_secret_access_key(raw: &str) -> ValidationResult<ProviderSecretText> {
         ProviderSecretText::try_from(raw.to_owned())
             .map_err(|_| ValidationError::S3SecretAccessKeyRequired)
     }
 
-    fn parse_access_key_id(raw: &str) -> ValidationResult<String> {
+    pub(crate) fn parse_access_key_id(raw: &str) -> ValidationResult<String> {
         Self::parse_name(
             raw,
             ValidationError::S3AccessKeyIdRequired,
@@ -286,6 +452,7 @@ impl S3Connection {
 mod tests {
     use super::{
         S3Connection, S3ConnectionDraft, S3DraftField, S3DraftFieldError, S3DraftValidation,
+        S3KeyDraft, S3Location,
     };
     use crate::S3KeyPrefix;
     use crate::errors::ValidationError;
@@ -513,6 +680,58 @@ mod tests {
     }
 
     #[test]
+    fn a_location_takes_a_key_typed_for_it_and_names_each_wrong_field() -> anyhow::Result<()> {
+        let connection = S3Connection::fixture()?;
+        let location = connection.location();
+        assert_eq!(location.label(), "S3 · nook-dev/e2e/run-1");
+        let wire = serde_json::to_value(&location)?;
+        assert!(!wire.to_string().contains(SECRET));
+        assert!(wire.get("accessKeyId").is_none());
+        assert_eq!(serde_json::from_value::<S3Location>(wire)?, location);
+        let typed = S3KeyDraft {
+            access_key_id: " device-a ".to_owned(),
+            secret_access_key: SECRET.to_owned(),
+        };
+        assert_eq!(
+            location.clone().with_key(&typed),
+            S3DraftValidation::Valid {
+                configuration: connection
+            }
+        );
+        let blank = S3KeyDraft {
+            access_key_id: String::new(),
+            secret_access_key: " ".to_owned(),
+        };
+        let invalid = location.with_key(&blank);
+        assert_eq!(
+            invalid,
+            S3DraftValidation::Invalid {
+                fields: vec![
+                    S3DraftFieldError {
+                        field: S3DraftField::AccessKeyId,
+                        error_key: ValidationError::S3AccessKeyIdRequired.to_string(),
+                    },
+                    S3DraftFieldError {
+                        field: S3DraftField::SecretAccessKey,
+                        error_key: ValidationError::S3SecretAccessKeyRequired.to_string(),
+                    },
+                ]
+            }
+        );
+        // A read-back location goes through the form's validators again.
+        assert!(
+            serde_json::from_value::<S3Location>(json!({
+                "endpoint": "http://s3.example.com",
+                "region": "us-east-1",
+                "bucket": "nook-dev",
+                "keyPrefix": { "state": "bucketRoot" },
+            }))
+            .is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
     fn a_location_is_identified_by_endpoint_bucket_and_prefix_alone() -> anyhow::Result<()> {
         let connection = S3Connection::fixture()?;
         assert_eq!(
@@ -546,6 +765,7 @@ mod tests {
                 "keyPrefix": { "state": "prefix", "value": "e2e/run-1" },
                 "accessKeyId": "device-a",
                 "secretAccessKey": SECRET,
+                "spareKeys": [],
             })
         );
         assert_eq!(
@@ -563,6 +783,14 @@ mod tests {
             ("bucket", json!("nook/dev")),
             ("accessKeyId", json!("device a")),
             ("secretAccessKey", json!(" ")),
+            (
+                "spareKeys",
+                json!([{ "accessKeyId": "device b", "secretAccessKey": "TEST-ONLY" }]),
+            ),
+            (
+                "spareKeys",
+                json!([{ "accessKeyId": "device-b", "secretAccessKey": " " }]),
+            ),
             ("sessionToken", json!("not-a-connection-field")),
         ] {
             let mut row = stored.clone();

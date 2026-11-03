@@ -118,7 +118,7 @@ impl NookProviderSaveOutcome {
     #[wasm_bindgen(getter)]
     pub fn draft(&self) -> Result<tsify::Ts<nook_core::ProviderDraft>, wasm_bindgen::JsError> {
         let result = match &self.0 {
-            ProviderSaveOutcome::Saved { draft, .. } => Ok(draft.clone()),
+            ProviderSaveOutcome::Saved { draft, .. } => Ok(draft.as_ref().clone()),
             ProviderSaveOutcome::Duplicate | ProviderSaveOutcome::Incomplete { .. } => Err(
                 JsError::new("provider save outcome does not contain a draft"),
             ),
@@ -689,7 +689,7 @@ mod projection_tests {
         let saved_snapshot = AuthProvidersSnapshot::default();
         let saved = NookProviderSaveOutcome(ProviderSaveOutcome::Saved {
             snapshot: saved_snapshot.clone(),
-            draft: ProviderDraft::Local {},
+            draft: Box::new(ProviderDraft::Local {}),
         });
         assert_eq!(saved.state(), NookProviderSaveOutcomeState::Saved);
         assert_eq!(saved.snapshot()?.to_rust()?, saved_snapshot);

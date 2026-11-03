@@ -281,15 +281,17 @@ pub fn first_compatible_provider_id_preferred(
 pub fn enrollment_provider_for_architecture(
     provider: &tsify::Ts<nook_core::StorageProvider>,
     architecture: &NookVaultArchitecture,
+    credential: &tsify::Ts<nook_core::EnrollmentCredentialChoice>,
 ) -> Result<NookEnrollmentProvider, wasm_bindgen::JsError> {
     let provider = provider.decode()?;
+    let credential = credential.decode()?;
 
     let architecture = architecture.to_core();
     Ok(NookEnrollmentProvider::from_core(
         ProviderEnrollmentRequest {
             provider: &provider,
             architecture: &architecture,
-            audience: EnrollmentAudience::Personal,
+            audience: EnrollmentAudience::Personal(credential),
         }
         .build()?,
     ))

@@ -315,6 +315,37 @@ pub fn s3_provider_draft(
     Ok(ProviderDraft::S3(S3Draft::Ready(connection)).encode()?)
 }
 
+/// A key typed for the S3 location an invite named, validated field by
+/// field: a valid key yields the connection the joiner's row is saved with.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn s3_draft_with_key(
+    draft: &tsify::Ts<ProviderDraft>,
+    key: &tsify::Ts<nook_core::S3KeyDraft>,
+) -> Result<tsify::Ts<nook_core::S3DraftValidation>, wasm_bindgen::JsError> {
+    let draft = draft.decode()?;
+    let key = key.decode()?;
+    Ok(draft.with_s3_key(&key)?.encode()?)
+}
+
+/// A GitHub draft an invite left awaiting its token, with the token typed
+/// for it. A blank token rejects with its validation key.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn github_draft_with_token(
+    draft: &tsify::Ts<ProviderDraft>,
+    token: &str,
+) -> Result<tsify::Ts<ProviderDraft>, wasm_bindgen::JsError> {
+    let draft = draft.decode()?;
+    Ok(draft.with_github_token(token)?.encode()?)
+}
+
 /// The message a connect or save that the gap stops reports.
 #[wasm_bindgen]
 #[cfg_attr(

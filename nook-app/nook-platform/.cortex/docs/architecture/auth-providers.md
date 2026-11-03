@@ -163,6 +163,13 @@ constant `nook-events`.
     shows it
 - **`secretAccessKey`**
   - **Notes:** Sealed at rest, like `token`
+- **`spareKeys`**
+  - **Notes:** Keys saved for invites, each an `accessKeyId` and a
+    `secretAccessKey`. An empty list is a real state. Every spare secret is
+    sealed at rest and walked by the row's secret list, so the sealing and the
+    sealed-credential checks cover it. A storage connection signs with the
+    row's own key and carries no spare. The Sync page adds and removes spares;
+    a key the row saves already is refused
 
 ### Rows are complete; drafts carry the gaps
 
@@ -573,6 +580,18 @@ vault. Earlier vault-named codes fail closed as invalid codes.
   `remote_file` field.
 - GitHub, S3, local, and local-folder invites still follow the vault's
   `replication_type`.
+
+**Several providers and key choices**
+
+An invite carries a non-empty list of providers, `providers`, in the
+inviter's order; an empty list fails to decode. A GitHub invite's `token` is
+`included` with its `pat`, or `joiner_provides`. An S3 invite carries its
+`location` (endpoint, region, bucket, and key prefix) and a `key`: `included`
+with this device's key or one saved spare, or `joiner_provides`. A key left to
+the joiner projects to `S3Draft::AwaitingKey` or `GithubDraftToken::AwaitingToken`,
+which the join screen completes. The joiner joins through a provider it has a
+key for and saves every provider whose key it has. The wire changed directly:
+there are no released codes to read back.
 
 **Rust typestates**
 

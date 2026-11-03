@@ -219,6 +219,7 @@ mod tests {
                     "bucket": "nook-dev",
                     "keyPrefix": { "state": "prefix", "value": "e2e/run-1" },
                     "accessKeyId": "device-a",
+                    "spareKeys": [],
                     "secretAccessKey": SECRET,
                 },
             })

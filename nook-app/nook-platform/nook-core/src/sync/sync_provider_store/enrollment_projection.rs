@@ -8,11 +8,11 @@
 use crate::errors::ValidationResult;
 use crate::{
     EnrollmentProvider, EnrollmentProviderDataRef, GithubDraft, GithubDraftToken,
-    GoogleDriveAccess, GoogleDriveAuthorization, GoogleDriveDraft, GoogleDriveFolder,
-    GoogleDriveFolderId, GoogleDriveSignIn, ICloudAccess, ICloudDraft, ICloudShare,
-    ICloudShareTargetId, ICloudSignIn, OAuthFileDraft, OAuthFileEnrollment,
-    PersonalEnrollmentProviderData, ProviderDraft, S3Connection, S3Draft,
-    SharedEnrollmentProviderData, StoredGithubRepository, ValidationError,
+    GithubEnrollmentToken, GoogleDriveAccess, GoogleDriveAuthorization, GoogleDriveDraft,
+    GoogleDriveFolder, GoogleDriveFolderId, GoogleDriveSignIn, ICloudAccess, ICloudDraft,
+    ICloudShare, ICloudShareTargetId, ICloudSignIn, OAuthFileDraft, OAuthFileEnrollment,
+    PersonalEnrollmentProviderData, ProviderDraft, S3Connection, S3Draft, S3EnrollmentKey,
+    S3Location, SharedEnrollmentProviderData, StoredGithubRepository, ValidationError,
 };
 
 /// The joiner's side of an S3 invite: the inviter's connection, validated
@@ -32,8 +32,9 @@ impl TryFrom<&EnrollmentProvider> for S3Connection {
 }
 
 /// The draft a decrypted code gives the joiner. A personal code carries the
-/// provider complete, validated again here; a shared grant names the target
-/// and leaves the sign-in to the joiner's own account.
+/// provider complete, validated again here, or its location with the key left
+/// to the joiner; a shared grant names the target and leaves the sign-in to
+/// the joiner's own account.
 impl TryFrom<&EnrollmentProvider> for ProviderDraft {
     type Error = ValidationError;
     fn try_from(provider: &EnrollmentProvider) -> ValidationResult<Self> {
@@ -42,14 +43,19 @@ impl TryFrom<&EnrollmentProvider> for ProviderDraft {
                 Self::Local {}
             }
             EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::Github {
-                pat,
+                token,
                 repo,
             }) => Self::Github(GithubDraft {
                 repository: match repo.trim() {
                     "" => StoredGithubRepository::DefaultRepository,
                     repo => StoredGithubRepository::Repository(repo.to_owned()),
                 },
-                token: GithubDraftToken::Entered(pat.clone()),
+                token: match token {
+                    GithubEnrollmentToken::Included { pat } => {
+                        GithubDraftToken::Entered(pat.clone())
+                    }
+                    GithubEnrollmentToken::JoinerProvides => GithubDraftToken::AwaitingToken,
+                },
             }),
             EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::OauthFile(
                 OAuthFileEnrollment::GoogleDrive {
@@ -82,7 +88,14 @@ impl TryFrom<&EnrollmentProvider> for ProviderDraft {
                 share: ICloudShare::Shared(ICloudShareTargetId::try_from(share_target.clone())?),
             })),
             EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::S3(connection)) => {
-                Self::S3(S3Draft::Ready(S3Connection::try_from(connection)?))
+                match &connection.key {
+                    S3EnrollmentKey::Included { .. } => {
+                        Self::S3(S3Draft::Ready(S3Connection::try_from(connection)?))
+                    }
+                    S3EnrollmentKey::JoinerProvides => Self::S3(S3Draft::AwaitingKey(
+                        S3Location::try_from(&connection.location)?,
+                    )),
+                }
             }
             EnrollmentProviderDataRef::Shared(SharedEnrollmentProviderData::GoogleDrive {
                 storage_target_id,
@@ -110,19 +123,20 @@ impl TryFrom<&EnrollmentProvider> for ProviderDraft {
 mod tests {
     use super::*;
     use crate::{
-        CheckedEnrollmentEnvelope, EnrollmentAudience, EnrollmentIdentityTarget, EnrollmentInvite,
-        EnrollmentIssuance, EnrollmentIssueInput, IdentityId, IdentityInviteId, InviteSigningSeed,
-        OnboardingType, PersonalEnrollmentProvider, ProviderDraftGap, ProviderEnrollmentRequest,
-        ProviderSecretText, ReplicationType, S3EnrollmentConnection, S3KeyPrefix,
-        SharedEnrollmentAudience, SharedEnrollmentProvider, StorageProvider, StoredProvider,
-        VaultArchitecture,
+        CheckedEnrollmentEnvelope, EnrollmentAudience, EnrollmentCredentialChoice,
+        EnrollmentIdentityTarget, EnrollmentInvite, EnrollmentIssuance, EnrollmentIssueInput,
+        EnrollmentProviders, IdentityId, IdentityInviteId, InviteSigningSeed, OnboardingType,
+        PersonalEnrollmentProvider, ProviderDraftGap, ProviderEnrollmentRequest,
+        ProviderSecretText, ReplicationType, S3EnrollmentConnection, S3EnrollmentLocation,
+        S3KeyDraft, S3KeyPrefix, SharedEnrollmentAudience, SharedEnrollmentProvider,
+        StorageProvider, StoredProvider, VaultArchitecture,
     };
 
     const S3_SECRET: &str = "TEST-ONLY-device-a-secret-not-real";
 
     fn issue(provider: EnrollmentProvider) -> anyhow::Result<String> {
         let input = EnrollmentIssueInput {
-            provider,
+            providers: EnrollmentProviders::single(provider),
             identity: EnrollmentIdentityTarget {
                 identity_id: IdentityId::generate()?,
                 label: "Team keyring".to_owned(),
@@ -145,12 +159,25 @@ mod tests {
     }
 
     fn companion(provider: StoredProvider) -> anyhow::Result<EnrollmentProvider> {
+        invite_with(provider, EnrollmentCredentialChoice::Inviter)
+    }
+
+    fn invite_with(
+        provider: StoredProvider,
+        choice: EnrollmentCredentialChoice,
+    ) -> anyhow::Result<EnrollmentProvider> {
         Ok(ProviderEnrollmentRequest {
             provider: &StorageProvider::fixture("row", provider),
             architecture: &VaultArchitecture::default(),
-            audience: EnrollmentAudience::Personal,
+            audience: EnrollmentAudience::Personal(choice),
         }
         .build()?)
+    }
+
+    fn decrypted_first(provider: EnrollmentProvider) -> anyhow::Result<EnrollmentProvider> {
+        let code = issue(provider)?;
+        let decrypted = CheckedEnrollmentEnvelope::parse(&code)?.decrypt("invite passphrase")?;
+        Ok(decrypted.providers.first().clone())
     }
 
     #[test]
@@ -163,7 +190,7 @@ mod tests {
             let code = issue(companion(provider.clone())?)?;
             let decrypted =
                 CheckedEnrollmentEnvelope::parse(&code)?.decrypt("invite passphrase")?;
-            let draft = ProviderDraft::try_from(&decrypted.provider)?;
+            let draft = ProviderDraft::try_from(decrypted.providers.first())?;
             assert_eq!(draft.complete(), Ok(provider));
         }
         Ok(())
@@ -180,7 +207,7 @@ mod tests {
         assert!(!code.contains(S3_SECRET));
         let decrypted = CheckedEnrollmentEnvelope::parse(&code)?.decrypt("invite passphrase")?;
         assert_eq!(
-            S3Connection::try_from(&decrypted.provider)?,
+            S3Connection::try_from(decrypted.providers.first())?,
             S3Connection::fixture()?
         );
         Ok(())
@@ -206,12 +233,16 @@ mod tests {
         // A decrypted code whose connection fails validation adds no provider.
         let tampered =
             EnrollmentProvider::personal(PersonalEnrollmentProvider::s3(S3EnrollmentConnection {
-                endpoint: "http://s3.example.com".to_owned(),
-                region: "us-east-1".to_owned(),
-                bucket: "nook-dev".to_owned(),
-                key_prefix: S3KeyPrefix::BucketRoot,
-                access_key_id: "device-a".to_owned(),
-                secret_access_key: ProviderSecretText::try_from(S3_SECRET.to_owned())?,
+                location: S3EnrollmentLocation {
+                    endpoint: "http://s3.example.com".to_owned(),
+                    region: "us-east-1".to_owned(),
+                    bucket: "nook-dev".to_owned(),
+                    key_prefix: S3KeyPrefix::BucketRoot,
+                },
+                key: crate::S3EnrollmentKey::Included {
+                    access_key_id: "device-a".to_owned(),
+                    secret_access_key: ProviderSecretText::try_from(S3_SECRET.to_owned())?,
+                },
             }));
         assert_eq!(
             S3Connection::try_from(&tampered),
@@ -227,6 +258,80 @@ mod tests {
             )),
             Err(ValidationError::S3StorageTargetInvalid)
         );
+        Ok(())
+    }
+
+    #[test]
+    fn a_key_left_to_the_joiner_projects_a_draft_that_knows_its_location() -> anyhow::Result<()> {
+        let s3 = decrypted_first(invite_with(
+            StoredProvider::s3_fixture()?,
+            EnrollmentCredentialChoice::JoinerProvides,
+        )?)?;
+        let location = S3Connection::fixture()?.location();
+        let draft = ProviderDraft::try_from(&s3)?;
+        assert_eq!(
+            draft,
+            ProviderDraft::S3(S3Draft::AwaitingKey(location.clone()))
+        );
+        assert_eq!(draft.clone().complete(), Err(ProviderDraftGap::S3Key));
+        // The invite gives no connection until the joiner adds its key.
+        assert_eq!(
+            S3Connection::try_from(&s3),
+            Err(ValidationError::S3AccessKeyIdRequired)
+        );
+        // The S3 form completes the location with just the key.
+        let typed = S3KeyDraft {
+            access_key_id: "device-a".to_owned(),
+            secret_access_key: S3_SECRET.to_owned(),
+        };
+        assert_eq!(
+            location.with_key(&typed),
+            crate::S3DraftValidation::Valid {
+                configuration: S3Connection::fixture()?
+            }
+        );
+
+        let github = decrypted_first(invite_with(
+            StoredProvider::github_fixture()?,
+            EnrollmentCredentialChoice::JoinerProvides,
+        )?)?;
+        assert_eq!(
+            ProviderDraft::try_from(&github)?,
+            ProviderDraft::Github(GithubDraft {
+                repository: StoredGithubRepository::Repository("team-vault".to_owned()),
+                token: GithubDraftToken::AwaitingToken,
+            })
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_spare_key_projects_a_complete_provider_with_that_key() -> anyhow::Result<()> {
+        let crate::S3SpareKeyAddition::Added {
+            provider: with_spare,
+        } = (crate::S3SpareKeyRequest {
+            provider: StorageProvider::fixture("row", StoredProvider::s3_fixture()?),
+            key: S3KeyDraft {
+                access_key_id: "device-b".to_owned(),
+                secret_access_key: "TEST-ONLY-device-b-secret".to_owned(),
+            },
+        })
+        .add()?
+        else {
+            anyhow::bail!("the spare key is saved");
+        };
+        let s3 = decrypted_first(invite_with(
+            with_spare.provider,
+            EnrollmentCredentialChoice::SavedKey {
+                access_key_id: "device-b".to_owned(),
+            },
+        )?)?;
+        let Ok(StoredProvider::S3(connection)) = ProviderDraft::try_from(&s3)?.complete() else {
+            anyhow::bail!("an S3 invite with a key completes as S3");
+        };
+        assert_eq!(connection.storage_detail(), "127.0.0.1:8333 · device-b");
+        assert_eq!(connection.location(), S3Connection::fixture()?.location());
+        assert!(!format!("{connection:?}").contains("TEST-ONLY-device-b-secret"));
         Ok(())
     }
 

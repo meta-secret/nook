@@ -51,7 +51,7 @@ pub enum ProviderSaveOutcome {
     /// The snapshot to persist and the draft the setup continues with.
     Saved {
         snapshot: AuthProvidersSnapshot,
-        draft: ProviderDraft,
+        draft: Box<ProviderDraft>,
     },
     Duplicate,
     /// A new provider was requested from a draft that cannot be saved yet.
@@ -91,7 +91,7 @@ impl ProviderSaveRequest {
                 providers,
                 active_vault_store_id: self.snapshot.active_vault_store_id,
             },
-            draft,
+            draft: Box::new(draft),
         }
     }
 
@@ -282,7 +282,7 @@ mod tests {
         outcome: ProviderSaveOutcome,
     ) -> anyhow::Result<(AuthProvidersSnapshot, ProviderDraft)> {
         match outcome {
-            ProviderSaveOutcome::Saved { snapshot, draft } => Ok((snapshot, draft)),
+            ProviderSaveOutcome::Saved { snapshot, draft } => Ok((snapshot, *draft)),
             other => anyhow::bail!("expected a save, got {other:?}"),
         }
     }

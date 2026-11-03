@@ -11,7 +11,8 @@ use crate::storage::s3::{S3Storage, S3VaultListing};
 use crate::{TypedInput, TypedOutput};
 use nook_core::{
     LocalVaultOccupancy, ProviderVaultListing, S3Connection, S3ConnectionDraft, S3DraftValidation,
-    S3EndpointService, S3KnownService, S3ServiceGuide,
+    S3EndpointService, S3KnownService, S3ServiceGuide, S3SpareKeyAddition, S3SpareKeyRemoval,
+    S3SpareKeyRequest, StorageProvider,
 };
 use wasm_bindgen::JsError;
 
@@ -24,6 +25,26 @@ use wasm_bindgen::JsError;
 ) -> Result<tsify::Ts<S3DraftValidation>, JsError> {
     let draft = draft.decode()?;
     Ok(draft.validate().encode()?)
+}
+
+/// Save a spare key on an S3 row: the key validated as the setup form's is,
+/// and refused when the row saves it already. The caller persists the row it
+/// returns, which seals the spare's secret with the row's own.
+#[wasm_bindgen]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn add_s3_spare_key(
+    request: &tsify::Ts<S3SpareKeyRequest>,
+) -> Result<tsify::Ts<S3SpareKeyAddition>, JsError> {
+    let request = request.decode()?;
+    Ok(request.add()?.encode()?)
+}
+
+/// An S3 row without one of its spare keys; its own key stays.
+#[wasm_bindgen]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn remove_s3_spare_key(
+    removal: &tsify::Ts<S3SpareKeyRemoval>,
+) -> Result<tsify::Ts<StorageProvider>, JsError> {
+    let removal = removal.decode()?;
+    Ok(removal.remove()?.encode()?)
 }
 
 /// The detail line of a validated S3 connection, as its saved row shows

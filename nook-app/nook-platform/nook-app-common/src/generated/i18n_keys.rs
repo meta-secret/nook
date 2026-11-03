@@ -797,6 +797,8 @@ pub const ERRORS_VALIDATION_DRIVE_FILE_NAME_INVALID: &str =
     "errors.validation.drive_file_name_invalid";
 pub const ERRORS_VALIDATION_DRIVE_FILE_NAME_LENGTH: &str =
     "errors.validation.drive_file_name_length";
+pub const ERRORS_VALIDATION_ENROLLMENT_CREDENTIAL_MISMATCH: &str =
+    "errors.validation.enrollment_credential_mismatch";
 pub const ERRORS_VALIDATION_EXTENSION_APPROVAL_APPLICATION_FORBIDDEN: &str =
     "errors.validation.extension_approval_application_forbidden";
 pub const ERRORS_VALIDATION_GITHUB_PAT_EMPTY: &str = "errors.validation.github_pat_empty";
@@ -840,10 +842,14 @@ pub const ERRORS_VALIDATION_ROUTING_NUMBER_INVALID: &str =
     "errors.validation.routing_number_invalid";
 pub const ERRORS_VALIDATION_ROUTING_NUMBER_REQUIRED: &str =
     "errors.validation.routing_number_required";
+pub const ERRORS_VALIDATION_S3_ACCESS_KEY_ID_DUPLICATE: &str =
+    "errors.validation.s3_access_key_id_duplicate";
 pub const ERRORS_VALIDATION_S3_ACCESS_KEY_ID_INVALID: &str =
     "errors.validation.s3_access_key_id_invalid";
 pub const ERRORS_VALIDATION_S3_ACCESS_KEY_ID_REQUIRED: &str =
     "errors.validation.s3_access_key_id_required";
+pub const ERRORS_VALIDATION_S3_ACCESS_KEY_NOT_SAVED: &str =
+    "errors.validation.s3_access_key_not_saved";
 pub const ERRORS_VALIDATION_S3_BUCKET_INVALID: &str = "errors.validation.s3_bucket_invalid";
 pub const ERRORS_VALIDATION_S3_BUCKET_REQUIRED: &str = "errors.validation.s3_bucket_required";
 pub const ERRORS_VALIDATION_S3_ENDPOINT_INSECURE: &str = "errors.validation.s3_endpoint_insecure";

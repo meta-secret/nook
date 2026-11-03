@@ -422,12 +422,13 @@ mod browser_tests {
 
         async fn issue_code(&mut self, identity_id: &IdentityId) -> anyhow::Result<String> {
             let input = NookEnrollmentIssueInput::for_identity(
-                NookEnrollmentProvider::local(),
+                vec![NookEnrollmentProvider::local()],
                 identity_id.as_str().to_owned(),
                 "Work".to_owned(),
                 "entry-1".to_owned(),
                 "2026-10-13T00:00:00Z".to_owned(),
-            );
+            )
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
             Founder::js(
                 self.manager
                     .issue_identity_invite_code(&input, INVITE_PASSPHRASE.to_owned())

@@ -65,9 +65,10 @@ pub use auth::enrollment::{
     CheckedEnrollmentEnvelope, CheckedEnrollmentIssuance, DecryptedEnrollmentPayload,
     EnrollmentCodeEnvelope, EnrollmentEmail, EnrollmentEntryLabel, EnrollmentIdentityTarget,
     EnrollmentInvite, EnrollmentInviteVault, EnrollmentIssuance, EnrollmentIssueInput,
-    EnrollmentLinkInput, EnrollmentProvider, EnrollmentProviderDataRef, EnrollmentState,
-    InviteSigningSeed, OAuthAccountIdentity, OAuthFileEnrollment, PersonalCredentialTransfer,
-    PersonalEnrollmentProvider, PersonalEnrollmentProviderData, S3EnrollmentConnection,
+    EnrollmentLinkInput, EnrollmentProvider, EnrollmentProviderDataRef, EnrollmentProviders,
+    EnrollmentState, GithubEnrollmentToken, InviteSigningSeed, OAuthAccountIdentity,
+    OAuthFileEnrollment, PersonalCredentialTransfer, PersonalEnrollmentProvider,
+    PersonalEnrollmentProviderData, S3EnrollmentConnection, S3EnrollmentKey, S3EnrollmentLocation,
     SharedEnrollmentProvider, SharedEnrollmentProviderData, SharedProviderGrant,
     TypedEnrollmentProvider,
 };

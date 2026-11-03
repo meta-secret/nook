@@ -15,10 +15,12 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
+use crate::errors::{ValidationError, ValidationResult};
 use crate::{
-    DraftStorageConnection, ExistingVaultProviderReadiness, GithubProvider, LocalFolderProvider,
-    ProviderKind, ProviderSecretText, S3Connection, StagedStorageConnection, StorageConnection,
-    StoredGithubRepository, StoredProvider,
+    DraftStorageConnection, ExistingVaultProviderReadiness, GithubPat, GithubProvider,
+    LocalFolderProvider, ProviderKind, ProviderSecretText, S3Connection, S3DraftValidation,
+    S3KeyDraft, S3Location, StagedStorageConnection, StorageConnection, StoredGithubRepository,
+    StoredProvider,
 };
 
 mod oauth_file;
@@ -78,11 +80,14 @@ pub struct GithubDraftForm {
     pub repository: String,
 }
 
-/// An S3 location before and after its setup form validated.
+/// An S3 location before and after its setup form validated. An invite
+/// that leaves the key to the new device names the location already: the
+/// form then asks only for the key.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", rename_all = "camelCase", deny_unknown_fields)]
 pub enum S3Draft {
     AwaitingConnection {},
+    AwaitingKey(S3Location),
     Ready(S3Connection),
 }
 
@@ -96,6 +101,7 @@ pub enum ProviderDraftGap {
     OAuthSignIn,
     SharedTarget,
     S3Connection,
+    S3Key,
 }
 
 /// Whether a draft holds the credentials its provider needs.
@@ -116,6 +122,7 @@ impl ProviderDraftGap {
             Self::OAuthSignIn => i18n_keys::ERRORS_VALIDATION_OAUTH_ACCESS_TOKEN_EMPTY,
             Self::SharedTarget => i18n_keys::ERRORS_VALIDATION_SHARED_STORAGE_TARGET_REQUIRED,
             Self::S3Connection => i18n_keys::ERRORS_VALIDATION_S3_STORAGE_TARGET_INVALID,
+            Self::S3Key => i18n_keys::ERRORS_VALIDATION_S3_ACCESS_KEY_ID_REQUIRED,
         }
     }
 
@@ -128,6 +135,7 @@ impl ProviderDraftGap {
             Self::GithubToken => i18n_keys::ERRORS_GITHUB_CREDENTIALS_REQUIRED,
             Self::OAuthSignIn | Self::SharedTarget => i18n_keys::ERRORS_GOOGLE_SIGN_IN_REQUIRED,
             Self::S3Connection => i18n_keys::ERRORS_VALIDATION_S3_STORAGE_TARGET_INVALID,
+            Self::S3Key => i18n_keys::ERRORS_VALIDATION_S3_ACCESS_KEY_ID_REQUIRED,
         }
     }
 }
@@ -196,6 +204,7 @@ impl ProviderDraft {
             Self::OauthFile(oauth) => oauth.complete().map(StoredProvider::OauthFile),
             Self::S3(S3Draft::Ready(connection)) => Ok(StoredProvider::S3(connection)),
             Self::S3(S3Draft::AwaitingConnection {}) => Err(ProviderDraftGap::S3Connection),
+            Self::S3(S3Draft::AwaitingKey(_)) => Err(ProviderDraftGap::S3Key),
         }
     }
 
@@ -252,6 +261,9 @@ impl ProviderDraft {
             Self::S3(S3Draft::AwaitingConnection {}) => {
                 ProviderCredentialReadiness::Required(ProviderDraftGap::S3Connection)
             }
+            Self::S3(S3Draft::AwaitingKey(_)) => {
+                ProviderCredentialReadiness::Required(ProviderDraftGap::S3Key)
+            }
         }
     }
 
@@ -271,6 +283,41 @@ impl ProviderDraft {
         }
     }
 
+    /// An S3 draft that names its location, with a key typed for it: the
+    /// key is validated field by field as the setup form's is.
+    pub fn with_s3_key(self, key: &S3KeyDraft) -> ValidationResult<S3DraftValidation> {
+        match self {
+            Self::S3(S3Draft::AwaitingKey(location)) => Ok(location.with_key(key)),
+            Self::Local {}
+            | Self::LocalFolder(_)
+            | Self::Github(_)
+            | Self::OauthFile(_)
+            | Self::S3(S3Draft::AwaitingConnection {} | S3Draft::Ready(_)) => {
+                Err(ValidationError::S3StorageTargetInvalid)
+            }
+        }
+    }
+
+    /// A GitHub draft that awaits its token, with the token typed for it.
+    pub fn with_github_token(self, token: &str) -> ValidationResult<Self> {
+        match self {
+            Self::Github(GithubDraft {
+                repository,
+                token: GithubDraftToken::AwaitingToken,
+            }) => Ok(Self::Github(GithubDraft {
+                repository,
+                token: GithubDraftToken::Entered(ProviderSecretText::try_from(
+                    GithubPat::parse(token.trim())?.into_inner(),
+                )?),
+            })),
+            Self::Local {}
+            | Self::LocalFolder(_)
+            | Self::Github(_)
+            | Self::OauthFile(_)
+            | Self::S3(_) => Err(ValidationError::EnrollmentCredentialMismatch),
+        }
+    }
+
     /// The label the setup shows. A local folder and an OAuth draft read as
     /// their provider; an S3 draft names its location once it is ready.
     #[must_use]
@@ -281,6 +328,7 @@ impl ProviderDraft {
             Self::Github(github) => github.repository.label(),
             Self::OauthFile(oauth) => oauth.preset().provider_label().to_owned(),
             Self::S3(S3Draft::Ready(connection)) => connection.label(),
+            Self::S3(S3Draft::AwaitingKey(location)) => location.label(),
             Self::S3(S3Draft::AwaitingConnection {}) => "S3".to_owned(),
         }
     }
@@ -314,7 +362,8 @@ mod tests {
     };
     use crate::{
         DraftStorageConnection, ExistingVaultProviderReadiness, OAuthFilePreset, ProviderKind,
-        StagedStorageConnection, StorageConnection, StoredGithubRepository, StoredProvider,
+        S3Connection, StagedStorageConnection, StorageConnection, StoredGithubRepository,
+        StoredProvider,
     };
     use nook_app_common::i18n_keys;
     use serde_json::json;
@@ -460,6 +509,11 @@ mod tests {
                 i18n_keys::ERRORS_VALIDATION_S3_STORAGE_TARGET_INVALID,
                 i18n_keys::ERRORS_VALIDATION_S3_STORAGE_TARGET_INVALID,
             ),
+            (
+                ProviderDraftGap::S3Key,
+                i18n_keys::ERRORS_VALIDATION_S3_ACCESS_KEY_ID_REQUIRED,
+                i18n_keys::ERRORS_VALIDATION_S3_ACCESS_KEY_ID_REQUIRED,
+            ),
         ] {
             assert_eq!(gap.translation_key(), connect);
             assert_eq!(gap.unlock_translation_key(), unlock);
@@ -524,6 +578,75 @@ mod tests {
         assert_eq!(
             ProviderDraft::from(StoredProvider::github_fixture()?).label(),
             "GitHub · team-vault"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn an_s3_draft_awaiting_its_key_names_the_location_and_waits_for_the_key() -> anyhow::Result<()>
+    {
+        let connection = S3Connection::fixture()?;
+        let draft = ProviderDraft::S3(S3Draft::AwaitingKey(connection.location()));
+        assert_eq!(draft.kind(), ProviderKind::S3);
+        assert_eq!(draft.label(), "S3 · nook-dev/e2e/run-1");
+        assert_eq!(
+            draft.credential_readiness(),
+            ProviderCredentialReadiness::Required(ProviderDraftGap::S3Key)
+        );
+        assert_eq!(
+            draft.clone().storage_connection(),
+            DraftStorageConnection::Incomplete {
+                gap: ProviderDraftGap::S3Key
+            }
+        );
+        let wire = serde_json::to_value(&draft)?;
+        assert_eq!(wire.get("state"), Some(&json!("awaitingKey")));
+        assert!(wire.get("accessKeyId").is_none());
+        assert_eq!(serde_json::from_value::<ProviderDraft>(wire)?, draft);
+        assert_eq!(draft.complete(), Err(ProviderDraftGap::S3Key));
+        Ok(())
+    }
+
+    #[test]
+    fn a_draft_awaiting_its_key_takes_only_a_key_of_its_kind() -> anyhow::Result<()> {
+        use crate::{S3DraftValidation, S3KeyDraft, ValidationError};
+        let connection = S3Connection::fixture()?;
+        let awaiting = ProviderDraft::S3(S3Draft::AwaitingKey(connection.location()));
+        let key = S3KeyDraft {
+            access_key_id: "device-a".to_owned(),
+            secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned(),
+        };
+        assert_eq!(
+            awaiting.clone().with_s3_key(&key)?,
+            S3DraftValidation::Valid {
+                configuration: connection
+            }
+        );
+        assert_eq!(
+            ProviderDraft::begin(ProviderKind::S3).with_s3_key(&key),
+            Err(ValidationError::S3StorageTargetInvalid)
+        );
+        let github = ProviderDraft::begin(ProviderKind::Github);
+        let entered = github.clone().with_github_token(" github_pat_TEST-ONLY ")?;
+        let ProviderDraft::Github(GithubDraft {
+            token: GithubDraftToken::Entered(token),
+            ..
+        }) = &entered
+        else {
+            anyhow::bail!("a typed token is entered");
+        };
+        assert_eq!(token.expose(), "github_pat_TEST-ONLY");
+        assert_eq!(
+            github.with_github_token(" "),
+            Err(ValidationError::GithubPatEmpty)
+        );
+        assert_eq!(
+            entered.with_github_token("github_pat_TEST-ONLY-2"),
+            Err(ValidationError::EnrollmentCredentialMismatch)
+        );
+        assert_eq!(
+            awaiting.with_github_token("github_pat_TEST-ONLY"),
+            Err(ValidationError::EnrollmentCredentialMismatch)
         );
         Ok(())
     }

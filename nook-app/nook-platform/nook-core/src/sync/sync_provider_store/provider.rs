@@ -24,6 +24,7 @@ mod github;
 mod local_folder;
 mod oauth_file;
 mod s3;
+pub use s3::{S3SpareKeyAddition, S3SpareKeyRemoval, S3SpareKeyRequest};
 
 pub use authorization_freshness::{
     GoogleDriveAuthorizationCheck, GoogleDriveAuthorizationFreshness,
@@ -105,7 +106,7 @@ impl StoredProvider {
             Self::Github(github) => github.storage_connection(),
             Self::OauthFile(oauth) => oauth.storage_connection(),
             Self::S3(connection) => StorageConnection::S3 {
-                connection: connection.clone(),
+                connection: connection.signing_connection(),
             },
         }
     }
@@ -168,7 +169,7 @@ impl StoredProvider {
             Self::Local {} | Self::LocalFolder(_) => Vec::new(),
             Self::Github(github) => vec![&github.token],
             Self::OauthFile(oauth) => vec![oauth.token()],
-            Self::S3(connection) => vec![&connection.secret_access_key],
+            Self::S3(connection) => connection.secrets(),
         }
     }
 

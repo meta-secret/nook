@@ -4,9 +4,10 @@ use super::{
 use crate::TypedOutput;
 use nook_core::OnboardingType;
 use nook_core::{
-    EnrollmentProvider, EnrollmentProviderDataRef, OAuthFileEnrollment, OAuthFilePreset,
-    PersonalEnrollmentProvider, PersonalEnrollmentProviderData, ProviderDraft, ProviderKind,
-    ProviderSecretText, SharedEnrollmentProvider, SharedEnrollmentProviderData,
+    EnrollmentProvider, EnrollmentProviderDataRef, EnrollmentProviders, GithubEnrollmentToken,
+    OAuthFileEnrollment, OAuthFilePreset, PersonalEnrollmentProvider,
+    PersonalEnrollmentProviderData, ProviderDraft, ProviderKind, ProviderSecretText,
+    SharedEnrollmentProvider, SharedEnrollmentProviderData,
 };
 use wasm_bindgen::JsError;
 
@@ -28,7 +29,12 @@ impl NookEnrollmentProvider {
     #[wasm_bindgen]
     pub fn github(repo: String, pat: String) -> Result<Self, wasm_bindgen::JsError> {
         Ok(Self(EnrollmentProvider::personal(
-            PersonalEnrollmentProvider::github(ProviderSecretText::try_from(pat)?, repo),
+            PersonalEnrollmentProvider::github(
+                GithubEnrollmentToken::Included {
+                    pat: ProviderSecretText::try_from(pat)?,
+                },
+                repo,
+            ),
         )))
     }
 
@@ -50,10 +56,6 @@ impl NookEnrollmentProvider {
 
     pub(crate) fn from_core(provider: nook_core::EnrollmentProvider) -> Self {
         Self(provider)
-    }
-
-    pub(crate) fn to_core(&self) -> nook_core::EnrollmentProvider {
-        self.0.clone()
     }
 
     #[wasm_bindgen(getter, js_name = "type")]
@@ -101,10 +103,10 @@ impl NookEnrollmentProvider {
     pub fn github_pat(&self) -> Result<String, wasm_bindgen::JsError> {
         match self.0.data() {
             EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::Github {
-                pat,
+                token: GithubEnrollmentToken::Included { pat },
                 ..
             }) => Ok(pat.expose().to_owned()),
-            _ => Err(JsError::new("enrollment provider is not GitHub")),
+            _ => Err(JsError::new("enrollment provider carries no GitHub token")),
         }
     }
 
@@ -231,7 +233,7 @@ impl NookEnrollmentProvider {
 
 #[wasm_bindgen]
 pub struct NookEnrollmentIssueInput {
-    provider: NookEnrollmentProvider,
+    providers: EnrollmentProviders,
     identity_id: String,
     identity_label: String,
     entry_id: String,
@@ -240,22 +242,29 @@ pub struct NookEnrollmentIssueInput {
 
 #[wasm_bindgen]
 impl NookEnrollmentIssueInput {
-    /// An invitation into one identity through the given provider mount.
+    /// An invitation into one identity through the given provider mounts,
+    /// in the inviter's order. An invite needs at least one.
     #[wasm_bindgen]
     pub fn for_identity(
-        provider: NookEnrollmentProvider,
+        providers: Vec<NookEnrollmentProvider>,
         identity_id: String,
         identity_label: String,
         entry_id: String,
         issued_at: String,
-    ) -> Self {
-        Self {
-            provider,
+    ) -> Result<Self, wasm_bindgen::JsError> {
+        let providers = EnrollmentProviders::try_from(
+            providers
+                .into_iter()
+                .map(|provider| provider.0)
+                .collect::<Vec<_>>(),
+        )?;
+        Ok(Self {
+            providers,
             identity_id,
             identity_label,
             entry_id,
             issued_at,
-        }
+        })
     }
 
     /// The issue input with the invite a member just recorded.
@@ -265,7 +274,7 @@ impl NookEnrollmentIssueInput {
     ) -> Result<nook_core::EnrollmentIssueInput, nook_core::EnrollmentError> {
         Ok(nook_core::EnrollmentIssueInput {
             invite,
-            provider: self.provider.to_core(),
+            providers: self.providers.clone(),
             identity: nook_core::EnrollmentIdentityTarget {
                 identity_id: nook_core::IdentityId::parse(&self.identity_id).map_err(|_| {
                     nook_core::EnrollmentError::MissingField {
@@ -280,8 +289,12 @@ impl NookEnrollmentIssueInput {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn provider(&self) -> NookEnrollmentProvider {
-        self.provider.clone()
+    pub fn providers(&self) -> Vec<NookEnrollmentProvider> {
+        self.providers
+            .iter()
+            .cloned()
+            .map(NookEnrollmentProvider::from_core)
+            .collect()
     }
 
     #[wasm_bindgen(getter, js_name = entryId)]
@@ -298,7 +311,7 @@ impl NookEnrollmentIssueInput {
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookDecryptedEnrollmentPayload {
-    provider: NookEnrollmentProvider,
+    providers: EnrollmentProviders,
     identity_id: String,
     identity_label: String,
     entry_id: String,
@@ -309,7 +322,7 @@ pub struct NookDecryptedEnrollmentPayload {
 impl NookDecryptedEnrollmentPayload {
     pub(crate) fn from_core(payload: nook_core::DecryptedEnrollmentPayload) -> Self {
         Self {
-            provider: NookEnrollmentProvider::from_core(payload.provider),
+            providers: payload.providers,
             identity_id: payload.identity.identity_id.to_string(),
             identity_label: payload.identity.label,
             entry_id: payload.entry_id,
@@ -317,9 +330,14 @@ impl NookDecryptedEnrollmentPayload {
         }
     }
 
+    /// Every provider the invite carries, in the inviter's order.
     #[wasm_bindgen(getter)]
-    pub fn provider(&self) -> NookEnrollmentProvider {
-        self.provider.clone()
+    pub fn providers(&self) -> Vec<NookEnrollmentProvider> {
+        self.providers
+            .iter()
+            .cloned()
+            .map(NookEnrollmentProvider::from_core)
+            .collect()
     }
 
     #[wasm_bindgen(getter, js_name = identityId)]
@@ -330,12 +348,6 @@ impl NookDecryptedEnrollmentPayload {
     #[wasm_bindgen(getter, js_name = identityLabel)]
     pub fn identity_label(&self) -> String {
         self.identity_label.clone()
-    }
-
-    #[wasm_bindgen(getter, js_name = onboardingType)]
-    #[must_use]
-    pub fn onboarding_type(&self) -> nook_core::OnboardingType {
-        self.provider.onboarding_type()
     }
 
     #[wasm_bindgen(getter, js_name = entryId)]
@@ -518,30 +530,43 @@ mod tests {
         };
         let provider = NookEnrollmentProvider::github("repo".into(), "pat".into())
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert!(
+            NookEnrollmentIssueInput::for_identity(
+                Vec::new(),
+                nook_core::IdentityId::generate()?.to_string(),
+                "Personal".into(),
+                "entry-0".into(),
+                "2026-01-01".into(),
+            )
+            .is_err()
+        );
         let malformed = NookEnrollmentIssueInput::for_identity(
-            provider.clone(),
+            vec![provider.clone()],
             "not-an-identity".into(),
             "Personal".into(),
             "entry-1".into(),
             "2026-01-01".into(),
-        );
+        )
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert_eq!(malformed.entry_id(), "entry-1");
         assert_eq!(malformed.issued_at(), "2026-01-01");
         assert!(malformed.to_core(invite()?).is_err());
         let identity_id = nook_core::IdentityId::generate()?;
         let named = NookEnrollmentIssueInput::for_identity(
-            provider,
+            vec![provider, NookEnrollmentProvider::local()],
             identity_id.to_string(),
             "Personal".into(),
             "entry-2".into(),
             "2026-01-02".into(),
-        );
+        )
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(named.providers().len(), 2);
         assert_eq!(named.to_core(invite()?)?.identity.identity_id, identity_id);
         assert_eq!(named.to_core(invite()?)?.identity.label, "Personal");
 
         let payload =
             NookDecryptedEnrollmentPayload::from_core(nook_core::DecryptedEnrollmentPayload {
-                provider: NookEnrollmentProvider::local().to_core(),
+                providers: EnrollmentProviders::single(NookEnrollmentProvider::local().0),
                 identity: nook_core::EnrollmentIdentityTarget {
                     identity_id: identity_id.clone(),
                     label: "Family".into(),
@@ -554,8 +579,12 @@ mod tests {
         assert_eq!(payload.identity_id(), identity_id.to_string());
         assert_eq!(payload.entry_id(), "entry-3");
         assert_eq!(payload.issued_at(), "2026-01-03");
+        let [provider] = payload
+            .providers()
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("the payload carries its one provider"))?;
         assert!(matches!(
-            payload.onboarding_type(),
+            provider.onboarding_type(),
             OnboardingType::PersonalCredentialTransfer
         ));
 

@@ -15,7 +15,10 @@ mod s3;
 mod s3_service;
 
 pub use github::*;
-pub use s3::{S3Connection, S3ConnectionDraft, S3DraftField, S3DraftFieldError, S3DraftValidation};
+pub use s3::{
+    S3AccessKey, S3Connection, S3ConnectionDraft, S3DraftField, S3DraftFieldError,
+    S3DraftValidation, S3KeyDraft, S3Location,
+};
 pub use s3_service::{S3EndpointService, S3KnownService, S3ServiceGuide};
 
 /// Validated Google Drive folder id used by shared provider connections.

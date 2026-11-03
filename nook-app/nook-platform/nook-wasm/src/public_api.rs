@@ -619,6 +619,7 @@ mod browser_tests {
         let github_enrollment = super::enrollment_provider_for_architecture(
             &ProviderFixture::wire(&provider)?,
             &architecture,
+            &ProviderFixture::wire(&nook_core::EnrollmentCredentialChoice::Inviter)?,
         )?;
         assert_eq!(
             github_enrollment.provider_type()?.to_rust()?,

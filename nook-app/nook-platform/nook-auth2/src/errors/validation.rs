@@ -194,6 +194,14 @@ pub enum ValidationError {
     #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_ACCESS_KEY_ID_REQUIRED)]
     S3AccessKeyIdRequired,
 
+    /// A key the provider saves already, as its own or as a spare.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_ACCESS_KEY_ID_DUPLICATE)]
+    S3AccessKeyIdDuplicate,
+
+    /// An invite names a spare key the provider no longer saves.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_ACCESS_KEY_NOT_SAVED)]
+    S3AccessKeyNotSaved,
+
     /// Whitespace or a control character.
     #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_ACCESS_KEY_ID_INVALID)]
     S3AccessKeyIdInvalid,
@@ -213,6 +221,10 @@ pub enum ValidationError {
     /// A personal invite would carry a credential still sealed at rest.
     #[error("{}", i18n_keys::ERRORS_VALIDATION_PROVIDER_CREDENTIAL_SEALED)]
     ProviderCredentialSealed,
+
+    /// An invite's key or token is of a kind its provider does not use.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_ENROLLMENT_CREDENTIAL_MISMATCH)]
+    EnrollmentCredentialMismatch,
 
     /// A stored local-folder row names no folder handle: damaged data.
     #[error("{}", ERRORS_VALIDATION_LOCAL_FOLDER_HANDLE_INVALID)]

@@ -44,8 +44,8 @@ pub use draft::{
     ProviderDraftMismatch, S3Draft,
 };
 pub use enrollment::{
-    EnrollmentAudience, ProviderEnrollmentRequest, SharedEnrollmentAudience,
-    SharedGrantProviderSelection,
+    EnrollmentAudience, EnrollmentCredentialChoice, ProviderEnrollmentRequest,
+    SharedEnrollmentAudience, SharedGrantProviderSelection,
 };
 pub use identity_mounts::{
     DeviceJoinReach, IdentityMountCapability, ProviderReplicationTarget, ProviderRowLookup,
@@ -56,7 +56,8 @@ pub use persistence::*;
 pub use provider::{
     GithubProvider, GoogleDriveAuthorization, GoogleDriveAuthorizationCheck,
     GoogleDriveAuthorizationFreshness, GoogleDriveProvider, ICloudProvider, LocalFolderHandleId,
-    LocalFolderName, LocalFolderProvider, OAuthFileProvider, StoredProvider,
+    LocalFolderName, LocalFolderProvider, OAuthFileProvider, S3SpareKeyAddition, S3SpareKeyRemoval,
+    S3SpareKeyRequest, StoredProvider,
 };
 pub use save::{
     DuplicateProviderHandling, ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup,
