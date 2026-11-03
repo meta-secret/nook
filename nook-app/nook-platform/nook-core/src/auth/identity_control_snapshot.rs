@@ -5,9 +5,12 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use std::iter;
+
 use nook_auth2::{AppId, IdentityId};
 use nook_event_log::{
-    IdentityControlState, IdentityMountTarget, IdentityProviderMount, IdentityVaultDekLookup,
+    IdentityControlMember, IdentityControlState, IdentityMountTarget, IdentityProviderMount,
+    IdentityVaultDekLookup, MemberDevice,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -37,6 +40,18 @@ pub struct IdentityMemberView {
     /// It runs on this installation's device: this app, or one sharing its
     /// device, as the browser extension in the web app's browser.
     pub on_current_device: bool,
+}
+
+/// One device the identity's apps run on, with every app on it. Each app
+/// holds its own key; apps in one browser, as the web app and the extension
+/// it added, are one device.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct IdentityDeviceView {
+    /// The app that brought the device first, then the apps added beside it.
+    pub apps: Vec<IdentityMemberView>,
+    /// This installation runs on it.
+    pub current: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -89,6 +104,8 @@ pub struct IdentityControlSnapshot {
     pub identity_label: String,
     pub standing: IdentityControlStanding,
     pub members: Vec<IdentityMemberView>,
+    /// The members grouped by the device they run on.
+    pub devices: Vec<IdentityDeviceView>,
     /// Devices the members run on: apps sharing one device count once.
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
@@ -153,6 +170,7 @@ impl IdentityControlSnapshot {
             identity_label: identity_label.to_owned(),
             standing: IdentityControlStanding::NotReplicated,
             members: Vec::new(),
+            devices: Vec::new(),
             device_count: 0,
             join_requests: Vec::new(),
             vaults: Vec::new(),
@@ -174,22 +192,36 @@ impl IdentityControlSnapshot {
             ReplicatedIdentityStanding::PendingJoin => IdentityControlStanding::PendingJoin,
             ReplicatedIdentityStanding::NotListed => IdentityControlStanding::NotListed,
         };
+        let view = |member: &IdentityControlMember| IdentityMemberView {
+            app_id: member.keys.app_id.as_str().to_owned(),
+            label: member.keys.label.as_str().to_owned(),
+            is_current_installation: &member.keys.app_id == *current_app_id,
+            on_current_device: &member.keys.app_id == *current_app_id
+                || state.share_a_device(&member.keys.app_id, current_app_id),
+        };
+        let devices = state
+            .device_members()
+            .map(|device| {
+                let beside = state.members.iter().filter(|member| {
+                    matches!(&member.device, MemberDevice::SameAs { app_id } if app_id == &device.keys.app_id)
+                });
+                let apps = iter::once(device)
+                    .chain(beside)
+                    .map(view)
+                    .collect::<Vec<_>>();
+                IdentityDeviceView {
+                    current: apps.iter().any(|app| app.on_current_device),
+                    apps,
+                }
+            })
+            .collect::<Vec<_>>();
         Self {
             identity_id: state.identity_id.as_str().to_owned(),
             identity_label: (*identity_label).to_owned(),
             standing,
-            members: state
-                .members
-                .iter()
-                .map(|member| IdentityMemberView {
-                    app_id: member.keys.app_id.as_str().to_owned(),
-                    label: member.keys.label.as_str().to_owned(),
-                    is_current_installation: &member.keys.app_id == *current_app_id,
-                    on_current_device: &member.keys.app_id == *current_app_id
-                        || state.share_a_device(&member.keys.app_id, current_app_id),
-                })
-                .collect(),
-            device_count: state.device_members().count(),
+            members: state.members.iter().map(view).collect(),
+            device_count: devices.len(),
+            devices,
             // Only a member answers join requests.
             join_requests: match standing {
                 IdentityControlStanding::Member => state

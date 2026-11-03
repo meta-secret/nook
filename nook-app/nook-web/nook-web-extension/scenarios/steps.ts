@@ -10,6 +10,7 @@ import {
 import {
   openAddDevice,
   openIdentitiesPage,
+  openIdentityPanel,
   openVaultAfterIdentityJoin,
   startFirstRun,
 } from '../../nook-web-app/e2e/helpers'
@@ -361,4 +362,19 @@ export async function expectBothDevicesCounted(
   await expect(card.getByTestId('identity-protection-toggle')).toHaveCount(0, {
     timeout: 90_000,
   })
+}
+
+/** The keyring panel lists one row per device: this device's web vault and
+ * extension as two keys in one row, the joined device in its own. */
+export async function expectDevicesGrouped(page: Page): Promise<void> {
+  await openIdentityPanel(page)
+  const rows = page.getByTestId('identity-panel-device')
+  await expect(rows).toHaveCount(2)
+  const here = rows.filter({ hasText: 'This device' })
+  await expect(here.getByTestId('identity-panel-device-key-count')).toHaveText(
+    '2 keys',
+  )
+  await expect(
+    here.getByTestId('identity-panel-device-apps').locator('li'),
+  ).toHaveCount(2)
 }

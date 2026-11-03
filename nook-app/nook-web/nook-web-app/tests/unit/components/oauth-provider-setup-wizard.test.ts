@@ -158,6 +158,7 @@ function useIdentity(vault: VaultState): void {
         onCurrentDevice: true,
       },
     ],
+    devices: [],
     deviceCount: 1,
     joinRequests: [],
     vaults: [],

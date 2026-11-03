@@ -1,11 +1,17 @@
-import { fireEvent, render } from '@testing-library/svelte'
+import { fireEvent, render, within } from '@testing-library/svelte'
 import type { ComponentProps } from 'svelte'
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest'
 import initNookWasm, { assess_identity_health } from '$app-wasm'
 import { type StorageProvider } from '$lib/auth/providers'
 import { ProviderRowFixture } from '../provider-fixtures'
 import { ok } from 'neverthrow'
-import { IdentityActionOutcome } from '$lib/vault/identity-control.svelte'
+import {
+  IdentityActionOutcome,
+  IdentityControlViewKind,
+  type IdentityControlView,
+} from '$lib/vault/identity-control.svelte'
+import type { IdentityControlSnapshot } from '$app-wasm'
+import type { VaultState } from '$lib/vault.svelte'
 import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import IdentityPanel from '../../../../nook-web-shared/src/vault-app/lib/components/identity-control/IdentityPanel.svelte'
@@ -23,10 +29,14 @@ function cloudProvider(): StorageProvider {
   }
 }
 
-function renderPanel(providers: StorageProvider[]) {
+function renderPanel(
+  providers: StorageProvider[],
+  prepare: (vault: VaultState) => void = () => {},
+) {
   const vault = VaultStateTestFixture.create()
   vault.providers = providers
   vault.providersLoaded = true
+  prepare(vault)
   vi.spyOn(vault.identityControl, 'followOpenVault').mockResolvedValue(
     ok(IdentityActionOutcome.Completed),
   )
@@ -103,5 +113,60 @@ describe('identity panel', () => {
       [WorkspaceSection.Sync],
       [WorkspaceSection.Keys],
     ])
+  })
+})
+
+describe('identity panel devices', () => {
+  function app(appId: string, label: string, current: boolean) {
+    return {
+      appId,
+      label,
+      isCurrentInstallation: current && label === 'Chrome on Mac',
+      onCurrentDevice: current,
+    }
+  }
+
+  test('groups the apps on one device into one row with their keys', () => {
+    const { view } = renderPanel([cloudProvider()], (vault) => {
+      const here = [
+        app('app_web', 'Chrome on Mac', true),
+        app('app_ext', 'Nook Extension', true),
+      ]
+      const other = [app('app_phone', 'Phone', false)]
+      const snapshot: IdentityControlSnapshot = {
+        identityId: 'idn_test',
+        identityLabel: 'Personal',
+        standing: 'member',
+        members: [...here, ...other],
+        devices: [
+          { apps: here, current: true },
+          { apps: other, current: false },
+        ],
+        deviceCount: 2,
+        joinRequests: [],
+        vaults: [],
+        mounts: [],
+      }
+      const ready: IdentityControlView = {
+        kind: IdentityControlViewKind.Ready,
+        snapshot,
+      }
+      vault.identityControl.view = ready
+    })
+
+    const rows = view.getAllByTestId('identity-panel-device')
+    expect(rows).toHaveLength(2)
+    const [shared, phone] = rows
+    if (!shared || !phone) throw new Error('two device rows')
+    expect(shared.textContent).toContain('Chrome on Mac')
+    expect(
+      within(shared).getByTestId('identity-panel-device-key-count').textContent,
+    ).toContain('2')
+    const apps = within(shared).getByTestId('identity-panel-device-apps')
+    expect(apps.querySelectorAll('li')).toHaveLength(2)
+    expect(apps.textContent).toContain('Nook Extension')
+    expect(
+      within(phone).queryAllByTestId('identity-panel-device-apps'),
+    ).toHaveLength(0)
   })
 })

@@ -65,6 +65,7 @@ class MembershipManager {
           identityLabel: 'Family',
           standing: this.standing,
           members: [],
+          devices: [],
           deviceCount: 0,
           joinRequests: [],
           vaults: [],

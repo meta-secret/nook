@@ -264,8 +264,8 @@ pub use auth::identity_control::{
 };
 pub use auth::identity_control_snapshot::{
     IdentityControlSnapshot, IdentityControlSnapshotRequest, IdentityControlStanding,
-    IdentityJoinRequestView, IdentityMemberView, IdentityMountProvider, IdentityMountView,
-    IdentityVaultView,
+    IdentityDeviceView, IdentityJoinRequestView, IdentityMemberView, IdentityMountProvider,
+    IdentityMountView, IdentityVaultView,
 };
 pub use auth::identity_join::{
     IdentityJoinAnswer, IdentityJoinCompletion, IdentityJoinCompletionPlan, IdentityJoinKey,

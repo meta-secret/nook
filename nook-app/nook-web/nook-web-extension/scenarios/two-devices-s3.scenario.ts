@@ -9,6 +9,7 @@ import {
 import { firstPage } from './dev-browser'
 import {
   expectBothDevicesCounted,
+  expectDevicesGrouped,
   expectUnlockedKeyringCountsBothDevices,
   issueInvite,
   joinWithInvite,
@@ -76,6 +77,13 @@ test('two devices on one S3 keyring, the second joined from an invite', async ()
     await devices.step('second device: keyring counts both devices', () =>
       expectBothDevicesCounted(joiner, 'S3 keyring'),
     )
+    await devices.step('first device: apps grouped by device', async () => {
+      await expectDevicesGrouped(vault)
+      if (process.env.LOOK_OUT)
+        await vault
+          .getByTestId('identity-panel-devices')
+          .screenshot({ path: `${process.env.LOOK_OUT}/devices-grouped.png` })
+    })
     for (const [name, page] of [
       ['first device', vault],
       ['second device', joiner],

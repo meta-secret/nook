@@ -562,7 +562,10 @@ mod browser_tests {
         assert!(
             founder
                 .manager
-                .bind_local_identity_to_invitation("not-an-identity".to_owned())
+                .bind_local_identity_to_invitation(
+                    "not-an-identity".to_owned(),
+                    "Family".to_owned()
+                )
                 .await
                 .is_err()
         );
@@ -619,7 +622,10 @@ mod browser_tests {
         assert!(
             founder
                 .manager
-                .bind_local_identity_to_invitation(IdentityId::generate()?.as_str().to_owned())
+                .bind_local_identity_to_invitation(
+                    IdentityId::generate()?.as_str().to_owned(),
+                    "Family".to_owned()
+                )
                 .await
                 .is_err()
         );
@@ -672,13 +678,13 @@ mod browser_tests {
         let invited = IdentityId::generate()?;
         Founder::js(
             manager
-                .bind_local_identity_to_invitation(invited.as_str().to_owned())
+                .bind_local_identity_to_invitation(invited.as_str().to_owned(), "Family".to_owned())
                 .await,
         )?;
         // Binding again to the same identity is a no-op.
         Founder::js(
             manager
-                .bind_local_identity_to_invitation(invited.as_str().to_owned())
+                .bind_local_identity_to_invitation(invited.as_str().to_owned(), "Family".to_owned())
                 .await,
         )?;
         let app_key = manager.unlocked_app_key()?;
@@ -693,6 +699,8 @@ mod browser_tests {
         .encode()?;
         let snapshot = Founder::js(manager.identity_control_snapshot(&empty).await)?.decode()?;
         assert_eq!(snapshot.identity_id, invited.as_str());
+        // The local identity takes the name the invitation carried.
+        assert_eq!(snapshot.identity_label, "Family");
         assert!(snapshot.members.is_empty());
         Founder::js(manager.delete_local_browser_data().await)?;
         Ok(())

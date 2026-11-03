@@ -338,6 +338,23 @@ fn the_extension_runs_in_the_web_apps_browser_so_it_adds_no_device() -> anyhow::
     let snapshot = family.snapshot_for(&family.founder)?;
     assert_eq!(snapshot.members.len(), 2);
     assert_eq!(snapshot.device_count, 1);
+    // The device lists both apps, the web app that added the extension first.
+    let [device] = snapshot.devices.as_slice() else {
+        anyhow::bail!("both apps share one device");
+    };
+    assert!(device.current);
+    let apps = device
+        .apps
+        .iter()
+        .map(|app| app.app_id.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        apps,
+        vec![
+            family.founder.app.app_id().as_str(),
+            key.app.app_id().as_str()
+        ]
+    );
     // Each app sees the other on its own device.
     for view in [snapshot.clone(), family.snapshot_for(&key)?] {
         assert!(view.members.iter().all(|member| member.on_current_device));
