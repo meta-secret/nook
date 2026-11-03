@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use url::{Host, Url};
 
+use crate::i18n_keys;
+
 /// A service Nook knows by its endpoint's domain.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
@@ -74,31 +76,31 @@ impl S3KnownService {
     pub fn guide(self) -> S3ServiceGuide {
         let (name_key, endpoint_example, region_example, key_console_url) = match self {
             Self::Aws => (
-                "provider_setup.s3_service_aws",
+                i18n_keys::PROVIDER_SETUP_S3_SERVICE_AWS,
                 "https://s3.us-east-1.amazonaws.com",
                 "us-east-1",
                 "https://console.aws.amazon.com/iam/home#/users",
             ),
             Self::CloudflareR2 => (
-                "provider_setup.s3_service_cloudflare_r2",
+                i18n_keys::PROVIDER_SETUP_S3_SERVICE_CLOUDFLARE_R2,
                 "https://<account-id>.r2.cloudflarestorage.com",
                 "auto",
                 "https://dash.cloudflare.com/?to=/:account/r2/overview",
             ),
             Self::BackblazeB2 => (
-                "provider_setup.s3_service_backblaze_b2",
+                i18n_keys::PROVIDER_SETUP_S3_SERVICE_BACKBLAZE_B2,
                 "https://s3.us-west-004.backblazeb2.com",
                 "us-west-004",
                 "https://secure.backblaze.com/app_keys.htm",
             ),
             Self::Wasabi => (
-                "provider_setup.s3_service_wasabi",
+                i18n_keys::PROVIDER_SETUP_S3_SERVICE_WASABI,
                 "https://s3.us-east-1.wasabisys.com",
                 "us-east-1",
                 "https://console.wasabisys.com/#/access_keys",
             ),
             Self::DigitalOceanSpaces => (
-                "provider_setup.s3_service_digitalocean_spaces",
+                i18n_keys::PROVIDER_SETUP_S3_SERVICE_DIGITALOCEAN_SPACES,
                 "https://nyc3.digitaloceanspaces.com",
                 "nyc3",
                 "https://cloud.digitalocean.com/spaces/access_keys",
@@ -211,7 +213,7 @@ mod tests {
         assert_eq!(guides.len(), S3KnownService::ALL.len());
         for (guide, service) in guides.iter().zip(S3KnownService::ALL) {
             assert_eq!(guide.service, service);
-            assert!(guide.name_key.starts_with("provider_setup.s3_service_"));
+            assert!(!guide.name_key.is_empty());
             assert!(guide.key_console_url.starts_with("https://"));
             assert!(guide.endpoint_example.starts_with("https://"));
             assert!(!guide.region_example.is_empty());

@@ -110,6 +110,15 @@ so a native submission could never carry them into a URL.
     }
   })
 
+  /** The key link's words, naming the service. */
+  function createKeyText(guide: S3ServiceGuide): string {
+    const request: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.ProviderSetupS3CreateKey,
+      replacements: { service: vault.t(guide.nameKey) },
+    }
+    return vault.t(request)
+  }
+
   function pickService(value: string): void {
     const guide = guides.find((candidate) => candidate.service === value)
     service = guide ? { kind: 'known', guide } : otherService
@@ -333,10 +342,7 @@ so a native submission could never carry them into a URL.
             class="inline-flex items-center gap-1.5 text-sm text-foreground underline underline-offset-4 hover:text-foreground/80"
             data-testid="s3-create-key-link"
           >
-            {vault.t({
-              key: I18N_KEYS.ProviderSetupS3CreateKey,
-              replacements: { service: vault.t(guide.nameKey) },
-            })}
+            {createKeyText(guide)}
             <ExternalLink class="size-3.5" aria-hidden="true" />
           </a>
           <p class="text-xs text-muted-foreground">
