@@ -734,9 +734,6 @@ test.describe('vault architecture modes', () => {
       page.getByTestId(`onboard-provider-${PERSONAL_ONLY_PROVIDER.id}`),
     ).toHaveCount(0)
 
-    await expect(page.getByTestId('onboarding-type-label')).toContainText(
-      'Shared provider grant',
-    )
     // The invite names one of the vault folder's accounts. Until one is
     // picked, no link is issued.
     const accounts = page

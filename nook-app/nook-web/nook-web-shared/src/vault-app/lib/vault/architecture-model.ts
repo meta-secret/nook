@@ -1,7 +1,6 @@
 import {
   DeviceMode,
   NookVaultArchitecture,
-  OnboardingType,
   ReplicationType,
   VaultType,
   default_vault_architecture,
@@ -27,7 +26,6 @@ export type { NookVaultArchitecture as VaultArchitecture } from "$app-wasm";
 
 export {
   DeviceMode,
-  OnboardingType,
   ReplicationType,
   VaultType,
   vault_architecture_can_create_secret,

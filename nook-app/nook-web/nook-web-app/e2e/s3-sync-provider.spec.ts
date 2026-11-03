@@ -71,14 +71,14 @@ async function keepSecretOnS3(
 }
 
 /** Issue an invite whose S3 provider gives the new device `keyChoice`, the
- * value of an option of the invite's key select. */
+ * value of one of the invite's key chips. */
 async function issueS3Invite(page: Page, keyChoice: string): Promise<string> {
   await openOnboardDevicePanel(page)
   const clear = page.getByTestId('onboard-clear-code-btn')
   if (await clear.isVisible()) await clear.click()
-  const keySelect = page.locator('[data-testid^="onboard-key-"]')
-  await expect(keySelect).toHaveCount(1, { timeout: UI_TIMEOUT_MS })
-  await keySelect.selectOption(keyChoice)
+  const chip = page.getByTestId(`onboard-key-option-${keyChoice}`)
+  await chip.click({ timeout: UI_TIMEOUT_MS })
+  await expect(chip).toHaveAttribute('aria-checked', 'true')
   await submitOnboardEnrollmentCode(page, E2E_IDENTITY_PASSPHRASE)
   const link = (await page.getByTestId('onboard-link').textContent()) || ''
   expect(link).toContain('#enroll=')

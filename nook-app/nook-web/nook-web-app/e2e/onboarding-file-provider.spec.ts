@@ -268,11 +268,6 @@ test.describe('Google Drive authorized accounts', () => {
     const secretValue = 'shared-without-owner-google-credentials'
     await addSecret(owner, secretKey, secretValue)
     await openOnboardDevicePanel(owner)
-    await expect(owner.getByTestId('onboarding-type-label')).toContainText(
-      enLocale.architecture_modes[
-        'onboarding_type_shared-provider-grant_title'
-      ],
-    )
     const picker = owner
       .getByTestId('onboard-device-panel')
       .getByTestId('authorized-accounts')
@@ -449,11 +444,6 @@ test.describe('iCloud provider setup', () => {
     await waitForLoadedSyncProviders(page, 1)
 
     await openOnboardDevicePanel(page)
-    await expect(page.getByTestId('onboarding-type-label')).toContainText(
-      enLocale.architecture_modes[
-        'onboarding_type_shared-provider-grant_title'
-      ],
-    )
     const accounts = page
       .getByTestId('onboard-device-panel')
       .getByTestId('authorized-accounts')

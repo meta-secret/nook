@@ -1,8 +1,8 @@
 <!--
 The invite stage of adding a device. Before the invite exists: the sync
 providers the invite carries, every one ticked, each with the key the new
-device gets (or the account a shared provider names), the one-time
-passphrase, and one button. After: the QR code beside three numbered steps,
+device gets as a row of chips (or the account a shared provider names), the
+one-time passphrase, and one button; no prose. After: the QR code beside three numbered steps,
 the passphrase in large type, and Done underneath: the new device joins by
 itself, so nothing here waits for it.
 -->
@@ -21,7 +21,16 @@ itself, so nothing here waits for it.
 
   import { untrack, type Snippet } from 'svelte'
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { Check, Cloud, Copy, Plus, QrCode, RefreshCw } from '@lucide/svelte'
+  import {
+    Ban,
+    Check,
+    Cloud,
+    Copy,
+    KeyRound,
+    Plus,
+    QrCode,
+    RefreshCw,
+  } from '@lucide/svelte'
   import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
   import SentinelOnboardingGuidance from '$lib/components/onboard-device/SentinelOnboardingGuidance.svelte'
   import { Button } from '$lib/components/ui/button'
@@ -43,11 +52,7 @@ itself, so nothing here waits for it.
   } from '$lib/vault/shared-joiner-selection'
   import { peek_enrollment_issued_at } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
-  import {
-    OnboardingType,
-    VaultType,
-    provider_onboarding_type,
-  } from '$lib/vault/architecture-model'
+  import { VaultType } from '$lib/vault/architecture-model'
 
   let {
     vault,
@@ -102,23 +107,6 @@ itself, so nothing here waits for it.
   const invitedMounts = $derived(
     compatibleMounts.filter((provider) => !excludedIds.includes(provider.id)),
   )
-  const usesSharedGrant = $derived(
-    invitedMounts.some(
-      (provider) =>
-        provider_onboarding_type(provider, vault.vaultArchitecture) ===
-        OnboardingType.SharedProviderGrant,
-    ),
-  )
-  const onboardingTypeTitleKey = $derived(
-    usesSharedGrant
-      ? I18N_KEYS.ArchitectureModesOnboardingTypeSharedProviderGrantTitle
-      : I18N_KEYS.ArchitectureModesOnboardingTypePersonalCredentialTransferTitle,
-  )
-  const onboardingTypeDescriptionKey = $derived(
-    usesSharedGrant
-      ? I18N_KEYS.ArchitectureModesOnboardingTypeSharedProviderGrantDescription
-      : I18N_KEYS.ArchitectureModesOnboardingTypePersonalCredentialTransferDescription,
-  )
   const isSentinelVault = $derived(
     vault.vaultArchitecture.vault_type === VaultType.Sentinel,
   )
@@ -163,21 +151,22 @@ itself, so nothing here waits for it.
 
   type KeyPick = {
     readonly providerId: string
-    readonly options: readonly InviteKeyOption[]
-    readonly value: string
+    readonly option: InviteKeyOption
   }
 
-  function pickKey({ providerId, options, value }: KeyPick): void {
-    const option = options.find((candidate) => candidate.value === value)
-    if (option) credentials[providerId] = option.choice
+  function pickKey({ providerId, option }: KeyPick): void {
+    credentials[providerId] = option.choice
   }
 
-  function optionLabel(option: InviteKeyOption): string {
-    const request: Parameters<typeof vault.t>[0] = {
-      key: option.labelKey,
-      replacements: { id: option.id },
+  /** What a chip leaving the key out means, on hover and to readers. */
+  function optionHint(option: InviteKeyOption): string {
+    switch (option.choice.kind) {
+      case 'joinerProvides':
+        return vault.t(I18N_KEYS.OnboardDeviceInviteJoinerHint)
+      case 'inviter':
+      case 'savedKey':
+        return ''
     }
-    return vault.t(request)
   }
 
   /** What the invite carries for one ticked provider. */
@@ -271,35 +260,55 @@ itself, so nothing here waits for it.
   }
 </script>
 
-{#snippet keySelect(
+{#snippet keyChips(
   provider: StorageProvider,
   options: readonly InviteKeyOption[],
 )}
   {@const shape = InviteProviderChoices.shapeOf(provider)}
-  <div class="flex flex-wrap items-center gap-2 pl-7">
-    <select
-      class="h-9 min-w-0 flex-1 rounded-none border border-input bg-background px-2 text-xs text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring disabled:opacity-60"
-      aria-label={vault.t(I18N_KEYS.OnboardDeviceInviteKey)}
-      data-testid="onboard-key-{provider.id}"
-      disabled={isBusy || isGenerating}
-      value={InviteProviderChoices.valueOf(credentialOf(provider.id))}
-      onchange={(event) => {
-        const pick: KeyPick = {
-          providerId: provider.id,
-          options,
-          value: event.currentTarget.value,
-        }
-        pickKey(pick)
-      }}
-    >
-      {#each options as option (option.value)}
-        <option value={option.value}>{optionLabel(option)}</option>
-      {/each}
-    </select>
+  {@const chosen = InviteProviderChoices.valueOf(credentialOf(provider.id))}
+  <div
+    class="flex flex-wrap items-center gap-1.5 pl-7"
+    role="radiogroup"
+    aria-label={vault.t(I18N_KEYS.OnboardDeviceInviteKey)}
+    data-testid="onboard-key-{provider.id}"
+  >
+    {#each options as option (option.value)}
+      {@const picked = option.value === chosen}
+      <button
+        type="button"
+        role="radio"
+        aria-checked={picked}
+        title={optionHint(option)}
+        class="inline-flex h-8 max-w-full items-center gap-1.5 border px-2.5 text-xs transition-colors disabled:opacity-50 {picked
+          ? 'border-foreground/70 bg-background text-foreground'
+          : 'border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground'}"
+        data-testid="onboard-key-option-{option.value}"
+        disabled={isBusy || isGenerating}
+        onclick={() => {
+          const pick: KeyPick = { providerId: provider.id, option }
+          pickKey(pick)
+        }}
+      >
+        {#if option.id}
+          <KeyRound class="size-3.5 shrink-0" aria-hidden="true" />
+          <span class="min-w-0 truncate font-mono">{option.id}</span>
+          <span class="nk-tag shrink-0 text-muted-foreground"
+            >{vault.t(option.labelKey)}</span
+          >
+        {:else}
+          {#if optionHint(option)}
+            <Ban class="size-3.5 shrink-0" aria-hidden="true" />
+          {:else}
+            <KeyRound class="size-3.5 shrink-0" aria-hidden="true" />
+          {/if}
+          <span>{vault.t(option.labelKey)}</span>
+        {/if}
+      </button>
+    {/each}
     {#if shape.kind === InviteChoiceShapeKind.S3Key}
       <button
         type="button"
-        class="inline-flex h-9 shrink-0 items-center gap-1.5 border border-dashed border-border px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-50"
+        class="inline-flex h-8 items-center gap-1.5 border border-dashed border-border px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-50"
         data-testid="onboard-add-key-{provider.id}"
         disabled={isBusy || isGenerating}
         onclick={() => onAddS3Key(provider.id)}
@@ -312,7 +321,7 @@ itself, so nothing here waits for it.
 {/snippet}
 
 <section
-  class="grid gap-6 animate-in fade-in duration-200"
+  class="grid grid-cols-[minmax(0,1fr)] gap-6 animate-in fade-in duration-200"
   data-testid="onboard-device-panel"
 >
   {#if !enrollmentCode}
@@ -320,28 +329,28 @@ itself, so nothing here waits for it.
       <h2 class="text-xl font-semibold tracking-tight text-foreground">
         {vault.t(I18N_KEYS.AddDeviceInviteTitle)}
       </h2>
-      <p class="max-w-[56ch] text-sm text-pretty text-muted-foreground">
-        {vault.t(I18N_KEYS.AddDeviceInviteBody)}
-      </p>
     </header>
 
     <form
-      class="grid gap-5"
+      class="grid grid-cols-[minmax(0,1fr)] gap-5"
       onsubmit={(event) => {
         event.preventDefault()
         void submitOnboard()
       }}
     >
-      <div class="grid gap-2">
+      <div class="grid grid-cols-[minmax(0,1fr)] gap-2">
         <p class="nk-label">
           {vault.t(I18N_KEYS.OnboardDeviceInviteProviders)}
         </p>
-        <ul class="grid gap-1.5" data-testid="onboard-provider-list">
+        <ul
+          class="grid grid-cols-[minmax(0,1fr)] gap-1.5"
+          data-testid="onboard-provider-list"
+        >
           {#each compatibleMounts as provider (provider.id)}
             {@const ticked = !excludedIds.includes(provider.id)}
             {@const shape = InviteProviderChoices.shapeOf(provider)}
             <li
-              class="grid gap-2 border px-3 py-2.5 text-sm transition-colors {ticked
+              class="grid grid-cols-[minmax(0,1fr)] gap-2 border px-3 py-2.5 text-sm transition-colors {ticked
                 ? 'border-foreground/50 bg-accent text-foreground'
                 : 'border-border text-muted-foreground'}"
             >
@@ -372,9 +381,9 @@ itself, so nothing here waits for it.
                   {@const options = InviteProviderChoices.s3Options(
                     shape.connection,
                   )}
-                  {@render keySelect(provider, options)}
+                  {@render keyChips(provider, options)}
                 {:else if shape.kind === InviteChoiceShapeKind.GithubToken}
-                  {@render keySelect(
+                  {@render keyChips(
                     provider,
                     InviteProviderChoices.githubOptions(),
                   )}
@@ -403,7 +412,7 @@ itself, so nothing here waits for it.
         </ul>
       </div>
 
-      <div class="grid gap-2">
+      <div class="grid grid-cols-[minmax(0,1fr)] gap-2">
         <label for="onboard-passphrase" class="nk-label">
           {vault.t(I18N_KEYS.AddDevicePassphraseLabel)}
         </label>
@@ -454,28 +463,6 @@ itself, so nothing here waits for it.
             {vault.t(I18N_KEYS.IdentityControlOnboardGenerate)}
           {/if}
         </Button>
-        <details
-          class="text-xs text-muted-foreground"
-          data-testid="onboarding-type-summary"
-        >
-          <summary class="cursor-pointer select-none hover:text-foreground">
-            {vault.t(I18N_KEYS.AddDeviceHowItWorks)}
-          </summary>
-          <div class="mt-2 max-w-[48ch] border-l-2 border-border pl-3">
-            <p
-              class="font-medium text-foreground"
-              data-testid="onboarding-type-label"
-            >
-              {vault.t(onboardingTypeTitleKey)}
-            </p>
-            <p
-              class="mt-1 text-pretty"
-              data-testid="onboarding-type-description"
-            >
-              {vault.t(onboardingTypeDescriptionKey)}
-            </p>
-          </div>
-        </details>
       </div>
     </form>
 

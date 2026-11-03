@@ -1246,14 +1246,15 @@
     "sentinel_provider_missing": "Connect a compatible provider before asking the new browser to join.",
     "sentinel_manage_providers": "Manage providers",
     "sentinel_review_joins": "Review join requests",
-    "invite_providers": "Sync providers in the invite",
+    "invite_providers": "In the invite",
     "invite_key": "Key for the new device",
-    "invite_key_mine": "This device's key · {id}",
-    "invite_key_spare": "Saved key · {id}",
-    "invite_key_joiner": "No key: the new device adds its own",
+    "invite_key_mine": "this device",
+    "invite_key_spare": "saved",
+    "invite_key_joiner": "No key",
     "invite_token_mine": "My token",
-    "invite_token_joiner": "No token: the new device adds its own",
-    "invite_add_key": "Add key"
+    "invite_token_joiner": "No token",
+    "invite_add_key": "Add S3 key",
+    "invite_joiner_hint": "The new device adds its own"
   },
   "auth_storage": {
     "saved_providers": "Saved Storage Providers",
@@ -1356,8 +1357,8 @@
     "icloud_not_signed_in": "Not signed in with iCloud",
     "s3_keys": "Keys",
     "s3_key_in_use": "in use",
-    "s3_add_key": "Add key",
-    "s3_save_key": "Save key",
+    "s3_add_key": "Add S3 key",
+    "s3_save_key": "Save S3 key",
     "s3_remove_key": "Remove key {id}"
   },
   "add_secret": {
@@ -2444,7 +2445,6 @@
     "cloud_examples": "Google Drive · iCloud · GitHub · S3",
     "cloud_action": "Add a sync provider",
     "invite_title": "Create a one-time invite",
-    "invite_body": "It works once, for one device. The passphrase travels separately: you type it on the new device yourself.",
     "passphrase_label": "Passphrase",
     "regenerate": "Generate another passphrase",
     "open_title": "Open the invite on the new device",
@@ -2456,7 +2456,6 @@
     "copied": "Copied",
     "done": "Done",
     "new_invite": "Make a new invite",
-    "how_it_works": "How the new device gets access",
     "single_device": "Only this device can open your keyring. Add another so losing it doesn't lock you out.",
     "not_member_title": "This key can't invite devices yet",
     "not_member_browser": "This browser hasn't joined {identity} yet. Only a member of {identity} can invite a new device."

@@ -129,7 +129,7 @@ Every place that offers "Add a device" opens this.
 {/snippet}
 
 <section
-  class="mx-auto grid w-full max-w-4xl gap-6 py-4 sm:py-8"
+  class="mx-auto grid w-full max-w-4xl grid-cols-[minmax(0,1fr)] gap-6 py-4 sm:py-8"
   data-testid="add-device-page"
 >
   <header class="nk-frame-tab nk-hero relative">
