@@ -19,6 +19,7 @@ import { ProviderSaveOutcome } from '$lib/vault/providers.svelte'
 import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
+import { ProviderRowFixture } from '../provider-fixtures'
 
 beforeAll(async () => {
   await initNookWasm()
@@ -290,5 +291,51 @@ describe('looking at an identity with no vault open', () => {
 
     expect(read).toHaveBeenCalledTimes(2)
     expect(created).not.toHaveBeenCalled()
+  })
+})
+
+describe('adding a sync provider from the keyring overview', () => {
+  function overviewVault(): VaultState {
+    const vault = VaultStateTestFixture.create()
+    vault.providers = []
+    vault.identityPage = WorkspaceSection.Overview
+    return vault
+  }
+
+  test('returns to the overview once the provider is added', () => {
+    const vault = overviewVault()
+    const pages = new IdentityPages(vault)
+
+    pages.addSyncProvider()
+    expect(vault.identityPage).toBe(WorkspaceSection.Sync)
+    expect(vault.addProviderOpen).toBe(true)
+
+    // Still choosing: the Sync page stays.
+    pages.followProviderAdd()
+    expect(vault.identityPage).toBe(WorkspaceSection.Sync)
+
+    vault.providers = [
+      ProviderRowFixture.github(ProviderRowFixture.unscoped('github-1')),
+    ]
+    vault.addProviderOpen = false
+    pages.followProviderAdd()
+    expect(vault.identityPage).toBe(WorkspaceSection.Overview)
+  })
+
+  test('a flow closed without a provider stays on Sync', () => {
+    const vault = overviewVault()
+    const pages = new IdentityPages(vault)
+
+    pages.addSyncProvider()
+    vault.cancelAddProvider()
+    pages.followProviderAdd()
+    expect(vault.identityPage).toBe(WorkspaceSection.Sync)
+
+    // A later provider added from Sync itself does not leave it.
+    vault.providers = [
+      ProviderRowFixture.github(ProviderRowFixture.unscoped('github-1')),
+    ]
+    pages.followProviderAdd()
+    expect(vault.identityPage).toBe(WorkspaceSection.Sync)
   })
 })

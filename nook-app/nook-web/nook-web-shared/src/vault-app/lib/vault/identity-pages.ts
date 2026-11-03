@@ -2,6 +2,11 @@ import { I18N_KEYS } from "../../../generated/i18n-keys";
 import { LoginSetupKind } from "$lib/vault/state/provider.svelte";
 import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 import type { VaultState } from "$lib/vault.svelte";
+import {
+  ProviderAddReturns,
+  ProviderAddStep,
+  type ProviderAddProgress,
+} from "$lib/vault/provider-add-return";
 
 /** A keyring a provider's listing added beside the one in use. */
 export type AddedKeyring = {
@@ -51,15 +56,41 @@ export class IdentityPages {
     else this.show(section);
   }
 
+  /** Add a provider from the overview or a checklist: once one is added,
+   * the overview shows again. */
   addSyncProvider(): void {
-    this.vault.beginAddProvider();
+    const vault = this.vault;
+    vault.providerAddReturn = ProviderAddReturns.back(vault.providers.length);
+    vault.beginAddProvider();
     this.show(WorkspaceSection.Sync);
+  }
+
+  /** The add flow closed: back to the overview when it added a provider. */
+  followProviderAdd(): void {
+    const vault = this.vault;
+    const progress: ProviderAddProgress = {
+      pending: vault.providerAddReturn,
+      addOpen: vault.addProviderOpen,
+      providers: vault.providers.length,
+    };
+    switch (ProviderAddReturns.step(progress)) {
+      case ProviderAddStep.Wait:
+        return;
+      case ProviderAddStep.ReturnBack:
+        vault.providerAddReturn = ProviderAddReturns.STAY;
+        this.show(WorkspaceSection.Overview);
+        return;
+      case ProviderAddStep.Drop:
+        vault.providerAddReturn = ProviderAddReturns.STAY;
+        return;
+    }
   }
 
   /** Back returns to the overview the page was opened from; leaving Sync
    * while adding a provider drops that provider. */
   back(): void {
     const vault = this.vault;
+    vault.providerAddReturn = ProviderAddReturns.STAY;
     if (
       vault.addProviderOpen ||
       vault.loginSetup.kind === LoginSetupKind.Active

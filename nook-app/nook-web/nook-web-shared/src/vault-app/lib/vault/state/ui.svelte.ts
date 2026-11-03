@@ -7,6 +7,10 @@
 
 import { UnlockReturn } from "$lib/app/unlock-return";
 import {
+  ProviderAddReturns,
+  type ProviderAddReturn,
+} from "$lib/vault/provider-add-return";
+import {
   EmptyVaultReplacementKind,
   type EmptyVaultReplacementPlan,
 } from "$lib/vault/provider-vaults";
@@ -153,6 +157,8 @@ export class VaultUiState {
   /** The page of an identity unlocked without an open vault: its overview
    * beside its card, or one of its pages; Identities is the hub alone. */
   identityPage = $state<WorkspaceSection>(WorkspaceSection.Identities);
+  /** Where adding a sync provider returns once it adds one. */
+  providerAddReturn = $state.raw<ProviderAddReturn>(ProviderAddReturns.STAY);
   /** Where a new identity created during setup is kept. */
   firstRunPlace = $state<FirstRunPlace>(FirstRunPlace.ThisBrowser);
   /** The sync provider picked during setup. Saving it projects the saved

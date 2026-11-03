@@ -36,6 +36,12 @@ Back returns to the overview.
   const adding = $derived(
     vault.addProviderOpen || vault.loginSetup.kind === LoginSetupKind.Active,
   )
+  // Adding a provider opened from the overview returns there once it adds one.
+  $effect(() => {
+    void vault.addProviderOpen
+    void vault.providers.length
+    untrack(() => pages.followProviderAdd())
+  })
   const title = $derived.by(() => {
     if (section === WorkspaceSection.Sync && adding)
       return vault.t(I18N_KEYS.SettingsAddSyncProvider)

@@ -49,6 +49,7 @@ const uiKeys = [
   "inviteKeyRequest",
   "s3KeyFormRequest",
   "identityPage",
+  "providerAddReturn",
   "firstRunPlace",
   "firstRunSyncSource",
   "firstRunJoin",
@@ -220,6 +221,7 @@ class VaultStateSlicesImplementation {
   declare inviteKeyRequest: VaultUiState["inviteKeyRequest"];
   declare s3KeyFormRequest: VaultUiState["s3KeyFormRequest"];
   declare identityPage: VaultUiState["identityPage"];
+  declare providerAddReturn: VaultUiState["providerAddReturn"];
   declare firstRunPlace: VaultUiState["firstRunPlace"];
   declare firstRunSyncSource: VaultUiState["firstRunSyncSource"];
   declare firstRunJoin: VaultUiState["firstRunJoin"];

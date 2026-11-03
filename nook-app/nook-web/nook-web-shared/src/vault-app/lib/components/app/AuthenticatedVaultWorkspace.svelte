@@ -6,6 +6,11 @@ passwords, settings) adds its rail. Every page is one framed sheet: a page
 band, the scrolling page and the status line.
 -->
 <script lang="ts">
+  import {
+    ProviderAddReturns,
+    ProviderAddStep,
+    type ProviderAddProgress,
+  } from '$lib/vault/provider-add-return'
   import { WorkspaceLocation, WorkspaceRoute } from '$lib/app/workspace-route'
   import { VaultWorkspaceActions } from '$lib/vault/ui'
   type SecretAddModeChange = {
@@ -236,6 +241,7 @@ band, the scrolling page and the status line.
 
   /** Back leaves management for the page it was entered from. */
   function goBack(): void {
+    vault.providerAddReturn = ProviderAddReturns.STAY
     if (addingProvider) {
       vault.cancelProviderSetup()
       vault.cancelAddProvider()
@@ -334,8 +340,32 @@ band, the scrolling page and the status line.
    * provider setup, so the picker opens after it. */
   function addSyncProvider(): void {
     openSection(WorkspaceSection.Sync)
+    vault.providerAddReturn = ProviderAddReturns.back(vault.providers.length)
     vault.beginAddProvider()
   }
+
+  // Adding a provider opened from another page returns there once it adds
+  // one; a flow closed without one stays on Sync.
+  $effect(() => {
+    const progress: ProviderAddProgress = {
+      pending: vault.providerAddReturn,
+      addOpen: vault.addProviderOpen,
+      providers: vault.providers.length,
+    }
+    untrack(() => {
+      switch (ProviderAddReturns.step(progress)) {
+        case ProviderAddStep.Wait:
+          return
+        case ProviderAddStep.ReturnBack:
+          vault.providerAddReturn = ProviderAddReturns.STAY
+          leaveManagement()
+          return
+        case ProviderAddStep.Drop:
+          vault.providerAddReturn = ProviderAddReturns.STAY
+          return
+      }
+    })
+  })
 
   function finishFirstRun(next: WorkspaceSection): void {
     vault.firstRun = FirstRunStage.Off
