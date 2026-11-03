@@ -8,13 +8,16 @@ so a native submission could never carry them into a URL.
 -->
 <script lang="ts">
   import { onMount, tick, type Component, type Snippet } from 'svelte'
-  import { RefreshCw, TriangleAlert } from '@lucide/svelte'
+  import { ExternalLink, RefreshCw, TriangleAlert } from '@lucide/svelte'
   import {
+    s3_endpoint_service,
+    s3_service_guides,
     validate_s3_connection_draft,
     type S3Connection,
     type S3ConnectionDraft,
     type S3DraftField,
     type S3DraftFieldError,
+    type S3EndpointService,
   } from '$app-wasm'
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
@@ -65,6 +68,29 @@ so a native submission could never carry them into a URL.
   /** The fields Rust found wrong, each once, in form order. */
   let fieldErrors = $state.raw<readonly S3DraftFieldError[]>([])
   const noteId = $derived(`${idPrefix}-s3-secret-note`)
+
+  /** The services Rust knows, for the Service field. */
+  const guides = s3_service_guides()
+  /** Any other S3-compatible server: the Service field's last choice. */
+  const otherService: S3EndpointService = { kind: 'other' }
+  /** The chosen service: picked in the Service field, or recognised from
+   * the endpoint as it is typed. */
+  let service = $state.raw<S3EndpointService>(otherService)
+  const serviceValue = $derived(
+    service.kind === 'known' ? service.guide.service : otherService.kind,
+  )
+
+  function pickService(value: string): void {
+    const guide = guides.find((candidate) => candidate.service === value)
+    service = guide ? { kind: 'known', guide } : otherService
+  }
+
+  /** A recognised endpoint selects its service; any other leaves the pick. */
+  function endpointEdited(): void {
+    edited('endpoint')
+    const recognised = s3_endpoint_service(draft.endpoint)
+    if (recognised.kind === 'known') service = recognised
+  }
 
   function inputId(field: S3DraftField): string {
     return `${idPrefix}-s3-${field}`
@@ -145,6 +171,27 @@ so a native submission could never carry them into a URL.
     <legend class="sr-only">{vault.t(I18N_KEYS.ProviderPickerS3)}</legend>
     <div class="grid gap-4 sm:grid-cols-2">
       <div class="min-w-0 space-y-1.5 sm:col-span-2">
+        <label class="nk-field-label block" for={`${idPrefix}-s3-service`}>
+          {vault.t(I18N_KEYS.ProviderSetupS3ServiceLabel)}
+        </label>
+        <select
+          id={`${idPrefix}-s3-service`}
+          disabled={busy}
+          data-testid="s3-service-select"
+          class="flex h-11 w-full rounded-none border border-input bg-background px-3 text-sm sm:h-10 focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring disabled:opacity-60"
+          value={serviceValue}
+          onchange={(event) => pickService(event.currentTarget.value)}
+        >
+          {#each guides as guide (guide.service)}
+            <option value={guide.service}>{vault.t(guide.nameKey)}</option>
+          {/each}
+          <option value={otherService.kind}>
+            {vault.t(I18N_KEYS.ProviderSetupS3ServiceOther)}
+          </option>
+        </select>
+      </div>
+
+      <div class="min-w-0 space-y-1.5 sm:col-span-2">
         <label class="nk-field-label block" for={inputId('endpoint')}>
           {vault.t(I18N_KEYS.ProviderSetupS3EndpointLabel)}
         </label>
@@ -152,7 +199,9 @@ so a native submission could never carry them into a URL.
           id={inputId('endpoint')}
           type="text"
           inputmode="url"
-          placeholder={vault.t(I18N_KEYS.ProviderSetupS3EndpointPlaceholder)}
+          placeholder={service.kind === 'known'
+            ? service.guide.endpointExample
+            : vault.t(I18N_KEYS.ProviderSetupS3EndpointPlaceholder)}
           autocomplete="off"
           spellcheck="false"
           autocapitalize="none"
@@ -162,7 +211,7 @@ so a native submission could never carry them into a URL.
           data-testid="s3-endpoint-input"
           class={inputClass('endpoint')}
           bind:value={draft.endpoint}
-          oninput={() => edited('endpoint')}
+          oninput={endpointEdited}
         />
         {@render fieldError('endpoint', 's3-endpoint-error')}
       </div>
@@ -174,7 +223,9 @@ so a native submission could never carry them into a URL.
         <input
           id={inputId('region')}
           type="text"
-          placeholder={vault.t(I18N_KEYS.ProviderSetupS3RegionPlaceholder)}
+          placeholder={service.kind === 'known'
+            ? service.guide.regionExample
+            : vault.t(I18N_KEYS.ProviderSetupS3RegionPlaceholder)}
           autocomplete="off"
           spellcheck="false"
           autocapitalize="none"
@@ -237,6 +288,30 @@ so a native submission could never carry them into a URL.
         />
         {@render fieldError('keyPrefix', 's3-key-prefix-error')}
       </div>
+
+      {#if service.kind === 'known'}
+        <div
+          class="min-w-0 space-y-1 sm:col-span-2"
+          data-testid="s3-create-key"
+        >
+          <a
+            href={service.guide.keyConsoleUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-1.5 text-sm text-foreground underline underline-offset-4 hover:text-foreground/80"
+            data-testid="s3-create-key-link"
+          >
+            {vault.t({
+              key: I18N_KEYS.ProviderSetupS3CreateKey,
+              replacements: { service: vault.t(service.guide.nameKey) },
+            })}
+            <ExternalLink class="size-3.5" aria-hidden="true" />
+          </a>
+          <p class="text-xs text-muted-foreground">
+            {vault.t(I18N_KEYS.ProviderSetupS3CreateKeyHint)}
+          </p>
+        </div>
+      {/if}
 
       <div class="min-w-0 space-y-1.5 sm:col-span-2">
         <label class="nk-field-label block" for={inputId('accessKeyId')}>

@@ -12,9 +12,11 @@ use super::{DEFAULT_GITHUB_REPO_NAME, ValidationError, ValidationResult};
 
 mod github;
 mod s3;
+mod s3_service;
 
 pub use github::*;
 pub use s3::{S3Connection, S3ConnectionDraft, S3DraftField, S3DraftFieldError, S3DraftValidation};
+pub use s3_service::{S3EndpointService, S3KnownService, S3ServiceGuide};
 
 /// Validated Google Drive folder id used by shared provider connections.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]

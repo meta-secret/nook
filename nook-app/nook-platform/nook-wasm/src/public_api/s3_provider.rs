@@ -11,6 +11,7 @@ use crate::storage::s3::{S3Storage, S3VaultListing};
 use crate::{TypedInput, TypedOutput};
 use nook_core::{
     LocalVaultOccupancy, ProviderVaultListing, S3Connection, S3ConnectionDraft, S3DraftValidation,
+    S3EndpointService, S3KnownService, S3ServiceGuide,
 };
 use wasm_bindgen::JsError;
 
@@ -33,6 +34,25 @@ use wasm_bindgen::JsError;
 ) -> Result<String, JsError> {
     let configuration = configuration.decode()?;
     Ok(configuration.storage_detail())
+}
+
+/// Every S3-compatible service the setup form offers, each with its endpoint
+/// and region formats and the console page that issues its access keys.
+#[wasm_bindgen]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn s3_service_guides(
+) -> Result<Vec<tsify::Ts<S3ServiceGuide>>, JsError> {
+    S3KnownService::guides()
+        .iter()
+        .map(|guide| Ok(guide.encode()?))
+        .collect()
+}
+
+/// The service a typed S3 endpoint belongs to, judged by its host.
+#[wasm_bindgen]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn s3_endpoint_service(
+    endpoint: &str,
+) -> Result<tsify::Ts<S3EndpointService>, JsError> {
+    Ok(S3EndpointService::for_endpoint(endpoint).encode()?)
 }
 
 /// List the vaults at an S3 location without saving or connecting to it,

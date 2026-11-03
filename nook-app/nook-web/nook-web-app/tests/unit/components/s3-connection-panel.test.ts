@@ -125,4 +125,50 @@ describe('S3 connection form', () => {
     expect(alert.textContent?.trim()).toBe(I18N_KEYS.ErrorsS3KeyAccessDenied)
     expect(view.getAllByRole('alert')).toHaveLength(1)
   })
+
+  test('another S3 server offers no key link until a known service is picked', async () => {
+    const fixture = new PanelFixture()
+    const view = fixture.render('')
+
+    expect(view.queryByTestId('s3-create-key-link')).toBeNull()
+
+    await fireEvent.change(view.getByTestId('s3-service-select'), {
+      target: { value: 'wasabi' },
+    })
+
+    const link = view.getByTestId('s3-create-key-link')
+    expect(link.getAttribute('href')).toBe(
+      'https://console.wasabisys.com/#/access_keys',
+    )
+    expect(link.getAttribute('target')).toBe('_blank')
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+    expect(
+      requireInputElement(view.getByTestId('s3-region-input')).placeholder,
+    ).toBe('us-east-1')
+  })
+
+  test('a typed endpoint on a known service selects it and links its key console', async () => {
+    const fixture = new PanelFixture()
+    const view = fixture.render('')
+
+    await fireEvent.input(view.getByTestId('s3-endpoint-input'), {
+      target: { value: 'https://0123abcd.r2.cloudflarestorage.com' },
+    })
+
+    const select = view.getByTestId('s3-service-select')
+    expect(select instanceof HTMLSelectElement && select.value).toBe(
+      'cloudflare-r2',
+    )
+    expect(view.getByTestId('s3-create-key-link').getAttribute('href')).toBe(
+      'https://dash.cloudflare.com/?to=/:account/r2/overview',
+    )
+
+    // The local server is another S3 server: the pick stays.
+    await fireEvent.input(view.getByTestId('s3-endpoint-input'), {
+      target: { value: 'http://127.0.0.1:8333' },
+    })
+    expect(select instanceof HTMLSelectElement && select.value).toBe(
+      'cloudflare-r2',
+    )
+  })
 })

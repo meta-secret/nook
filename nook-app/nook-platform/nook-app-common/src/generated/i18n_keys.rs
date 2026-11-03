@@ -2353,6 +2353,8 @@ pub const PROVIDER_SETUP_S3_ACCESS_KEY_ID_PLACEHOLDER: &str =
 pub const PROVIDER_SETUP_S3_BUCKET_LABEL: &str = "provider_setup.s3_bucket_label";
 pub const PROVIDER_SETUP_S3_BUCKET_PLACEHOLDER: &str = "provider_setup.s3_bucket_placeholder";
 pub const PROVIDER_SETUP_S3_CONNECTION_SUBTITLE: &str = "provider_setup.s3_connection_subtitle";
+pub const PROVIDER_SETUP_S3_CREATE_KEY: &str = "provider_setup.s3_create_key";
+pub const PROVIDER_SETUP_S3_CREATE_KEY_HINT: &str = "provider_setup.s3_create_key_hint";
 pub const PROVIDER_SETUP_S3_ENDPOINT_LABEL: &str = "provider_setup.s3_endpoint_label";
 pub const PROVIDER_SETUP_S3_ENDPOINT_PLACEHOLDER: &str = "provider_setup.s3_endpoint_placeholder";
 pub const PROVIDER_SETUP_S3_KEY_PREFIX_LABEL: &str = "provider_setup.s3_key_prefix_label";
@@ -2364,6 +2366,14 @@ pub const PROVIDER_SETUP_S3_REGION_PLACEHOLDER: &str = "provider_setup.s3_region
 pub const PROVIDER_SETUP_S3_SECRET_ACCESS_KEY_LABEL: &str =
     "provider_setup.s3_secret_access_key_label";
 pub const PROVIDER_SETUP_S3_SECRET_NOTE: &str = "provider_setup.s3_secret_note";
+pub const PROVIDER_SETUP_S3_SERVICE_AWS: &str = "provider_setup.s3_service_aws";
+pub const PROVIDER_SETUP_S3_SERVICE_BACKBLAZE_B2: &str = "provider_setup.s3_service_backblaze_b2";
+pub const PROVIDER_SETUP_S3_SERVICE_CLOUDFLARE_R2: &str = "provider_setup.s3_service_cloudflare_r2";
+pub const PROVIDER_SETUP_S3_SERVICE_DIGITALOCEAN_SPACES: &str =
+    "provider_setup.s3_service_digitalocean_spaces";
+pub const PROVIDER_SETUP_S3_SERVICE_LABEL: &str = "provider_setup.s3_service_label";
+pub const PROVIDER_SETUP_S3_SERVICE_OTHER: &str = "provider_setup.s3_service_other";
+pub const PROVIDER_SETUP_S3_SERVICE_WASABI: &str = "provider_setup.s3_service_wasabi";
 pub const PROVIDER_SETUP_SIGN_IN_WITH_GOOGLE: &str = "provider_setup.sign_in_with_google";
 pub const PROVIDER_SETUP_SIGN_IN_WITH_ICLOUD: &str = "provider_setup.sign_in_with_icloud";
 pub const PROVIDER_SETUP_STORED_LOCALLY_DESC: &str = "provider_setup.stored_locally_desc";

@@ -423,7 +423,7 @@ pub use validation::{
     GithubPatMask, GithubRepoName, GoogleDriveFolderId, ICloudShareRole, ICloudShareTargetId,
     ICloudSharedTarget, OAuthFilePreset, OauthAccessToken, ProviderKind, ProviderSetupNameRequest,
     ProviderTargetKey, S3Connection, S3ConnectionDraft, S3DraftField, S3DraftFieldError,
-    S3DraftValidation, StorageMode,
+    S3DraftValidation, S3EndpointService, S3KnownService, S3ServiceGuide, StorageMode,
 };
 pub use vault::vault_recovery_options::{
     VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryPassword,
