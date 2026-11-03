@@ -31,10 +31,11 @@ export class IdentityCards {
       void vault.identityControl.view;
       void this.loader.reload();
     });
-    // Vaults the unlocked identity's log lists, stored here or not: read
-    // again whenever this browser's vault catalog changes.
+    // The unlocked identity's log, with or without a vault open: its vaults,
+    // stored here or not, and its devices, which the protection checklist
+    // counts. Read again whenever this browser's vault catalog changes.
     $effect(() => {
-      if (!vault.isAuthenticated) return;
+      if (!vault.isAuthenticated && !vault.deviceProtectionReady) return;
       void vault.localVaults.length;
       void untrack(() => vault.identityControl.loadSnapshot());
     });

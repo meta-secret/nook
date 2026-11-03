@@ -9,11 +9,13 @@ import {
 import { firstPage } from './dev-browser'
 import {
   expectBothDevicesCounted,
+  expectUnlockedKeyringCountsBothDevices,
   issueInvite,
   joinWithInvite,
   pairExtension,
   protectExtensionWithPin,
   reloadAndUnlockWithPin,
+  reopenAndUnlockKeyring,
   runScenario,
   saveLogin,
   startVaultWithPin,
@@ -74,5 +76,14 @@ test('two devices on one S3 keyring, the second joined from an invite', async ()
     await devices.step('second device: keyring counts both devices', () =>
       expectBothDevicesCounted(joiner, 'S3 keyring'),
     )
+    for (const [name, page] of [
+      ['first device', vault],
+      ['second device', joiner],
+    ] as const) {
+      await devices.step(`${name}: reopened, keyring unlocked`, async () => {
+        await reopenAndUnlockKeyring(page)
+        await expectUnlockedKeyringCountsBothDevices(page, 'S3 keyring')
+      })
+    }
   })
 })

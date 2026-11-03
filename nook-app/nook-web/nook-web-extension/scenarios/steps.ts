@@ -310,14 +310,7 @@ export async function joinWithInvite(page: Page, link: string): Promise<void> {
  * person does after reopening the browser, and open its vault. Scenarios
  * never pause the app's sync timers, as e2e helpers do. */
 export async function reloadAndUnlockWithPin(page: Page): Promise<void> {
-  await page.goto('/app/')
-  const pin = page.getByTestId('card-pin-input')
-  const unlock = page.getByTestId('identity-unlock').first()
-  await expect(pin.or(unlock).first()).toBeVisible()
-  if (!(await pin.isVisible())) await unlock.click()
-  await pin.fill(MOCK_AUTH_DEFAULT_PIN)
-  await page.getByTestId('card-pin-submit').click()
-  await expect(pin).toHaveCount(0)
+  await reopenAndUnlockKeyring(page)
   // The unlocked keyring keeps its vault selected but closed: its row opens
   // the vault panel, whose Open enters the vault.
   await page.getByTestId('identity-vault-row').first().click()
@@ -327,6 +320,32 @@ export async function reloadAndUnlockWithPin(page: Page): Promise<void> {
     .first()
   await open.click()
   await expect(page.getByTestId('vault-panel')).toBeVisible()
+}
+
+/** Reopen the app and unlock the keyring with the scenario PIN, leaving
+ * its vault closed: what a person sees right after reopening the browser. */
+export async function reopenAndUnlockKeyring(page: Page): Promise<void> {
+  await page.goto('/app/')
+  const pin = page.getByTestId('card-pin-input')
+  const unlock = page.getByTestId('identity-unlock').first()
+  await expect(pin.or(unlock).first()).toBeVisible()
+  if (!(await pin.isVisible())) await unlock.click()
+  await pin.fill(MOCK_AUTH_DEFAULT_PIN)
+  await page.getByTestId('card-pin-submit').click()
+  await expect(pin).toHaveCount(0)
+}
+
+/** Right after the keyring unlocks, with no vault open, its card on the
+ * keyrings page already counts both devices: no protection checklist. */
+export async function expectUnlockedKeyringCountsBothDevices(
+  page: Page,
+  keyringName: string,
+): Promise<void> {
+  const card = page.getByRole('article', { name: keyringName })
+  await expect(card).toHaveAttribute('data-status', 'unlocked')
+  await expect(card.getByTestId('identity-protection-toggle')).toHaveCount(0, {
+    timeout: 15_000,
+  })
 }
 
 /** The keyring on this device knows both devices without being asked to
