@@ -46,6 +46,8 @@ const uiKeys = [
   "firstRun",
   "firstRunVaultName",
   "joinICloudSignIn",
+  "inviteKeyRequest",
+  "s3KeyFormRequest",
   "identityPage",
   "firstRunPlace",
   "firstRunSyncSource",
@@ -118,7 +120,6 @@ const sessionKeys = [
   "vaultMembers",
   "enrollSecretsKey",
   "enrollMembersKey",
-  "sharedJoinerSelection",
   "joinEnrollmentPrompt",
   "awaitingJoinApproval",
   "loginPasswordPrompt",
@@ -216,6 +217,8 @@ class VaultStateSlicesImplementation {
   declare firstRun: VaultUiState["firstRun"];
   declare firstRunVaultName: VaultUiState["firstRunVaultName"];
   declare joinICloudSignIn: VaultUiState["joinICloudSignIn"];
+  declare inviteKeyRequest: VaultUiState["inviteKeyRequest"];
+  declare s3KeyFormRequest: VaultUiState["s3KeyFormRequest"];
   declare identityPage: VaultUiState["identityPage"];
   declare firstRunPlace: VaultUiState["firstRunPlace"];
   declare firstRunSyncSource: VaultUiState["firstRunSyncSource"];
@@ -284,7 +287,6 @@ class VaultStateSlicesImplementation {
   declare vaultMembers: VaultSessionState["vaultMembers"];
   declare enrollSecretsKey: VaultSessionState["enrollSecretsKey"];
   declare enrollMembersKey: VaultSessionState["enrollMembersKey"];
-  declare sharedJoinerSelection: VaultSessionState["sharedJoinerSelection"];
   declare joinEnrollmentPrompt: VaultSessionState["joinEnrollmentPrompt"];
   declare awaitingJoinApproval: VaultSessionState["awaitingJoinApproval"];
   declare loginPasswordPrompt: VaultSessionState["loginPasswordPrompt"];

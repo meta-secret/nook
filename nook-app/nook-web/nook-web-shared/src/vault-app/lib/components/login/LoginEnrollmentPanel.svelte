@@ -1,10 +1,16 @@
 <script lang="ts">
-  type EnrollmentCodeUnlock = { readonly code: string; readonly password: string }
+  import type { EnrollmentCodeUnlock } from "$lib/components/login/login-create-vault-chooser-contract";
 
-  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { ChevronDown, QrCode, RefreshCw, ShieldCheck } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
   import BackButton from "$lib/components/workspace/BackButton.svelte";
+  import InviteProviderKeys from "$lib/components/join/InviteProviderKeys.svelte";
+  import { untrack } from "svelte";
+  import {
+    InviteKeyRequests,
+    type InviteKeyEntry,
+  } from "$lib/vault/invite-join-keys";
 
   import type { VaultState } from "$lib/vault.svelte";
 
@@ -21,14 +27,20 @@
     isVerifying: boolean;
     initialCode?: string;
     openFormInitially?: boolean;
-    onUseEnrollmentCode?: (
-      args: EnrollmentCodeUnlock,
-    ) => void | Promise<void>;
+    onUseEnrollmentCode?: (args: EnrollmentCodeUnlock) => void | Promise<void>;
   } = $props();
 
   let enrollmentCodeFormOpen = $state(false);
   let enrollmentCodeInput = $state("");
   let enrollmentPasswordInput = $state("");
+  /** What is typed for each provider whose key this device adds. */
+  let keyEntries = $state<InviteKeyEntry[]>([]);
+  $effect.pre(() => {
+    const request = vault.inviteKeyRequest;
+    untrack(() => {
+      keyEntries = InviteKeyRequests.blankEntries(request);
+    });
+  });
 
   $effect(() => {
     if (!open) {
@@ -111,7 +123,13 @@
             e.preventDefault();
             const trimmed = enrollmentCodeInput.trim();
             if (!trimmed) return;
-            const onUseEnrollmentCodeArgs: Parameters<typeof onUseEnrollmentCode>[0] = { code: trimmed, password: enrollmentPasswordInput };
+            const onUseEnrollmentCodeArgs: Parameters<
+              typeof onUseEnrollmentCode
+            >[0] = {
+              code: trimmed,
+              password: enrollmentPasswordInput,
+              keys: $state.snapshot(keyEntries),
+            };
             void onUseEnrollmentCode(onUseEnrollmentCodeArgs);
           }}
         >
@@ -157,6 +175,11 @@
               data-testid="enrollment-password-input"
             />
           </div>
+          <InviteProviderKeys
+            {vault}
+            bind:entries={keyEntries}
+            disabled={isVerifying}
+          />
           <div class="flex justify-end">
             <Button
               type="submit"

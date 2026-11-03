@@ -20,7 +20,6 @@ import { browserLogRuntime } from "$lib/runtime/log";
 import { SentinelUnlockActions } from "$lib/vault/sentinel-unlock";
 import { LocalLoginPreparationState } from "$lib/vault/state/local-login-preparation-state";
 import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
-import { SharedJoinerSelections } from "$lib/vault/shared-joiner-selection";
 
 const log = browserLogRuntime.createLogger("vault-session");
 
@@ -83,7 +82,6 @@ export class VaultSessionActions {
     state.sentinelGenesisPhase = SentinelGenesisPhase.Inactive;
     state.sentinelGenesisRequest = "";
     state.clearSentinelGenesisStore();
-    state.sharedJoinerSelection = SharedJoinerSelections.NONE;
   }
 
   markVaultUnlocked() {
@@ -169,7 +167,6 @@ export class VaultSessionActions {
     state.joinEnrollmentPrompt = JoinEnrollmentState.None;
     state.enrollSecretsKey = "";
     state.enrollMembersKey = "";
-    state.sharedJoinerSelection = SharedJoinerSelections.NONE;
     state.workspaceSection = WorkspaceSection.Vault;
     state.enrollmentCode = "";
     state.errorMsg = "";

@@ -332,11 +332,12 @@
   async function handleUseEnrollmentCode({
     code,
     password,
+    keys,
   }: EnrollmentCodeUseRequest) {
     if (!vault.deviceProtectionReady) {
       pendingEnrollmentSubmitState = {
         kind: EnrollmentSubmitQueueKind.WaitingForDevice,
-        request: { code, password },
+        request: { code, password, keys },
       }
       pendingEnrollmentDeviceUnlock = true
       return
@@ -349,6 +350,7 @@
     >[0] = {
       code,
       password,
+      keys,
     }
     await vault.connectWithEnrollmentCode(enrollmentConnectionRequest)
   }

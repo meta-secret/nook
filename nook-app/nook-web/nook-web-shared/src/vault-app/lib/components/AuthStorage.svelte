@@ -23,6 +23,11 @@
   import LocalFolderProviderSetupWizard from '$lib/components/LocalFolderProviderSetupWizard.svelte'
   import S3ProviderSetupWizard from '$lib/components/S3ProviderSetupWizard.svelte'
   import AuthorizedAccountsPanel from '$lib/components/AuthorizedAccountsPanel.svelte'
+  import S3ProviderKeys from '$lib/components/S3ProviderKeys.svelte'
+  import {
+    S3ProviderKeysKind,
+    S3ProviderKeysOf,
+  } from '$lib/components/s3-provider-keys'
   import ProviderConnectionStatus from '$lib/components/ProviderConnectionStatus.svelte'
   import {
     ProviderSetupName,
@@ -303,6 +308,7 @@
                     vault.vaultArchitecture.replication_type,
                   ) === ReplicationSupport.Supported}
                 {@const sharedAccounts = SharedProviderAccountsOf.row(provider)}
+                {@const s3Keys = S3ProviderKeysOf.row(provider)}
                 {@const providerLabel = providerTitle(provider)}
                 {@const glyph = ProviderRowGlyphs.of(provider.provider)}
                 <li class="nk-panel grid gap-4 p-3 sm:p-4">
@@ -421,6 +427,14 @@
                         selection={SharedJoinerSelections.NONE}
                       />
                     </div>
+                  {/if}
+                  {#if s3Keys.kind === S3ProviderKeysKind.Listed}
+                    <S3ProviderKeys
+                      {vault}
+                      {provider}
+                      connection={s3Keys.connection}
+                      disabled={isVerifying || isInitializing}
+                    />
                   {/if}
                 </li>
               {/each}

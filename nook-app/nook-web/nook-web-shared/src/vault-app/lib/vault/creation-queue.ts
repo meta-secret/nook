@@ -1,3 +1,4 @@
+import type { EnrollmentCodeUseRequest } from "$lib/app/app-interaction-types";
 import type { StartSentinelGenesisArgs } from "$app-wasm";
 import type { ActiveVault } from "$lib/vault/state/provider.svelte";
 import type { ProviderDraft, ProviderKind } from "$lib/auth/providers";
@@ -52,7 +53,7 @@ export type ExistingVaultImportQueue =
       request: PendingExistingVaultImport;
     };
 
-export type PendingEnrollmentSubmit = { code: string; password: string };
+export type PendingEnrollmentSubmit = EnrollmentCodeUseRequest;
 
 export enum EnrollmentSubmitQueueKind {
   Idle = "idle",

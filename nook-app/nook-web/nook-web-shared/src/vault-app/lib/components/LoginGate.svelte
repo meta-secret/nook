@@ -9,10 +9,7 @@
     IdentityVaultTarget,
   } from '$lib/components/identities/identity-card-model'
   import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
-  type EnrollmentCodeUnlock = {
-    readonly code: string
-    readonly password: string
-  }
+  import type { EnrollmentCodeUnlock } from '$lib/components/login/login-create-vault-chooser-contract'
 
   type VaultPasswordUnlock = {
     readonly entryId: string

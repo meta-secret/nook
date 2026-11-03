@@ -76,8 +76,8 @@ export class ProviderCredentialBuffer {
 
   /** None for this browser's store or a local folder; the token for GitHub;
    * the access token for Google Drive; the web-auth token for iCloud; the
-   * secret access key for S3: the credentials Rust's `StoredProvider::secrets()`
-   * walks. A test holds the two together. */
+   * secret access key of S3's own key and of each spare: the credentials
+   * Rust's `StoredProvider::secrets()` walks. A test holds the two together. */
   private wipe(row: StorageProvider): void {
     const provider = row.provider
     switch (provider.type) {
@@ -92,6 +92,8 @@ export class ProviderCredentialBuffer {
         return
       case 's3':
         provider.secretAccessKey = ProviderCredentialBuffer.WIPED_CREDENTIAL
+        for (const spare of provider.spareKeys)
+          spare.secretAccessKey = ProviderCredentialBuffer.WIPED_CREDENTIAL
         return
     }
   }

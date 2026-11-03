@@ -1245,7 +1245,15 @@
     "sentinel_provider_ready": "{count} compatible provider connections are available on this browser.",
     "sentinel_provider_missing": "Connect a compatible provider before asking the new browser to join.",
     "sentinel_manage_providers": "Manage providers",
-    "sentinel_review_joins": "Review join requests"
+    "sentinel_review_joins": "Review join requests",
+    "invite_providers": "Sync providers in the invite",
+    "invite_key": "Key for the new device",
+    "invite_key_mine": "This device's key · {id}",
+    "invite_key_spare": "Saved key · {id}",
+    "invite_key_joiner": "No key: the new device adds its own",
+    "invite_token_mine": "My token",
+    "invite_token_joiner": "No token: the new device adds its own",
+    "invite_add_key": "Add key"
   },
   "auth_storage": {
     "saved_providers": "Saved Storage Providers",
@@ -1345,7 +1353,12 @@
     "google_signed_in": "Signed in with Google",
     "google_not_signed_in": "Not signed in with Google",
     "icloud_signed_in": "Signed in with iCloud",
-    "icloud_not_signed_in": "Not signed in with iCloud"
+    "icloud_not_signed_in": "Not signed in with iCloud",
+    "s3_keys": "Keys",
+    "s3_key_in_use": "in use",
+    "s3_add_key": "Add key",
+    "s3_save_key": "Save key",
+    "s3_remove_key": "Remove key {id}"
   },
   "add_secret": {
     "title_edit_login": "Edit login",
@@ -2544,7 +2557,10 @@
     "passphrase_label": "One-time passphrase",
     "submit": "Join",
     "submitting": "Joining…",
-    "requirement": "Needs a cloud sync provider, such as GitHub or Google Drive."
+    "requirement": "Needs a cloud sync provider, such as GitHub or Google Drive.",
+    "keys_title": "Keys for this device",
+    "keys_required": "Add a key for at least one provider to join.",
+    "keys_optional": "Optional: a key here saves that provider too."
   },
   "new_identity": {
     "title": "Name your new keyring",

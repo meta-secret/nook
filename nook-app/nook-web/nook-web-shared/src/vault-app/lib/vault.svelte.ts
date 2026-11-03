@@ -109,20 +109,15 @@ interface VaultPasswordEntryUpdate {
   readonly password: string;
 }
 
-interface EnrollmentCodeIssue {
-  readonly passphrase: string;
-  readonly providerId: string;
-}
+type EnrollmentCodeIssue = passwordUnlockActions.IdentityEnrollmentIssueRequest;
 
 interface VaultPasswordUnlock {
   readonly entryId: PasswordEntryId;
   readonly password: string;
 }
 
-interface EnrollmentCodeConnectionInput {
-  readonly code: string;
-  readonly password: string;
-}
+type EnrollmentCodeConnectionInput =
+  passwordUnlockActions.EnrollmentCodeConnection;
 
 type AuthenticatorMigrationUriCollection = string[];
 
@@ -872,13 +867,10 @@ export class VaultState extends VaultRuntimeState {
    * through one of its mounts. The passphrase encrypts the code and is shared
    * separately; a member still approves the join.
    */
-  async issueEnrollmentCode({ passphrase, providerId }: EnrollmentCodeIssue) {
-    const enrollmentArgs: Parameters<
-      passwordUnlockActions.IdentityEnrollmentIssue["issueEnrollmentCode"]
-    >[0] = { passphrase, providerId };
+  async issueEnrollmentCode(issue: EnrollmentCodeIssue) {
     return new passwordUnlockActions.IdentityEnrollmentIssue(
       this,
-    ).issueEnrollmentCode(enrollmentArgs);
+    ).issueEnrollmentCode(issue);
   }
 
   clearEnrollmentCode() {
@@ -906,14 +898,12 @@ export class VaultState extends VaultRuntimeState {
    * Joining-side: parse an enrollment code, restore provider credentials, and
    * self-enrol via `connect_with_password`. Skips approval entirely.
    */
-  async connectWithEnrollmentCode({
-    code,
-    password,
-  }: EnrollmentCodeConnectionInput): Promise<void> {
+  async connectWithEnrollmentCode(
+    connection: EnrollmentCodeConnectionInput,
+  ): Promise<void> {
     return new passwordUnlockActions.PasswordEnrollmentActions(
       this,
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    ).connectWithEnrollmentCode({ code, password });
+    ).connectWithEnrollmentCode(connection);
   }
 
   async handleAddSecret(request: SecretCreationInput) {

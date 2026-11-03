@@ -23,6 +23,7 @@ Every place that offers "Add a device" opens this.
   import { DeviceJoinMounts } from './device-join-mounts'
   import PairingDiagram from './PairingDiagram.svelte'
   import { PairingProgress, PairingStage } from './pairing-stage'
+  import { S3KeyFormRequests } from '$lib/vault/s3-key-form-request'
 
   type OnboardDeviceProps = ComponentProps<typeof OnboardDevice>
 
@@ -97,6 +98,13 @@ Every place that offers "Add a device" opens this.
     }
     return vault.t(manualRequest)
   })
+
+  /** The key the new device needs is not saved yet: add it on the Sync
+   * page, whose Add key form for that provider opens. */
+  function addS3Key(providerId: string): void {
+    vault.s3KeyFormRequest = S3KeyFormRequests.open(providerId)
+    onManageAccounts()
+  }
 
   function reportFailure(translationKey: Parameters<typeof vault.t>[0]) {
     vault.errorMsg = vault.t(translationKey)
@@ -240,6 +248,7 @@ Every place that offers "Add a device" opens this.
           ) => vault.issueEnrollmentCode(issueRequest)}
           onClearCode={() => vault.clearEnrollmentCode()}
           {onManageAccounts}
+          onAddS3Key={addS3Key}
         />
       {/if}
     </div>

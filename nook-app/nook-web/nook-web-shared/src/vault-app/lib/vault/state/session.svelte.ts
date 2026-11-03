@@ -12,10 +12,6 @@ import {
   type NookVaultManager,
   type PasswordEntryId,
 } from "$app-wasm";
-import {
-  SharedJoinerSelections,
-  type SharedJoinerSelection,
-} from "$lib/vault/shared-joiner-selection";
 export enum ManagerSessionKind {
   Unavailable = "unavailable",
   Available = "available",
@@ -80,9 +76,6 @@ export class VaultSessionState {
   vaultMembers = $state<VaultMember[]>([]);
   enrollSecretsKey = $state("");
   enrollMembersKey = $state("");
-  sharedJoinerSelection = $state.raw<SharedJoinerSelection>(
-    SharedJoinerSelections.NONE,
-  );
   joinEnrollmentPrompt = $state<JoinEnrollmentState>(JoinEnrollmentState.None);
   /**
    * True from the moment this device sends a join request until it unlocks.

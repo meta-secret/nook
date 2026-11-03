@@ -69,6 +69,8 @@ export {
   PasswordEnrollmentActions,
   IdentityEnrollmentIssue,
 } from "$lib/vault/password-enrollment-flow";
+export type { EnrollmentCodeConnection } from "$lib/vault/password-enrollment-flow";
+export type { EnrollmentCodeIssueRequest as IdentityEnrollmentIssueRequest } from "$lib/vault/password-enrollment-issue";
 
 /** Owns browser orchestration for one password unlock context. */
 export class VaultPasswordActions {

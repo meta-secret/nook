@@ -924,7 +924,15 @@
     "sentinel_provider_ready": "В этом браузере доступно совместимых подключений: {count}.",
     "sentinel_provider_missing": "Подключите совместимый провайдер, прежде чем новый браузер отправит запрос.",
     "sentinel_manage_providers": "Управлять провайдерами",
-    "sentinel_review_joins": "Проверить запросы"
+    "sentinel_review_joins": "Проверить запросы",
+    "invite_providers": "Провайдеры синхронизации в приглашении",
+    "invite_key": "Ключ для нового устройства",
+    "invite_key_mine": "Ключ этого устройства · {id}",
+    "invite_key_spare": "Сохранённый ключ · {id}",
+    "invite_key_joiner": "Без ключа: новое устройство добавит свой",
+    "invite_token_mine": "Мой токен",
+    "invite_token_joiner": "Без токена: новое устройство добавит свой",
+    "invite_add_key": "Добавить ключ"
   },
   "auth_storage": {
     "saved_providers": "Сохраненные провайдеры хранилища",
@@ -1024,7 +1032,12 @@
     "google_signed_in": "Вход выполнен через Google",
     "google_not_signed_in": "Вход через Google не выполнен",
     "icloud_signed_in": "Вход выполнен через iCloud",
-    "icloud_not_signed_in": "Вход через iCloud не выполнен"
+    "icloud_not_signed_in": "Вход через iCloud не выполнен",
+    "s3_keys": "Ключи",
+    "s3_key_in_use": "используется",
+    "s3_add_key": "Добавить ключ",
+    "s3_save_key": "Сохранить ключ",
+    "s3_remove_key": "Удалить ключ {id}"
   },
   "add_secret": {
     "title_edit_login": "Редактировать логин",
@@ -2544,7 +2557,10 @@
     "passphrase_label": "Одноразовая парольная фраза",
     "submit": "Подключиться",
     "submitting": "Подключение…",
-    "requirement": "Нужен облачный провайдер синхронизации, например GitHub или Google Drive."
+    "requirement": "Нужен облачный провайдер синхронизации, например GitHub или Google Drive.",
+    "keys_title": "Ключи для этого устройства",
+    "keys_required": "Добавьте ключ хотя бы для одного провайдера, чтобы присоединиться.",
+    "keys_optional": "Необязательно: ключ здесь сохранит и этого провайдера."
   },
   "new_identity": {
     "title": "Назовите новую связку ключей",

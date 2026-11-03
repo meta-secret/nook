@@ -30,6 +30,7 @@ import {
   type AuthProvidersSnapshot,
   type DuplicateProviderHandling,
   type NookProviderSaveOutcome,
+  type ProviderDraft,
   type ProviderSaveRequest,
   type ProviderSaveSetup,
   type ProviderVaultScope,
@@ -175,6 +176,47 @@ export class ProviderPersistenceActions {
           return storageErr(new NativeVaultStorageFailure(failure));
         }
       });
+    } finally {
+      outcome.free();
+    }
+  }
+
+  /** Save a provider an invite gave beside the one the join went through:
+   * a new row, or the saved one it duplicates. The setup in progress and the
+   * provider in use stay as they are. */
+  async saveInvitedProvider(
+    draft: ProviderDraft,
+  ): Promise<Result<ProviderSaveOutcome, StorageOperationFailure>> {
+    const state = this.state;
+    const scope = await this.providerStoreIdForSave();
+    if (scope.isErr()) return storageErr(scope.error);
+    const request: ProviderSaveRequest = {
+      snapshot: {
+        providers: $state.snapshot(state.providers),
+        activeVaultStoreId:
+          state.activeVault.kind === ActiveVaultKind.Open
+            ? activeVaultScope(state.activeVault.storeId)
+            : unselectedVaultScope(),
+      },
+      providerStoreId: scope.value,
+      setup: new_provider_save_setup(),
+      duplicates: DuplicateHandling.of(false),
+      draft,
+      newProviderId: generate_id(),
+      createdAt: isoTimestamp(),
+    };
+    const outcome = apply_provider_save_policy(request);
+    try {
+      const admitted = this.savedOutcome(outcome);
+      if (admitted.isErr()) return storageErr(admitted.error);
+      const persistenceOptions: ProviderPersistenceOptions = {
+        replace: false,
+        providers: outcome.snapshot.providers,
+      };
+      const persistence = await state.persistProviders(persistenceOptions);
+      if (persistence.isErr()) return storageErr(persistence.error);
+      log.info("invited sync provider saved");
+      return storageOk(ProviderSaveOutcome.Saved);
     } finally {
       outcome.free();
     }

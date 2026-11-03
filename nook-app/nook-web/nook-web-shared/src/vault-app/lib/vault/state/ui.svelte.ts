@@ -20,6 +20,14 @@ import {
   type FirstRunJoin,
   type IdentityJoinWait,
 } from "$lib/vault/identity-join-wait";
+import {
+  S3KeyFormRequests,
+  type S3KeyFormRequest,
+} from "$lib/vault/s3-key-form-request";
+import {
+  InviteKeyRequests,
+  type InviteKeyRequest,
+} from "$lib/vault/invite-join-keys";
 
 export enum WorkspaceSection {
   Vault = "vault",
@@ -137,6 +145,11 @@ export class VaultUiState {
   firstRunVaultName = $state("");
   /** An invite kept in iCloud asked this browser to sign in to iCloud. */
   joinICloudSignIn = $state<JoinICloudSignIn>(JoinICloudSignIn.NotNeeded);
+  /** The providers of an invite whose keys this device adds, once the join
+   * screen asks for them. */
+  inviteKeyRequest = $state.raw<InviteKeyRequest>(InviteKeyRequests.NONE);
+  /** The Sync page opens this S3 provider's Add key form. */
+  s3KeyFormRequest = $state.raw<S3KeyFormRequest>(S3KeyFormRequests.CLOSED);
   /** The page of an identity unlocked without an open vault: its overview
    * beside its card, or one of its pages; Identities is the hub alone. */
   identityPage = $state<WorkspaceSection>(WorkspaceSection.Identities);

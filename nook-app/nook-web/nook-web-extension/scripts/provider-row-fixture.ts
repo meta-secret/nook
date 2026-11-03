@@ -133,6 +133,13 @@ export class ProviderRowFixture {
       keyPrefix: { state: 'prefix', value: 'e2e' },
       accessKeyId: localS3Credentials(LocalS3Identity.DeviceA).accessKeyId,
       secretAccessKey: credential,
+      // A spare key saved for invites holds a credential too.
+      spareKeys: [
+        {
+          accessKeyId: localS3Credentials(LocalS3Identity.DeviceB).accessKeyId,
+          secretAccessKey: credential,
+        },
+      ],
     } satisfies S3Connection
   }
 

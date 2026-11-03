@@ -10,6 +10,7 @@ import initNookWasm, {
 } from '$app-wasm'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import type { StorageProvider } from '$lib/auth/providers'
+import type { EnrollmentCredentialChoice } from '$app-wasm'
 import {
   ProviderFixtureCredentials,
   ProviderRowFixture,
@@ -93,9 +94,11 @@ describe('vault architecture adapter', () => {
   })
 
   test('the companion handoff transfers the Drive session for the vault folder', () => {
+    const ownSession: EnrollmentCredentialChoice = { kind: 'inviter' }
     const enrollmentProvider = enrollment_provider_for_architecture(
       googleDriveProvider(),
       default_vault_architecture(),
+      ownSession,
     )
 
     expect(enrollmentProvider.onboardingType).toBe(

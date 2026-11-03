@@ -19,11 +19,14 @@ import {
   bind_icloud_share,
   decrypt_enrollment_payload,
   draft_storage_args,
+  github_draft_with_token,
   provider_draft_gap_translation_key,
   provider_draft_kind,
+  provider_draft_label,
   provider_row_draft,
+  s3_draft_with_key,
+  s3_provider_draft,
   verify_joiner_account,
-  type NookDecryptedEnrollmentPayload,
   type NookEnrollmentProvider,
   type ProviderDraft,
 } from "$app-wasm";
@@ -42,6 +45,19 @@ import {
   ProviderDraftReads,
   type OAuthProviderDraft,
 } from "$lib/vault/provider-draft-reads";
+import {
+  InviteKeyKind,
+  InviteKeyNeed,
+  InviteKeyRequestKind,
+  InviteKeyRequests,
+  type InviteKeyAsk,
+  type InviteKeyEntry,
+  type InviteKeyProvider,
+} from "$lib/vault/invite-join-keys";
+import {
+  ProviderPersistenceActions,
+  ProviderSaveOutcome,
+} from "$lib/vault/provider-persistence.svelte";
 
 enum IdentityInviteJoinOutcome {
   Joined = "joined",
@@ -54,10 +70,54 @@ class InviteJoinFailure {
 
 type InviteStorageArgs = Result<NookStorageConnection, InviteJoinFailure>;
 
-type InviteProviderSource = {
-  readonly payload: NookDecryptedEnrollmentPayload;
+/** How one provider of a decrypted invite can serve this device. */
+enum InviteProviderReadKind {
+  /** It carries its key: a complete draft. */
+  Ready = "ready",
+  /** Its key is this device's to add. */
+  AwaitingKey = "awaiting-key",
+  /** A shared target this device signs in to. */
+  Grant = "grant",
+}
+
+type InviteProviderRead =
+  | {
+      readonly kind: InviteProviderReadKind.Ready;
+      readonly draft: ProviderDraft;
+    }
+  | {
+      readonly kind: InviteProviderReadKind.AwaitingKey;
+      readonly provider: InviteKeyProvider;
+    }
+  | {
+      readonly kind: InviteProviderReadKind.Grant;
+      readonly enrollmentProvider: NookEnrollmentProvider;
+    };
+
+type InviteProviderReading = {
   readonly enrollmentProvider: NookEnrollmentProvider;
+  readonly index: number;
 };
+
+type InviteKeyCompletion = {
+  readonly entry: InviteKeyEntry;
+  readonly awaiting: readonly InviteKeyProvider[];
+};
+
+/** The providers an invite gives this device, sorted by what each needs. */
+type InviteProviderPlan = {
+  /** Complete drafts: the ones that carry a key, then the keyed ones. */
+  readonly complete: readonly ProviderDraft[];
+  readonly awaiting: readonly InviteKeyProvider[];
+  readonly grants: readonly NookEnrollmentProvider[];
+};
+
+type InvitePlanRequest = {
+  readonly providers: readonly NookEnrollmentProvider[];
+  readonly keys: readonly InviteKeyEntry[];
+};
+
+type InviteDraftCompletion = Result<ProviderDraft, InviteJoinFailure>;
 
 type OAuthGrantJoin = Omit<SharedGrantJoin, "saved">;
 type ICloudJoinBase = Omit<SharedGrantJoin, "enrollmentProvider">;
@@ -71,6 +131,9 @@ type SharedGrantJoin = {
 export type EnrollmentCodeConnection = {
   readonly code: string;
   readonly password: string;
+  /** Keys typed on the join screen for providers whose key this device
+   * adds; none before the screen asks. */
+  readonly keys: readonly InviteKeyEntry[];
 };
 
 export { IdentityEnrollmentIssue } from "$lib/vault/password-enrollment-issue";
@@ -85,33 +148,32 @@ export class PasswordEnrollmentActions {
     state.clearActiveEnrollmentEntry();
   }
 
-  /** The connection an invite joins through: the payload's own provider for a
-   * personal invite, or the shared target the joiner signs in to. */
-  private async inviteStorageArgs({
-    payload,
+  /** How one provider of the invite serves this device. */
+  private readInviteProvider({
     enrollmentProvider,
-  }: InviteProviderSource): Promise<InviteStorageArgs> {
-    const kind = enrollmentProvider.type;
-    if (kind.type === "github" || kind.type === "s3") {
-      return this.connectPersonalInvite(enrollmentProvider);
+    index,
+  }: InviteProviderReading): Result<InviteProviderRead, InviteJoinFailure> {
+    if (
+      enrollmentProvider.onboardingType === OnboardingType.SharedProviderGrant
+    ) {
+      const grant: InviteProviderRead = {
+        kind: InviteProviderReadKind.Grant,
+        enrollmentProvider,
+      };
+      return storageOk(grant);
     }
-    if (payload.onboardingType === OnboardingType.SharedProviderGrant) {
-      return this.joinSharedGrant(enrollmentProvider);
+    switch (enrollmentProvider.type.type) {
+      case "local":
+      case "local-folder":
+        // A local provider cannot carry an identity to another app.
+        return storageErr(
+          new InviteJoinFailure(I18N_KEYS.IdentityControlJoinLocalProvider),
+        );
+      case "github":
+      case "s3":
+      case "oauth-file":
+        break;
     }
-    if (kind.type === "oauth-file") {
-      return this.connectPersonalInvite(enrollmentProvider);
-    }
-    // A local provider cannot carry an identity to another app.
-    return storageErr(
-      new InviteJoinFailure(I18N_KEYS.IdentityControlJoinLocalProvider),
-    );
-  }
-
-  /** A personal invite carries its complete provider: stage it and connect. */
-  private connectPersonalInvite(
-    enrollmentProvider: NookEnrollmentProvider,
-  ): InviteStorageArgs {
-    const state = this.state;
     let draft: ProviderDraft;
     try {
       draft = enrollmentProvider.provider_draft();
@@ -122,9 +184,162 @@ export class PasswordEnrollmentActions {
         ),
       );
     }
+    const connection = draft_storage_args(draft);
+    switch (connection.state) {
+      case "ready": {
+        const ready: InviteProviderRead = {
+          kind: InviteProviderReadKind.Ready,
+          draft,
+        };
+        return storageOk(ready);
+      }
+      case "incomplete":
+        break;
+    }
+    const awaiting = (kind: InviteKeyKind): InviteProviderRead => ({
+      kind: InviteProviderReadKind.AwaitingKey,
+      provider: { index, kind, label: provider_draft_label(draft), draft },
+    });
+    switch (connection.gap) {
+      case "s3Key":
+        return storageOk(awaiting(InviteKeyKind.S3));
+      case "githubToken":
+        return storageOk(awaiting(InviteKeyKind.Github));
+      case "localFolder":
+      case "oauthSignIn":
+      case "sharedTarget":
+      case "s3Connection":
+        return storageErr(
+          new InviteJoinFailure(
+            provider_draft_gap_translation_key(connection.gap),
+          ),
+        );
+    }
+  }
+
+  /** Every provider of the invite, read, with the keys typed for it. */
+  private inviteProviderPlan({
+    providers,
+    keys,
+  }: InvitePlanRequest): Result<InviteProviderPlan, InviteJoinFailure> {
+    const ready: ProviderDraft[] = [];
+    const awaiting: InviteKeyProvider[] = [];
+    const grants: NookEnrollmentProvider[] = [];
+    for (const [index, enrollmentProvider] of providers.entries()) {
+      const reading: InviteProviderReading = { enrollmentProvider, index };
+      const read = this.readInviteProvider(reading);
+      if (read.isErr()) return storageErr(read.error);
+      switch (read.value.kind) {
+        case InviteProviderReadKind.Ready:
+          ready.push(read.value.draft);
+          break;
+        case InviteProviderReadKind.AwaitingKey:
+          awaiting.push(read.value.provider);
+          break;
+        case InviteProviderReadKind.Grant:
+          grants.push(read.value.enrollmentProvider);
+          break;
+      }
+    }
+    const keyed: ProviderDraft[] = [];
+    for (const entry of keys.filter((typed) =>
+      InviteKeyRequests.typed(typed),
+    )) {
+      const completion: InviteKeyCompletion = { entry, awaiting };
+      const completed = this.completeInviteKey(completion);
+      if (completed.isErr()) return storageErr(completed.error);
+      keyed.push(completed.value);
+    }
+    const plan: InviteProviderPlan = {
+      complete: [...ready, ...keyed],
+      awaiting,
+      grants,
+    };
+    return storageOk(plan);
+  }
+
+  /** The complete draft a key typed on the join screen makes, validated by
+   * Rust as the setup forms validate theirs. */
+  private completeInviteKey({
+    entry,
+    awaiting,
+  }: InviteKeyCompletion): InviteDraftCompletion {
+    const provider = awaiting.find(
+      (candidate) => candidate.index === entry.index,
+    );
+    if (!provider)
+      return storageErr(
+        new InviteJoinFailure(I18N_KEYS.ErrorsVaultSelectionFailed),
+      );
+    try {
+      switch (entry.kind) {
+        case InviteKeyKind.Github:
+          return storageOk(
+            github_draft_with_token(provider.draft, entry.token),
+          );
+        case InviteKeyKind.S3: {
+          const key: Parameters<typeof s3_draft_with_key>[1] = {
+            accessKeyId: entry.accessKeyId,
+            secretAccessKey: entry.secretAccessKey,
+          };
+          const validation = s3_draft_with_key(provider.draft, key);
+          switch (validation.state) {
+            case "valid":
+              return storageOk(s3_provider_draft(validation.configuration));
+            case "invalid": {
+              const [first] = validation.fields;
+              return storageErr(
+                new InviteJoinFailure(
+                  first
+                    ? first.errorKey
+                    : I18N_KEYS.ErrorsValidationS3AccessKeyIdRequired,
+                ),
+              );
+            }
+          }
+        }
+      }
+    } catch (failure) {
+      return storageErr(
+        new InviteJoinFailure(
+          new NativeVaultStorageFailure(failure).translationKey,
+        ),
+      );
+    }
+  }
+
+  /** The connection an invite joins through: a provider it has a key for, or
+   * else a shared target the joiner signs in to. */
+  private async inviteStorageArgs(
+    plan: InviteProviderPlan,
+  ): Promise<InviteStorageArgs> {
+    const [draft] = plan.complete;
+    if (draft) return this.connectPersonalInvite(draft);
+    const [grant] = plan.grants;
+    if (grant) return this.joinSharedGrant(grant);
+    return storageErr(new InviteJoinFailure(I18N_KEYS.JoinKeysRequired));
+  }
+
+  /** A provider the invite gives complete: stage it and connect. */
+  private connectPersonalInvite(draft: ProviderDraft): InviteStorageArgs {
+    const state = this.state;
     state.activateLoginSetup(provider_draft_kind(draft));
     state.stageProviderDraft(draft);
     return this.draftArgs(draft);
+  }
+
+  /** Every other provider the invite gave with its key is saved beside the
+   * one the join went through. */
+  private async saveOtherInviteProviders(
+    plan: InviteProviderPlan,
+  ): ReturnType<ProviderPersistenceActions["saveInvitedProvider"]> {
+    const persistence = new ProviderPersistenceActions(this.state);
+    const others = plan.complete.slice(1);
+    for (const draft of others) {
+      const saved = await persistence.saveInvitedProvider(draft);
+      if (saved.isErr()) return saved;
+    }
+    return storageOk(ProviderSaveOutcome.Saved);
   }
 
   private draftArgs(draft: ProviderDraft): InviteStorageArgs {
@@ -370,6 +585,7 @@ export class PasswordEnrollmentActions {
   async connectWithEnrollmentCode({
     code,
     password,
+    keys,
   }: EnrollmentCodeConnection): Promise<void> {
     const state = this.state;
     if (!state.hasManager) {
@@ -391,15 +607,7 @@ export class PasswordEnrollmentActions {
         return;
       }
       try {
-        let enrollmentProvider: typeof payload.provider;
-        try {
-          enrollmentProvider = payload.provider;
-        } catch (failure) {
-          state.errorMsg = state.t(
-            new NativeVaultStorageFailure(failure).translationKey,
-          );
-          return;
-        }
+        const enrollmentProviders = payload.providers;
         try {
           const entryId = payload.entryId.trim();
           const unlockPassword = password.trim();
@@ -412,11 +620,35 @@ export class PasswordEnrollmentActions {
             return;
           }
 
-          const source: InviteProviderSource = {
-            payload,
-            enrollmentProvider,
+          const planRequest: InvitePlanRequest = {
+            providers: enrollmentProviders,
+            keys,
           };
-          const storageArgs = await this.inviteStorageArgs(source);
+          const planned = this.inviteProviderPlan(planRequest);
+          if (planned.isErr()) {
+            state.errorMsg = state.t(planned.error.translationKey);
+            return;
+          }
+          const plan = planned.value;
+          // A provider whose key this device adds asks for it first, with
+          // its location shown, in one form per provider.
+          const keyAsk: InviteKeyAsk = {
+            request: state.inviteKeyRequest,
+            code,
+          };
+          if (plan.awaiting.length > 0 && !InviteKeyRequests.asked(keyAsk)) {
+            state.inviteKeyRequest = {
+              kind: InviteKeyRequestKind.Asked,
+              code,
+              need:
+                plan.complete.length + plan.grants.length > 0
+                  ? InviteKeyNeed.Optional
+                  : InviteKeyNeed.AtLeastOne,
+              providers: plan.awaiting,
+            };
+            return;
+          }
+          const storageArgs = await this.inviteStorageArgs(plan);
           if (storageArgs.isErr()) {
             state.errorMsg = state.t(storageArgs.error.translationKey);
             return;
@@ -461,6 +693,12 @@ export class PasswordEnrollmentActions {
             state.errorMsg = state.t(savedProvider.error.translationKey);
             return;
           }
+          const savedOthers = await this.saveOtherInviteProviders(plan);
+          if (savedOthers.isErr()) {
+            state.errorMsg = state.t(savedOthers.error.translationKey);
+            return;
+          }
+          state.inviteKeyRequest = InviteKeyRequests.NONE;
           state.joinEnrollmentPrompt = JoinEnrollmentState.None;
           state.loginEnrollmentCode = "";
           state.prefillEnrollmentCode = "";
@@ -471,7 +709,8 @@ export class PasswordEnrollmentActions {
             state.errorMsg = state.t(followed.error.translationKey);
           }
         } finally {
-          enrollmentProvider.free();
+          for (const enrollmentProvider of enrollmentProviders)
+            enrollmentProvider.free();
         }
       } finally {
         payload.free();

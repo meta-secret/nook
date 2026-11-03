@@ -1,3 +1,4 @@
+import type { EnrollmentCodeUseRequest } from "$lib/app/app-interaction-types";
 import type {
   NookSentinelGenesisDelivery,
   NookSentinelGenesisParticipantStatus,
@@ -15,10 +16,7 @@ import type {
 } from "$lib/vault/sentinel-genesis";
 import type { VaultState } from "$lib/vault.svelte";
 
-export type EnrollmentCodeUnlock = {
-  readonly code: string;
-  readonly password: string;
-};
+export type EnrollmentCodeUnlock = EnrollmentCodeUseRequest;
 
 export type SentinelGenesisParticipation = {
   readonly payload: string;

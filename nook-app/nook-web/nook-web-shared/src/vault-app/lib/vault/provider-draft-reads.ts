@@ -146,9 +146,11 @@ export class S3DraftReads {
             keyPrefix: draft.keyPrefix,
             accessKeyId: draft.accessKeyId,
             secretAccessKey: draft.secretAccessKey,
+            spareKeys: draft.spareKeys,
           },
         };
       case "awaitingConnection":
+      case "awaitingKey":
         return { kind: DraftS3ConnectionKind.NotReady };
     }
   }

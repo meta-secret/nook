@@ -157,7 +157,11 @@ describe('refreshing the unlocked identity in the offscreen session', () => {
     expect(manager.synced).toEqual([
       {
         mode: 's3',
-        connection: ProviderRowFixture.s3Connection(S3_SECRET),
+        // A storage request signs with the row's own key and carries no spare.
+        connection: {
+          ...ProviderRowFixture.s3Connection(S3_SECRET),
+          spareKeys: [],
+        },
       },
     ])
     expect(refreshed._unsafeUnwrap()).toMatchObject({
