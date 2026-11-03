@@ -583,15 +583,18 @@ vault. Earlier vault-named codes fail closed as invalid codes.
 
 **Several providers and key choices**
 
-An invite carries a non-empty list of providers, `providers`, in the
-inviter's order; an empty list fails to decode. A GitHub invite's `token` is
-`included` with its `pat`, or `joiner_provides`. An S3 invite carries its
-`location` (endpoint, region, bucket, and key prefix) and a `key`: `included`
-with this device's key or one saved spare, or `joiner_provides`. A key left to
-the joiner projects to `S3Draft::AwaitingKey` or `GithubDraftToken::AwaitingToken`,
-which the join screen completes. The joiner joins through a provider it has a
-key for and saves every provider whose key it has. The wire changed directly:
-there are no released codes to read back.
+- An invite carries a non-empty list, `providers`, in the inviter's order.
+  An empty list fails to decode.
+- A GitHub invite's `token` is `included` with its `pat`, or
+  `joiner_provides`.
+- An S3 invite carries its `location` (endpoint, region, bucket, and key
+  prefix) and a `key`: `included` with this device's key or one saved spare,
+  or `joiner_provides`.
+- A key left to the joiner projects to `S3Draft::AwaitingKey` or
+  `GithubDraftToken::AwaitingToken`, which the join screen completes.
+- The joiner joins through a provider it has a key for and saves every
+  provider whose key it has.
+- The wire changed directly: no released code needs to read back.
 
 **Rust typestates**
 
