@@ -1988,6 +1988,7 @@ export const I18N_KEYS = {
   ProviderSetupS3ServiceLabel: 'provider_setup.s3_service_label',
   ProviderSetupS3ServiceOther: 'provider_setup.s3_service_other',
   ProviderSetupS3ServiceWasabi: 'provider_setup.s3_service_wasabi',
+  ProviderSetupS3UseLocalDev: 'provider_setup.s3_use_local_dev',
   ProviderSetupSignInWithGoogle: 'provider_setup.sign_in_with_google',
   ProviderSetupSignInWithIcloud: 'provider_setup.sign_in_with_icloud',
   ProviderSetupStoredLocallyDesc: 'provider_setup.stored_locally_desc',

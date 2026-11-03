@@ -2374,6 +2374,7 @@ pub const PROVIDER_SETUP_S3_SERVICE_DIGITALOCEAN_SPACES: &str =
 pub const PROVIDER_SETUP_S3_SERVICE_LABEL: &str = "provider_setup.s3_service_label";
 pub const PROVIDER_SETUP_S3_SERVICE_OTHER: &str = "provider_setup.s3_service_other";
 pub const PROVIDER_SETUP_S3_SERVICE_WASABI: &str = "provider_setup.s3_service_wasabi";
+pub const PROVIDER_SETUP_S3_USE_LOCAL_DEV: &str = "provider_setup.s3_use_local_dev";
 pub const PROVIDER_SETUP_SIGN_IN_WITH_GOOGLE: &str = "provider_setup.sign_in_with_google";
 pub const PROVIDER_SETUP_SIGN_IN_WITH_ICLOUD: &str = "provider_setup.sign_in_with_icloud";
 pub const PROVIDER_SETUP_STORED_LOCALLY_DESC: &str = "provider_setup.stored_locally_desc";

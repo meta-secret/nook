@@ -16,40 +16,18 @@ import {
   extensionChannelIdentity,
   resolveExtensionChannel,
 } from './channel-identity'
-import identities from './local-s3-identities.json' with { type: 'json' }
+import {
+  LOCAL_S3_BUCKET,
+  LOCAL_S3_ENDPOINT,
+} from '../../nook-web-shared/src/dev/local-s3-fixture'
 
-export const LOCAL_S3_ENDPOINT = 'http://127.0.0.1:8333'
-export const LOCAL_S3_REGION = 'us-east-1'
-export const LOCAL_S3_BUCKET = 'nook-dev'
-
-/** The fixture's keys: three devices with full access to the bucket, one with none. */
-export enum LocalS3Identity {
-  DeviceA = 'device-a',
-  DeviceB = 'device-b',
-  DeviceC = 'device-c',
-  NoAccess = 'no-access',
-}
-
-export type LocalS3Credentials = {
-  accessKeyId: string
-  secretAccessKey: string
-}
-
-/** The TEST-ONLY key pair of a fixture identity. */
-export const localS3Credentials = (
-  identity: LocalS3Identity,
-): LocalS3Credentials => {
-  const credential = identities.identities.find(
-    (entry) => entry.name === identity,
-  )?.credentials?.[0]
-  if (!credential) {
-    throw new Error(`The local S3 fixture has no key for ${identity}.`)
-  }
-  return {
-    accessKeyId: credential.accessKey,
-    secretAccessKey: credential.secretKey,
-  }
-}
+export {
+  LOCAL_S3_BUCKET,
+  LOCAL_S3_ENDPOINT,
+  LOCAL_S3_REGION,
+  LocalS3Identity,
+  localS3Credentials,
+} from '../../nook-web-shared/src/dev/local-s3-fixture'
 
 const extensionRoot = fileURLToPath(new URL('..', import.meta.url))
 

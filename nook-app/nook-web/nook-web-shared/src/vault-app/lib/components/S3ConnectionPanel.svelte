@@ -8,7 +8,12 @@ so a native submission could never carry them into a URL.
 -->
 <script lang="ts">
   import { onMount, tick, type Component, type Snippet } from 'svelte'
-  import { ExternalLink, RefreshCw, TriangleAlert } from '@lucide/svelte'
+  import {
+    ExternalLink,
+    RefreshCw,
+    Server,
+    TriangleAlert,
+  } from '@lucide/svelte'
   import {
     s3_endpoint_service,
     s3_service_guides,
@@ -124,6 +129,31 @@ so a native submission could never carry them into a URL.
     service = guide ? { kind: 'known', guide } : otherService
   }
 
+  /** A dev build offers the local dev S3 server with its TEST-ONLY key, so
+   * nobody types a fixture key by hand; a production build offers nothing
+   * and, with the branch below folded away, bundles none of it. */
+  type LocalDevServer = { readonly labelKey: string }
+  const localDevServers: readonly LocalDevServer[] = import.meta.env.DEV
+    ? [{ labelKey: I18N_KEYS.ProviderSetupS3UseLocalDev }]
+    : []
+
+  async function useLocalDevServer(): Promise<void> {
+    if (import.meta.env.DEV) {
+      const fixture = await import('../../../dev/local-s3-fixture')
+      const key = fixture.localS3Credentials(fixture.LocalS3Identity.DeviceA)
+      draft = {
+        endpoint: fixture.LOCAL_S3_ENDPOINT,
+        region: fixture.LOCAL_S3_REGION,
+        bucket: fixture.LOCAL_S3_BUCKET,
+        keyPrefix: 'dev',
+        accessKeyId: key.accessKeyId,
+        secretAccessKey: key.secretAccessKey,
+      }
+      fieldErrors = []
+      service = otherService
+    }
+  }
+
   /** A recognised endpoint selects its service; any other leaves the pick. */
   function endpointEdited(): void {
     edited('endpoint')
@@ -215,6 +245,18 @@ so a native submission could never carry them into a URL.
   >
     <legend class="sr-only">{vault.t(I18N_KEYS.ProviderPickerS3)}</legend>
     <div class="grid gap-4 sm:grid-cols-2">
+      {#each localDevServers as server (server.labelKey)}
+        <button
+          type="button"
+          class="inline-flex w-fit items-center gap-1.5 text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground disabled:opacity-60 sm:col-span-2"
+          disabled={busy}
+          data-testid="s3-use-local-dev"
+          onclick={() => void useLocalDevServer()}
+        >
+          <Server class="size-3.5" aria-hidden="true" />
+          {vault.t(server.labelKey)}
+        </button>
+      {/each}
       <div class="min-w-0 space-y-1.5 sm:col-span-2">
         <label class="nk-field-label block" for={`${idPrefix}-s3-service`}>
           {vault.t(I18N_KEYS.ProviderSetupS3ServiceLabel)}

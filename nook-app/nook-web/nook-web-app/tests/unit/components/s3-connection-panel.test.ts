@@ -111,8 +111,12 @@ describe('S3 connection form', () => {
     expect(secret.autocomplete).toBe('off')
     for (const input of view.container.querySelectorAll('input'))
       expect(input.hasAttribute('name')).toBe(false)
-    // The form's only button is its action; nothing reveals the secret.
-    expect(view.getAllByRole('button')).toHaveLength(1)
+    // The form's only button besides the dev build's local-server fill is
+    // its action; nothing reveals the secret.
+    const buttons = view
+      .getAllByRole('button')
+      .filter((button) => button.dataset.testid !== 's3-use-local-dev')
+    expect(buttons).toHaveLength(1)
     expect(view.container.innerHTML).not.toContain(S3ConnectionFixture.SECRET)
   })
 
