@@ -225,7 +225,9 @@ test.describe('Google Drive authorized accounts', () => {
     await waitForVaultOperationsIdle(owner, ENROLLMENT_UNLOCK_TIMEOUT_MS)
     await assertVaultReady(owner)
 
-    // The Sync page lists each provider's authorized accounts on its card.
+    // Adding the provider returns to the page it started from; the Sync page
+    // lists each provider's authorized accounts on its card.
+    await openStorageSettings(owner)
     const accounts = owner.getByTestId('authorized-accounts')
     await expect(
       accounts.getByTestId(`authorized-account-${ownerEmail}`),

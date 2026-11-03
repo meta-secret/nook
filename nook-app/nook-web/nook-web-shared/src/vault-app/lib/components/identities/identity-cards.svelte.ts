@@ -33,9 +33,12 @@ export class IdentityCards {
     });
     // The unlocked identity's log, with or without a vault open: its vaults,
     // stored here or not, and its devices, which the protection checklist
-    // counts. Read again whenever this browser's vault catalog changes.
+    // counts. Read again whenever this browser's vault catalog changes, once
+    // an unlock or vault opening in progress has settled, so the read never
+    // queues in front of it.
     $effect(() => {
       if (!vault.isAuthenticated && !vault.deviceProtectionReady) return;
+      if (vault.isVerifying || vault.isInitializing) return;
       void vault.localVaults.length;
       void untrack(() => vault.identityControl.loadSnapshot());
     });
