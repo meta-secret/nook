@@ -60,7 +60,6 @@ export const I18N_KEYS = {
   AddDeviceDone: 'add_device.done',
   AddDeviceEyebrow: 'add_device.eyebrow',
   AddDeviceHowItWorks: 'add_device.how_it_works',
-  AddDeviceIntro: 'add_device.intro',
   AddDeviceInviteBody: 'add_device.invite_body',
   AddDeviceInviteTitle: 'add_device.invite_title',
   AddDeviceJoinManual: 'add_device.join_manual',

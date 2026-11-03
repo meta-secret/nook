@@ -2421,7 +2421,6 @@
   "add_device": {
     "title": "Add a device",
     "eyebrow": "pairing · end-to-end encrypted",
-    "intro": "Use {identity} on your phone or another computer.",
     "progress_cloud": "Cloud copy",
     "progress_invite": "Invite",
     "cloud_title": "First, a cloud copy",

@@ -7,24 +7,24 @@ out the new device joins by itself: nothing here waits for it.
 Every place that offers "Add a device" opens this.
 -->
 <script lang="ts">
-  import { Cloud, CloudOff, KeyRound, ShieldCheck } from "@lucide/svelte";
-  import { onMount, type ComponentProps } from "svelte";
-  import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import OnboardDevice from "$lib/components/OnboardDevice.svelte";
-  import IdentityStandingNotices from "$lib/components/identity-control/IdentityStandingNotices.svelte";
-  import { IdentityStandingPresentation } from "$lib/components/identity-control/identity-standing";
-  import BackButton from "$lib/components/workspace/BackButton.svelte";
-  import StepProgress from "$lib/components/login/StepProgress.svelte";
-  import { Button } from "$lib/components/ui/button";
-  import { CipherField, scramble } from "$lib/components/ui/cipher";
-  import { localizeProviderLabel } from "$lib/auth/providers";
-  import { enrollmentBrowser } from "$lib/enrollment/code";
-  import type { VaultState } from "$lib/vault.svelte";
-  import { DeviceJoinMounts } from "./device-join-mounts";
-  import PairingDiagram from "./PairingDiagram.svelte";
-  import { PairingProgress, PairingStage } from "./pairing-stage";
+  import { Cloud, CloudOff, KeyRound, ShieldCheck } from '@lucide/svelte'
+  import { onMount, type ComponentProps } from 'svelte'
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import OnboardDevice from '$lib/components/OnboardDevice.svelte'
+  import IdentityStandingNotices from '$lib/components/identity-control/IdentityStandingNotices.svelte'
+  import { IdentityStandingPresentation } from '$lib/components/identity-control/identity-standing'
+  import BackButton from '$lib/components/workspace/BackButton.svelte'
+  import StepProgress from '$lib/components/login/StepProgress.svelte'
+  import { Button } from '$lib/components/ui/button'
+  import { CipherField, scramble } from '$lib/components/ui/cipher'
+  import { localizeProviderLabel } from '$lib/auth/providers'
+  import { enrollmentBrowser } from '$lib/enrollment/code'
+  import type { VaultState } from '$lib/vault.svelte'
+  import { DeviceJoinMounts } from './device-join-mounts'
+  import PairingDiagram from './PairingDiagram.svelte'
+  import { PairingProgress, PairingStage } from './pairing-stage'
 
-  type OnboardDeviceProps = ComponentProps<typeof OnboardDevice>;
+  type OnboardDeviceProps = ComponentProps<typeof OnboardDevice>
 
   let {
     vault,
@@ -33,87 +33,80 @@ Every place that offers "Add a device" opens this.
     onOpenSync,
     onManageAccounts,
   }: {
-    vault: VaultState;
-    identityName: string;
+    vault: VaultState
+    identityName: string
     /** Leave the flow for the page it was opened from. */
-    onBack: () => void;
+    onBack: () => void
     /** Add a sync provider so the identity has a cloud copy. */
-    onOpenSync: () => void;
+    onOpenSync: () => void
     /** Authorize another account on a sync provider. */
-    onManageAccounts: () => void;
-  } = $props();
+    onManageAccounts: () => void
+  } = $props()
 
-  const control = $derived(vault.identityControl);
-  const snapshot = $derived(control.snapshot);
-  const standing = $derived(new IdentityStandingPresentation(snapshot));
-  const isBusy = $derived(control.busy || vault.isSaving || vault.isVerifying);
+  const control = $derived(vault.identityControl)
+  const snapshot = $derived(control.snapshot)
+  const standing = $derived(new IdentityStandingPresentation(snapshot))
+  const isBusy = $derived(control.busy || vault.isSaving || vault.isVerifying)
   const joinMounts = $derived.by(() => {
     const mountRequest: ConstructorParameters<typeof DeviceJoinMounts>[0] = {
       mounts: control.mounts,
       replication: vault.vaultArchitecture.replication_type,
-    };
-    return new DeviceJoinMounts(mountRequest).compatible;
-  });
+    }
+    return new DeviceJoinMounts(mountRequest).compatible
+  })
   const progress = $derived.by(() => {
     const facts: ConstructorParameters<typeof PairingProgress>[0] = {
       member: standing.isMember(),
       cloudReady: joinMounts.length > 0,
-      inviteReady: vault.enrollmentCode !== "",
-    };
-    return new PairingProgress(facts);
-  });
-  const stage = $derived(progress.stage);
+      inviteReady: vault.enrollmentCode !== '',
+    }
+    return new PairingProgress(facts)
+  })
+  const stage = $derived(progress.stage)
   const steps = $derived([
     vault.t(I18N_KEYS.AddDeviceProgressCloud),
     vault.t(I18N_KEYS.AddDeviceProgressInvite),
-  ]);
+  ])
   const providerLabel = $derived.by(() => {
-    const [mount] = joinMounts;
-    if (!mount) return "";
+    const [mount] = joinMounts
+    if (!mount) return ''
     const labelRequest: Parameters<typeof localizeProviderLabel>[0] = {
       label: mount.label,
       t: vault.t,
-    };
-    return localizeProviderLabel(labelRequest);
-  });
+    }
+    return localizeProviderLabel(labelRequest)
+  })
 
-  const intro = $derived.by(() => {
-    const introRequest: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.AddDeviceIntro,
-      replacements: { identity: identityName },
-    };
-    return vault.t(introRequest);
-  });
   /** Why the key in use cannot invite: this browser's key has not joined
    * the identity. */
   const notMember = $derived.by(() => {
     const notMemberRequest: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.AddDeviceNotMemberBrowser,
       replacements: { identity: identityName },
-    };
-    return vault.t(notMemberRequest);
-  });
+    }
+    return vault.t(notMemberRequest)
+  })
   const manualJoin = $derived.by(() => {
     const appUrl = enrollmentBrowser
       .getEnrollmentLinkBase()
-      .replace(/^https?:\/\//, "")
-      .replace(/\/$/, "");
+      .replace(/^https?:\/\//, '')
+      .replace(/\/$/, '')
     const manualRequest: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.AddDeviceJoinManual,
       replacements: { url: appUrl },
-    };
-    return vault.t(manualRequest);
-  });
+    }
+    return vault.t(manualRequest)
+  })
 
   function reportFailure(translationKey: Parameters<typeof vault.t>[0]) {
-    vault.errorMsg = vault.t(translationKey);
+    vault.errorMsg = vault.t(translationKey)
   }
 
   onMount(() => {
     void control.followOpenVault().then((refreshed) => {
-      if (refreshed.isErr()) reportFailure(refreshed.error.translationKey);
-    });
-  });
+      if (refreshed.isErr()) reportFailure(refreshed.error.translationKey)
+    })
+  })
 </script>
 
 {#snippet done()}
@@ -133,7 +126,9 @@ Every place that offers "Add a device" opens this.
 >
   <header class="nk-frame-tab nk-hero relative">
     <CipherField class="nk-hero-cipher" />
-    <div class="relative grid gap-8">
+    <div
+      class="relative grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-8"
+    >
       <div class="flex min-w-0 items-start gap-4">
         <BackButton
           label={vault.t(I18N_KEYS.WorkspaceBackToIdentities)}
@@ -141,7 +136,7 @@ Every place that offers "Add a device" opens this.
           {onBack}
         />
         <div class="min-w-0">
-          <p class="nk-eyebrow nk-lockup">
+          <p class="nk-eyebrow nk-lockup lg:whitespace-nowrap">
             <ShieldCheck class="size-3.5 text-success" aria-hidden="true" />
             {vault.t(I18N_KEYS.AddDeviceEyebrow)}<span
               class="nk-caret"
@@ -156,12 +151,9 @@ Every place that offers "Add a device" opens this.
               {vault.t(I18N_KEYS.AddDeviceTitle)}
             </h1>
           {/key}
-          <p class="mt-3 max-w-[48ch] text-sm text-pretty text-muted-foreground sm:text-base">
-            {intro}
-          </p>
         </div>
       </div>
-      <div class="max-w-xl">
+      <div class="w-full max-w-sm lg:w-80">
         <PairingDiagram {vault} {stage} {providerLabel} />
       </div>
     </div>
@@ -189,7 +181,9 @@ Every place that offers "Add a device" opens this.
     >
       {#if stage === PairingStage.Cloud}
         <div class="grid gap-6" data-testid="onboard-no-identity-mount">
-          <div class="grid gap-5 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start">
+          <div
+            class="grid gap-5 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start"
+          >
             <span class="nk-pair-node" data-state="missing">
               <CloudOff class="size-6" aria-hidden="true" />
             </span>
@@ -217,7 +211,9 @@ Every place that offers "Add a device" opens this.
         </div>
       {:else if stage === PairingStage.NotMember}
         <div class="grid gap-6" data-testid="add-device-not-member">
-          <div class="grid gap-5 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start">
+          <div
+            class="grid gap-5 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start"
+          >
             <span class="nk-pair-node" data-state="missing">
               <KeyRound class="size-6" aria-hidden="true" />
             </span>
@@ -239,8 +235,9 @@ Every place that offers "Add a device" opens this.
           {isBusy}
           {manualJoin}
           {done}
-          onIssueCode={(issueRequest: Parameters<OnboardDeviceProps["onIssueCode"]>[0]) =>
-            vault.issueEnrollmentCode(issueRequest)}
+          onIssueCode={(
+            issueRequest: Parameters<OnboardDeviceProps['onIssueCode']>[0],
+          ) => vault.issueEnrollmentCode(issueRequest)}
           onClearCode={() => vault.clearEnrollmentCode()}
           {onManageAccounts}
         />

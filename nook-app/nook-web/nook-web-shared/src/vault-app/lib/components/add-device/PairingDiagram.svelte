@@ -4,39 +4,45 @@ advances: the cloud is dashed while missing, and the new device lights up
 once the invite is out, since it then joins by itself.
 -->
 <script lang="ts">
-  import { Cloud, CloudOff, Laptop, MonitorSmartphone } from "@lucide/svelte";
-  import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import type { VaultState } from "$lib/vault.svelte";
-  import { PairingStage } from "./pairing-stage";
+  import { Cloud, CloudOff, Laptop, MonitorSmartphone } from '@lucide/svelte'
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import type { VaultState } from '$lib/vault.svelte'
+  import { PairingStage } from './pairing-stage'
 
   let {
     vault,
     stage,
     providerLabel,
   }: {
-    vault: VaultState;
-    stage: PairingStage;
+    vault: VaultState
+    stage: PairingStage
     /** The mount the invite goes through; empty before one exists. */
-    providerLabel: string;
-  } = $props();
+    providerLabel: string
+  } = $props()
 
-  const cloudMissing = $derived(stage === PairingStage.Cloud);
-  const issued = $derived(stage === PairingStage.Issued);
-  const firstLink = $derived(cloudMissing ? "off" : "on");
-  const secondLink = $derived(issued ? "on" : "off");
+  const cloudMissing = $derived(stage === PairingStage.Cloud)
+  const issued = $derived(stage === PairingStage.Issued)
+  const firstLink = $derived(cloudMissing ? 'off' : 'on')
+  const secondLink = $derived(issued ? 'on' : 'off')
 </script>
 
 {#snippet label(text: string, strong: boolean)}
+  <!-- One line: a long provider name truncates, whole on hover. -->
   <span
-    class="w-20 text-center text-[11px] leading-tight break-words {strong
+    class="w-16 truncate text-center sm:w-20 text-[11px] leading-tight {strong
       ? 'font-semibold text-foreground'
       : 'text-muted-foreground'}"
+    title={text}
   >
     {text}
   </span>
 {/snippet}
 
-<div class="flex items-start gap-1 sm:gap-2" data-testid="pairing-diagram" data-stage={stage}>
+<div
+  class="flex items-start gap-1 sm:gap-2"
+  data-testid="pairing-diagram"
+  data-stage={stage}
+>
   <div class="flex flex-col items-center gap-2">
     <span class="nk-pair-node" data-state="on">
       <Laptop class="size-5" aria-hidden="true" />
@@ -45,7 +51,7 @@ once the invite is out, since it then joins by itself.
   </div>
   <span class="nk-pair-link" data-state={firstLink} aria-hidden="true"></span>
   <div class="flex flex-col items-center gap-2">
-    <span class="nk-pair-node" data-state={cloudMissing ? "missing" : "on"}>
+    <span class="nk-pair-node" data-state={cloudMissing ? 'missing' : 'on'}>
       {#if cloudMissing}
         <CloudOff class="size-5" aria-hidden="true" />
       {:else}
@@ -56,7 +62,7 @@ once the invite is out, since it then joins by itself.
   </div>
   <span class="nk-pair-link" data-state={secondLink} aria-hidden="true"></span>
   <div class="flex flex-col items-center gap-2">
-    <span class="nk-pair-node" data-state={issued ? "on" : "off"}>
+    <span class="nk-pair-node" data-state={issued ? 'on' : 'off'}>
       <MonitorSmartphone class="size-5" aria-hidden="true" />
     </span>
     {@render label(vault.t(I18N_KEYS.JoinNodeJoiner), issued)}

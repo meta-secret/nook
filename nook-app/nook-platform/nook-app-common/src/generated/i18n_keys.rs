@@ -59,7 +59,6 @@ pub const ADD_DEVICE_COPY: &str = "add_device.copy";
 pub const ADD_DEVICE_DONE: &str = "add_device.done";
 pub const ADD_DEVICE_EYEBROW: &str = "add_device.eyebrow";
 pub const ADD_DEVICE_HOW_IT_WORKS: &str = "add_device.how_it_works";
-pub const ADD_DEVICE_INTRO: &str = "add_device.intro";
 pub const ADD_DEVICE_INVITE_BODY: &str = "add_device.invite_body";
 pub const ADD_DEVICE_INVITE_TITLE: &str = "add_device.invite_title";
 pub const ADD_DEVICE_JOIN_MANUAL: &str = "add_device.join_manual";
