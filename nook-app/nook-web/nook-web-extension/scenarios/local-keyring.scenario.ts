@@ -16,7 +16,8 @@ import {
 // checking how a sync provider is added (the dev build's S3 form fills in
 // the local S3 server with one click).
 test('local keyring with a PIN, a login, the extension paired, no provider', async () => {
-  await runScenario(async (browser) => {
+  await runScenario(async (devices) => {
+    const browser = await devices.open('this-device')
     await protectExtensionWithPin(browser)
     const vault = await startVaultWithPin(browser)
     await nameFirstIdentityHere(vault, 'Local keyring')

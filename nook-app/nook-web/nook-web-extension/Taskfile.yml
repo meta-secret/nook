@@ -21,9 +21,10 @@ tasks:
 
   extension:scenario:
     desc: >-
-      Drive a dev scenario (SCENARIO=<name> from scenarios/) in a new Brave
-      profile against the running dev servers, then reopen that profile as an
-      ordinary Brave window for a person to continue.
+      Drive a dev scenario (SCENARIO=<name> from scenarios/) in new Brave
+      profiles, one per device it opens, against the running dev servers,
+      then reopen each profile as an ordinary Brave window for a person to
+      continue.
     deps:
       - extension:dev:bun
     vars:
@@ -41,15 +42,18 @@ tasks:
         NOOK_EXTENSION_CHANNEL=local
         task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" _extension:build
       - |
-        profile="$HOME/Library/Application Support/Nook/browser-profiles/scenario-{{.SCENARIO}}-$(date +%Y%m%d-%H%M%S)"
+        root="$HOME/Library/Application Support/Nook/browser-profiles/scenario-{{.SCENARIO}}-$(date +%Y%m%d-%H%M%S)"
         cd "{{.EXTENSION_ROOT}}"
         PATH="$HOME/.nook/bun/{{.DEV_BUN_VERSION}}/bin:$PATH" \
-          NOOK_SCENARIO_PROFILE="$profile" NOOK_SIMPLE_VAULT_URL=https://localhost:5173/ \
+          NOOK_SCENARIO_ROOT="$root" NOOK_SIMPLE_VAULT_URL=https://localhost:5173/ \
           bun x playwright test --config scenarios/playwright.config.ts "scenarios/{{.SCENARIO}}.scenario.ts"
-        open -na "Brave Browser" --args --user-data-dir="$profile" \
-          --load-extension="{{.EXTENSION_ROOT}}/dist" --no-first-run --no-default-browser-check \
-          https://localhost:5173/app/
-        echo "Scenario {{.SCENARIO}} is open in Brave on $profile"
+        # One Brave window per device the scenario opened, each on its profile.
+        for profile in "$root"/*/; do
+          open -na "Brave Browser" --args --user-data-dir="$profile" \
+            --load-extension="{{.EXTENSION_ROOT}}/dist" --no-first-run --no-default-browser-check \
+            https://localhost:5173/app/
+          echo "Scenario {{.SCENARIO}}: $(basename "$profile") is open in Brave on $profile"
+        done
 
   extension:check:
     desc: Type-check the browser extension and verify the build sealed by setup.

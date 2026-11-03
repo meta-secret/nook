@@ -71,13 +71,9 @@ function withoutPasskeys(): void {
   })
 }
 
-/** Open Brave on the scenario's profile with the localhost extension, as a
- * visible window the script drives. */
-export async function launchDevBrowser(): Promise<DevBrowser> {
-  const profile = process.env.NOOK_SCENARIO_PROFILE
-  if (!profile) {
-    throw new Error('NOOK_SCENARIO_PROFILE names the scenario Brave profile.')
-  }
+/** Open Brave on one of the scenario's profiles with the localhost
+ * extension, as a visible window the script drives. */
+export async function launchDevBrowser(profile: string): Promise<DevBrowser> {
   const context = await chromium.launchPersistentContext(profile, {
     executablePath: BRAVE_EXECUTABLE,
     headless: false,

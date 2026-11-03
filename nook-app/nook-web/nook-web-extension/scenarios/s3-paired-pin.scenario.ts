@@ -17,7 +17,8 @@ import {
 // A web vault keyring on the local S3 server, protected by a PIN, with one
 // vault and a login, and the extension (also PIN-protected) paired with it.
 test('S3 keyring with a PIN, a login, and the extension paired', async () => {
-  await runScenario(async (browser) => {
+  await runScenario(async (devices) => {
+    const browser = await devices.open('this-device')
     await protectExtensionWithPin(browser)
     const vault = await startVaultWithPin(browser)
     await connectS3InFirstRun(vault, {
