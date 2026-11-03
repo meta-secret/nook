@@ -1,10 +1,5 @@
 use super::wasm_bindgen;
-use nook_core::DriveBackupName;
-use nook_core::{
-    OAuthProviderLabel, OauthFilePreset, ProviderLabel, ProviderOauthPreset, StorageProviderType,
-    StoredGithubRepository, StoredLocalFolderDirectory, StoredOAuthRemoteFileName,
-};
-use wasm_bindgen::JsError;
+use crate::TypedInput;
 
 #[wasm_bindgen]
 #[must_use]
@@ -13,284 +8,120 @@ use wasm_bindgen::JsError;
 }
 
 #[wasm_bindgen]
-#[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn default_drive_backup_name() -> String {
-    nook_core::DEFAULT_DRIVE_BACKUP_NAME.to_owned()
-}
-
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn format_drive_storage_ref(file_id: &str, file_name: &str) -> String {
-    DriveBackupName::format_storage_ref_raw(file_id, file_name)
-}
-
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn format_new_drive_storage_ref(file_name: &str) -> String {
-    DriveBackupName::format_storage_ref_raw("", file_name)
-}
-
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn wasm_storage_mode_for_provider(
-    provider_type: &tsify::Ts<nook_core::StorageProviderType>,
-    oauth_preset: &tsify::Ts<nook_core::OauthFilePreset>,
+    kind: &tsify::Ts<nook_core::ProviderKind>,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let oauth_preset = oauth_preset
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-
-    let provider_type = provider_type
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
-
-    Ok(provider_type
-        .storage_mode(ProviderOauthPreset::Preset(oauth_preset))
-        .as_str()
-        .to_owned())
+    let kind = kind.decode()?;
+    Ok(kind.storage_mode().as_str().to_owned())
 }
 
+/// The label a row of `kind` takes from a detail: a folder name, a
+/// repository, or an S3 location.
 #[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn provider_default_label(
-    provider_type: &tsify::Ts<nook_core::StorageProviderType>,
-
+    kind: &tsify::Ts<nook_core::ProviderKind>,
     detail: &str,
-    oauth_preset: &tsify::Ts<nook_core::OauthFilePreset>,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let oauth_preset = oauth_preset
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-
-    let provider_type = provider_type
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
-
-    Ok(match provider_type {
-        StorageProviderType::Local => ProviderLabel::Local.render(),
-        StorageProviderType::LocalFolder => ProviderLabel::LocalFolder(
-            &StoredLocalFolderDirectory::DirectoryName(detail.to_owned()),
-        )
-        .render(),
-        StorageProviderType::Github => {
-            ProviderLabel::Github(&StoredGithubRepository::Repository(detail.to_owned())).render()
-        }
-        StorageProviderType::OauthFile => ProviderLabel::OAuth(OAuthProviderLabel {
-            preset: oauth_preset,
-            file_name: &StoredOAuthRemoteFileName::FileName(detail.to_owned()),
-        })
-        .render(),
-    })
+    let kind = kind.decode()?;
+    Ok(kind.label_with_detail(detail))
 }
 
 #[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn provider_default_label_without_detail(
-    provider_type: &tsify::Ts<nook_core::StorageProviderType>,
-    oauth_preset: &tsify::Ts<nook_core::OauthFilePreset>,
+    kind: &tsify::Ts<nook_core::ProviderKind>,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let oauth_preset = oauth_preset
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-
-    let provider_type = provider_type
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
-
-    Ok(match provider_type {
-        StorageProviderType::Local => ProviderLabel::Local.render(),
-        StorageProviderType::LocalFolder => {
-            ProviderLabel::LocalFolder(&StoredLocalFolderDirectory::Unnamed).render()
-        }
-        StorageProviderType::Github => {
-            ProviderLabel::Github(&StoredGithubRepository::DefaultRepository).render()
-        }
-        StorageProviderType::OauthFile => ProviderLabel::OAuth(OAuthProviderLabel {
-            preset: oauth_preset,
-            file_name: &StoredOAuthRemoteFileName::Unresolved,
-        })
-        .render(),
-    })
+    let kind = kind.decode()?;
+    Ok(kind.bare_label())
 }
 
+/// The toast a successful connect through a provider of `kind` shows.
 #[wasm_bindgen]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
-pub fn staged_local_provider_label(
-    provider_type: &tsify::Ts<nook_core::StorageProviderType>,
+pub fn provider_connected_toast_key(
+    kind: &tsify::Ts<nook_core::ProviderKind>,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let provider_type = provider_type
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
-
-    Ok(match provider_type {
-        StorageProviderType::Local => ProviderLabel::Local.render(),
-        StorageProviderType::LocalFolder => {
-            ProviderLabel::LocalFolder(&StoredLocalFolderDirectory::Unnamed).render()
-        }
-        StorageProviderType::Github => {
-            ProviderLabel::Github(&StoredGithubRepository::DefaultRepository).render()
-        }
-        StorageProviderType::OauthFile => ProviderLabel::OAuth(OAuthProviderLabel {
-            preset: OauthFilePreset::GoogleDrive,
-            file_name: &StoredOAuthRemoteFileName::Unresolved,
-        })
-        .render(),
-    })
+    let kind = kind.decode()?;
+    Ok(kind.connected_toast_key().to_owned())
 }
 
+/// The name a setup heading gives a provider; this browser's own store takes
+/// the host's words for it.
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_github_provider_label(github_repo: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(ProviderLabel::Github(&StoredGithubRepository::Repository(github_repo.to_owned())).render())
-}
-
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_configured_oauth_provider_label(oauth_file_name: &str,
-oauth_preset: &tsify::Ts<nook_core::OauthFilePreset>) -> Result<String, wasm_bindgen::JsError> {
-let oauth_preset = oauth_preset.to_rust().map_err(|_| JsError::new("Invalid typed WASM input."))?;
-
-    Ok(ProviderLabel::OAuth(OAuthProviderLabel {
-        preset: oauth_preset,
-        file_name: &StoredOAuthRemoteFileName::FileName(oauth_file_name.to_owned()),
-    })
-    .render())
-
-}
-
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_unconfigured_oauth_provider_label() -> Result<String, wasm_bindgen::JsError> {
-    Ok(ProviderLabel::OAuth(OAuthProviderLabel {
-        preset: OauthFilePreset::GoogleDrive,
-        file_name: &StoredOAuthRemoteFileName::Unresolved,
-    })
-    .render())
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn provider_setup_name_key(
+    request: &tsify::Ts<nook_core::ProviderSetupNameRequest>,
+) -> Result<String, wasm_bindgen::JsError> {
+    let request = request.decode()?;
+    Ok(request.translation_key().to_owned())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nook_core::OauthFilePreset;
-    #[cfg(test)]
+    use nook_core::{OAuthFilePreset, ProviderKind, ProviderSetupNameRequest, i18n_keys};
     use tsify::Tsify;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
-    fn provider_label_exports_cover_defaults_and_details() -> Result<(), wasm_bindgen::JsError> {
+    fn provider_label_exports_cover_modes_and_details() -> Result<(), wasm_bindgen::JsError> {
         assert_eq!(default_github_repo(), "nook");
-        assert_eq!(default_drive_backup_name(), "nook-events");
+        let icloud = Tsify::into_ts(&ProviderKind::OauthFile(OAuthFilePreset::ICloud))?;
+        assert_eq!(wasm_storage_mode_for_provider(&icloud)?, "icloud");
+        assert_eq!(provider_default_label(&icloud, "ignored")?, "iCloud");
+        let folder = Tsify::into_ts(&ProviderKind::LocalFolder)?;
         assert_eq!(
-            format_drive_storage_ref(" file-id ", " events.json "),
-            "file-id\tevents.json"
-        );
-        assert_eq!(format_new_drive_storage_ref(""), "nook-events");
-
-        assert_eq!(
-            wasm_storage_mode_for_provider(
-                &Tsify::into_ts(&(StorageProviderType::Local))?,
-                &Tsify::into_ts(&(OauthFilePreset::ICloud))?
-            )?,
-            "local"
-        );
-        assert_eq!(
-            wasm_storage_mode_for_provider(
-                &Tsify::into_ts(&(StorageProviderType::Github))?,
-                &Tsify::into_ts(&(OauthFilePreset::GoogleDrive))?
-            )?,
-            "github"
-        );
-        assert_eq!(
-            wasm_storage_mode_for_provider(
-                &Tsify::into_ts(&(StorageProviderType::OauthFile))?,
-                &Tsify::into_ts(&(OauthFilePreset::GoogleDrive))?
-            )?,
-            "google-drive"
-        );
-        assert_eq!(
-            wasm_storage_mode_for_provider(
-                &Tsify::into_ts(&(StorageProviderType::OauthFile))?,
-                &Tsify::into_ts(&(OauthFilePreset::ICloud))?
-            )?,
-            "icloud"
-        );
-
-        assert_eq!(
-            provider_default_label(
-                &Tsify::into_ts(&(StorageProviderType::Local))?,
-                "ignored",
-                &Tsify::into_ts(&(OauthFilePreset::GoogleDrive))?
-            )?,
-            "This device"
-        );
-        assert_eq!(
-            provider_default_label(
-                &Tsify::into_ts(&(StorageProviderType::LocalFolder))?,
-                " backups ",
-                &Tsify::into_ts(&(OauthFilePreset::GoogleDrive))?
-            )?,
+            provider_default_label(&folder, " backups ")?,
             "Local backup · backups"
         );
         assert_eq!(
-            provider_default_label(
-                &Tsify::into_ts(&(StorageProviderType::Github))?,
-                " repo ",
-                &Tsify::into_ts(&(OauthFilePreset::GoogleDrive))?
-            )?,
-            "GitHub · repo"
+            provider_default_label_without_detail(&folder)?,
+            "Local backup"
         );
-        assert_eq!(
-            provider_default_label(
-                &Tsify::into_ts(&(StorageProviderType::OauthFile))?,
-                " vault.json ",
-                &Tsify::into_ts(&(OauthFilePreset::ICloud))?
-            )?,
-            "iCloud · vault.json"
-        );
-        assert_eq!(
-            provider_default_label_without_detail(
-                &Tsify::into_ts(&(StorageProviderType::OauthFile))?,
-                &Tsify::into_ts(&(OauthFilePreset::GoogleDrive))?
-            )?,
-            "Google Drive"
-        );
+        let github = Tsify::into_ts(&ProviderKind::Github)?;
+        assert_eq!(wasm_storage_mode_for_provider(&github)?, "github");
+        assert_eq!(provider_default_label(&github, " repo ")?, "GitHub · repo");
         Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn staged_provider_labels_use_their_provider_specific_defaults()
-    -> Result<(), wasm_bindgen::JsError> {
+    fn the_connect_toast_and_setup_name_come_from_the_kind() -> Result<(), wasm_bindgen::JsError> {
+        let icloud = Tsify::into_ts(&ProviderKind::OauthFile(OAuthFilePreset::ICloud))?;
         assert_eq!(
-            staged_local_provider_label(&Tsify::into_ts(&(StorageProviderType::Local))?)?,
-            "This device"
+            provider_connected_toast_key(&icloud)?,
+            i18n_keys::TOASTS_GOOGLE_DRIVE_CONNECTED
+        );
+        let name = |kind| {
+            Tsify::into_ts(&ProviderSetupNameRequest {
+                kind,
+                this_browser_key: "host.this_browser".to_owned(),
+            })
+        };
+        assert_eq!(
+            provider_setup_name_key(&name(ProviderKind::OauthFile(OAuthFilePreset::ICloud))?)?,
+            i18n_keys::PROVIDER_PICKER_ICLOUD
         );
         assert_eq!(
-            staged_local_provider_label(&Tsify::into_ts(&(StorageProviderType::LocalFolder))?)?,
-            "Local backup"
+            provider_setup_name_key(&name(ProviderKind::Local)?)?,
+            "host.this_browser"
         );
-        assert_eq!(staged_github_provider_label(" nook ")?, "GitHub");
-        assert_eq!(
-            staged_github_provider_label("team-vault")?,
-            "GitHub · team-vault"
-        );
-        assert_eq!(
-            staged_configured_oauth_provider_label(
-                "events.json",
-                &Tsify::into_ts(&(OauthFilePreset::GoogleDrive))?
-            )?,
-            "Google Drive · events.json"
-        );
-        assert_eq!(staged_unconfigured_oauth_provider_label()?, "Google Drive");
         Ok(())
     }
 }

@@ -8,9 +8,10 @@
 
 use super::{ReplicationType, VaultArchitecture};
 use crate::errors::{ValidationError, ValidationResult};
-use crate::{OAuthFilePreset, OauthFilePreset, StorageProviderType};
+use crate::{OAuthFilePreset, ProviderKind, i18n_keys};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
+use wasm_bindgen::prelude::wasm_bindgen;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "snake_case")]
@@ -27,13 +28,8 @@ impl SharedJoinerIdentityKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", content = "preset", rename_all = "snake_case")]
-pub enum ProviderOauthPreset {
-    NotApplicable,
-    Preset(OAuthFilePreset),
-}
-
+/// Whom a shared invite names: an authorized account of a given kind, or no
+/// one, because the provider's own sharing list admits the joiner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "state", content = "kind", rename_all = "snake_case")]
 pub enum ProviderJoinerIdentity {
@@ -41,88 +37,92 @@ pub enum ProviderJoinerIdentity {
     Required(SharedJoinerIdentityKind),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+/// Whether a provider supports one replication.
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReplicationSupport {
+    Supported,
+    Unsupported,
+}
+
+/// Whether a provider replicates shared vaults, and whom their invites name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SharedReplication {
+    Unsupported,
+    Supported(ProviderJoinerIdentity),
+}
+
+/// What one provider kind can replicate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProviderReplicationCapability {
-    pub provider_type: String,
-    pub oauth_preset: ProviderOauthPreset,
-    pub supports_personal: bool,
-    pub supports_shared: bool,
-    pub shared_joiner_identity: ProviderJoinerIdentity,
+    pub kind: ProviderKind,
+    pub personal: ReplicationSupport,
+    pub shared: SharedReplication,
+}
+
+impl ProviderKind {
+    /// Local, local-folder, GitHub, and S3 rows replicate personal vaults
+    /// only: an invite either carries their one credential or the joiner sets
+    /// one up. Google Drive and iCloud replicate both; a Drive invite names
+    /// the joiner's Google account.
+    #[must_use]
+    pub const fn replication_capability(self) -> ProviderReplicationCapability {
+        let shared = match self {
+            Self::Local | Self::LocalFolder | Self::Github | Self::S3 => {
+                SharedReplication::Unsupported
+            }
+            Self::OauthFile(OAuthFilePreset::GoogleDrive) => SharedReplication::Supported(
+                ProviderJoinerIdentity::Required(SharedJoinerIdentityKind::Email),
+            ),
+            Self::OauthFile(OAuthFilePreset::ICloud) => {
+                SharedReplication::Supported(ProviderJoinerIdentity::NotRequired)
+            }
+        };
+        ProviderReplicationCapability {
+            kind: self,
+            personal: ReplicationSupport::Supported,
+            shared,
+        }
+    }
 }
 
 impl ProviderReplicationCapability {
+    /// The translation key of the label a provider picker shows for this
+    /// capability: personal and shared replication, or personal only.
     #[must_use]
-    pub fn for_provider(
-        provider_type: StorageProviderType,
-        oauth_preset: ProviderOauthPreset,
-    ) -> Self {
-        match provider_type {
-            StorageProviderType::Local
-            | StorageProviderType::LocalFolder
-            | StorageProviderType::Github => Self {
-                provider_type: provider_type.as_str().to_owned(),
-                oauth_preset: ProviderOauthPreset::NotApplicable,
-                supports_personal: true,
-                supports_shared: false,
-                shared_joiner_identity: ProviderJoinerIdentity::NotRequired,
-            },
-            StorageProviderType::OauthFile => {
-                let ProviderOauthPreset::Preset(preset) = oauth_preset else {
-                    return Self {
-                        provider_type: provider_type.as_str().to_owned(),
-                        oauth_preset: ProviderOauthPreset::NotApplicable,
-                        supports_personal: false,
-                        supports_shared: false,
-                        shared_joiner_identity: ProviderJoinerIdentity::NotRequired,
-                    };
-                };
-                match preset {
-                    OauthFilePreset::GoogleDrive => Self {
-                        provider_type: provider_type.as_str().to_owned(),
-                        oauth_preset: ProviderOauthPreset::Preset(preset),
-                        supports_personal: true,
-                        supports_shared: true,
-                        shared_joiner_identity: ProviderJoinerIdentity::Required(
-                            SharedJoinerIdentityKind::Email,
-                        ),
-                    },
-                    OauthFilePreset::ICloud => Self {
-                        provider_type: provider_type.as_str().to_owned(),
-                        oauth_preset: ProviderOauthPreset::Preset(preset),
-                        supports_personal: true,
-                        supports_shared: true,
-                        shared_joiner_identity: ProviderJoinerIdentity::NotRequired,
-                    },
-                }
+    pub const fn label_translation_key(&self) -> &'static str {
+        match self.shared {
+            SharedReplication::Supported(_) => {
+                i18n_keys::PROVIDER_PICKER_CAPABILITY_PERSONAL_SHARED
+            }
+            SharedReplication::Unsupported => i18n_keys::PROVIDER_PICKER_CAPABILITY_PERSONAL_ONLY,
+        }
+    }
+
+    #[must_use]
+    pub const fn supports(&self, replication: ReplicationType) -> ReplicationSupport {
+        match (replication, self.shared) {
+            (ReplicationType::Personal, _) => self.personal,
+            (ReplicationType::Shared, SharedReplication::Supported(_)) => {
+                ReplicationSupport::Supported
+            }
+            (ReplicationType::Shared, SharedReplication::Unsupported) => {
+                ReplicationSupport::Unsupported
             }
         }
     }
 
-    pub fn validate(
-        provider_type: StorageProviderType,
-        oauth_preset: ProviderOauthPreset,
-        replication_type: ReplicationType,
-    ) -> ValidationResult<Self> {
-        let capability = Self::for_provider(provider_type, oauth_preset);
-        if capability.supports(replication_type) {
-            return Ok(capability);
-        }
-        Err(ValidationError::UnsupportedProviderReplication {
-            provider_type: capability.provider_type,
-            oauth_preset: match capability.oauth_preset {
-                ProviderOauthPreset::NotApplicable => String::new(),
-                ProviderOauthPreset::Preset(preset) => preset.as_str().to_owned(),
-            },
-            replication_type: replication_type.as_str().to_owned(),
-        })
-    }
-
-    #[must_use]
-    pub fn supports(&self, replication_type: ReplicationType) -> bool {
-        match replication_type {
-            ReplicationType::Personal => self.supports_personal,
-            ReplicationType::Shared => self.supports_shared,
+    /// The capability when it supports `replication`, else the error naming
+    /// the provider and the replication.
+    pub fn validate(self, replication: ReplicationType) -> ValidationResult<Self> {
+        match self.supports(replication) {
+            ReplicationSupport::Supported => Ok(self),
+            ReplicationSupport::Unsupported => {
+                Err(ValidationError::UnsupportedProviderReplication {
+                    provider: self.kind.label().to_owned(),
+                    replication_type: replication.as_str().to_owned(),
+                })
+            }
         }
     }
 }
@@ -130,11 +130,11 @@ impl ProviderReplicationCapability {
 impl VaultArchitecture {
     pub fn validate_for_provider(
         &self,
-        provider_type: StorageProviderType,
-        oauth_preset: ProviderOauthPreset,
+        kind: ProviderKind,
     ) -> ValidationResult<ProviderReplicationCapability> {
         self.validate()?;
-        ProviderReplicationCapability::validate(provider_type, oauth_preset, self.replication_type)
+        kind.replication_capability()
+            .validate(self.replication_type)
     }
 }
 
@@ -144,54 +144,91 @@ mod tests {
     use crate::vault::vault_architecture::{DeviceMode, SentinelPolicy};
 
     #[test]
+    fn the_picker_label_names_shared_replication_only_where_supported() {
+        for kind in [
+            ProviderKind::Local,
+            ProviderKind::LocalFolder,
+            ProviderKind::Github,
+            ProviderKind::S3,
+        ] {
+            assert_eq!(
+                kind.replication_capability().label_translation_key(),
+                i18n_keys::PROVIDER_PICKER_CAPABILITY_PERSONAL_ONLY
+            );
+        }
+        for preset in [OAuthFilePreset::GoogleDrive, OAuthFilePreset::ICloud] {
+            assert_eq!(
+                ProviderKind::OauthFile(preset)
+                    .replication_capability()
+                    .label_translation_key(),
+                i18n_keys::PROVIDER_PICKER_CAPABILITY_PERSONAL_SHARED
+            );
+        }
+    }
+
+    #[test]
     fn provider_capability_matrix_is_fail_closed() -> anyhow::Result<()> {
-        ProviderReplicationCapability::validate(
-            StorageProviderType::Github,
-            ProviderOauthPreset::NotApplicable,
-            ReplicationType::Personal,
-        )?;
-        assert!(
-            ProviderReplicationCapability::validate(
-                StorageProviderType::Github,
-                ProviderOauthPreset::NotApplicable,
-                ReplicationType::Shared,
-            )
-            .is_err()
-        );
-
-        let gdrive = ProviderReplicationCapability::validate(
-            StorageProviderType::OauthFile,
-            ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
-            ReplicationType::Shared,
-        )?;
+        let personal_only = [
+            ProviderKind::Local,
+            ProviderKind::LocalFolder,
+            ProviderKind::Github,
+            ProviderKind::S3,
+        ];
+        for kind in personal_only {
+            let capability = kind
+                .replication_capability()
+                .validate(ReplicationType::Personal)?;
+            assert_eq!(capability.shared, SharedReplication::Unsupported);
+            assert_eq!(
+                capability.supports(ReplicationType::Shared),
+                ReplicationSupport::Unsupported
+            );
+        }
         assert_eq!(
-            gdrive.shared_joiner_identity,
-            ProviderJoinerIdentity::Required(SharedJoinerIdentityKind::Email)
+            ProviderKind::OauthFile(OAuthFilePreset::GoogleDrive)
+                .replication_capability()
+                .validate(ReplicationType::Shared)?
+                .shared,
+            SharedReplication::Supported(ProviderJoinerIdentity::Required(
+                SharedJoinerIdentityKind::Email
+            ))
         );
-
-        let icloud = ProviderReplicationCapability::validate(
-            StorageProviderType::OauthFile,
-            ProviderOauthPreset::Preset(OauthFilePreset::ICloud),
-            ReplicationType::Shared,
-        )?;
+        let icloud = ProviderKind::OauthFile(OAuthFilePreset::ICloud).replication_capability();
         assert_eq!(
-            icloud.shared_joiner_identity,
-            ProviderJoinerIdentity::NotRequired
+            icloud.shared,
+            SharedReplication::Supported(ProviderJoinerIdentity::NotRequired)
+        );
+        assert_eq!(
+            icloud.supports(ReplicationType::Personal),
+            ReplicationSupport::Supported
+        );
+        // The error names the provider and the replication, nothing empty.
+        for (kind, provider) in [(ProviderKind::S3, "s3"), (ProviderKind::Github, "github")] {
+            assert_eq!(
+                kind.replication_capability()
+                    .validate(ReplicationType::Shared),
+                Err(ValidationError::UnsupportedProviderReplication {
+                    provider: provider.to_owned(),
+                    replication_type: "shared".to_owned(),
+                })
+            );
+        }
+        assert_eq!(
+            ProviderKind::Github
+                .replication_capability()
+                .validate(ReplicationType::Shared)
+                .map_err(|error| error.to_string()),
+            Err("errors.validation.unsupported_provider_replication:github:shared".to_owned())
         );
         Ok(())
     }
 
     #[test]
     fn grouped_architecture_matrix_validates_provider_replication() -> anyhow::Result<()> {
+        let drive = ProviderKind::OauthFile(OAuthFilePreset::GoogleDrive);
         let simple_personal = VaultArchitecture::simple_personal(DeviceMode::Standard);
-        simple_personal.validate_for_provider(
-            StorageProviderType::Github,
-            ProviderOauthPreset::NotApplicable,
-        )?;
-        simple_personal.validate_for_provider(
-            StorageProviderType::OauthFile,
-            ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
-        )?;
+        simple_personal.validate_for_provider(ProviderKind::Github)?;
+        simple_personal.validate_for_provider(drive)?;
 
         let simple_shared = VaultArchitecture {
             replication_type: ReplicationType::Shared,
@@ -199,16 +236,10 @@ mod tests {
         };
         assert!(
             simple_shared
-                .validate_for_provider(
-                    StorageProviderType::Github,
-                    ProviderOauthPreset::NotApplicable
-                )
+                .validate_for_provider(ProviderKind::Github)
                 .is_err()
         );
-        simple_shared.validate_for_provider(
-            StorageProviderType::OauthFile,
-            ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
-        )?;
+        simple_shared.validate_for_provider(drive)?;
 
         let sentinel_ready = VaultArchitecture::sentinel_personal(
             DeviceMode::AntiHacker,
@@ -218,31 +249,19 @@ mod tests {
                 ready_participants: 2.into(),
             },
         );
-        sentinel_ready.validate_for_provider(
-            StorageProviderType::Github,
-            ProviderOauthPreset::NotApplicable,
-        )?;
+        sentinel_ready.validate_for_provider(ProviderKind::Github)?;
 
         let sentinel_shared = VaultArchitecture {
             replication_type: ReplicationType::Shared,
             ..sentinel_ready
         };
-        sentinel_shared.validate_for_provider(
-            StorageProviderType::OauthFile,
-            ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
-        )?;
+        sentinel_shared.validate_for_provider(drive)?;
         assert!(
             sentinel_shared
-                .validate_for_provider(
-                    StorageProviderType::Github,
-                    ProviderOauthPreset::NotApplicable
-                )
+                .validate_for_provider(ProviderKind::Github)
                 .is_err()
         );
-        sentinel_shared.validate_for_provider(
-            StorageProviderType::OauthFile,
-            ProviderOauthPreset::Preset(OauthFilePreset::ICloud),
-        )?;
+        sentinel_shared.validate_for_provider(ProviderKind::OauthFile(OAuthFilePreset::ICloud))?;
         Ok(())
     }
 }

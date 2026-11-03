@@ -1,5 +1,6 @@
 import type {
   NookGoogleDriveVaultListing,
+  FilingIdentity,
   ProviderVaultSummary,
 } from "$app-wasm";
 import type { VaultState } from "$lib/vault.svelte";
@@ -60,13 +61,20 @@ export class DriveVaultInventoryReader {
 }
 
 /** The vaults a found Nook root holds; none before it is listed. */
+/** The vaults a listing holds and the identities they are filed under. */
+export type ListedVaults = {
+  readonly vaults: readonly ProviderVaultSummary[];
+  readonly identities: readonly FilingIdentity[];
+};
+
+/** A Drive account without a Nook root holds no vaults. */
 export function listedVaults(
   listing: NookGoogleDriveVaultListing,
-): readonly ProviderVaultSummary[] {
+): ListedVaults {
   switch (listing.root) {
     case "found":
-      return listing.listing.vaults;
+      return listing.listing;
     case "absent":
-      return [];
+      return { vaults: [], identities: [] };
   }
 }

@@ -68,7 +68,7 @@ export async function addSecret(
         window as Window & {
           __nookVault?: {
             secrets?: unknown[]
-            storageMode?: string
+            providerDraft: { type: string }
             localVaultPresent?: boolean
             syncProviders?: unknown[]
             isSaving?: boolean
@@ -102,8 +102,10 @@ export async function addSecret(
           tx.oncomplete = () => db.close()
         }
       })
-      const storageMode: unknown = vault?.storageMode
       const debug = {
+        providerDraftType: vault
+          ? vault.providerDraft.type
+          : 'vault-unavailable',
         secrets: vault?.secrets?.length,
         localVaultPresent: vault?.localVaultPresent,
         syncProviders: vault?.syncProviders?.length,
@@ -115,7 +117,7 @@ export async function addSecret(
           idbYaml.match(/\n\s*-\s+id:\s+secret_/g)?.length,
         ),
       }
-      return typeof storageMode === 'string' ? { ...debug, storageMode } : debug
+      return debug
     }, key)
     throw new Error(
       `Secret row "${key}" did not appear. Debug: ${JSON.stringify(debug)}. Original: ${

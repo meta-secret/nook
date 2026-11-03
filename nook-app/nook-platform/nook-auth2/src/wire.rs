@@ -6,7 +6,7 @@ use age::secrecy::ExposeSecret;
 use age::x25519::{Identity, Recipient};
 use serde::{Deserialize, Serialize};
 use std::{fmt, mem};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 mod metadata;
 pub use metadata::{DeviceSigningPublicKey, IdentityVaultEventId, IsoTimestamp, Sha256Hex};
@@ -418,6 +418,43 @@ impl TryFrom<String> for DeviceIdentitySecret {
     }
 }
 
+/// One sync-provider credential's text: a GitHub token, a Google Drive access
+/// token, an iCloud web-auth token, or an S3 secret access key. It is the
+/// plaintext while its provider is open and the age armor sealed to an app key
+/// at rest. It is never blank and is kept exactly as written, because armor
+/// line breaks matter. `Debug` is redacted, there is no `Display`, and the
+/// text is wiped when the value is dropped or replaced.
+#[derive(Clone, PartialEq, Eq, Deserialize, Serialize, tsify::Tsify, Zeroize, ZeroizeOnDrop)]
+#[tsify(type = "string")]
+#[serde(try_from = "String")]
+pub struct ProviderSecretText(String);
+
+impl ProviderSecretText {
+    /// The text, for sealing, request signing, and the provider adapters.
+    #[must_use]
+    pub fn expose(&self) -> &str {
+        let Self(text) = self;
+        text
+    }
+}
+
+/// A blank text, empty or whitespace only, names no credential.
+impl TryFrom<String> for ProviderSecretText {
+    type Error = ValidationError;
+    fn try_from(text: String) -> ValidationResult<Self> {
+        match text.trim() {
+            "" => Err(ValidationError::ProviderSecretRequired),
+            _ => Ok(Self(text)),
+        }
+    }
+}
+
+impl fmt::Debug for ProviderSecretText {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("ProviderSecretText([REDACTED])")
+    }
+}
+
 impl SigningSeedHex {
     pub fn parse(raw: &str) -> ValidationResult<Self> {
         let seed = raw.trim();
@@ -475,6 +512,55 @@ mod tests {
     use super::*;
     use age::secrecy::ExposeSecret;
     use age::x25519::Identity;
+    use tsify::Tsify;
+
+    struct WipedOnDrop;
+    impl WipedOnDrop {
+        /// Compiles only for a type that wipes itself when dropped.
+        const fn check<T: ZeroizeOnDrop>() {}
+    }
+
+    #[test]
+    fn a_provider_secret_is_never_blank_and_keeps_its_text_exactly() -> anyhow::Result<()> {
+        for blank in ["", " ", "\t\n"] {
+            assert_eq!(
+                ProviderSecretText::try_from(blank.to_owned()),
+                Err(ValidationError::ProviderSecretRequired)
+            );
+        }
+        let armor = "-----BEGIN AGE ENCRYPTED FILE-----\nYWdl\n-----END AGE ENCRYPTED FILE-----\n";
+        assert_eq!(
+            ProviderSecretText::try_from(armor.to_owned())?.expose(),
+            armor
+        );
+        assert_eq!(
+            ProviderSecretText::try_from(" kept exactly\n".to_owned())?.expose(),
+            " kept exactly\n"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_provider_secret_is_a_plain_string_on_the_wire_and_redacted_in_debug() -> anyhow::Result<()>
+    {
+        let secret = ProviderSecretText::try_from("TEST-ONLY-secret-not-real".to_owned())?;
+        let wire = serde_json::to_value(&secret)?;
+        assert_eq!(wire, serde_json::json!("TEST-ONLY-secret-not-real"));
+        assert_eq!(serde_json::from_value::<ProviderSecretText>(wire)?, secret);
+        assert!(serde_json::from_value::<ProviderSecretText>(serde_json::json!("  ")).is_err());
+        assert_eq!(format!("{secret:?}"), "ProviderSecretText([REDACTED])");
+        assert!(ProviderSecretText::DECL.ends_with("export type ProviderSecretText = string;"));
+        Ok(())
+    }
+
+    #[test]
+    fn a_provider_secret_wipes_its_text() -> anyhow::Result<()> {
+        WipedOnDrop::check::<ProviderSecretText>();
+        let mut secret = ProviderSecretText::try_from("TEST-ONLY-secret-not-real".to_owned())?;
+        secret.zeroize();
+        assert_eq!(secret.expose(), "");
+        Ok(())
+    }
 
     #[test]
     fn symmetric_key_roundtrip_and_generate() -> anyhow::Result<()> {

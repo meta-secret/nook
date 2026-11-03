@@ -10,7 +10,9 @@ under their identity and are never acted on one by one in this step.
 Two screens read the folder. Setup (first run, and adding a sync provider to
 the identity in use) gives each identity one [setup action](#setup-action)
 that runs at once. The recovery screen, with no identity in use, plans
-decisions and applies them together.
+decisions and applies them together. An S3 location is read the same way on
+first run and on the recovery screen, but its Sync page wizard lists no
+identities.
 
 This record owns the rules and the identity operations behind them. The
 [identity architecture](identity-vault-architecture.md) owns identity, app key,

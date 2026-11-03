@@ -10,7 +10,7 @@ mod admission;
 mod codec;
 mod issuance;
 use crate::{
-    AgeArmoredCiphertext, AuthProvidersSnapshotData, MultiDeviceError, SentinelGenesisRequest,
+    AgeArmoredCiphertext, AuthProvidersSnapshot, MultiDeviceError, SentinelGenesisRequest,
     SentinelGenesisShareDelivery, StoredSecretRecord,
 };
 pub use admission::SentinelOnboardingRecipient;
@@ -60,7 +60,7 @@ pub struct SentinelOnboardingPackage {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AcceptedSentinelOnboarding {
     pub share_record: StoredSecretRecord,
-    pub provider_snapshot: AuthProvidersSnapshotData,
+    pub provider_snapshot: AuthProvidersSnapshot,
 }
 
 struct OnboardingDelivery<'a> {
@@ -85,13 +85,11 @@ impl OnboardingDelivery<'_> {
 mod tests {
     use super::{SentinelOnboardingPackage, SentinelOnboardingVersion};
     use crate::{
-        ActiveVaultScope, AuthProvidersSnapshotData, CheckedSentinelGenesisResponse,
-        DeviceIdentity, OAuthFileConfigData, OauthFilePreset, ProviderSyncCheckpoint,
-        ProviderVaultScope, SentinelGenesisRequest, SentinelGenesisShareDelivery,
-        SentinelOnboardingIssuance, SentinelOnboardingRecipient, SigningIdentity,
-        StorageProviderData, StorageProviderType, StoredGithubPat, StoredGithubRepository,
-        StoredLocalFolderConfiguration, StoredOAuthAccessCredential, StoredOAuthFileConfiguration,
-        StoredOAuthRemoteFileName,
+        ActiveVaultScope, AuthProvidersSnapshot, CheckedSentinelGenesisResponse, DeviceIdentity,
+        GoogleDriveAuthorization, GoogleDriveFolderId, GoogleDriveProvider, OAuthAccountIdentity,
+        OAuthFileProvider, ProviderSecretText, SentinelGenesisRequest,
+        SentinelGenesisShareDelivery, SentinelOnboardingIssuance, SentinelOnboardingRecipient,
+        SigningIdentity, StorageProvider, StoredProvider,
     };
     use std::io::Error as IoError;
 
@@ -99,7 +97,7 @@ mod tests {
         pub(super) member: DeviceIdentity,
         pub(super) request: SentinelGenesisRequest,
         pub(super) delivery: SentinelGenesisShareDelivery,
-        pub(super) snapshot: AuthProvidersSnapshotData,
+        pub(super) snapshot: AuthProvidersSnapshot,
     }
     impl OnboardingFixture {
         pub(super) fn new() -> anyhow::Result<Self> {
@@ -137,32 +135,25 @@ mod tests {
                 member,
                 request,
                 delivery,
-                snapshot: Self::snapshot(store_id.as_str()),
+                snapshot: Self::snapshot(store_id.as_str())?,
             })
         }
-        fn snapshot(store_id: &str) -> AuthProvidersSnapshotData {
-            AuthProvidersSnapshotData {
-                providers: vec![StorageProviderData {
-                    id: "drive-1".to_owned(),
-                    provider_type: StorageProviderType::OauthFile,
-                    label: "Google Drive".to_owned(),
-                    github_pat: StoredGithubPat::Missing,
-                    github_repo: StoredGithubRepository::DefaultRepository,
-                    oauth_file: StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
-                        preset: OauthFilePreset::GoogleDrive,
-                        access_token: StoredOAuthAccessCredential::AccessToken(
-                            "member-secret-token".to_owned(),
-                        ),
-                        file_name: StoredOAuthRemoteFileName::FileName("nook-events".to_owned()),
-                        ..OAuthFileConfigData::default()
-                    }),
-                    local_folder: StoredLocalFolderConfiguration::NotApplicable,
-                    store_id: ProviderVaultScope::Unscoped,
-                    sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-                    created_at: "2026-07-12T00:00:00.000Z".to_owned(),
-                }],
+        fn snapshot(store_id: &str) -> anyhow::Result<AuthProvidersSnapshot> {
+            Ok(AuthProvidersSnapshot {
+                providers: vec![StorageProvider::fixture(
+                    "drive-1",
+                    StoredProvider::OauthFile(OAuthFileProvider::GoogleDrive(
+                        GoogleDriveProvider {
+                            authorization: GoogleDriveAuthorization::fixture(
+                                "member-secret-token",
+                            )?,
+                            account: OAuthAccountIdentity::Unknown,
+                            folder_id: GoogleDriveFolderId::parse("vault-folder")?,
+                        },
+                    )),
+                )],
                 active_vault_store_id: ActiveVaultScope::StoreId(store_id.to_owned()),
-            }
+            })
         }
         pub(super) fn package(&self) -> anyhow::Result<SentinelOnboardingPackage> {
             Ok(SentinelOnboardingIssuance {
@@ -212,19 +203,17 @@ mod tests {
                 .as_str()
                 .starts_with("sentinel_share:")
         );
+        let Some(provider) = accepted.provider_snapshot.providers.first() else {
+            anyhow::bail!("the provider snapshot fixture holds one provider");
+        };
         assert_eq!(
-            (match &accepted
-                .provider_snapshot
-                .providers
-                .first()
-                .unwrap_or_else(|| panic!("provider snapshot fixture must contain one provider"))
-                .oauth_file
-            {
-                StoredOAuthFileConfiguration::Configured(config) => &config.access_token,
-                StoredOAuthFileConfiguration::NotApplicable =>
-                    return Err(IoError::other("provider OAuth fixture must exist").into()),
-            }),
-            &StoredOAuthAccessCredential::AccessToken("member-secret-token".to_owned())
+            provider
+                .provider
+                .secrets()
+                .into_iter()
+                .map(ProviderSecretText::expose)
+                .collect::<Vec<_>>(),
+            vec!["member-secret-token"]
         );
         Ok(())
     }

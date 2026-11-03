@@ -22,6 +22,7 @@ import {
   NookVaultSwitchState,
   NookActiveVaultSelectionState,
   type NookLocalVaultEntry,
+  type NookStorageConnection,
   type StoreId,
 } from "$app-wasm";
 import {
@@ -292,10 +293,7 @@ export class VaultLoginActions {
     state.localLoginPreparation = LocalLoginPreparationState.Preparing;
     log.debug("preparing local login gate");
     try {
-      state.storageMode = "local";
-      state.githubPat = "";
-      state.clearOauthFile();
-      state.clearLocalFolder();
+      state.useThisBrowser();
       const passwordRefresh1 = await state.refreshPasswordEntriesList();
       if (passwordRefresh1.isErr()) {
         if (canPublishPreparationResult())
@@ -440,10 +438,7 @@ export class VaultLoginActions {
 
     state.errorMsg = "";
     state.dismissSuccess();
-    state.storageMode = "local";
-    state.githubPat = "";
-    state.clearOauthFile();
-    state.clearLocalFolder();
+    state.useThisBrowser();
     state.isVerifying = true;
     let creationState = LocalVaultCreationState.Pending;
 
@@ -480,10 +475,10 @@ export class VaultLoginActions {
       const connected = await state.enqueueStorage(async () => {
         const manager = state.admitManager();
         if (manager.isErr()) return storageErr(manager.error);
+        const local: NookStorageConnection = { mode: "local" };
         try {
-          if (creatingAdditionalVault)
-            await manager.value.connect_fresh("local", "", "");
-          else await manager.value.connect("local", "", "");
+          if (creatingAdditionalVault) await manager.value.connect_fresh(local);
+          else await manager.value.connect(local);
           return storageOk(VaultChangeOutcome.Completed);
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));

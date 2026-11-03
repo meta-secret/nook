@@ -27,7 +27,6 @@ import {
   set_active_vault,
   type NookVaultManager,
 } from "$app-wasm";
-import { LOCAL_PROVIDER_TYPE } from "$lib/auth/providers";
 import {
   unlockDeviceProtection,
   type PasskeyCeremonyFailure,
@@ -257,7 +256,7 @@ export class VaultInitializationActions {
           // not been granted membership and password recovery must remain usable
           // without altering identity ownership.
           if (state.localVaultPresent) {
-            state.storageMode = LOCAL_PROVIDER_TYPE;
+            state.useThisBrowser();
             await state.prepareLocalLogin();
             return;
           }
@@ -413,16 +412,13 @@ export class VaultInitializationActions {
       }
       const created = await state.enqueueStorage(async () => {
         const storageArgs = state.wasmStorageArgs();
+        if (storageArgs.isErr()) return storageErr(storageArgs.error);
         const admitted = state.admitManager();
         if (admitted.isErr()) return storageErr(admitted.error);
         const operation = (async () => {
           try {
             if (creatingAdditionalVault) admitted.value.reset_vault_session();
-            await admitted.value.connect_fresh(
-              storageArgs.mode,
-              storageArgs.pat,
-              storageArgs.repo,
-            );
+            await admitted.value.connect_fresh(storageArgs.value);
             return storageOk(VaultChangeOutcome.Completed);
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
@@ -627,15 +623,11 @@ class DeviceInitializationContinuation {
       return storageErr(new NativeVaultStorageFailure(failure));
     }
     if (state.localVaultPresent) {
-      state.storageMode = LOCAL_PROVIDER_TYPE;
-      state.githubPat = "";
-      state.clearOauthFile();
-      state.clearLocalFolder();
+      state.useThisBrowser();
     } else {
       state.applyActiveProviderCredentials();
     }
     if (state.localVaultPresent) {
-      state.storageMode = LOCAL_PROVIDER_TYPE;
       const passwordRefresh1 = await state.refreshPasswordEntriesList();
       if (passwordRefresh1.isErr()) {
         return storageErr(passwordRefresh1.error);

@@ -18,11 +18,7 @@ import {
   setupDeviceProtection as createPasskeyProtection,
   unlockDeviceProtection as authorizePasskeyProtection,
 } from "$lib/auth/passkey-device-protection";
-import {
-  activeVaultScope,
-  LOCAL_PROVIDER_TYPE,
-  unselectedVaultScope,
-} from "$lib/auth/providers";
+import { activeVaultScope, unselectedVaultScope } from "$lib/auth/providers";
 import { browserLogRuntime } from "$lib/runtime/log";
 import { browserDataLifecycle } from "$lib/runtime/browser-data";
 import type { DeviceMode } from "$lib/vault/architecture-model";
@@ -89,13 +85,11 @@ type DeviceProtectionRecoveryState = Pick<
   | "devicePublicKey"
   | "providers"
   | "providersLoaded"
-  | "githubPat"
-  | "storageMode"
+  | "forgetDraftCredentials"
+  | "useThisBrowser"
   | "enqueueExclusiveStorage"
   | "adoptLocalDataStorageGeneration"
   | "clearUnlockedSession"
-  | "clearOauthFile"
-  | "clearLocalFolder"
   | "dismissSuccess"
   | "showSuccess"
   | "t"
@@ -166,10 +160,8 @@ export class DeviceProtectionActions {
     state.deviceAuthorizationInProgress = false;
     state.deviceId = "";
     state.devicePublicKey = "";
-    state.githubPat = "";
-    state.clearOauthFile();
-    state.clearLocalFolder();
-    if (state.localVaultPresent) state.storageMode = LOCAL_PROVIDER_TYPE;
+    state.forgetDraftCredentials();
+    if (state.localVaultPresent) state.useThisBrowser();
 
     // Dispose native authority synchronously, before any queued or asynchronous work.
     let locked: Result<DeviceProtectionLockOutcome, StorageOperationFailure> =
@@ -397,14 +389,27 @@ export class DeviceProtectionActions {
     failure: PasskeyCeremonyFailure | StorageOperationFailure,
   ): void {
     if (failure instanceof PasskeyCeremonyFailure) {
-      if (failure.fallback === PasskeyFallback.OfferPin) {
-        this.state.deviceProtectionStatus = DeviceProtectionStatus.PinSetup;
+      switch (failure.fallback) {
+        case PasskeyFallback.OfferPin: {
+          // A browser without usable passkeys is a setting, not a fault: the
+          // PIN form it falls back to is the expected path.
+          this.state.deviceProtectionStatus = DeviceProtectionStatus.PinSetup;
+          const pinOffered: Parameters<typeof log.infoWithContext>[0] = {
+            message: "passkeys unavailable; PIN offered",
+            serializedContext: JSON.stringify(failure.diagnostic),
+          };
+          log.infoWithContext(pinOffered);
+          break;
+        }
+        case PasskeyFallback.Unchanged: {
+          const ceremonyLogEntry: PasskeyCeremonyLogEntry = {
+            message: "passkey ceremony did not complete",
+            data: failure.diagnostic,
+          };
+          this.logPasskeyCeremony(ceremonyLogEntry);
+          break;
+        }
       }
-      const ceremonyLogEntry: PasskeyCeremonyLogEntry = {
-        message: "passkey ceremony did not complete",
-        data: failure.diagnostic,
-      };
-      this.logPasskeyCeremony(ceremonyLogEntry);
     }
     this.state.errorMsg = this.state.t(failure.translationKey);
   }
@@ -743,10 +748,7 @@ export class DeviceProtectionRecoveryActions {
     state.devicePublicKey = "";
     state.providers = [];
     state.providersLoaded = false;
-    state.githubPat = "";
-    state.clearOauthFile();
-    state.clearLocalFolder();
-    state.storageMode = LOCAL_PROVIDER_TYPE;
+    state.useThisBrowser();
   }
 
   private applyPersistedProtectionStatus({

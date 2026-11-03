@@ -78,6 +78,7 @@ export async function openVaultPage(page: Page): Promise<void> {
   )
   const enter = page.getByTestId('vault-panel-open')
   const pageBack = page.getByTestId('page-bar-back')
+  const vaultPageBar = page.getByTestId('vault-page-bar')
   const flowBack = page
     .getByTestId('add-device-back')
     .or(page.getByTestId('identity-page-back'))
@@ -92,6 +93,9 @@ export async function openVaultPage(page: Page): Promise<void> {
         if (await pressIfReady(collapsedOpenRow)) return false
         if (await openRow.isVisible()) return false
         if (await pressIfReady(flowBack)) return false
+        // The vault page's own back leaves the vault: on it, wait for the
+        // panel that is still rendering instead.
+        if (await vaultPageBar.isVisible()) return false
         await pressIfReady(pageBack)
         return false
       },

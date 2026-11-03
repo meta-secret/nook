@@ -7,6 +7,7 @@
 use super::NookVaultManager;
 use super::session::VaultKeyMaterial;
 use crate::BrowserTimestamp;
+use crate::TypedInput;
 use crate::VaultSnapshotLookup;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use crate::storage::indexed_db::ImportVaultLabel;
@@ -16,7 +17,7 @@ use nook_core::ActiveVaultScope;
 use crate::ImportVaultBlobRequest;
 use crate::NookDatabase;
 
-use crate::{NookError, NookPasswordEntrySummary};
+use crate::{NookError, NookPasswordEntrySummary, NookStorageConnection};
 use nook_core::{
     IsoTimestamp, MultiDeviceError, PasswordEntryId, SymmetricKey, VaultOperation, VaultType,
     VaultUnlock,
@@ -38,15 +39,14 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn fetch_vault_password_entries(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<NookStorageConnection>,
     ) -> Result<Vec<NookPasswordEntrySummary>, JsError> {
+        let connection = connection.decode()?;
         // Reading password envelopes from another provider is still a
         // same-vault operation. Preserve the active vault metadata while the
         // storage target changes; clearing it here used to erase vault_name
         // immediately before enrollment payloads were issued.
-        self.prepare_storage_preserving_vault_metadata(&storage_mode, &github_pat, &github_repo)
+        self.prepare_storage_preserving_vault_metadata(&connection)
             .await?;
         let mut vault_missing = false;
         let mut content = self.fetch_vault_content(&mut vault_missing).await?;
@@ -320,6 +320,7 @@ impl NookVaultManager {
 mod metadata_tests {
     use super::*;
     use crate::manager::VaultNameState;
+    use crate::test_fixtures::WasmFixture;
     use nook_core::{DeviceIdentity, VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite};
     use std::slice;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -546,14 +547,13 @@ mod metadata_tests {
         )?
         .to_storage_id()?;
         manager
-            .prepare_storage_preserving_vault_metadata(
-                "icloud",
-                "oauth_token_for_metadata_test",
-                &format!("{share_target}\twork-vault.yaml"),
-            )
+            .prepare_storage_preserving_vault_metadata(&nook_core::StorageConnection::ICloud {
+                token: WasmFixture::secret("oauth_token_for_metadata_test")?,
+                share_target: nook_core::ICloudShareTargetId::try_from(share_target)?,
+            })
             .await?;
         manager
-            .prepare_storage_preserving_vault_metadata("local", "", "")
+            .prepare_storage_preserving_vault_metadata(&nook_core::StorageConnection::Local)
             .await?;
 
         assert!(matches!(
@@ -623,11 +623,14 @@ mod metadata_tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod wasm_tests {
     use super::*;
+    use crate::TypedOutput;
     use crate::manager::VaultNameState;
+    use crate::manager::{OutboxTarget, ProviderCacheRef, SyncOutbox};
+    use crate::test_fixtures::WasmFixture;
 
     use nook_core::{
-        Database, DeviceIdentity, SecretId, SecretValue, StorageMode, VaultCrypto, VaultName,
-        VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite,
+        Database, DeviceIdentity, SecretId, SecretValue, VaultCrypto, VaultName, VaultNameRef,
+        VaultStoreIdentityRef, VaultVersionWrite,
     };
     use std::slice;
     use wasm_bindgen_test::*;
@@ -720,10 +723,10 @@ mod wasm_tests {
         let identity = DeviceIdentity::generate()?;
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.bootstrap_event_log_genesis().await?;
-        manager.sync_outbox.provider_id = "configured-provider".to_owned();
-        manager.sync_outbox.storage_mode = StorageMode::Github;
-        manager.sync_outbox.access_token = "invalid-token".to_owned();
-        manager.sync_outbox.repo_arg = "invalid-repository".to_owned();
+        manager.sync_outbox = SyncOutbox::Bound(OutboxTarget {
+            provider: ProviderCacheRef::fixture("configured-provider"),
+            connection: WasmFixture::github_connection("invalid-token", "invalid-repository")?,
+        });
 
         assert!(manager.set_vault_name("   ").await.is_err());
         manager
@@ -817,9 +820,7 @@ mod wasm_tests {
         let mut manager = NookVaultManager::new();
         let result = manager
             .connect_with_password(
-                "local".to_owned(),
-                String::new(),
-                String::new(),
+                &nook_core::StorageConnection::Local.encode()?,
                 password_entry.id.clone(),
                 "correct horse battery staple".to_owned(),
                 50,
@@ -863,9 +864,7 @@ mod wasm_tests {
         let mut recovered = NookVaultManager::new();
         let page = recovered
             .connect_with_password(
-                "local".to_owned(),
-                String::new(),
-                String::new(),
+                &nook_core::StorageConnection::Local.encode()?,
                 password_entry.id,
                 "correct horse battery staple".to_owned(),
                 50,
@@ -909,7 +908,7 @@ mod wasm_tests {
 
         let mut recovered = NookVaultManager::new();
         let listed = recovered
-            .fetch_vault_password_entries("local".to_owned(), String::new(), String::new())
+            .fetch_vault_password_entries(&nook_core::StorageConnection::Local.encode()?)
             .await
             .map_err(|error| anyhow::anyhow!("password listing failed: {error:?}"))?;
 

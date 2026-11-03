@@ -1,4 +1,4 @@
-import { err } from 'neverthrow'
+import { err, ok } from 'neverthrow'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import {
   ProviderCredentialFailure,
@@ -6,10 +6,12 @@ import {
 } from '../src/lib/provider-credential-staging'
 import initNookWasm, {
   admit_extension_storage_providers,
+  decode_extension_pairing_storage_provider,
+  seal_auth_providers_for_device_public_key,
+  type AuthProvidersSnapshot,
   type StorageProvider,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
-import type { BrowserRuntimeMessageValue } from '../src/lib/browser-runtime-message'
 import {
   BrowserRuntimeMessage,
   BrowserRuntimeMessageAdmissionKind,
@@ -19,6 +21,7 @@ import {
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
   parseExtensionSessionRequest,
 } from '../src/offscreen/session-request-adapter'
+import { ProviderRowFixture, type ProviderRows } from './provider-row-fixture'
 
 beforeAll(async () => {
   await initNookWasm({
@@ -31,330 +34,258 @@ beforeAll(async () => {
   })
 })
 
-class ProviderStagingFixture {
-  github(): StorageProvider {
-    return {
-      id: 'github',
-      type: 'github',
-      label: 'GitHub',
-      githubPat: {
-        state: 'token',
-        value: '-----BEGIN AGE ENCRYPTED FILE-----\nfixture',
-      },
-      githubRepo: { state: 'defaultRepository' },
-      oauthFile: { state: 'notApplicable' },
-      localFolder: { state: 'notApplicable' },
-      storeId: { state: 'unscoped' },
-      syncCheckpoint: { state: 'neverSynced' },
-      createdAt: '2026-06-24T00:00:00.000Z',
+/** Rust's own credential walk, reached through the export that seals every
+ * credential a row holds for another app. */
+class RustCredentialWalk {
+  sealed(row: StorageProvider): ProviderRows {
+    const snapshot: AuthProvidersSnapshot = {
+      providers: [row],
+      activeVaultStoreId: { state: 'unselected' },
     }
-  }
-  async stage(
-    providers: ConstructorParameters<typeof ProviderCredentialBuffer>[0],
-  ) {
-    return new ProviderCredentialBuffer(providers).stage({
-      decode: async (candidate) => admit_extension_storage_providers(candidate),
-    })
-  }
-
-  runtimeValue(provider: StorageProvider): BrowserRuntimeMessageValue {
-    if (provider.githubPat.state !== 'token') {
-      throw new Error('GitHub staging fixture requires a token')
-    }
-    return {
-      id: provider.id,
-      type: provider.type,
-      label: provider.label,
-      githubPat: { state: 'token', value: provider.githubPat.value },
-      githubRepo: { state: 'defaultRepository' },
-      oauthFile: { state: 'notApplicable' },
-      localFolder: { state: 'notApplicable' },
-      storeId: { state: 'unscoped' },
-      syncCheckpoint: { state: 'neverSynced' },
-      createdAt: provider.createdAt,
-    }
+    return seal_auth_providers_for_device_public_key(
+      ProviderRowFixture.SEALING_RECIPIENT,
+      snapshot,
+    ).providers
   }
 }
 
-const providerStagingFixture = new ProviderStagingFixture()
+const rustWalk = new RustCredentialWalk()
 
-function parseProviderImport(providers: BrowserRuntimeMessageValue[]) {
-  return parseExtensionSessionRequest({
-    type: ExtensionSessionMessageType.ImportVault,
-    payload: {
-      vaultStoreId: 'store_abcdefghijk',
-      deviceId: 'device',
-      devicePublicKey: 'public',
-      deviceSigningPublicKey: 'signing',
-      providers,
-      eventLogRecords: [],
-      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
-    },
+/** The four stored variants that hold a credential. */
+class CredentialRows {
+  static every(credential: string): ProviderRows {
+    return [
+      ProviderRowFixture.github(credential),
+      ProviderRowFixture.googleDrive(credential),
+      ProviderRowFixture.icloud(credential),
+      ProviderRowFixture.s3(credential),
+    ]
+  }
+}
+
+describe('the provider credential wipe', () => {
+  test('drops every credential Rust seals, for every variant', () => {
+    for (const row of ProviderRowFixture.every(ProviderRowFixture.PLAINTEXT)) {
+      const sealed = rustWalk.sealed(row)
+      const canonical = admit_extension_storage_providers([row])
+      expect(ProviderRowFixture.afterWipe(sealed)).toEqual(
+        ProviderRowFixture.afterWipe(canonical),
+      )
+    }
   })
-}
+
+  test('the cross-check sees each credential Rust seals', () => {
+    for (const row of CredentialRows.every(ProviderRowFixture.PLAINTEXT)) {
+      expect(rustWalk.sealed(row)).not.toEqual([row])
+    }
+  })
+
+  test('leaves no credential text, whatever it was', () => {
+    expect(ProviderRowFixture.every(ProviderRowFixture.PLAINTEXT)).not.toEqual(
+      ProviderRowFixture.every(ProviderRowFixture.SEALED),
+    )
+    expect(
+      ProviderRowFixture.afterWipe(
+        ProviderRowFixture.every(ProviderRowFixture.PLAINTEXT),
+      ),
+    ).toEqual(
+      ProviderRowFixture.afterWipe(
+        ProviderRowFixture.every(ProviderRowFixture.SEALED),
+      ),
+    )
+  })
+
+  test('leaves this browser’s store and a local folder as they are', () => {
+    expect(
+      ProviderRowFixture.afterWipe([
+        ProviderRowFixture.local(),
+        ProviderRowFixture.localFolder(),
+      ]),
+    ).toEqual([ProviderRowFixture.local(), ProviderRowFixture.localFolder()])
+  })
+
+  test('a wiped row can never be admitted again', () => {
+    for (const row of ProviderRowFixture.afterWipe(
+      CredentialRows.every(ProviderRowFixture.PLAINTEXT),
+    )) {
+      expect(() => admit_extension_storage_providers([row])).toThrow()
+    }
+  })
+})
+
+describe('provider rows through the generated package', () => {
+  test('every variant reads back from Rust unchanged', () => {
+    for (const credential of [
+      ProviderRowFixture.SEALED,
+      ProviderRowFixture.PLAINTEXT,
+    ]) {
+      expect(
+        admit_extension_storage_providers(ProviderRowFixture.every(credential)),
+      ).toEqual(ProviderRowFixture.every(credential))
+    }
+  })
+
+  test('the pairing decoder admits sealed rows and refuses plaintext ones', () => {
+    for (const row of ProviderRowFixture.every(ProviderRowFixture.SEALED)) {
+      expect(decode_extension_pairing_storage_provider(row)).toEqual(row)
+    }
+    for (const row of CredentialRows.every(ProviderRowFixture.PLAINTEXT)) {
+      expect(() => decode_extension_pairing_storage_provider(row)).toThrow(
+        'not storage-safe',
+      )
+    }
+  })
+})
 
 describe('provider credential staging', () => {
-  test('accepts a local provider from the pairing approval payload', async () => {
-    const parse = await parseProviderImport([
-      {
-        id: 'local-provider',
-        type: 'local',
-        label: 'This device',
-        githubPat: { state: 'missing' },
-        githubRepo: { state: 'defaultRepository' },
-        oauthFile: { state: 'notApplicable' },
-        localFolder: { state: 'notApplicable' },
-        storeId: { state: 'storeId', value: 'store_abcdefghijk' },
-        syncCheckpoint: { state: 'neverSynced' },
-        createdAt: '2026-09-18T00:00:00.000Z',
+  test('copies every variant through canonical admission and wipes the staged copy', async () => {
+    const source = ProviderRowFixture.every(ProviderRowFixture.SEALED)
+    let staged: ProviderRows = []
+    const staging = await new ProviderCredentialBuffer(source).stage({
+      decode: async (candidate) => {
+        staged = candidate
+        return admit_extension_storage_providers(candidate)
       },
-    ])
-
-    expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
+    })
+    expect(staging).toEqual(
+      ok(ProviderRowFixture.every(ProviderRowFixture.SEALED)),
+    )
+    expect(staged).toEqual(
+      ProviderRowFixture.afterWipe(
+        ProviderRowFixture.every(ProviderRowFixture.OTHER),
+      ),
+    )
+    expect(source).toEqual(ProviderRowFixture.every(ProviderRowFixture.SEALED))
   })
 
-  test('invalid identity is a typed rejection', () => {
-    expect(
-      new ProviderCredentialBuffer([{ id: '', type: 'github' }]).identities(),
-    ).toEqual(err(ProviderCredentialFailure.InvalidIdentity))
-  })
-
-  test('foreign admission rejection erases the staged credential copy', async () => {
-    const source = [providerStagingFixture.github()]
-    let staged: unknown[] = []
+  test('a refused admission wipes the staged copy', async () => {
+    const source = ProviderRowFixture.every(ProviderRowFixture.SEALED)
+    let staged: ProviderRows = []
     const result = await new ProviderCredentialBuffer(source).stage({
       decode: async (candidate) => {
         staged = candidate
-        return Promise.reject('foreign admission rejected')
+        return Promise.reject(new Error('foreign admission rejected'))
       },
     })
     expect(result).toEqual(err(ProviderCredentialFailure.AdmissionRejected))
-    expect(staged).toEqual([{ ...source[0], githubPat: { state: 'missing' } }])
-    expect(source[0]?.githubPat).toEqual(
-      providerStagingFixture.github().githubPat,
+    expect(staged).toEqual(
+      ProviderRowFixture.afterWipe(
+        ProviderRowFixture.every(ProviderRowFixture.OTHER),
+      ),
     )
+    expect(source).toEqual(ProviderRowFixture.every(ProviderRowFixture.SEALED))
   })
 
-  test('scrubs a cloned credential copy when structural admission rejects it', async () => {
-    const source = providerStagingFixture.github()
-    Object.assign(source.oauthFile, {
-      accessToken: 'oauth_access_secret',
-      refreshToken: 'oauth_refresh_secret',
-    })
-    Reflect.deleteProperty(source, 'label')
-
-    const nativeStructuredClone = globalThis.structuredClone
-    let cloned: unknown
-    globalThis.structuredClone = <T>(value: T): T => {
-      const copy = nativeStructuredClone(value)
-      cloned = copy
-      return copy
-    }
-    try {
-      const result = await new ProviderCredentialBuffer([source]).stage({
-        decode: async () => {
-          throw new Error('structural admission should happen first')
-        },
-      })
-      expect(result).toEqual(err(ProviderCredentialFailure.InvalidTransport))
-      expect(cloned).toEqual([
-        {
-          ...source,
-          githubPat: { state: 'missing' },
-          oauthFile: { state: 'notApplicable', accessToken: '' },
-        },
-      ])
-      expect(source.githubPat).toEqual(
-        providerStagingFixture.github().githubPat,
-      )
-    } finally {
-      globalThis.structuredClone = nativeStructuredClone
-    }
-  })
-
-  test('scrubs nested OAuth credentials in a structurally incomplete clone', async () => {
-    const source = providerStagingFixture.github()
-    Object.assign(source.oauthFile, {
-      config: {
-        accessToken: 'nested_oauth_access_secret',
-        refreshToken: 'nested_oauth_refresh_secret',
+  test('a value outside serialized data is an invalid transport', async () => {
+    const row = ProviderRowFixture.github(ProviderRowFixture.SEALED)
+    Reflect.set(row, 'label', () => 'not serialized')
+    let decoded = false
+    const result = await new ProviderCredentialBuffer([row]).stage({
+      decode: async (candidate) => {
+        decoded = true
+        return candidate
       },
     })
-    Reflect.deleteProperty(source, 'label')
-
-    const nativeStructuredClone = globalThis.structuredClone
-    let cloned: unknown
-    globalThis.structuredClone = <T>(value: T): T => {
-      const copy = nativeStructuredClone(value)
-      cloned = copy
-      return copy
-    }
-    try {
-      const result = await new ProviderCredentialBuffer([source]).stage({
-        decode: async () => {
-          throw new Error('structural admission should happen first')
-        },
-      })
-      expect(result).toEqual(err(ProviderCredentialFailure.InvalidTransport))
-      expect(cloned).toEqual([
-        {
-          ...source,
-          githubPat: { state: 'missing' },
-          oauthFile: {
-            state: 'notApplicable',
-            config: {
-              accessToken: { state: 'signedOut' },
-              refreshToken: { state: 'notIssued' },
-            },
-          },
-        },
-      ])
-    } finally {
-      globalThis.structuredClone = nativeStructuredClone
-    }
-  })
-
-  test('scrubs every provider when a later clone fails structural admission', async () => {
-    const first = providerStagingFixture.github()
-    const second = providerStagingFixture.github()
-    Object.assign(second.oauthFile, {
-      config: {
-        accessToken: 'later_nested_oauth_access_secret',
-        refreshToken: 'later_nested_oauth_refresh_secret',
-      },
-    })
-    Reflect.deleteProperty(second, 'label')
-    const source = [first, second]
-
-    const nativeStructuredClone = globalThis.structuredClone
-    let cloned: unknown
-    globalThis.structuredClone = <T>(value: T): T => {
-      const copy = nativeStructuredClone(value)
-      cloned = copy
-      return copy
-    }
-    try {
-      const result = await new ProviderCredentialBuffer(source).stage({
-        decode: async () => {
-          throw new Error('structural admission should happen first')
-        },
-      })
-      expect(result).toEqual(err(ProviderCredentialFailure.InvalidTransport))
-      expect(cloned).toEqual([
-        { ...first, githubPat: { state: 'missing' } },
-        {
-          ...second,
-          githubPat: { state: 'missing' },
-          oauthFile: {
-            state: 'notApplicable',
-            config: {
-              accessToken: { state: 'signedOut' },
-              refreshToken: { state: 'notIssued' },
-            },
-          },
-        },
-      ])
-    } finally {
-      globalThis.structuredClone = nativeStructuredClone
-    }
-  })
-
-  test('copies complete providers through canonical admission', async () => {
-    const source = [providerStagingFixture.github()]
-    const staging = await providerStagingFixture.stage(source)
-    expect(staging.isOk()).toBe(true)
-    if (staging.isErr()) return
-    expect(staging.value).toEqual(source)
-    expect(staging.value[0]).not.toBe(source[0])
-    expect(source[0]?.githubPat).toEqual(
-      providerStagingFixture.github().githubPat,
+    expect(result).toEqual(err(ProviderCredentialFailure.InvalidTransport))
+    expect(decoded).toBe(false)
+    expect(row.provider).toEqual(
+      ProviderRowFixture.github(ProviderRowFixture.SEALED).provider,
     )
-  })
-
-  test('scrubs decoded providers when queued import work expires', async () => {
-    const staging = await providerStagingFixture.stage([
-      providerStagingFixture.github(),
-    ])
-    expect(staging.isOk()).toBe(true)
-    if (staging.isErr()) return
-    new ProviderCredentialBuffer(staging.value).clear()
-    expect(staging.value[0]?.githubPat).toEqual({ state: 'missing' })
-  })
-
-  test('scrubs a raw IPC snapshot after successful handoff', async () => {
-    const providers = [providerStagingFixture.github()]
-    let observedDuringHandoff = false
-    expect(
-      await new ProviderCredentialBuffer(providers).runWithCleanup(async () => {
-        observedDuringHandoff = providers[0]?.githubPat.state === 'token'
-        return { ok: true }
-      }),
-    ).toEqual({ ok: true })
-    expect(observedDuringHandoff).toBe(true)
-    expect(providers[0]?.githubPat).toEqual({ state: 'missing' })
-  })
-
-  test('scrubs a raw IPC snapshot after failed handoff', async () => {
-    const providers = [providerStagingFixture.github()]
-    expect(
-      await new ProviderCredentialBuffer(providers).runWithCleanup(async () => {
-        return err(ProviderCredentialFailure.AdmissionRejected)
-      }),
-    ).toEqual(err(ProviderCredentialFailure.AdmissionRejected))
-    expect(providers[0]?.githubPat).toEqual({ state: 'missing' })
-  })
-
-  test('continues scrubbing after malformed OAuth transport', async () => {
-    const providers = [
-      { oauthFile: 'malformed' },
-      { oauthFile: { config: 'malformed' } },
-      { githubPat: 'github_pat_following_secret' },
-    ]
-    expect((await parseProviderImport(providers)).kind).toBe(
-      ExtensionSessionRequestParseKind.Invalid,
-    )
-    expect(providers[2]).toHaveProperty('githubPat.state', 'missing')
-  })
-
-  test('rejects values outside serialized external data', async () => {
-    const source = [
-      { ...providerStagingFixture.github(), metadata: new Date() },
-    ]
-    const admission = BrowserRuntimeMessage.from({
-      type: ExtensionSessionMessageType.ImportVault,
-      payload: {
-        providers: source,
-        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
-      },
-    })
-
-    expect(admission.kind).toBe(BrowserRuntimeMessageAdmissionKind.Rejected)
-    expect(source[0]?.githubPat.state).toBe('token')
-  })
-
-  test('preserves valid provider metadata through canonical admission', async () => {
-    const provider = providerStagingFixture.github()
-    const parsed = await parseProviderImport([
-      providerStagingFixture.runtimeValue(provider),
-    ])
-    expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
-    if (parsed.kind !== ExtensionSessionRequestParseKind.Parsed) return
-    expect(parsed.request.type).toBe(ExtensionSessionMessageType.ImportVault)
-    if (parsed.request.type !== ExtensionSessionMessageType.ImportVault) return
-    expect(parsed.request.payload.providers).toHaveLength(1)
-    expect(parsed.request.payload.providers[0]?.id).toBe(provider.id)
-    expect(parsed.request.payload.providers[0]?.type).toBe(provider.type)
   })
 
   test('canonical admission does not retain prototype metadata', async () => {
-    const source = providerStagingFixture.github()
+    const source = ProviderRowFixture.github(ProviderRowFixture.SEALED)
     Object.defineProperty(source, '__proto__', {
-      value: { githubPat: 'inherited-secret' },
+      value: { token: 'inherited-secret' },
       enumerable: true,
     })
-    const staging = await providerStagingFixture.stage([source])
-    expect(staging.isOk()).toBe(true)
-    if (staging.isErr()) return
-    expect(Object.hasOwn(staging.value[0] || {}, '__proto__')).toBe(false)
+    const staging = await new ProviderCredentialBuffer([source]).stage({
+      decode: async (candidate) => admit_extension_storage_providers(candidate),
+    })
+    expect(
+      staging._unsafeUnwrap().filter((row) => Object.hasOwn(row, '__proto__')),
+    ).toEqual([])
+  })
+
+  test('wipes the rows after a successful handoff', async () => {
+    const rows = ProviderRowFixture.every(ProviderRowFixture.PLAINTEXT)
+    let during: ProviderRows = []
+    expect(
+      await new ProviderCredentialBuffer(rows).runWithCleanup(async () => {
+        during = structuredClone(rows)
+        return { ok: true }
+      }),
+    ).toEqual({ ok: true })
+    expect(during).toEqual(
+      ProviderRowFixture.every(ProviderRowFixture.PLAINTEXT),
+    )
+    expect(rows).toEqual(
+      ProviderRowFixture.afterWipe(
+        ProviderRowFixture.every(ProviderRowFixture.OTHER),
+      ),
+    )
+  })
+
+  test('wipes the rows after a failed handoff', async () => {
+    const rows = ProviderRowFixture.every(ProviderRowFixture.PLAINTEXT)
+    expect(
+      await new ProviderCredentialBuffer(rows).runWithCleanup(async () =>
+        err(ProviderCredentialFailure.AdmissionRejected),
+      ),
+    ).toEqual(err(ProviderCredentialFailure.AdmissionRejected))
+    expect(rows).toEqual(
+      ProviderRowFixture.afterWipe(
+        ProviderRowFixture.every(ProviderRowFixture.OTHER),
+      ),
+    )
+  })
+
+  test('names each row to the companion protocol by id and provider type', () => {
+    expect(
+      new ProviderCredentialBuffer(
+        ProviderRowFixture.every(ProviderRowFixture.SEALED),
+      ).identities(),
+    ).toEqual([
+      { id: 'local', type: 'local' },
+      { id: 'local-folder', type: 'local-folder' },
+      { id: 'github', type: 'github' },
+      { id: 'google-drive', type: 'oauth-file' },
+      { id: 'icloud', type: 'oauth-file' },
+      { id: 's3', type: 's3' },
+    ])
+  })
+
+  test('rejects values outside serialized external data before dispatch', () => {
+    const row = ProviderRowFixture.github(ProviderRowFixture.SEALED)
+    const admission = BrowserRuntimeMessage.from({
+      type: ExtensionSessionMessageType.ImportVault,
+      payload: {
+        providers: [{ ...row, metadata: new Date() }],
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+      },
+    })
+    expect(admission.kind).toBe(BrowserRuntimeMessageAdmissionKind.Rejected)
+    expect(row).toEqual(ProviderRowFixture.github(ProviderRowFixture.SEALED))
+  })
+
+  test('parses every sealed variant from an import and keeps each row whole', async () => {
+    const parsed = await parseExtensionSessionRequest({
+      type: ExtensionSessionMessageType.ImportVault,
+      payload: {
+        vaultStoreId: 'store_abcdefghijk',
+        deviceId: 'device',
+        devicePublicKey: 'public',
+        deviceSigningPublicKey: 'signing',
+        providers: ProviderRowFixture.every(ProviderRowFixture.SEALED),
+        eventLogRecords: [],
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+      },
+    })
+    expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
+    if (parsed.kind !== ExtensionSessionRequestParseKind.Parsed) return
+    if (parsed.request.type !== ExtensionSessionMessageType.ImportVault) return
+    expect(parsed.request.payload.providers).toEqual(
+      ProviderRowFixture.every(ProviderRowFixture.SEALED),
+    )
   })
 })

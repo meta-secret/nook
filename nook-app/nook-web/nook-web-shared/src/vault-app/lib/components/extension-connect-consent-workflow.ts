@@ -153,7 +153,7 @@ export enum ExtensionConsentWorkflowNoticeKind {
 type ExtensionConsentVisibleNotice =
   | {
       readonly kind: ExtensionConsentWorkflowNoticeKind.Message;
-      readonly translationKey: I18nKey;
+      readonly translationKey: string;
     }
   | {
       readonly kind: ExtensionConsentWorkflowNoticeKind.Rejected;
@@ -905,7 +905,7 @@ export class ExtensionConsentWorkflowPresentation {
     }
   }
 
-  failureTranslationKey(failure: ExtensionConsentWorkflowFailure): I18nKey {
+  failureTranslationKey(failure: ExtensionConsentWorkflowFailure): string {
     switch (failure.kind) {
       case ExtensionConsentWorkflowFailureKind.Authorization:
       case ExtensionConsentWorkflowFailureKind.GrantPreparation:

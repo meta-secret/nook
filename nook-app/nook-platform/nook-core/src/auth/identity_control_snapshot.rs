@@ -5,15 +5,18 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use std::iter;
+
 use nook_auth2::{AppId, IdentityId};
 use nook_event_log::{
-    IdentityControlState, IdentityMountTarget, IdentityProviderMount, IdentityVaultDekLookup,
+    IdentityControlMember, IdentityControlState, IdentityMountTarget, IdentityProviderMount,
+    IdentityVaultDekLookup, MemberDevice,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 use super::identity_control::ReplicatedIdentityStanding;
-use crate::{IdentityMountCapability, StorageProviderData};
+use crate::{IdentityMountCapability, StorageProvider};
 
 /// This installation's standing in its identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -37,6 +40,18 @@ pub struct IdentityMemberView {
     /// It runs on this installation's device: this app, or one sharing its
     /// device, as the browser extension in the web app's browser.
     pub on_current_device: bool,
+}
+
+/// One device the identity's apps run on, with every app on it. Each app
+/// holds its own key; apps in one browser, as the web app and the extension
+/// it added, are one device.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct IdentityDeviceView {
+    /// The app that brought the device first, then the apps added beside it.
+    pub apps: Vec<IdentityMemberView>,
+    /// This installation runs on it.
+    pub current: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -66,6 +81,7 @@ pub enum IdentityMountProvider {
     #[serde(rename = "icloud")]
     ICloud,
     LocalFolder,
+    S3,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -88,6 +104,8 @@ pub struct IdentityControlSnapshot {
     pub identity_label: String,
     pub standing: IdentityControlStanding,
     pub members: Vec<IdentityMemberView>,
+    /// The members grouped by the device they run on.
+    pub devices: Vec<IdentityDeviceView>,
     /// Devices the members run on: apps sharing one device count once.
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
@@ -108,11 +126,11 @@ pub struct IdentityControlSnapshotRequest<'a> {
     pub state: &'a IdentityControlState,
     pub identity_label: &'a str,
     pub current_app_id: &'a AppId,
-    pub providers: &'a [StorageProviderData],
+    pub providers: &'a [StorageProvider],
 }
 
 impl IdentityMountView {
-    fn from_mount(mount: &IdentityProviderMount, providers: &[StorageProviderData]) -> Self {
+    fn from_mount(mount: &IdentityProviderMount, providers: &[StorageProvider]) -> Self {
         let (provider, target) = match &mount.target {
             IdentityMountTarget::Github { repository } => {
                 (IdentityMountProvider::Github, repository.clone())
@@ -125,6 +143,9 @@ impl IdentityMountView {
             }
             IdentityMountTarget::LocalFolder { directory_name } => {
                 (IdentityMountProvider::LocalFolder, directory_name.clone())
+            }
+            IdentityMountTarget::S3(location) => {
+                (IdentityMountProvider::S3, location.location_identity())
             }
         };
         Self {
@@ -149,6 +170,7 @@ impl IdentityControlSnapshot {
             identity_label: identity_label.to_owned(),
             standing: IdentityControlStanding::NotReplicated,
             members: Vec::new(),
+            devices: Vec::new(),
             device_count: 0,
             join_requests: Vec::new(),
             vaults: Vec::new(),
@@ -170,22 +192,36 @@ impl IdentityControlSnapshot {
             ReplicatedIdentityStanding::PendingJoin => IdentityControlStanding::PendingJoin,
             ReplicatedIdentityStanding::NotListed => IdentityControlStanding::NotListed,
         };
+        let view = |member: &IdentityControlMember| IdentityMemberView {
+            app_id: member.keys.app_id.as_str().to_owned(),
+            label: member.keys.label.as_str().to_owned(),
+            is_current_installation: &member.keys.app_id == *current_app_id,
+            on_current_device: &member.keys.app_id == *current_app_id
+                || state.share_a_device(&member.keys.app_id, current_app_id),
+        };
+        let devices = state
+            .device_members()
+            .map(|device| {
+                let beside = state.members.iter().filter(|member| {
+                    matches!(&member.device, MemberDevice::SameAs { app_id } if app_id == &device.keys.app_id)
+                });
+                let apps = iter::once(device)
+                    .chain(beside)
+                    .map(view)
+                    .collect::<Vec<_>>();
+                IdentityDeviceView {
+                    current: apps.iter().any(|app| app.on_current_device),
+                    apps,
+                }
+            })
+            .collect::<Vec<_>>();
         Self {
             identity_id: state.identity_id.as_str().to_owned(),
             identity_label: (*identity_label).to_owned(),
             standing,
-            members: state
-                .members
-                .iter()
-                .map(|member| IdentityMemberView {
-                    app_id: member.keys.app_id.as_str().to_owned(),
-                    label: member.keys.label.as_str().to_owned(),
-                    is_current_installation: &member.keys.app_id == *current_app_id,
-                    on_current_device: &member.keys.app_id == *current_app_id
-                        || state.share_a_device(&member.keys.app_id, current_app_id),
-                })
-                .collect(),
-            device_count: state.device_members().count(),
+            members: state.members.iter().map(view).collect(),
+            device_count: devices.len(),
+            devices,
             // Only a member answers join requests.
             join_requests: match standing {
                 IdentityControlStanding::Member => state
@@ -224,5 +260,38 @@ impl IdentityControlSnapshot {
                 .map(|mount| IdentityMountView::from_mount(mount, providers))
                 .collect(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::slice;
+
+    use super::{IdentityMountProvider, IdentityMountView};
+    use crate::{
+        IdentityProviderMount, ProviderMountId, S3Connection, StorageProvider, StoredProvider,
+    };
+
+    #[test]
+    fn an_s3_mount_shows_its_location_and_whether_this_app_connects_it() -> anyhow::Result<()> {
+        let config = S3Connection::fixture()?;
+        let mount = IdentityProviderMount {
+            mount_id: ProviderMountId::generate()?,
+            label: "S3 · nook-dev/e2e/run-1".to_owned(),
+            target: config.mount_target(),
+        };
+        let mut row = StorageProvider::fixture("s3", StoredProvider::S3(config));
+        let view = IdentityMountView::from_mount(&mount, slice::from_ref(&row));
+        assert_eq!(view.provider, IdentityMountProvider::S3);
+        assert_eq!(view.target, "http://127.0.0.1:8333/nook-dev/e2e/run-1");
+        assert!(view.connected_here);
+        assert!(!IdentityMountView::from_mount(&mount, &[]).connected_here);
+        // A row that signs for the same location in another region connects it.
+        let StoredProvider::S3(config) = &mut row.provider else {
+            anyhow::bail!("an S3 row carries its connection");
+        };
+        config.region = "eu-central-1".to_owned();
+        assert!(IdentityMountView::from_mount(&mount, slice::from_ref(&row)).connected_here);
+        Ok(())
     }
 }

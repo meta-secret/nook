@@ -145,7 +145,7 @@ test('a passkey lookup without result offers creating one or looking elsewhere',
     // The passkey's options sit beside the button on the same step.
     await panel.locator('summary', { hasText: 'Options' }).click()
     await expect(
-      panel.getByTestId('device-mode-select').locator('option:checked'),
+      panel.getByTestId('device-mode-select').locator('[aria-checked="true"]'),
     ).toHaveText('Standard')
     await expect(title).toHaveText("Didn't find your passkey?")
   } finally {

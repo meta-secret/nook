@@ -63,8 +63,8 @@ Nook replaces that with device keys and deliberate consent:
 - **Open machinery.** The code, protocols, and trade-offs are built in the open.
 
 Unlock this browser with a passkey (WebAuthn PRF) or PIN fallback. GitHub,
-Google Drive, iCloud, and local-folder sync are available today; more providers
-are planned. Google Drive syncs through one folder named `Nook` in your My
+Google Drive, iCloud, S3-compatible storage, and local-folder sync are
+available today; more providers are planned. Google Drive syncs through one folder named `Nook` in your My
 Drive, each vault in its own subfolder; iCloud syncs through a share. You
 authorize other accounts on that folder or share — a device invite names one
 authorized account and carries only the share target; each browser signs in
@@ -509,6 +509,9 @@ task extension:smoke:hosted CHANNEL=dev # disposable Chromium hosted extension +
 task extension:setup:brave CHANNEL=dev # Brave PIN bootstrap: install, create vault, approve, leave open
 task extension:run:chrome CHANNEL=dev # Chrome for Testing auto-loads; branded Chrome opens one-time setup
 task extension:run:brave CHANNEL=prod # launch a hosted build in an isolated Brave profile (no vault setup)
+task extension:dev         # host-native Brave loop: Vite, the local S3 server, extension rebuilds
+task s3:dev                # pinned local S3 server (SeaweedFS) on http://127.0.0.1:8333 with test-only keys
+task s3:dev:reset          # delete the local S3 server's dev data (refuses while it runs)
 task ci:pr                 # optional local mirror of the non-browser PR gate (daemon BuildKit; never shared nook-pr)
 task ci:pr:e2e             # explicit full web + extension e2e validation (optional)
 task pr:preflight PR=410   # JSON audit: base, policy, exact-head runs/deployments, feedback
@@ -638,7 +641,8 @@ The workflow uses package-write only for this publication; PR jobs receive
 package-read and authenticate the job container with their scoped token. Then set the repository variable
 `NOOK_PR_RUNNER_IMAGE` to its immutable `ghcr.io/...@sha256:...` digest.
 This image uses the same Debian Trixie ABI as the exported preflight reporter,
-with system Chromium, ffmpeg, Xvfb, Bun, Node and Task, but no product source.
+with system Chromium, ffmpeg, Xvfb, Bun, Node, Task and the pinned SeaweedFS
+`weed` binary (the local S3 server Playwright starts), but no product source.
 It is rebuilt only when the runtime tooling changes.
 Deploy the updated ARC container hook and
 BuildKit ingress policy. Job containers need the injected Docker client and

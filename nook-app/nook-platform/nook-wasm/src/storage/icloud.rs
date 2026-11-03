@@ -6,17 +6,22 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use nook_core::ProviderSecretText;
 use reqwest::Client;
 #[cfg(test)]
 use std::collections;
 use std::str;
 
+use super::checked_event_write::CheckedEventWrite;
+use super::event_store::EventStore;
+use super::remote_event::RemoteEventRead;
 use crate::NookError;
 use nook_core::{EventId, ICloudShareRole, ICloudSharedTarget, PlacedNamespace};
 use serde::Serialize;
+use std::collections::BTreeSet;
 
 pub(crate) struct ICloudEventStore<'a> {
-    pub(crate) web_auth_token: &'a str,
+    pub(crate) web_auth_token: &'a ProviderSecretText,
     pub(crate) target: &'a ICloudSharedTarget,
     /// The identity log or vault these records belong to.
     pub(crate) placed: &'a PlacedNamespace,
@@ -25,11 +30,13 @@ pub(crate) struct ICloudEventStore<'a> {
 mod diagnostics;
 mod event_write;
 mod namespace;
+mod vault_listing;
+pub(crate) use vault_listing::ICloudLocation;
 mod wire;
 use wire::{
     EventIdentity, FieldText, ICloudFilter, ICloudLookup, ICloudQuery, ICloudQueryPage,
-    ICloudRecordReference, ICloudRecordsResponse, ICloudRequest, ICloudTextField, ICloudZone,
-    QueryCompletion, QueryContinuation, RecordLookup,
+    ICloudQueryResponse, ICloudRecordReference, ICloudRecordsResponse, ICloudRequest,
+    ICloudTextField, ICloudZone, QueryCompletion, QueryContinuation, RecordLookup,
 };
 #[cfg(test)]
 use wire::{ICloudFieldValue, ICloudRecord, RecordFields};
@@ -186,7 +193,7 @@ impl ICloudEventStore<'_> {
     pub(crate) async fn list_icloud_event_ids(&self) -> Result<Vec<String>, NookError> {
         let web_auth_token = self.web_auth_token;
         let target = self.target;
-        let token = nook_core::OauthAccessToken::parse(web_auth_token)?;
+        let token = web_auth_token.expose();
         let namespace = self.namespace();
         let client = Client::new();
         let mut event_ids = Vec::new();
@@ -213,7 +220,7 @@ impl ICloudEventStore<'_> {
                 target,
             );
 
-            Self::log_icloud_request_start(OPERATION, PATH, token.as_ref());
+            Self::log_icloud_request_start(OPERATION, PATH, token);
             tracing::info!(
                 scope = "wasm-icloud",
                 operation = OPERATION,
@@ -226,7 +233,7 @@ impl ICloudEventStore<'_> {
             let mut request = client
                 .post(Self::icloud_database_url(target, PATH))
                 .header("Content-Type", "application/json");
-            for (name, value) in Self::icloud_auth_query(token.as_ref()) {
+            for (name, value) in Self::icloud_auth_query(token) {
                 request = request.query(&[(name, value)]);
             }
             let response = request.json(&body).send().await?;
@@ -234,29 +241,32 @@ impl ICloudEventStore<'_> {
             Self::log_icloud_response(OPERATION, PATH, status);
             if !response.status().is_success() {
                 let body = response.text().await.unwrap_or_default();
-                Self::log_icloud_error_body(OPERATION, PATH, status, &body, token.as_ref());
+                Self::log_icloud_error_body(OPERATION, PATH, status, &body, token);
                 return Err(Self::icloud_error(status, &body));
             }
-            let parsed: ICloudRecordsResponse = response.json().await.map_err(|e| {
+            let ICloudQueryResponse {
+                records,
+                continuation_marker: completion,
+            } = response.json().await.map_err(|e| {
                 NookError::Serialization(format!("Failed to parse CloudKit event query: {e}"))
             })?;
+            let records = records.into_rows();
             tracing::info!(
                 scope = "wasm-icloud",
                 operation = OPERATION,
                 path = PATH,
-                returned_records = parsed.records.len(),
-                continuation_returned =
-                    matches!(parsed.continuation_marker, QueryCompletion::Continue(_)),
+                returned_records = records.len(),
+                continuation_returned = matches!(completion, QueryCompletion::Continue(_)),
                 "CloudKit event query parsed"
             );
-            for record in &parsed.records {
+            for record in &records {
                 if let EventIdentity::Declared(event_id) = record.event_id()
                     && EventId::parse(&event_id).is_ok()
                 {
                     event_ids.push(event_id);
                 }
             }
-            continuation_marker = match parsed.continuation_marker {
+            continuation_marker = match completion {
                 QueryCompletion::Complete => break,
                 QueryCompletion::Continue(marker) => QueryContinuation::Continue(marker),
             };
@@ -271,13 +281,12 @@ impl ICloudEventStore<'_> {
         Ok(event_ids)
     }
 
-    pub(crate) async fn fetch_icloud_event(
-        &self,
-        event_id: &EventId,
-    ) -> Result<Vec<u8>, NookError> {
+    /// A lookup answered with no record reads as an event the namespace does
+    /// not hold.
+    async fn read_icloud_event(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
         let web_auth_token = self.web_auth_token;
         let target = self.target;
-        let token = nook_core::OauthAccessToken::parse(web_auth_token)?;
+        let token = web_auth_token.expose();
         let record_name = Self::icloud_event_record_name(&self.namespace(), event_id);
         tracing::info!(
             scope = "wasm-icloud",
@@ -286,18 +295,14 @@ impl ICloudEventStore<'_> {
             "CloudKit event fetch started"
         );
         let record = match Self::lookup_record(CloudKitRecordQuery {
-            web_auth_token: token.as_ref(),
+            web_auth_token: token,
             target,
             record_name: &record_name,
         })
         .await?
         {
             RecordLookup::Loaded(record) => record,
-            RecordLookup::Missing => {
-                return Err(NookError::ICloud(format!(
-                    "CloudKit event record {record_name} is missing."
-                )));
-            }
+            RecordLookup::Missing => return Ok(RemoteEventRead::Unavailable),
         };
         let stored_event_id = match record.event_id() {
             EventIdentity::Declared(id) => id,
@@ -328,7 +333,29 @@ impl ICloudEventStore<'_> {
             content_len = content.len(),
             "CloudKit event fetch completed"
         );
-        Ok(content.into_bytes())
+        Ok(RemoteEventRead::Retrieved(content.into_bytes().into()))
+    }
+}
+
+impl EventStore for ICloudEventStore<'_> {
+    async fn event_ids(&self) -> Result<BTreeSet<EventId>, NookError> {
+        self.list_icloud_event_ids()
+            .await?
+            .iter()
+            .map(|raw| Ok(EventId::parse(raw)?))
+            .collect()
+    }
+
+    async fn read(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
+        self.read_icloud_event(event_id).await
+    }
+
+    async fn put_checked(&self, event: CheckedEventWrite<'_>) -> Result<(), NookError> {
+        self.put_icloud_event(event).await
+    }
+
+    async fn delete_events(&self) -> Result<(), NookError> {
+        self.delete_icloud_namespace().await
     }
 }
 
@@ -337,6 +364,46 @@ mod tests {
     use super::*;
     use nook_core::ICloudSharedTarget;
     use wasm_bindgen_test::wasm_bindgen_test;
+
+    /// `CloudKit`'s answers: a query page may omit its records and its marker,
+    /// a record may omit its fields; a lookup or modify answer always names
+    /// its records, and a field object always carries its value.
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
+    )]
+    fn cloudkit_answers_decode_documented_absence_and_refuse_the_rest() -> anyhow::Result<()> {
+        let last: ICloudQueryResponse = serde_json::from_str("{}")?;
+        assert!(last.records.into_rows().is_empty());
+        assert_eq!(last.continuation_marker, QueryCompletion::Complete);
+        let more: ICloudQueryResponse = serde_json::from_str(
+            r#"{"records":[{"recordName":"r"}],"continuationMarker":"next"}"#,
+        )?;
+        assert_eq!(
+            more.continuation_marker,
+            QueryCompletion::Continue("next".to_owned())
+        );
+        let rows = more.records.into_rows();
+        assert!(matches!(
+            rows.first().map(|record| &record.fields),
+            Some(RecordFields::Undisclosed)
+        ));
+        let null: ICloudQueryResponse =
+            serde_json::from_str(r#"{"records":null,"continuationMarker":null}"#)?;
+        assert_eq!(null.continuation_marker, QueryCompletion::Complete);
+        assert!(serde_json::from_str::<ICloudRecordsResponse>("{}").is_err());
+        assert!(
+            serde_json::from_str::<ICloudRecordsResponse>(
+                r#"{"records":[{"recordName":"r","fields":{"content":{}}}]}"#
+            )
+            .is_err()
+        );
+        Ok(())
+    }
 
     struct SharedTargetFixture(ICloudSharedTarget);
 
@@ -426,19 +493,19 @@ mod tests {
                 (
                     ICLOUD_CONTENT_FIELD.to_owned(),
                     ICloudFieldValue {
-                        value: FieldText::Text("encrypted".to_owned()),
+                        value: "encrypted".to_owned(),
                     },
                 ),
                 (
                     ICLOUD_EVENT_ID_FIELD.to_owned(),
                     ICloudFieldValue {
-                        value: FieldText::Text(event_id.to_string()),
+                        value: event_id.to_string(),
                     },
                 ),
                 (
                     ICLOUD_LOCATION_FIELD.to_owned(),
                     ICloudFieldValue {
-                        value: FieldText::Text("vault:store_abcdefghijk".to_owned()),
+                        value: "vault:store_abcdefghijk".to_owned(),
                     },
                 ),
             ])),
@@ -464,41 +531,10 @@ mod tests {
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
-mod browser_tests {
-    use super::*;
-    use wasm_bindgen_test::*;
-
-    wasm_bindgen_test_configure!(run_in_browser);
-
-    #[wasm_bindgen_test]
-    async fn empty_icloud_token_is_rejected_before_network_access() -> anyhow::Result<()> {
-        let target = super::owner_share_fixture()?;
-        let location = nook_core::PlacedNamespace::vault(
-            nook_core::IdentityId::parse("idn_abcdefghijk")?,
-            nook_core::StoreId::parse("store_abcdefghijk")?,
-        );
-        let store = ICloudEventStore {
-            web_auth_token: "  ",
-            target: &target,
-            placed: &location,
-        };
-        let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
-        assert!(store.list_icloud_event_ids().await.is_err());
-        assert!(store.fetch_icloud_event(&event_id).await.is_err());
-        assert!(
-            store
-                .put_icloud_event_if_absent(&event_id, b"event: test")
-                .await
-                .is_err()
-        );
-        Ok(())
-    }
-}
-
-#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod fetch_tests {
     use super::*;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+    use crate::test_fixtures::WasmFixture;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     const QUERY: &str = "records/query";
@@ -545,8 +581,9 @@ mod fetch_tests {
             FetchRoute::ok("POST", QUERY, &first),
             FetchRoute::ok("POST", QUERY, &second),
         ])?;
+        let web_token = WasmFixture::secret("web-token")?;
         let store = ICloudEventStore {
-            web_auth_token: "web-token",
+            web_auth_token: &web_token,
             target: &super::owner_share_fixture()?,
             placed: &location,
         };
@@ -575,8 +612,9 @@ mod fetch_tests {
             nook_core::IdentityId::parse("idn_abcdefghijk")?,
             nook_core::StoreId::parse("store_abcdefghijk")?,
         );
+        let web_token = WasmFixture::secret("web-token")?;
         let store = ICloudEventStore {
-            web_auth_token: "web-token",
+            web_auth_token: &web_token,
             target: &super::owner_share_fixture()?,
             placed: &location,
         };
@@ -587,11 +625,18 @@ mod fetch_tests {
             event_record(wanted.as_str(), "body")
         );
         let stub = FetchStub::install(vec![FetchRoute::ok("POST", LOOKUP, &found)])?;
-        assert_eq!(store.fetch_icloud_event(&wanted).await?, b"body");
+        assert_eq!(
+            store.read(&wanted).await?,
+            RemoteEventRead::Retrieved(b"body".to_vec().into())
+        );
+        drop(stub);
+
+        // CloudKit answers an absent record with no record.
+        let stub = FetchStub::install(vec![FetchRoute::ok("POST", LOOKUP, r#"{"records":[]}"#)])?;
+        assert_eq!(store.read(&wanted).await?, RemoteEventRead::Unavailable);
         drop(stub);
 
         for response in [
-            r#"{"records":[]}"#.to_owned(),
             format!(
                 r#"{{"records":[{}]}}"#,
                 event_record(other.as_str(), "body")
@@ -603,10 +648,10 @@ mod fetch_tests {
             ),
         ] {
             let _stub = FetchStub::install(vec![FetchRoute::ok("POST", LOOKUP, &response)])?;
-            assert!(store.fetch_icloud_event(&wanted).await.is_err());
+            assert!(store.read(&wanted).await.is_err());
         }
         let _stub = FetchStub::install(vec![FetchRoute::failing("POST", LOOKUP, 500)])?;
-        assert!(store.fetch_icloud_event(&wanted).await.is_err());
+        assert!(store.read(&wanted).await.is_err());
         Ok(())
     }
 }

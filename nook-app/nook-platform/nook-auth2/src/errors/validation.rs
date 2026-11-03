@@ -38,6 +38,8 @@ const ERRORS_VALIDATION_ISO_TIMESTAMP_INVALID: &str = "errors.validation.iso_tim
 const ERRORS_VALIDATION_PASSWORD_ENTRY_ID_INVALID: &str =
     "errors.validation.password_entry_id_invalid";
 const ERRORS_VALIDATION_SIGNING_SEED_INVALID: &str = "errors.validation.signing_seed_invalid";
+const ERRORS_VALIDATION_LOCAL_FOLDER_HANDLE_INVALID: &str =
+    "errors.validation.local_folder_handle_invalid";
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ValidationError {
@@ -77,13 +79,13 @@ pub enum ValidationError {
     #[error("{}:{replication_type}", ERRORS_VALIDATION_UNKNOWN_REPLICATION_TYPE)]
     UnknownReplicationType { replication_type: String },
 
+    /// The provider is a kind label: `github`, `google-drive`, `s3`, and so on.
     #[error(
-        "{}:{provider_type}:{oauth_preset}:{replication_type}",
+        "{}:{provider}:{replication_type}",
         ERRORS_VALIDATION_UNSUPPORTED_PROVIDER_REPLICATION
     )]
     UnsupportedProviderReplication {
-        provider_type: String,
-        oauth_preset: String,
+        provider: String,
         replication_type: String,
     },
 
@@ -159,6 +161,74 @@ pub enum ValidationError {
 
     #[error("{}", i18n_keys::ERRORS_VALIDATION_JOINER_ACCOUNT_MISMATCH)]
     JoinerAccountMismatch,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_ENDPOINT_REQUIRED)]
+    S3EndpointRequired,
+
+    /// Not an `http://` or `https://` origin: a scheme, a host, and a port.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_ENDPOINT_INVALID)]
+    S3EndpointInvalid,
+
+    /// Plain `http://` to a host other than `localhost`, `127.0.0.1`, or `[::1]`.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_ENDPOINT_INSECURE)]
+    S3EndpointInsecure,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_REGION_REQUIRED)]
+    S3RegionRequired,
+
+    /// Whitespace or a control character.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_REGION_INVALID)]
+    S3RegionInvalid,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_BUCKET_REQUIRED)]
+    S3BucketRequired,
+
+    /// A `/`, whitespace, or a control character.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_BUCKET_INVALID)]
+    S3BucketInvalid,
+
+    /// An empty, `.`, or `..` segment, or a control character.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_KEY_PREFIX_INVALID)]
+    S3KeyPrefixInvalid,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_ACCESS_KEY_ID_REQUIRED)]
+    S3AccessKeyIdRequired,
+
+    /// A key the provider saves already, as its own or as a spare.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_ACCESS_KEY_ID_DUPLICATE)]
+    S3AccessKeyIdDuplicate,
+
+    /// An invite names a spare key the provider no longer saves.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_ACCESS_KEY_NOT_SAVED)]
+    S3AccessKeyNotSaved,
+
+    /// Whitespace or a control character.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_ACCESS_KEY_ID_INVALID)]
+    S3AccessKeyIdInvalid,
+
+    /// Carries no part of the rejected secret.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_SECRET_ACCESS_KEY_REQUIRED)]
+    S3SecretAccessKeyRequired,
+
+    /// An S3 provider or invite has no usable connection.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_STORAGE_TARGET_INVALID)]
+    S3StorageTargetInvalid,
+
+    /// A provider credential is blank. Carries no part of the rejected text.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_PROVIDER_SECRET_REQUIRED)]
+    ProviderSecretRequired,
+
+    /// A personal invite would carry a credential still sealed at rest.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_PROVIDER_CREDENTIAL_SEALED)]
+    ProviderCredentialSealed,
+
+    /// An invite's key or token is of a kind its provider does not use.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_ENROLLMENT_CREDENTIAL_MISMATCH)]
+    EnrollmentCredentialMismatch,
+
+    /// A stored local-folder row names no folder handle: damaged data.
+    #[error("{}", ERRORS_VALIDATION_LOCAL_FOLDER_HANDLE_INVALID)]
+    LocalFolderHandleInvalid,
 
     #[error("{}", i18n_keys::ERRORS_VALIDATION_SECRET_DATA_REQUIRED)]
     SecretDataRequired,

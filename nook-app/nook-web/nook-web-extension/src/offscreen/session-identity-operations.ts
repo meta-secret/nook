@@ -7,7 +7,7 @@ import {
   type EventLogStorageRecord,
   type NookSecretPage,
   type NookVaultManager,
-  type StorageConnectArgs,
+  type NookStorageConnection,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   SessionOperationFailure,
@@ -84,7 +84,7 @@ async function mountArgs({
   manager,
   mountProviderId,
 }: IdentityMountRequest): Promise<
-  Result<StorageConnectArgs, SessionOperationFailure>
+  Result<NookStorageConnection, SessionOperationFailure>
 > {
   const providers = decode_storage_providers(
     await manager.load_auth_providers_snapshot(),
@@ -163,13 +163,7 @@ async function openIdentityVault({
       const args = await mountArgs(mountRequest)
       if (args.isErr()) return err(args.error)
       return ok(
-        await manager.connect_identity_vault(
-          args.value.mode,
-          args.value.pat,
-          args.value.repo,
-          vaultStoreId,
-          1,
-        ),
+        await manager.connect_identity_vault(args.value, vaultStoreId, 1),
       )
     }
   }

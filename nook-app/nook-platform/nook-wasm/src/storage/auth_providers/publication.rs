@@ -11,9 +11,7 @@ use super::STORE;
 use crate::AuthProviderDatabase;
 use crate::NookError;
 use crate::ProviderDbReadRawSnapshotFromStore;
-use nook_core::{
-    AppId, AuthProvidersSnapshotData, DeviceIdentity, ProviderCredentialStorageAdmission,
-};
+use nook_core::{AppId, AuthProvidersSnapshot, DeviceIdentity, ProviderCredentialStorageAdmission};
 use rexie::{Store, Transaction, TransactionMode};
 use serde::Serialize;
 use serde_wasm_bindgen::Serializer;
@@ -21,7 +19,7 @@ use serde_wasm_bindgen::Serializer;
 /// Normal publication derives encrypted credentials before observing storage.
 pub(crate) struct ProviderSnapshotPublication<'a> {
     pub(crate) identity: &'a DeviceIdentity,
-    pub(crate) snapshot: &'a AuthProvidersSnapshotData,
+    pub(crate) snapshot: &'a AuthProvidersSnapshot,
 }
 impl ProviderSnapshotPublication<'_> {
     pub(crate) async fn save(self) -> Result<(), NookError> {
@@ -62,7 +60,7 @@ pub(crate) enum PresealedProviderMerge {
 /// Locked import binds an explicit recipient without requiring its private key.
 pub(crate) struct PresealedProviderSnapshotPublication<'a> {
     pub(crate) app_id: &'a AppId,
-    pub(crate) snapshot: &'a AuthProvidersSnapshotData,
+    pub(crate) snapshot: &'a AuthProvidersSnapshot,
     pub(crate) merge: PresealedProviderMerge,
 }
 impl PresealedProviderSnapshotPublication<'_> {
@@ -150,7 +148,7 @@ struct PreparedProviderSnapshotWrite {
     transaction: Transaction,
     store: Store,
     state_key: String,
-    snapshot: AuthProvidersSnapshotData,
+    snapshot: AuthProvidersSnapshot,
     completion: PublicationCompletion,
 }
 impl PreparedProviderSnapshotWrite {
@@ -184,7 +182,7 @@ pub(super) struct ProviderSnapshotStore<'a> {
     pub(super) state_key: &'a str,
 }
 impl ProviderSnapshotStore<'_> {
-    pub(super) async fn write(self, snapshot: &AuthProvidersSnapshotData) -> Result<(), NookError> {
+    pub(super) async fn write(self, snapshot: &AuthProvidersSnapshot) -> Result<(), NookError> {
         let Self { store, state_key } = self;
         let key = serde_wasm_bindgen::to_value(state_key)
             .map_err(|e| NookError::IndexedDb(format!("{}: {:?}", "nook_auth key error", e)))?;
@@ -206,12 +204,11 @@ mod tests {
     use super::{
         PresealedProviderMerge, PresealedProviderSnapshotPublication, ProviderSnapshotPublication,
     };
+    use crate::test_fixtures::WasmFixture;
     use crate::{AuthProviderDatabase, NookDatabase, NookError, ProviderDbWriteSnapshotAt};
-    use nook_core::ProviderVaultScope;
-    use nook_core::StoredGithubPat;
     use nook_core::{
-        AGE_ARMOR_MARKER, ActiveVaultScope, AuthProvidersSnapshotData, DeviceIdentity,
-        ProviderCredentialStorageAdmission, StorageProviderData, StorageProviderType,
+        AGE_ARMOR_MARKER, ActiveVaultScope, AuthProvidersSnapshot, DeviceIdentity,
+        ProviderCredentialStorageAdmission, ProviderVaultScope, StorageProvider, StoredProvider,
     };
     use serde_json::Value;
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
@@ -223,23 +220,17 @@ mod tests {
         pat: &'a str,
     }
     impl GithubSnapshotFixture<'_> {
-        fn snapshot(self) -> AuthProvidersSnapshotData {
-            AuthProvidersSnapshotData {
-                providers: vec![StorageProviderData::github(
-                    self.id,
-                    "GitHub",
-                    self.pat,
-                    "nook",
-                    "2026-06-24T00:00:00.000Z",
-                )],
+        fn snapshot(self) -> anyhow::Result<AuthProvidersSnapshot> {
+            Ok(AuthProvidersSnapshot {
+                providers: vec![WasmFixture::github_row(self.id, self.pat, "nook")?],
                 active_vault_store_id: ActiveVaultScope::Unselected,
-            }
+            })
         }
     }
 
     struct PublicationFixture {
         identity: DeviceIdentity,
-        snapshot: AuthProvidersSnapshotData,
+        snapshot: AuthProvidersSnapshot,
     }
     impl PublicationFixture {
         async fn new(credential: &str) -> anyhow::Result<Self> {
@@ -248,14 +239,8 @@ mod tests {
             NookDatabase::clear_identity_directory_for_test().await?;
             Ok(Self {
                 identity: DeviceIdentity::generate()?,
-                snapshot: AuthProvidersSnapshotData {
-                    providers: vec![StorageProviderData::github(
-                        "publication",
-                        "GitHub",
-                        credential,
-                        "nook",
-                        "2026-06-24T00:00:00.000Z",
-                    )],
+                snapshot: AuthProvidersSnapshot {
+                    providers: vec![WasmFixture::github_row("publication", credential, "nook")?],
                     active_vault_store_id: ActiveVaultScope::Unselected,
                 },
             })
@@ -455,12 +440,12 @@ mod tests {
             id: "gh-wasm",
             pat: "github_pat_first_old",
         }
-        .snapshot();
+        .snapshot()?;
         let mut second_existing = GithubSnapshotFixture {
             id: "gh-wasm",
             pat: "github_pat_second",
         }
-        .snapshot();
+        .snapshot()?;
         first_existing = first_existing
             .seal_credentials(&first)
             .map_err(|rejection| rejection.into_cause())?;
@@ -481,7 +466,7 @@ mod tests {
             id: "gh-wasm",
             pat: "github_pat_first_new",
         }
-        .snapshot();
+        .snapshot()?;
         incoming = incoming
             .seal_credentials(&first)
             .map_err(|rejection| rejection.into_cause())?;
@@ -497,12 +482,12 @@ mod tests {
         let first_loaded = AuthProviderDatabase::load_auth_providers(&first).await?;
         let second_loaded = AuthProviderDatabase::load_auth_providers(&second).await?;
         assert_eq!(
-            first_loaded.providers[0].github_pat,
-            StoredGithubPat::Token(("github_pat_first_new").to_owned())
+            WasmFixture::first_github_token(&first_loaded)?.expose(),
+            "github_pat_first_new"
         );
         assert_eq!(
-            second_loaded.providers[0].github_pat,
-            StoredGithubPat::Token(("github_pat_second").to_owned())
+            WasmFixture::first_github_token(&second_loaded)?.expose(),
+            "github_pat_second"
         );
         Ok(())
     }
@@ -518,7 +503,7 @@ mod tests {
     async fn presealed_save_replaces_the_vaults_local_row_and_keeps_mounts() -> anyhow::Result<()> {
         AuthProviderDatabase::clear_auth_providers_db().await?;
         let identity = DeviceIdentity::generate()?;
-        let existing = VaultRowsFixture::existing().snapshot(&identity)?;
+        let existing = VaultRowsFixture::existing()?.snapshot(&identity)?;
         AuthProviderDatabase::write_snapshot_at(ProviderDbWriteSnapshotAt {
             state_key: &AuthProviderDatabase::state_key_for_app_id(identity.app_id()),
             snapshot: &existing,
@@ -529,7 +514,7 @@ mod tests {
             id: "gh-incoming",
             pat: "github_pat_incoming",
         }
-        .snapshot();
+        .snapshot()?;
         incoming.active_vault_store_id = ActiveVaultScope::StoreId("store-incoming".to_owned());
         incoming = incoming
             .seal_credentials(&identity)
@@ -575,14 +560,14 @@ mod tests {
                 id: "gh-plaintext",
                 pat: "github_pat_plaintext",
             }
-            .snapshot(),
+            .snapshot()?,
         })
         .await?;
         let mut incoming = GithubSnapshotFixture {
             id: "gh-incoming",
             pat: "github_pat_incoming",
         }
-        .snapshot();
+        .snapshot()?;
         incoming = incoming
             .seal_credentials(&identity)
             .map_err(|rejection| rejection.into_cause())?;
@@ -604,8 +589,9 @@ mod tests {
         )
         .await?;
         assert_eq!(
-            AuthProviderDatabase::decode_stored_snapshot(raw)?.providers[0].github_pat,
-            StoredGithubPat::Token("github_pat_plaintext".to_owned())
+            WasmFixture::first_github_token(&AuthProviderDatabase::decode_stored_snapshot(raw)?)?
+                .expose(),
+            "github_pat_plaintext"
         );
         Ok(())
     }
@@ -622,7 +608,7 @@ mod tests {
     {
         AuthProviderDatabase::clear_auth_providers_db().await?;
         let identity = DeviceIdentity::generate()?;
-        let existing = VaultRowsFixture::existing().snapshot(&identity)?;
+        let existing = VaultRowsFixture::existing()?.snapshot(&identity)?;
         AuthProviderDatabase::write_snapshot_at(ProviderDbWriteSnapshotAt {
             state_key: &AuthProviderDatabase::state_key_for_app_id(identity.app_id()),
             snapshot: &existing,
@@ -631,7 +617,7 @@ mod tests {
 
         PresealedProviderSnapshotPublication {
             app_id: identity.app_id(),
-            snapshot: &AuthProvidersSnapshotData {
+            snapshot: &AuthProvidersSnapshot {
                 providers: Vec::new(),
                 active_vault_store_id: ActiveVaultScope::StoreId("store-incoming".to_owned()),
             },
@@ -654,35 +640,30 @@ mod tests {
 
     /// Browser rows of two vaults and one identity mount.
     struct VaultRowsFixture {
-        providers: Vec<StorageProviderData>,
+        providers: Vec<StorageProvider>,
     }
     impl VaultRowsFixture {
-        fn local(id: &str, store_id: &str) -> StorageProviderData {
-            let mut row = StorageProviderData::github(id, "This browser", "", "", "now");
-            row.provider_type = StorageProviderType::Local;
-            row.github_pat = StoredGithubPat::Missing;
-            row.store_id = ProviderVaultScope::StoreId(store_id.to_owned());
-            row
+        fn local(id: &str, store_id: &str) -> StorageProvider {
+            StorageProvider::never_synced(
+                id.to_owned(),
+                ProviderVaultScope::StoreId(store_id.to_owned()),
+                "now".to_owned(),
+                StoredProvider::Local {},
+            )
         }
 
-        fn existing() -> Self {
-            Self {
+        fn existing() -> anyhow::Result<Self> {
+            Ok(Self {
                 providers: vec![
                     Self::local("local-removed", "store-incoming"),
                     Self::local("local-retained", "store-other"),
-                    StorageProviderData::github(
-                        "gh-mount",
-                        "GitHub",
-                        "github_pat_mount",
-                        "nook",
-                        "now",
-                    ),
+                    WasmFixture::github_row("gh-mount", "github_pat_mount", "nook")?,
                 ],
-            }
+            })
         }
 
-        fn snapshot(self, identity: &DeviceIdentity) -> anyhow::Result<AuthProvidersSnapshotData> {
-            AuthProvidersSnapshotData {
+        fn snapshot(self, identity: &DeviceIdentity) -> anyhow::Result<AuthProvidersSnapshot> {
+            AuthProvidersSnapshot {
                 providers: self.providers,
                 active_vault_store_id: ActiveVaultScope::StoreId("store-incoming".to_owned()),
             }
@@ -690,7 +671,7 @@ mod tests {
             .map_err(|rejection| rejection.into_cause().into())
         }
 
-        async fn stored(identity: &DeviceIdentity) -> anyhow::Result<AuthProvidersSnapshotData> {
+        async fn stored(identity: &DeviceIdentity) -> anyhow::Result<AuthProvidersSnapshot> {
             let raw = AuthProviderDatabase::read_raw_snapshot_at(
                 &AuthProviderDatabase::state_key_for_app_id(identity.app_id()),
             )
@@ -698,7 +679,7 @@ mod tests {
             Ok(AuthProviderDatabase::decode_stored_snapshot(raw)?)
         }
 
-        fn ids(snapshot: &AuthProvidersSnapshotData) -> Vec<&str> {
+        fn ids(snapshot: &AuthProvidersSnapshot) -> Vec<&str> {
             let mut ids = snapshot
                 .providers
                 .iter()

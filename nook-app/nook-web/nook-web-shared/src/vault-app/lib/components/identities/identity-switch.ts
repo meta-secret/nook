@@ -100,25 +100,23 @@ export class IdentitySwitch {
 }
 
 /**
- * "Use identity" on the locked identities page. A switch that leaves the
- * identity locked (a PIN, or a dismissed passkey prompt) has its providers
- * still unread: they are read once its key is unlocked.
+ * "Use identity" and "Unlock" on the locked identities page. A locked
+ * identity shows only its local row, so its sync providers are read each
+ * time its key is unlocked: after a reload as much as after a switch.
  */
 export class LockedIdentitySwitch {
-  private providersAwaitUnlock = false;
-
   constructor(private readonly vault: VaultState) {}
 
   async use(identityId: string): Promise<void> {
-    const outcome = await new IdentitySwitch(this.vault).to(identityId);
-    this.providersAwaitUnlock = outcome === IdentitySwitchOutcome.Locked;
+    await new IdentitySwitch(this.vault).to(identityId);
   }
 
-  /** Read the providers of an identity switched to while locked, now that
-   * its key is unlocked. */
+  /** Read the unlocked identity's providers, then its log, whose devices
+   * the protection checklist counts before any vault opens; a key still
+   * locked reads none. */
   async loadProvidersOnceUnlocked(): Promise<void> {
-    if (!this.providersAwaitUnlock || !this.vault.deviceProtectionReady) return;
-    this.providersAwaitUnlock = false;
+    if (!this.vault.deviceProtectionReady) return;
     await new IdentitySwitch(this.vault).loadProviders();
+    await this.vault.identityControl.loadSnapshot();
   }
 }

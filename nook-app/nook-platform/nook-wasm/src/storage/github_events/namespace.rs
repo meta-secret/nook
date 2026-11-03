@@ -2,12 +2,13 @@
 //! GitHub repository in a single commit. A branch that moved in between
 //! fails the ref update instead of being overwritten.
 
-use reqwest::{Client, Method, RequestBuilder};
+use reqwest::{Method, RequestBuilder};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use super::GitHubEventStore;
 use crate::NookError;
+use crate::storage::github::{GitHubRequest, GitHubStorageClient};
 
 #[derive(Deserialize)]
 struct RepoInfo {
@@ -49,7 +50,16 @@ struct PathRemoval<'a> {
     mode: &'static str,
     #[serde(rename = "type")]
     kind: &'static str,
-    sha: Option<&'a str>,
+    sha: RemovedBlob,
+}
+
+/// The blob of a removed path: always JSON `null`.
+struct RemovedBlob;
+
+impl Serialize for RemovedBlob {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_unit()
+    }
 }
 
 #[derive(Serialize)]
@@ -73,7 +83,7 @@ struct RefMove<'a> {
 
 /// Named values required by `GitHubEventStore::github_api`.
 struct GitHubCall<'a> {
-    client: &'a Client,
+    client: &'a GitHubStorageClient<'a>,
     method: Method,
     path: &'a str,
 }
@@ -85,15 +95,10 @@ impl GitHubEventStore<'_> {
             method,
             path,
         } = call;
-        client
-            .request(
-                method,
-                format!("https://api.github.com/repos/{}/{path}", self.repo),
-            )
-            .header("Authorization", format!("Bearer {}", self.pat.trim()))
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .header("User-Agent", "nook-wasm")
+        client.call(GitHubRequest {
+            method,
+            url: &format!("https://api.github.com/repos/{}/{path}", self.repo),
+        })
     }
 
     async fn github_json<T: DeserializeOwned>(request: RequestBuilder) -> Result<T, NookError> {
@@ -121,10 +126,10 @@ impl GitHubEventStore<'_> {
             .collect()
     }
 
-    /// Delete every file of this namespace in one commit. Returns how many
-    /// went; nothing to do when the namespace holds none.
-    pub(crate) async fn delete_github_namespace(&self) -> Result<usize, NookError> {
-        let client = Client::new();
+    /// Delete every file of this namespace in one commit; nothing to do when
+    /// the namespace holds none.
+    pub(crate) async fn delete_github_namespace(&self) -> Result<(), NookError> {
+        let client = GitHubStorageClient::new(self.token)?;
         let repo: RepoInfo = Self::github_json(self.github_api(GitHubCall {
             client: &client,
             method: Method::GET,
@@ -158,7 +163,7 @@ impl GitHubEventStore<'_> {
         let root = self.placed.root();
         let paths = Self::namespace_paths(&listing.tree, &root);
         if paths.is_empty() {
-            return Ok(0);
+            return Ok(());
         }
         let tree: ShaObject = Self::github_json(
             self.github_api(GitHubCall {
@@ -174,7 +179,7 @@ impl GitHubEventStore<'_> {
                         path,
                         mode: "100644",
                         kind: "blob",
-                        sha: None,
+                        sha: RemovedBlob,
                     })
                     .collect(),
             }),
@@ -206,7 +211,7 @@ impl GitHubEventStore<'_> {
             }),
         )
         .await?;
-        Ok(paths.len())
+        Ok(())
     }
 }
 
@@ -261,7 +266,7 @@ mod tests {
             path: "nook-log/v1/vaults/store_drop/events/a.yaml",
             mode: "100644",
             kind: "blob",
-            sha: None,
+            sha: RemovedBlob,
         };
         let json = serde_json::to_value(&removal)?;
         assert!(json.get("sha").is_some_and(serde_json::Value::is_null));
@@ -272,8 +277,10 @@ mod tests {
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod fetch_tests {
+    use super::super::GitHubRepository;
     use super::*;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+    use crate::test_fixtures::WasmFixture;
     use nook_core::{EventLogNamespaceKind, IdentityId, PlacedNamespace, StoreId};
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -330,14 +337,13 @@ mod fetch_tests {
             ),
         ]);
         let stub = FetchStub::install(routes)?;
-        let deleted = GitHubEventStore {
-            pat: " pat ",
+        GitHubEventStore {
+            token: &WasmFixture::secret("pat")?,
             repo: "owner/repo",
             placed: &location,
         }
         .delete_github_namespace()
         .await?;
-        assert_eq!(deleted, 2);
         let calls = stub.calls();
         assert_eq!(calls.len(), 7);
         assert!(calls[6].starts_with("PATCH"));
@@ -354,13 +360,14 @@ mod fetch_tests {
     )]
     async fn empty_truncated_or_failed_namespaces_write_nothing() -> anyhow::Result<()> {
         let location = location()?;
+        let token = WasmFixture::secret("pat")?;
         let store = GitHubEventStore {
-            pat: "pat",
+            token: &token,
             repo: "owner/repo",
             placed: &location,
         };
         let stub = FetchStub::install(head_routes(r#"{"truncated":false,"tree":[]}"#))?;
-        assert_eq!(store.delete_github_namespace().await?, 0);
+        store.delete_github_namespace().await?;
         assert!(stub.calls().iter().all(|call| call.starts_with("GET")));
         drop(stub);
 
@@ -395,12 +402,12 @@ mod fetch_tests {
             ),
             FetchRoute::ok("GET", REPO, r#"{"default_branch":"main"}"#),
         ])?;
-        let placed = GitHubEventStore::list_github_namespaces(
-            "pat",
-            "owner/repo",
-            EventLogNamespaceKind::Vault,
-        )
-        .await?;
+        let token = WasmFixture::secret("pat")?;
+        let repository = GitHubRepository {
+            token: &token,
+            repo: "owner/repo",
+        };
+        let placed = repository.namespaces(EventLogNamespaceKind::Vault).await?;
         assert_eq!(
             placed,
             [
@@ -419,13 +426,10 @@ mod fetch_tests {
 
         let _stub = FetchStub::install(vec![FetchRoute::failing("GET", REPO, 404)])?;
         assert!(
-            GitHubEventStore::list_github_namespaces(
-                "pat",
-                "owner/repo",
-                EventLogNamespaceKind::Identity,
-            )
-            .await?
-            .is_empty()
+            repository
+                .namespaces(EventLogNamespaceKind::Identity)
+                .await?
+                .is_empty()
         );
         Ok(())
     }

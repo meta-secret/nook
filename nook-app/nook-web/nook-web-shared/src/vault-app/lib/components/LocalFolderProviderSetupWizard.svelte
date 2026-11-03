@@ -1,26 +1,25 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { FolderOpen, RefreshCw, ShieldCheck } from '@lucide/svelte'
-  import {
-    localFolderDirectoryValue,
-    LocalFolderPresentation,
-    LocalFolderHandleKind,
-  } from '$lib/auth/providers'
   import { Button } from '$lib/components/ui/button'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   import type { VaultState } from '$lib/vault.svelte'
-  import { LocalFolderDraftKind } from '$lib/vault/state/provider.svelte'
+  import type { LocalFolderProviderDraft } from '$lib/vault/provider-draft-reads'
 
   let {
     vault,
-    idPrefix = 'local-folder',
+    folder,
+    idPrefix,
     isVerifying,
     isInitializing,
     onCancelSetup,
     onConnect,
   }: {
     vault: VaultState
-    idPrefix?: string
+    /** The staged local-folder draft: awaiting a folder, or its folder. */
+    folder: LocalFolderProviderDraft
+    /** Namespace of this wizard's test ids. */
+    idPrefix: string
     isVerifying: boolean
     isInitializing: boolean
     onCancelSetup: () => void
@@ -32,21 +31,7 @@
   let connectionOpen = $state(true)
   let syncOpen = $state(false)
 
-  const folderHandle = $derived(
-    vault.localFolderDraft.kind === LocalFolderDraftKind.Configured
-      ? new LocalFolderPresentation(
-          vault.localFolderDraft.config,
-        ).localFolderHandle()
-      : { kind: LocalFolderHandleKind.Unselected },
-  )
-  const hasFolder = $derived(
-    folderHandle.kind === LocalFolderHandleKind.Selected,
-  )
-  const selectedDirectoryName = $derived(
-    vault.localFolderDraft.kind === LocalFolderDraftKind.Configured
-      ? localFolderDirectoryValue(vault.localFolderDraft.config.directoryName)
-      : '',
-  )
+  const hasFolder = $derived(folder.state === 'selected')
   const localFolderUnavailable = $derived(!vault.localFolderBackupSupported)
 
   $effect(() => {
@@ -120,12 +105,12 @@
           {vault.t(I18N_KEYS.ProviderSetupLocalFolderUnsupportedBrowser)}
         </p>
       {/if}
-      {#if selectedDirectoryName}
+      {#if folder.state === 'selected'}
         <p
           class="truncate rounded-md border border-border/60 bg-muted/20 px-3 py-2 font-mono text-xs text-muted-foreground"
           data-testid="{idPrefix}-local-folder-selected"
         >
-          {selectedDirectoryName}
+          {folder.directoryName}
         </p>
       {/if}
       {#if folderError}

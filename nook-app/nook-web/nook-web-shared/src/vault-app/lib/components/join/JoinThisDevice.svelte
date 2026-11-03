@@ -7,6 +7,7 @@ identities hub lists the vaults it can open. An invite kept in iCloud asks
 for the iCloud sign-in only when the join reaches it.
 -->
 <script lang="ts">
+  import { untrack } from "svelte";
   import { CheckCircle2, RefreshCw } from "@lucide/svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { Button } from "$lib/components/ui/button";
@@ -17,6 +18,11 @@ for the iCloud sign-in only when the join reaches it.
   import { IdentityJoinKind } from "$lib/vault/identity-control.svelte";
   import { JoinICloudSignIn } from "$lib/vault/state/ui.svelte";
   import JoinFlowDiagram from "./JoinFlowDiagram.svelte";
+  import InviteProviderKeys from "./InviteProviderKeys.svelte";
+  import {
+    InviteKeyRequests,
+    type InviteKeyEntry,
+  } from "$lib/vault/invite-join-keys";
   import { JoinSide } from "./join-flow";
 
   let {
@@ -39,6 +45,14 @@ for the iCloud sign-in only when the join reaches it.
 
   let linkInput = $state("");
   let passphraseInput = $state("");
+  /** What is typed for each provider whose key this device adds. */
+  let keyEntries = $state<InviteKeyEntry[]>([]);
+  $effect.pre(() => {
+    const request = vault.inviteKeyRequest;
+    untrack(() => {
+      keyEntries = InviteKeyRequests.blankEntries(request);
+    });
+  });
 
   const linkReceived = $derived(Boolean(code));
   const joinCode = $derived(linkReceived ? code : linkInput.trim());
@@ -52,6 +66,7 @@ for the iCloud sign-in only when the join reaches it.
     const request: EnrollmentCodeUnlock = {
       code: joinCode,
       password: passphraseInput,
+      keys: $state.snapshot(keyEntries),
     };
     void onUseEnrollmentCode(request);
   }
@@ -98,7 +113,10 @@ for the iCloud sign-in only when the join reaches it.
           {vault.t(I18N_KEYS.JoinInstruction)}
         </p>
         <div class="grid gap-1.5">
-          <label for="join-link-input" class="text-sm font-medium text-foreground">
+          <label
+            for="join-link-input"
+            class="text-sm font-medium text-foreground"
+          >
             {vault.t(I18N_KEYS.JoinLinkLabel)}
           </label>
           <input
@@ -128,6 +146,11 @@ for the iCloud sign-in only when the join reaches it.
           data-testid="enrollment-password-input"
         />
       </div>
+      <InviteProviderKeys
+        {vault}
+        bind:entries={keyEntries}
+        disabled={isVerifying}
+      />
       {#if vault.joinICloudSignIn === JoinICloudSignIn.Needed}
         <ICloudEnrollmentAuth {vault} />
       {/if}
@@ -144,12 +167,6 @@ for the iCloud sign-in only when the join reaches it.
           {vault.t(I18N_KEYS.JoinSubmit)}
         {/if}
       </Button>
-      <p
-        class="text-center font-mono text-[11px] tracking-[0.04em] text-muted-foreground"
-        data-testid="join-requirement"
-      >
-        {vault.t(I18N_KEYS.JoinRequirement)}
-      </p>
     </form>
   {/if}
 </section>

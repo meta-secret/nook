@@ -5,63 +5,13 @@ import { expect, type Page } from '@playwright/test'
 import {
   type ActiveVaultScope,
   type AuthProvidersSnapshot,
-  type OAuthFileConfig,
+  type OAuthAccountIdentity,
+  type ProviderVaultScope,
   type StorageProvider,
 } from '$app-wasm'
 import { E2E_GOOGLE_ACCOUNT_EMAIL } from '../google-identity-stub'
-import { readLocalVaultYamlFromIdb } from './local-sync'
+import { readLocalVaultYamlFromIdb, storeIdOfVaultYaml } from './local-sync'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
-
-type SeededOAuthFileCredentials = {
-  accessToken: string
-  refreshToken?: string
-  fileName: string
-  accountEmail?: string
-}
-
-/** Every Google Drive provider syncs under its own My Drive vault folder;
- * every iCloud provider under a CloudKit share (`icloud-share-v1:{…}`). */
-export type SeededOAuthFile =
-  | (SeededOAuthFileCredentials & { preset: 'google-drive'; folderId: string })
-  | (SeededOAuthFileCredentials & {
-      preset: 'icloud'
-      iCloudShareTarget: string
-    })
-
-export type SeededAuthProvider = {
-  id: string
-  type: StorageProvider['type']
-  label: string
-  githubRepo?: string
-  githubPat?: string
-  oauthFile?: SeededOAuthFile
-  storeId?: string
-  createdAt?: string
-}
-
-/** The vault folder id a seeded Drive provider syncs under by default. The
- * e2e Drive stubs register a seeded folder on first use. */
-export function e2eDriveFolderId(fileName: string): string {
-  return `e2e-folder-${fileName.replace(/[^A-Za-z0-9_-]/g, '-')}`
-}
-
-function seededSharedTarget(oauth: SeededOAuthFile): {
-  folderId: OAuthFileConfig['folderId']
-  iCloudShareTarget: OAuthFileConfig['iCloudShareTarget']
-} {
-  return oauth.preset === 'google-drive'
-    ? {
-        folderId: { state: 'folderId', value: oauth.folderId },
-        iCloudShareTarget: { state: 'unbound' },
-      }
-    : {
-        folderId: { state: 'root' },
-        iCloudShareTarget: {
-          state: 'sharedTarget',
-          value: oauth.iCloudShareTarget,
-        },
-      }
-}
 
 export enum AuthProviderSeedScopeKind {
   Unselected = 'unselected',
@@ -80,6 +30,58 @@ export function activeAuthProviderSeedScope(
   storeId: string,
 ): AuthProviderSeedScope {
   return { kind: AuthProviderSeedScopeKind.ActiveVault, storeId }
+}
+
+export enum SeededProviderKind {
+  Github = 'github',
+  GoogleDrive = 'google-drive',
+  ICloud = 'icloud',
+}
+
+type SeededProviderCommon = {
+  id: string
+  label: string
+  scope: AuthProviderSeedScope
+}
+
+/** One saved provider row to seed, with the fields of its own variant. */
+export type SeededProvider =
+  | (SeededProviderCommon & {
+      kind: SeededProviderKind.Github
+      repository: string
+      token: string
+    })
+  | (SeededProviderCommon & {
+      kind: SeededProviderKind.GoogleDrive
+      /** Names the e2e Drive stub's vault; the row syncs under its folder. */
+      fileName: string
+      accessToken: string
+      account: OAuthAccountIdentity
+    })
+  | (SeededProviderCommon & {
+      kind: SeededProviderKind.ICloud
+      webAuthToken: string
+      account: OAuthAccountIdentity
+      /** A CloudKit share (`icloud-share-v1:{…}`). */
+      shareTarget: string
+    })
+
+/** The signed-in account the e2e Google stub reports. */
+export const E2E_GOOGLE_ACCOUNT: OAuthAccountIdentity = {
+  state: 'email',
+  email: E2E_GOOGLE_ACCOUNT_EMAIL,
+}
+
+export const E2E_UNKNOWN_ACCOUNT: OAuthAccountIdentity = { state: 'unknown' }
+
+export function e2eAccount(email: string): OAuthAccountIdentity {
+  return { state: 'email', email }
+}
+
+/** The vault folder id a seeded Drive provider syncs under. The e2e Drive
+ * stubs register a seeded folder on first use. */
+export function e2eDriveFolderId(fileName: string): string {
+  return `e2e-folder-${fileName.replace(/[^A-Za-z0-9_-]/g, '-')}`
 }
 
 enum AuthProviderHookFailure {
@@ -101,91 +103,71 @@ type AuthProviderBrowserHooks = {
   unselectedVaultScope(): ActiveVaultScope
 }
 
-function providerVaultScope(
-  provider: SeededAuthProvider,
-  seedScope: AuthProviderSeedScope,
-): StorageProvider['storeId'] {
-  if ('storeId' in provider && typeof provider.storeId === 'string') {
-    return { state: 'storeId', value: provider.storeId }
+function providerVaultScope(scope: AuthProviderSeedScope): ProviderVaultScope {
+  switch (scope.kind) {
+    case AuthProviderSeedScopeKind.ActiveVault:
+      return { state: 'storeId', value: scope.storeId }
+    case AuthProviderSeedScopeKind.Unselected:
+      return { state: 'unscoped' }
   }
-  return seedScope.kind === AuthProviderSeedScopeKind.ActiveVault
-    ? { state: 'storeId', value: seedScope.storeId }
-    : { state: 'unscoped' }
 }
 
-function storedProvider(
-  provider: SeededAuthProvider,
-  seedScope: AuthProviderSeedScope,
-): StorageProvider {
-  const createdAt =
-    'createdAt' in provider && typeof provider.createdAt === 'string'
-      ? provider.createdAt
-      : new Date().toISOString()
+function storedProvider(provider: SeededProvider): StorageProvider {
   const common = {
     id: provider.id,
-    type: provider.type,
     label: provider.label,
-    githubPat: { state: 'missing' } as const,
-    githubRepo: { state: 'defaultRepository' } as const,
-    oauthFile: { state: 'notApplicable' } as const,
-    localFolder: { state: 'notApplicable' } as const,
-    storeId: providerVaultScope(provider, seedScope),
+    storeId: providerVaultScope(provider.scope),
     syncCheckpoint: { state: 'neverSynced' } as const,
-    createdAt,
+    createdAt: new Date().toISOString(),
   }
-  if (provider.type === 'github') {
-    return {
-      ...common,
-      type: 'github',
-      githubPat:
-        'githubPat' in provider && typeof provider.githubPat === 'string'
-          ? { state: 'token', value: provider.githubPat }
-          : { state: 'missing' },
-      githubRepo:
-        'githubRepo' in provider && typeof provider.githubRepo === 'string'
-          ? { state: 'repository', value: provider.githubRepo }
-          : { state: 'defaultRepository' },
-    }
-  }
-  if (provider.type === 'oauth-file' && provider.oauthFile) {
-    const oauth = provider.oauthFile
-    return {
-      ...common,
-      type: 'oauth-file',
-      oauthFile: {
-        state: 'configured',
-        config: {
-          preset: oauth.preset,
-          accessToken: { state: 'accessToken', value: oauth.accessToken },
-          refreshToken:
-            'refreshToken' in oauth && typeof oauth.refreshToken === 'string'
-              ? { state: 'token', value: oauth.refreshToken }
-              : { state: 'notIssued' },
-          expiresAt: { state: 'unknown' },
-          fileId: { state: 'unresolved' },
-          fileName: { state: 'fileName', value: oauth.fileName },
-          accountEmail:
-            'accountEmail' in oauth && typeof oauth.accountEmail === 'string'
-              ? { state: 'email', value: oauth.accountEmail }
-              : { state: 'unknown' },
-          ...seededSharedTarget(oauth),
+  switch (provider.kind) {
+    case SeededProviderKind.Github:
+      return {
+        ...common,
+        provider: {
+          type: 'github',
+          repository: { state: 'repository', value: provider.repository },
+          token: provider.token,
         },
-      },
-    }
+      }
+    case SeededProviderKind.GoogleDrive:
+      return {
+        ...common,
+        provider: {
+          type: 'oauth-file',
+          preset: 'google-drive',
+          authorization: {
+            accessToken: provider.accessToken,
+            expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+          },
+          account: provider.account,
+          folderId: e2eDriveFolderId(provider.fileName),
+        },
+      }
+    case SeededProviderKind.ICloud:
+      return {
+        ...common,
+        provider: {
+          type: 'oauth-file',
+          preset: 'icloud',
+          webAuthToken: provider.webAuthToken,
+          account: provider.account,
+          shareTarget: provider.shareTarget,
+        },
+      }
   }
-  return common
 }
 
 /** Put a plaintext GitHub token into one stored provider row, in place of
  * its sealed credential, to observe that loading rejects it. */
-export async function storePlaintextGithubPat(
+export async function storePlaintextGithubToken(
   page: Page,
   providerId: string,
-  pat: string,
+  token: string,
 ): Promise<void> {
   const stateKey = await activeAuthProviderStateKey(page)
   await page.evaluate(
-    ({ stateKey: key, providerId: id, pat: token }) =>
+    ({ stateKey: key, providerId: id, token: plaintext }) =>
       new Promise<void>((resolve, reject) => {
         const request = indexedDB.open('nook_auth', 1)
         request.onerror = () =>
@@ -210,11 +192,15 @@ export async function storePlaintextGithubPat(
                       id,
                 )
               : {}
-            if (!(row instanceof Object)) {
+            const provider: unknown =
+              row instanceof Object
+                ? Object.getOwnPropertyDescriptor(row, 'provider')?.value
+                : {}
+            if (!(provider instanceof Object)) {
               reject(new Error(`provider ${id} is not stored`))
               return
             }
-            Object.assign(row, { githubPat: { state: 'token', value: token } })
+            Object.assign(provider, { token: plaintext })
             store.put(snapshot, key)
           }
           tx.oncomplete = () => {
@@ -225,18 +211,15 @@ export async function storePlaintextGithubPat(
             reject(((v) => (v ? v : new Error('idb tx failed')))(tx.error))
         }
       }),
-    { stateKey, providerId, pat },
+    { stateKey, providerId, token },
   )
 }
 
 async function appendSealedAuthProviders(
   page: Page,
-  providers: SeededAuthProvider[],
-  seedScope: AuthProviderSeedScope,
+  providers: SeededProvider[],
 ): Promise<void> {
-  const storedAdditions = providers.map((provider) =>
-    storedProvider(provider, seedScope),
-  )
+  const storedAdditions = providers.map(storedProvider)
   const stored = await page.evaluate(
     async ({ providers: additions, failures }) => {
       const hook = (
@@ -311,22 +294,28 @@ export async function waitForAuthProviderIds(
   )
 }
 
+/** One GitHub provider to seed. */
+export type SeededGithubProviderInput = {
+  id: string
+  label: string
+  repository: string
+  token: string
+}
+
 /**
  * Add extra GitHub providers to the saved auth snapshot for onboarding UI tests.
  */
 export async function seedExtraGithubProviders(
   page: Page,
-  extras: Array<{
-    id: string
-    label: string
-    githubRepo: string
-    githubPat: string
-  }>,
+  extras: SeededGithubProviderInput[],
 ) {
   await appendSealedAuthProviders(
     page,
-    extras.map((provider) => ({ ...provider, type: 'github' })),
-    unselectedAuthProviderSeedScope(),
+    extras.map((provider) => ({
+      kind: SeededProviderKind.Github,
+      scope: unselectedAuthProviderSeedScope(),
+      ...provider,
+    })),
   )
   await waitForAuthProviderIds(
     page,
@@ -334,39 +323,28 @@ export async function seedExtraGithubProviders(
   )
 }
 
-type SeededOauthFileProviderInput = {
+/** One Google Drive provider to seed; `fileName` names the stub's vault. */
+export type SeededDriveProviderInput = {
   id: string
   label: string
   fileName: string
   accessToken: string
-  accountEmail?: string
-  /** Defaults to `e2eDriveFolderId(fileName)`. */
-  folderId?: string
+  account: OAuthAccountIdentity
 }
 
 async function seedOauthFileProviders(
   page: Page,
-  extras: SeededOauthFileProviderInput[],
-  seedScope: AuthProviderSeedScope,
+  extras: SeededDriveProviderInput[],
+  scope: AuthProviderSeedScope,
 ) {
-  const providers: SeededAuthProvider[] = extras.map((provider) => {
-    const oauthFile: SeededOAuthFile = {
-      preset: 'google-drive',
-      accessToken: provider.accessToken,
-      fileName: provider.fileName,
-      folderId: ((v) => (v ? v : e2eDriveFolderId(provider.fileName)))(
-        provider.folderId,
-      ),
-    }
-    if (provider.accountEmail) oauthFile.accountEmail = provider.accountEmail
-    return {
-      id: provider.id,
-      type: 'oauth-file',
-      label: provider.label,
-      oauthFile,
-    }
-  })
-  await appendSealedAuthProviders(page, providers, seedScope)
+  await appendSealedAuthProviders(
+    page,
+    extras.map((provider) => ({
+      kind: SeededProviderKind.GoogleDrive,
+      scope,
+      ...provider,
+    })),
+  )
   await waitForAuthProviderIds(
     page,
     extras.map((provider) => provider.id),
@@ -378,30 +356,23 @@ async function seedOauthFileProviders(
  */
 export async function seedExtraOauthFileProviders(
   page: Page,
-  extras: SeededOauthFileProviderInput[],
+  extras: SeededDriveProviderInput[],
 ) {
   await seedOauthFileProviders(page, extras, await activeVaultSeedScope(page))
 }
 
 async function activeVaultSeedScope(page: Page) {
-  const vaultYaml = await readLocalVaultYamlFromIdb(page).catch(() => '')
-  const storeIdMatch = vaultYaml.match(/^store_id:\s*(\S+)/m)
-  if (!storeIdMatch) {
-    throw new Error('E2E OAuth provider seeding requires an active vault')
-  }
-  const storeId = storeIdMatch[1]
-  if (!storeId) throw new Error('E2E OAuth provider store id is unavailable')
-  return activeAuthProviderSeedScope(storeId)
+  return activeAuthProviderSeedScope(
+    storeIdOfVaultYaml(await readLocalVaultYamlFromIdb(page)),
+  )
 }
 
 /** One iCloud provider bound to a CloudKit share (`icloud-share-v1:{…}`). */
 export type SeededICloudProviderInput = {
   id: string
   label: string
-  fileName: string
-  /** CloudKit web auth token. */
-  accessToken: string
-  iCloudShareTarget: string
+  webAuthToken: string
+  shareTarget: string
 }
 
 /** Add iCloud providers, each bound to its CloudKit share, to the active
@@ -410,21 +381,15 @@ export async function seedExtraICloudProviders(
   page: Page,
   extras: SeededICloudProviderInput[],
 ) {
-  const providers: SeededAuthProvider[] = extras.map((provider) => ({
-    id: provider.id,
-    type: 'oauth-file',
-    label: provider.label,
-    oauthFile: {
-      preset: 'icloud',
-      accessToken: provider.accessToken,
-      fileName: provider.fileName,
-      iCloudShareTarget: provider.iCloudShareTarget,
-    },
-  }))
+  const scope = await activeVaultSeedScope(page)
   await appendSealedAuthProviders(
     page,
-    providers,
-    await activeVaultSeedScope(page),
+    extras.map((provider) => ({
+      kind: SeededProviderKind.ICloud,
+      scope,
+      account: E2E_UNKNOWN_ACCOUNT,
+      ...provider,
+    })),
   )
   await waitForAuthProviderIds(
     page,
@@ -437,65 +402,146 @@ export async function seedExtraICloudProviders(
  */
 export async function seedUnscopedOauthFileProvidersForEnrollment(
   page: Page,
-  extras: SeededOauthFileProviderInput[],
+  extras: SeededDriveProviderInput[],
 ) {
   await seedOauthFileProviders(page, extras, unselectedAuthProviderSeedScope())
 }
 
 export const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
 
-enum RawCredentialReadKind {
+/** The keys that hold a secret in a stored provider row: GitHub `token`,
+ * Drive `authorization.accessToken`, iCloud `webAuthToken` and S3
+ * `secretAccessKey`. */
+export const PROVIDER_CREDENTIAL_KEYS = [
+  'token',
+  'accessToken',
+  'webAuthToken',
+  'secretAccessKey',
+] as const
+
+export enum RawCredentialKind {
   Absent = 'absent',
-  Malformed = 'malformed',
-  LegacyCiphertext = 'legacy-ciphertext',
-  TaggedCiphertext = 'tagged-ciphertext',
-  TaggedWithoutCiphertext = 'tagged-without-ciphertext',
+  Text = 'text',
 }
 
-enum RawCredentialProjectionKind {
-  Omit = 'omit',
-  Include = 'include',
+/** A credential as persisted: the text found at its path, sealed or not. */
+export type RawCredential =
+  | { kind: RawCredentialKind.Absent }
+  | { kind: RawCredentialKind.Text; text: string }
+
+export enum RawStoredProviderKind {
+  Local = 'local',
+  LocalFolder = 'local-folder',
+  Github = 'github',
+  GoogleDrive = 'google-drive',
+  ICloud = 'icloud',
+  S3 = 's3',
+  Unrecognized = 'unrecognized',
 }
 
-type RawCredentialRead =
-  | { kind: RawCredentialReadKind.Absent }
-  | { kind: RawCredentialReadKind.Malformed }
-  | { kind: RawCredentialReadKind.LegacyCiphertext; ciphertext: string }
-  | {
-      kind: RawCredentialReadKind.TaggedCiphertext
-      state: string
-      ciphertext: string
-    }
-  | { kind: RawCredentialReadKind.TaggedWithoutCiphertext; state: string }
-
-type RawCredentialSnapshotValue =
-  string | { state: string } | { state: string; value: string }
-
-type RawCredentialProjection =
-  | { kind: RawCredentialProjectionKind.Omit }
-  | {
-      kind: RawCredentialProjectionKind.Include
-      value: RawCredentialSnapshotValue
-    }
-
-type RawAuthProviderPageReadRequest = {
-  stateKey: string
-  credentialReadKind: typeof RawCredentialReadKind
-  credentialProjectionKind: typeof RawCredentialProjectionKind
-}
-
-type RawOAuthFileCredentials = {
-  accessToken?: RawCredentialSnapshotValue
-  refreshToken?: RawCredentialSnapshotValue
-}
+/** One stored provider's credential, read at the path its variant owns. */
+export type RawStoredProvider =
+  | { kind: RawStoredProviderKind.Local }
+  | { kind: RawStoredProviderKind.LocalFolder }
+  | { kind: RawStoredProviderKind.Github; token: RawCredential }
+  | { kind: RawStoredProviderKind.GoogleDrive; accessToken: RawCredential }
+  | { kind: RawStoredProviderKind.ICloud; webAuthToken: RawCredential }
+  | { kind: RawStoredProviderKind.S3; secretAccessKey: RawCredential }
+  | { kind: RawStoredProviderKind.Unrecognized }
 
 export type RawAuthProvidersSnapshot = {
-  providers: Array<{
-    id: string
-    type: string
-    githubPat?: RawCredentialSnapshotValue
-    oauthFile?: RawOAuthFileCredentials
-  }>
+  providers: Array<{ id: string; provider: RawStoredProvider }>
+}
+
+enum OwnValueKind {
+  Missing = 'missing',
+  Value = 'value',
+}
+
+type OwnValue =
+  { kind: OwnValueKind.Missing } | { kind: OwnValueKind.Value; value: unknown }
+
+function ownValue(owner: unknown, property: string): OwnValue {
+  if (typeof owner !== 'object' || !owner || Array.isArray(owner)) {
+    return { kind: OwnValueKind.Missing }
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(owner, property)
+  return descriptor && 'value' in descriptor
+    ? { kind: OwnValueKind.Value, value: descriptor.value }
+    : { kind: OwnValueKind.Missing }
+}
+
+function ownText(owner: unknown, property: string): string {
+  const read = ownValue(owner, property)
+  if (read.kind === OwnValueKind.Value && typeof read.value === 'string') {
+    return read.value
+  }
+  throw new Error(`stored provider has no text at ${property}`)
+}
+
+function rawCredential(owner: unknown, property: string): RawCredential {
+  const read = ownValue(owner, property)
+  return read.kind === OwnValueKind.Value && typeof read.value === 'string'
+    ? { kind: RawCredentialKind.Text, text: read.value }
+    : { kind: RawCredentialKind.Absent }
+}
+
+function rawNested(owner: unknown, property: string): unknown {
+  const read = ownValue(owner, property)
+  return read.kind === OwnValueKind.Value ? read.value : {}
+}
+
+function rawStoredProvider(provider: unknown): RawStoredProvider {
+  switch (ownText(provider, 'type')) {
+    case 'local':
+      return { kind: RawStoredProviderKind.Local }
+    case 'local-folder':
+      return { kind: RawStoredProviderKind.LocalFolder }
+    case 'github':
+      return {
+        kind: RawStoredProviderKind.Github,
+        token: rawCredential(provider, 'token'),
+      }
+    case 'oauth-file':
+      switch (ownText(provider, 'preset')) {
+        case 'google-drive':
+          return {
+            kind: RawStoredProviderKind.GoogleDrive,
+            accessToken: rawCredential(
+              rawNested(provider, 'authorization'),
+              'accessToken',
+            ),
+          }
+        case 'icloud':
+          return {
+            kind: RawStoredProviderKind.ICloud,
+            webAuthToken: rawCredential(provider, 'webAuthToken'),
+          }
+        default:
+          return { kind: RawStoredProviderKind.Unrecognized }
+      }
+    case 's3':
+      return {
+        kind: RawStoredProviderKind.S3,
+        secretAccessKey: rawCredential(provider, 'secretAccessKey'),
+      }
+    default:
+      return { kind: RawStoredProviderKind.Unrecognized }
+  }
+}
+
+function rawAuthProvidersSnapshot(snapshot: unknown): RawAuthProvidersSnapshot {
+  const rows = ownValue(snapshot, 'providers')
+  if (rows.kind === OwnValueKind.Missing || !Array.isArray(rows.value)) {
+    return { providers: [] }
+  }
+  const providers: unknown[] = rows.value
+  return {
+    providers: providers.map((row) => ({
+      id: ownText(row, 'id'),
+      provider: rawStoredProvider(rawNested(row, 'provider')),
+    })),
+  }
 }
 
 async function activeAuthProviderStateKey(page: Page): Promise<string> {
@@ -533,219 +579,34 @@ async function activeAuthProviderStateKey(page: Page): Promise<string> {
 }
 
 /** Read the raw `nook_auth` snapshot as persisted (sealed credential fields). */
+/** Read the raw `nook_auth` snapshot as persisted (sealed credential fields). */
 export async function readRawAuthProvidersFromIdb(
   page: Page,
 ): Promise<RawAuthProvidersSnapshot> {
   const stateKey = await activeAuthProviderStateKey(page)
-  const request: RawAuthProviderPageReadRequest = {
+  const snapshot: unknown = await page.evaluate(
+    (scopedStateKey) =>
+      new Promise<unknown>((resolve, reject) => {
+        const request = indexedDB.open('nook_auth', 1)
+        request.onerror = () =>
+          reject(((v) => (v ? v : new Error('idb open failed')))(request.error))
+        request.onsuccess = () => {
+          const db = request.result
+          const tx = db.transaction('auth', 'readonly')
+          const getReq = tx.objectStore('auth').get(scopedStateKey)
+          getReq.onerror = () =>
+            reject(
+              ((v) => (v ? v : new Error('idb read failed')))(getReq.error),
+            )
+          getReq.onsuccess = () => resolve(getReq.result)
+          tx.oncomplete = () => db.close()
+          tx.onerror = () =>
+            reject(((v) => (v ? v : new Error('idb tx failed')))(tx.error))
+        }
+      }),
     stateKey,
-    credentialReadKind: RawCredentialReadKind,
-    credentialProjectionKind: RawCredentialProjectionKind,
-  }
-  return page.evaluate((request) => {
-    const {
-      stateKey: scopedStateKey,
-      credentialReadKind,
-      credentialProjectionKind,
-    } = request
-    return new Promise<RawAuthProvidersSnapshot>((resolve, reject) => {
-      const resolveEmptySnapshot = () => resolve({ providers: [] })
-      const resolveSnapshot = (rawSnapshot: unknown) => {
-        if (
-          typeof rawSnapshot !== 'object' ||
-          Object(rawSnapshot) !== rawSnapshot
-        ) {
-          resolve({ providers: [] })
-          return
-        }
-        enum OwnPropertyReadKind {
-          InvalidOwner = 'invalid-owner',
-          Missing = 'missing',
-          Accessor = 'accessor',
-          Value = 'value',
-        }
-        type OwnPropertyRead =
-          | { kind: OwnPropertyReadKind.InvalidOwner }
-          | { kind: OwnPropertyReadKind.Missing }
-          | { kind: OwnPropertyReadKind.Accessor }
-          | { kind: OwnPropertyReadKind.Value; value: unknown }
-        const readOwnProperty = (
-          owner: unknown,
-          property: string,
-        ): OwnPropertyRead => {
-          if (typeof owner !== 'object' || !owner || Array.isArray(owner)) {
-            return { kind: OwnPropertyReadKind.InvalidOwner }
-          }
-          const descriptor = Object.getOwnPropertyDescriptor(owner, property)
-          if (!descriptor) return { kind: OwnPropertyReadKind.Missing }
-          if (!('value' in descriptor))
-            return { kind: OwnPropertyReadKind.Accessor }
-          return { kind: OwnPropertyReadKind.Value, value: descriptor.value }
-        }
-        const providersProperty = Object.getOwnPropertyDescriptor(
-          rawSnapshot,
-          'providers',
-        )
-        if (
-          !providersProperty ||
-          !('value' in providersProperty) ||
-          !Array.isArray(providersProperty.value)
-        ) {
-          resolve({ providers: [] })
-          return
-        }
-        const providersValue: unknown[] = providersProperty.value
-        const providers: RawAuthProvidersSnapshot['providers'] = []
-        const readCredential = (credential: unknown): RawCredentialRead => {
-          if (typeof credential === 'string') {
-            return {
-              kind: credentialReadKind.LegacyCiphertext,
-              ciphertext: credential,
-            }
-          }
-          const stateProperty = readOwnProperty(credential, 'state')
-          if (
-            stateProperty.kind !== OwnPropertyReadKind.Value ||
-            typeof stateProperty.value !== 'string'
-          ) {
-            return { kind: credentialReadKind.Malformed }
-          }
-          const valueProperty = readOwnProperty(credential, 'value')
-          if (
-            valueProperty.kind !== OwnPropertyReadKind.Value ||
-            typeof valueProperty.value !== 'string'
-          ) {
-            return {
-              kind: credentialReadKind.TaggedWithoutCiphertext,
-              state: stateProperty.value,
-            }
-          }
-          return {
-            kind: credentialReadKind.TaggedCiphertext,
-            state: stateProperty.value,
-            ciphertext: valueProperty.value,
-          }
-        }
-        const readCredentialProperty = (
-          owner: unknown,
-          property: string,
-        ): RawCredentialRead => {
-          const propertyRead = readOwnProperty(owner, property)
-          if (propertyRead.kind === OwnPropertyReadKind.Missing) {
-            return { kind: credentialReadKind.Absent }
-          }
-          if (propertyRead.kind !== OwnPropertyReadKind.Value) {
-            return { kind: credentialReadKind.Malformed }
-          }
-          return readCredential(propertyRead.value)
-        }
-        const projectCredential = (
-          credential: RawCredentialRead,
-        ): RawCredentialProjection => {
-          switch (credential.kind) {
-            case credentialReadKind.Absent:
-            case credentialReadKind.Malformed:
-              return { kind: credentialProjectionKind.Omit }
-            case credentialReadKind.LegacyCiphertext:
-              return {
-                kind: credentialProjectionKind.Include,
-                value: credential.ciphertext,
-              }
-            case credentialReadKind.TaggedCiphertext:
-              return {
-                kind: credentialProjectionKind.Include,
-                value: {
-                  state: credential.state,
-                  value: credential.ciphertext,
-                },
-              }
-            case credentialReadKind.TaggedWithoutCiphertext:
-              return {
-                kind: credentialProjectionKind.Include,
-                value: { state: credential.state },
-              }
-          }
-        }
-        for (const providerValue of providersValue) {
-          const idProperty = readOwnProperty(providerValue, 'id')
-          const typeProperty = readOwnProperty(providerValue, 'type')
-          if (
-            idProperty.kind !== OwnPropertyReadKind.Value ||
-            typeof idProperty.value !== 'string' ||
-            typeProperty.kind !== OwnPropertyReadKind.Value ||
-            typeof typeProperty.value !== 'string'
-          ) {
-            continue
-          }
-          const id = idProperty.value
-          const type = typeProperty.value
-          const provider: RawAuthProvidersSnapshot['providers'][number] = {
-            id,
-            type,
-          }
-          const githubPat = projectCredential(
-            readCredentialProperty(providerValue, 'githubPat'),
-          )
-          if (githubPat.kind === credentialProjectionKind.Include) {
-            provider.githubPat = githubPat.value
-          }
-          const oauthFileProperty = readOwnProperty(providerValue, 'oauthFile')
-          if (oauthFileProperty.kind === OwnPropertyReadKind.Value) {
-            const oauthFileValue = oauthFileProperty.value
-            const configuredProperty = readOwnProperty(oauthFileValue, 'config')
-            if (configuredProperty.kind !== OwnPropertyReadKind.InvalidOwner) {
-              let credentialSource = oauthFileValue
-              if (
-                configuredProperty.kind === OwnPropertyReadKind.Value &&
-                readOwnProperty(configuredProperty.value, 'accessToken')
-                  .kind !== OwnPropertyReadKind.InvalidOwner
-              ) {
-                credentialSource = configuredProperty.value
-              }
-              const oauthFile: RawOAuthFileCredentials = {}
-              const accessToken = projectCredential(
-                readCredentialProperty(credentialSource, 'accessToken'),
-              )
-              if (accessToken.kind === credentialProjectionKind.Include) {
-                oauthFile.accessToken = accessToken.value
-              }
-              const refreshToken = projectCredential(
-                readCredentialProperty(credentialSource, 'refreshToken'),
-              )
-              if (refreshToken.kind === credentialProjectionKind.Include) {
-                oauthFile.refreshToken = refreshToken.value
-              }
-              provider.oauthFile = oauthFile
-            }
-          }
-          providers.push(provider)
-        }
-        resolve({ providers })
-      }
-      const request = indexedDB.open('nook_auth', 1)
-      request.onerror = () =>
-        reject(((v) => (v ? v : new Error('idb open failed')))(request.error))
-      request.onsuccess = () => {
-        const db = request.result
-        const tx = db.transaction('auth', 'readonly')
-        const store = tx.objectStore('auth')
-        const getReq = store.get(scopedStateKey)
-        getReq.onerror = () =>
-          reject(((v) => (v ? v : new Error('idb read failed')))(getReq.error))
-        getReq.onsuccess = () => {
-          if (getReq.result) {
-            const rawSnapshot: unknown = getReq.result
-            resolveSnapshot(rawSnapshot)
-            return
-          }
-          resolveEmptySnapshot()
-        }
-        tx.oncomplete = () => db.close()
-        tx.onerror = () =>
-          reject(((v) => (v ? v : new Error('idb tx failed')))(tx.error))
-      }
-    })
-  }, request)
+  )
+  return rawAuthProvidersSnapshot(snapshot)
 }
 
 export async function waitForAuthProvidersE2eHook(page: Page) {
@@ -787,18 +648,12 @@ export class AuthProviderBrowserFixture {
 /** Save sync providers through wasm (plaintext in → sealed in IndexedDB). */
 export async function saveAuthProvidersInBrowser(
   page: Page,
-  snapshot: { providers: SeededAuthProvider[] },
+  snapshot: { providers: SeededProvider[] },
   seedScope: AuthProviderSeedScope,
 ) {
-  const providers = snapshot.providers.map((provider) =>
-    storedProvider(provider, seedScope),
-  )
-  const activeStoreId =
-    seedScope.kind === AuthProviderSeedScopeKind.ActiveVault
-      ? seedScope.storeId
-      : false
+  const providers = snapshot.providers.map(storedProvider)
   const stored = await page.evaluate(
-    async ({ providers, activeStoreId, failures }) => {
+    async ({ providers, seedScope, scopeKinds, failures }) => {
       const hook = (
         window as Window & {
           __nookAuthProviders?: AuthProviderBrowserHooks
@@ -806,12 +661,10 @@ export async function saveAuthProvidersInBrowser(
       ).__nookAuthProviders
       if (!hook)
         return { ok: false as const, failure: failures.HookUnavailable }
-      let activeVaultStoreId: ActiveVaultScope
-      if (typeof activeStoreId === 'string') {
-        activeVaultStoreId = hook.activeVaultScope(activeStoreId)
-      } else {
-        activeVaultStoreId = hook.unselectedVaultScope()
-      }
+      const activeVaultStoreId: ActiveVaultScope =
+        seedScope.kind === scopeKinds.ActiveVault
+          ? hook.activeVaultScope(seedScope.storeId)
+          : hook.unselectedVaultScope()
       const authProvidersSnapshot: AuthProvidersSnapshot = {
         providers,
         activeVaultStoreId,
@@ -823,94 +676,76 @@ export async function saveAuthProvidersInBrowser(
     },
     {
       providers,
-      activeStoreId,
+      seedScope,
+      scopeKinds: AuthProviderSeedScopeKind,
       failures: AuthProviderHookFailure,
     },
   )
   expect(stored).toEqual({ ok: true })
 }
 
+/** Assert a persisted credential is age armor that does not contain `plaintext`. */
 export function expectSealedCredential(
-  stored: unknown,
+  stored: RawCredential,
   plaintext: string,
-  expectedState: string,
 ) {
-  enum PersistedSealedCredentialReadKind {
-    NotTagged = 'not-tagged',
-    Incomplete = 'incomplete',
-    Tagged = 'tagged',
-  }
-  type PersistedSealedCredentialRead =
-    | { kind: PersistedSealedCredentialReadKind.NotTagged }
-    | { kind: PersistedSealedCredentialReadKind.Incomplete }
-    | {
-        kind: PersistedSealedCredentialReadKind.Tagged
-        state: unknown
-        ciphertext: string
-      }
-  const readPersistedSealedCredential = (
-    value: unknown,
-  ): PersistedSealedCredentialRead => {
-    if (typeof value !== 'object' || !value || Array.isArray(value)) {
-      return { kind: PersistedSealedCredentialReadKind.NotTagged }
-    }
-    const stateProperty = Object.getOwnPropertyDescriptor(value, 'state')
-    const valueProperty = Object.getOwnPropertyDescriptor(value, 'value')
-    if (
-      !stateProperty ||
-      !('value' in stateProperty) ||
-      !valueProperty ||
-      !('value' in valueProperty) ||
-      typeof valueProperty.value !== 'string'
-    ) {
-      return { kind: PersistedSealedCredentialReadKind.Incomplete }
-    }
-    return {
-      kind: PersistedSealedCredentialReadKind.Tagged,
-      state: stateProperty.value,
-      ciphertext: valueProperty.value,
-    }
-  }
-  const credential = readPersistedSealedCredential(stored)
-  expect(credential.kind).not.toBe(PersistedSealedCredentialReadKind.NotTagged)
-  if (credential.kind === PersistedSealedCredentialReadKind.NotTagged) {
-    throw new Error('expected a tagged sealed credential')
-  }
-  if (credential.kind === PersistedSealedCredentialReadKind.Incomplete) {
+  expect(stored.kind).toBe(RawCredentialKind.Text)
+  if (stored.kind === RawCredentialKind.Absent) {
     throw new Error('expected a persisted sealed credential')
   }
-  expect(credential.state).toBe(expectedState)
-  const ciphertext = credential.ciphertext
-  expect(typeof ciphertext).toBe('string')
-  expect(ciphertext).toContain(AGE_ARMOR_MARKER)
-  expect(ciphertext).not.toContain(plaintext)
+  expect(stored.text).toContain(AGE_ARMOR_MARKER)
+  expect(stored.text).not.toContain(plaintext)
 }
 
 /** Default GitHub sync provider for local e2e onboarding / fan-out specs. */
-export const E2E_GITHUB_ONBOARD_PROVIDER = {
+export const E2E_GITHUB_ONBOARD_PROVIDER: SeededGithubProviderInput = {
   id: 'e2e-onboard-github',
   label: 'GitHub (e2e onboard)',
-  githubRepo: 'nook-e2e-onboard',
-  githubPat: 'ghp_test_token',
+  repository: 'nook-e2e-onboard',
+  token: 'ghp_test_token',
 }
 
 /** Default file-backed oauth-file sync provider for PR / IndexedDB-only e2e. */
-export const E2E_OAUTH_ONBOARD_PROVIDER = {
+export const E2E_OAUTH_ONBOARD_PROVIDER: SeededDriveProviderInput = {
   id: 'e2e-onboard-file',
   label: 'File (e2e onboard)',
   fileName: 'nook-e2e-onboard',
   accessToken: 'ya29.e2e_file_sync_token',
-  accountEmail: E2E_GOOGLE_ACCOUNT_EMAIL,
+  account: E2E_GOOGLE_ACCOUNT,
 }
 
 /** Alias for local sync provider used in multi-device / fan-out e2e. */
 export const E2E_SYNC_ONBOARD_PROVIDER = E2E_OAUTH_ONBOARD_PROVIDER
 
-export type E2eOauthSyncProvider = {
-  id: string
-  label: string
-  fileName: string
-  accessToken: string
-  accountEmail?: string
-  folderId?: string
+function rawProviderById(
+  snapshot: RawAuthProvidersSnapshot,
+  id: string,
+): RawStoredProvider {
+  const row = snapshot.providers.find((candidate) => candidate.id === id)
+  if (!row) throw new Error(`provider ${id} is not stored`)
+  return row.provider
+}
+
+/** The persisted `provider.token` of one stored GitHub row. */
+export function rawGithubToken(
+  snapshot: RawAuthProvidersSnapshot,
+  id: string,
+): RawCredential {
+  const provider = rawProviderById(snapshot, id)
+  if (provider.kind !== RawStoredProviderKind.Github) {
+    throw new Error(`provider ${id} is not a GitHub row`)
+  }
+  return provider.token
+}
+
+/** The persisted `provider.authorization.accessToken` of one stored Drive row. */
+export function rawDriveAccessToken(
+  snapshot: RawAuthProvidersSnapshot,
+  id: string,
+): RawCredential {
+  const provider = rawProviderById(snapshot, id)
+  if (provider.kind !== RawStoredProviderKind.GoogleDrive) {
+    throw new Error(`provider ${id} is not a Google Drive row`)
+  }
+  return provider.accessToken
 }

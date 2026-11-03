@@ -8,22 +8,13 @@ import initNookWasm, {
   enrollment_provider_for_architecture,
   enrollment_shared_provider_for_architecture,
 } from '$app-wasm'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
+import type { StorageProvider } from '$lib/auth/providers'
+import type { EnrollmentCredentialChoice } from '$app-wasm'
 import {
-  configuredOAuthFile,
-  DEFAULT_DRIVE_BACKUP_NAME,
-  decodeStoredOAuthFileConfiguration,
-  defaultOAuthFileConfig,
-  StoredOAuthFileConfigurationDecodeKind,
-  providerPersistenceDefaults,
-  storedGithubPat,
-  storedGithubRepository,
-  storedGoogleDriveFolder,
-  storedICloudShareTarget,
-  storedOAuthAccountEmail,
-  storedOAuthCredential,
-  storedOAuthRemoteFileName,
-  type StorageProvider,
-} from '$lib/auth/providers'
+  ProviderFixtureCredentials,
+  ProviderRowFixture,
+} from '../provider-fixtures'
 import {
   vault_architecture_can_create_secret,
   CompatibleProviderPreferenceKind,
@@ -32,8 +23,9 @@ import {
   firstCompatibleProvider,
   vault_architecture_onboarding_type,
   providerCapabilityLabelKey,
-  ProviderCapabilityLabelKey,
+  provider_kind_replication_capability,
   provider_onboarding_type,
+  ReplicationSupport,
   provider_replication_capability,
   provider_supports_replication,
   validate_provider_replication,
@@ -45,74 +37,18 @@ beforeAll(async () => {
   await initNookWasm()
 })
 
-function googleDriveProvider(folderId = ''): StorageProvider {
-  return {
-    ...providerPersistenceDefaults(),
-    id: 'drive-1',
-    type: 'oauth-file',
-    label: 'Google Drive',
-    oauthFile: configuredOAuthFile({
-      ...defaultOAuthFileConfig({
-        preset: 'google-drive',
-        fileName: DEFAULT_DRIVE_BACKUP_NAME,
-      }),
-      accessToken: storedOAuthCredential('ya29.test'),
-      fileName: storedOAuthRemoteFileName('nook.yaml'),
-      accountEmail: storedOAuthAccountEmail('alex@example.com'),
-      ...(folderId ? { folderId: storedGoogleDriveFolder(folderId) } : {}),
-    }),
-    syncCheckpoint: { state: 'neverSynced' },
-    createdAt: '2026-07-08T00:00:00.000Z',
-  }
+function googleDriveProvider(): StorageProvider {
+  return ProviderRowFixture.googleDrive(ProviderRowFixture.unscoped('drive-1'))
 }
 
 function githubProvider(): StorageProvider {
-  return {
-    ...providerPersistenceDefaults(),
-    id: 'github-1',
-    type: 'github',
-    label: 'GitHub',
-    githubRepo: storedGithubRepository('nook-vault'),
-    githubPat: storedGithubPat('github_pat_test'),
-    syncCheckpoint: { state: 'neverSynced' },
-    createdAt: '2026-07-08T00:00:00.000Z',
-  }
+  return ProviderRowFixture.github(ProviderRowFixture.unscoped('github-1'))
 }
-
-const ICLOUD_SHARED_TARGET =
-  'icloud-share-v1:{"role":"owner","zoneName":"zone","ownerRecordName":"owner","rootRecordName":"root","shortGuid":"guid"}'
 
 function sharedICloudProvider(): StorageProvider {
-  return {
-    ...providerPersistenceDefaults(),
-    id: 'icloud-shared-1',
-    type: 'oauth-file',
-    label: 'iCloud',
-    oauthFile: configuredOAuthFile({
-      ...defaultOAuthFileConfig({
-        preset: 'icloud',
-        fileName: DEFAULT_DRIVE_BACKUP_NAME,
-      }),
-      accessToken: storedOAuthCredential('cloudkit-web-token'),
-      iCloudShareTarget: storedICloudShareTarget(ICLOUD_SHARED_TARGET),
-    }),
-    syncCheckpoint: { state: 'neverSynced' },
-    createdAt: '2026-07-14T00:00:00.000Z',
-  }
-}
-
-function unsharedICloudProvider(): StorageProvider {
-  return {
-    ...sharedICloudProvider(),
-    id: 'icloud-unshared-1',
-    oauthFile: configuredOAuthFile({
-      ...defaultOAuthFileConfig({
-        preset: 'icloud',
-        fileName: DEFAULT_DRIVE_BACKUP_NAME,
-      }),
-      accessToken: storedOAuthCredential('cloudkit-web-token'),
-    }),
-  }
+  return ProviderRowFixture.icloud(
+    ProviderRowFixture.unscoped('icloud-shared-1'),
+  )
 }
 
 describe('vault architecture adapter', () => {
@@ -158,15 +94,19 @@ describe('vault architecture adapter', () => {
   })
 
   test('the companion handoff transfers the Drive session for the vault folder', () => {
+    const ownSession: EnrollmentCredentialChoice = { kind: 'inviter' }
     const enrollmentProvider = enrollment_provider_for_architecture(
-      googleDriveProvider('vault-folder'),
+      googleDriveProvider(),
       default_vault_architecture(),
+      ownSession,
     )
 
     expect(enrollmentProvider.onboardingType).toBe(
       OnboardingType.PersonalCredentialTransfer,
     )
-    expect(enrollmentProvider.oauthAccessToken).toBe('ya29.test')
+    expect(enrollmentProvider.oauthAccessToken).toBe(
+      ProviderFixtureCredentials.DRIVE_TOKEN,
+    )
   })
 
   test('sentinel vaults are gated until their policy is ready', () => {
@@ -225,26 +165,44 @@ describe('vault architecture adapter', () => {
     const driveCapability = provider_replication_capability(
       googleDriveProvider(),
     )
-    expect(driveCapability.providerType).toBe('oauth-file')
-    expect(driveCapability.oauthPreset).toBe('google-drive')
-    expect(driveCapability.supportsPersonal).toBe(true)
-    expect(driveCapability.supportsShared).toBe(true)
+    expect(driveCapability.kind).toEqual({
+      type: 'oauth-file',
+      preset: 'google-drive',
+    })
+    expect(driveCapability.supports(ReplicationType.Personal)).toBe(
+      ReplicationSupport.Supported,
+    )
+    expect(driveCapability.supports(ReplicationType.Shared)).toBe(
+      ReplicationSupport.Supported,
+    )
     expect(driveCapability.sharedJoinerIdentity).toBe('email')
     const validatedCapability = validate_provider_replication(
       googleDriveProvider(),
       ReplicationType.Shared,
     )
-    expect(validatedCapability.providerType).toBe(driveCapability.providerType)
-    expect(validatedCapability.oauthPreset).toBe('google-drive')
-    expect(validatedCapability.supportsPersonal).toBe(true)
-    expect(validatedCapability.supportsShared).toBe(true)
+    expect(validatedCapability.kind).toEqual(driveCapability.kind)
     expect(validatedCapability.sharedJoinerIdentity).toBe('email')
 
     expect(() =>
       validate_provider_replication(githubProvider(), ReplicationType.Shared),
     ).toThrow(
-      /errors\.validation\.unsupported_provider_replication:github::shared/,
+      /errors\.validation\.unsupported_provider_replication:github:shared/,
     )
+  })
+
+  test('the capability label key comes from Rust', () => {
+    expect(providerCapabilityLabelKey(githubProvider())).toBe(
+      I18N_KEYS.ProviderPickerCapabilityPersonalOnly,
+    )
+    expect(providerCapabilityLabelKey(googleDriveProvider())).toBe(
+      I18N_KEYS.ProviderPickerCapabilityPersonalShared,
+    )
+    const s3 = provider_kind_replication_capability({ type: 's3' })
+    try {
+      expect(s3.labelKey).toBe(I18N_KEYS.ProviderPickerCapabilityPersonalOnly)
+    } finally {
+      s3.free()
+    }
   })
 
   test('provider presentation selects only rows Rust accepts for the vault mode', () => {
@@ -252,17 +210,11 @@ describe('vault architecture adapter', () => {
     const drive = googleDriveProvider()
     const providers = [github, drive]
 
-    expect(providerCapabilityLabelKey(github)).toBe(
-      ProviderCapabilityLabelKey.PersonalOnly,
-    )
-    expect(providerCapabilityLabelKey(drive)).toBe(
-      ProviderCapabilityLabelKey.PersonalShared,
-    )
     expect(provider_supports_replication(github, ReplicationType.Shared)).toBe(
-      false,
+      ReplicationSupport.Unsupported,
     )
     expect(provider_supports_replication(drive, ReplicationType.Shared)).toBe(
-      true,
+      ReplicationSupport.Supported,
     )
     expect(
       firstCompatibleProvider({
@@ -302,52 +254,14 @@ describe('vault architecture adapter', () => {
     ).toEqual({ kind: CompatibleProviderSelectionKind.Unavailable })
   })
 
-  test('iCloud rows without a share cannot carry shared onboarding', () => {
-    const privateICloud = unsharedICloudProvider()
-    const sharedICloud = sharedICloudProvider()
-
-    expect(
-      provider_supports_replication(privateICloud, ReplicationType.Personal),
-    ).toBe(true)
-    expect(
-      provider_supports_replication(privateICloud, ReplicationType.Shared),
-    ).toBe(false)
-    expect(
-      provider_supports_replication(sharedICloud, ReplicationType.Shared),
-    ).toBe(true)
-    expect(
-      firstCompatibleProvider({
-        providers: [privateICloud, sharedICloud],
-        replicationType: ReplicationType.Shared,
-        preference: {
-          kind: CompatibleProviderPreferenceKind.Selected,
-          providerId: privateICloud.id,
-        },
-      }),
-    ).toEqual({
-      kind: CompatibleProviderSelectionKind.Selected,
-      provider: sharedICloud,
-    })
-  })
-
-  test('WASM refuses to emit a shared enrollment provider without a storage target', () => {
+  test('a shared Drive enrollment names the saved folder and carries no credential', () => {
     const architecture = validateVaultArchitecture({
       device_mode: DeviceMode.Standard,
       vault_type: VaultType.Simple,
       replication_type: ReplicationType.Shared,
     })
-    const provider = googleDriveProvider()
-
-    expect(() =>
-      enrollment_shared_provider_for_architecture(
-        provider,
-        architecture,
-        'joiner@example.com',
-      ),
-    ).toThrow(/shared_storage_target_required/)
-
     const enrollmentProvider = enrollment_shared_provider_for_architecture(
-      googleDriveProvider('shared-folder-abc'),
+      googleDriveProvider(),
       architecture,
       'joiner@example.com',
     )
@@ -355,28 +269,14 @@ describe('vault architecture adapter', () => {
     expect(enrollmentProvider.onboardingType).toBe(
       OnboardingType.SharedProviderGrant,
     )
-    expect(enrollmentProvider.sharedStorageTargetId).toBe('shared-folder-abc')
+    expect(enrollmentProvider.sharedStorageTargetId).toBe(
+      ProviderFixtureCredentials.DRIVE_FOLDER,
+    )
   })
 
   test('Drive invites never transfer credentials, even in a personal vault', () => {
     const architecture = default_vault_architecture()
-    const baseProvider = googleDriveProvider()
-    const baseConfiguration = decodeStoredOAuthFileConfiguration(
-      baseProvider.oauthFile,
-    )
-    if (
-      baseConfiguration.kind !==
-      StoredOAuthFileConfigurationDecodeKind.Configured
-    ) {
-      throw new Error('expected configured Google Drive provider')
-    }
-    const provider: StorageProvider = {
-      ...baseProvider,
-      oauthFile: configuredOAuthFile({
-        ...baseConfiguration.config,
-        folderId: storedGoogleDriveFolder('persisted-shared-folder'),
-      }),
-    }
+    const provider = googleDriveProvider()
 
     expect(provider_onboarding_type(provider, architecture)).toBe(
       OnboardingType.SharedProviderGrant,
@@ -387,31 +287,20 @@ describe('vault architecture adapter', () => {
       'joiner@example.com',
     )
     expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
-    expect(enrollmentProvider.onboardingType).toBe(
-      OnboardingType.SharedProviderGrant,
-    )
     expect(enrollmentProvider.sharedStorageTargetId).toBe(
-      'persisted-shared-folder',
+      ProviderFixtureCredentials.DRIVE_FOLDER,
     )
     expect(() => enrollmentProvider.oauthAccessToken).toThrow()
-    expect(() =>
-      enrollmentProvider.oauth_configuration(
-        defaultOAuthFileConfig({
-          preset: 'google-drive',
-          fileName: 'nook-events',
-        }),
-      ),
-    ).toThrow()
   })
 
   test('shared iCloud enrollment sends the CloudKit target and the invited account', () => {
     const provider = sharedICloudProvider()
     const architecture = default_vault_architecture()
     const capability = provider_replication_capability(provider)
-    expect(capability.providerType).toBe('oauth-file')
-    expect(capability.oauthPreset).toBe('icloud')
-    expect(capability.supportsPersonal).toBe(true)
-    expect(capability.supportsShared).toBe(true)
+    expect(capability.kind).toEqual({ type: 'oauth-file', preset: 'icloud' })
+    expect(capability.supports(ReplicationType.Shared)).toBe(
+      ReplicationSupport.Supported,
+    )
     expect(provider_onboarding_type(provider, architecture)).toBe(
       OnboardingType.SharedProviderGrant,
     )
@@ -421,12 +310,11 @@ describe('vault architecture adapter', () => {
       'member@icloud.com',
     )
     expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
-    expect(enrollmentProvider.onboardingType).toBe(
-      OnboardingType.SharedProviderGrant,
-    )
     expect(enrollmentProvider.oauthPreset).toBe('icloud')
     expect(enrollmentProvider.sharedJoinerIdentity).toBe('member@icloud.com')
-    expect(enrollmentProvider.sharedStorageTargetId).toBe(ICLOUD_SHARED_TARGET)
+    expect(enrollmentProvider.sharedStorageTargetId).toBe(
+      ProviderFixtureCredentials.ICLOUD_SHARE,
+    )
     expect(() => enrollmentProvider.oauthAccessToken).toThrow()
   })
 })

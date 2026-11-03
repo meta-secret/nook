@@ -29,13 +29,7 @@ import {
   type ConflictProviderSave,
 } from "$lib/vault/sync-operation-state";
 import { StagedRemoteStorageKind } from "$lib/vault/state/provider.svelte";
-import {
-  LocalFolderPresentation,
-  LocalFolderHandleKind,
-  StorageProviderPresentation,
-  LocalFolderProviderConfigurationKind,
-  scopedProviderVault,
-} from "$lib/auth/providers";
+import { scopedProviderVault } from "$lib/auth/providers";
 import { LoginUnlockPresentation } from "$lib/vault/login-unlock-capabilities";
 import {
   ProviderVaultIdentitySelectionKind,
@@ -434,28 +428,8 @@ export class SyncConflictActions {
           const provider = state.providers.find(
             (p) => p.id === conflict.providerId,
           );
-          if (provider && provider.type === "local-folder") {
-            const configuration = new StorageProviderPresentation(
-              provider,
-            ).localFolderProviderConfiguration();
-            if (
-              configuration.kind ===
-              LocalFolderProviderConfigurationKind.Missing
-            ) {
-              state.errorMsg = state.t(
-                I18N_KEYS.AuthStorageLocalFolderChooseErr,
-              );
-              return;
-            }
-            const handle = new LocalFolderPresentation(
-              configuration.config,
-            ).localFolderHandle();
-            if (handle.kind === LocalFolderHandleKind.Unselected) {
-              state.errorMsg = state.t(
-                I18N_KEYS.AuthStorageLocalFolderChooseErr,
-              );
-              return;
-            }
+          const folder = provider?.provider;
+          if (folder?.type === "local-folder") {
             const imported = await state.enqueueStorage(async () => {
               const admittedManager = state.admitManager();
               if (admittedManager.isErr())
@@ -463,7 +437,7 @@ export class SyncConflictActions {
               try {
                 return storageOk(
                   await admittedManager.value.import_local_folder_event_log_as_local_vault(
-                    handle.handleId,
+                    folder.handleId,
                   ),
                 );
               } catch (nativeFailure) {
@@ -483,9 +457,7 @@ export class SyncConflictActions {
               try {
                 return storageOk(
                   await admittedManager.value.import_provider_event_log_as_local_vault(
-                    conflict.mode,
-                    conflict.pat,
-                    conflict.repo,
+                    conflict.connection,
                   ),
                 );
               } catch (nativeFailure) {
@@ -542,6 +514,7 @@ export class SyncConflictActions {
             typeof state.persistProviders
           >[0] = {
             replace: false,
+            providers: state.providers,
           };
           const persistence = await state.persistProviders(persistenceOptions);
           if (persistence.isErr()) {

@@ -1,21 +1,20 @@
 import { ok } from 'neverthrow'
 import { describe, expect, test, vi } from 'vitest'
 import { JoinEnrollmentState, NookLocalVaultUnlockState } from '$app-wasm'
-import { LOCAL_PROVIDER_TYPE } from '$lib/auth/providers'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { ExistingVaultImportQueueKind } from '$lib/vault/creation-queue'
 import { ExistingVaultImportLifecycle } from '$lib/vault/existing-vault-import.svelte'
 import { ConnectedExistingVaultActivationOutcome } from '$lib/vault/local-login'
+import { ProviderSetupKinds } from '$lib/vault/provider-setup-kinds'
 import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
+import { ProviderDraftFixture } from '../provider-fixtures'
 import type { VaultState } from '$lib/vault.svelte'
 
 function lifecycleHarness(authenticated = false) {
   const state = VaultStateTestFixture.create()
-  state.activateLoginSetup(LOCAL_PROVIDER_TYPE)
-  state.clearOauthFile()
-  state.clearLocalFolder()
-  state.githubPat = ''
-  state.githubRepo = ''
+  state.activateLoginSetup(ProviderSetupKinds.THIS_BROWSER)
+  state.useThisBrowser()
   state.openActiveVault('current-vault')
   state.localVaults = [
     {
@@ -31,7 +30,6 @@ function lifecycleHarness(authenticated = false) {
   state.isAuthenticated = authenticated
   state.errorMsg = ''
   state.loginRequiresExistingVault = false
-  state.storageMode = LOCAL_PROVIDER_TYPE
   state.clearExistingVaultRecoverySummary()
   state.loginPasswordPrompt = true
   state.joinEnrollmentPrompt = JoinEnrollmentState.None
@@ -43,8 +41,7 @@ function lifecycleHarness(authenticated = false) {
   const selectVaultForUnlock = vi.spyOn(state, 'selectVaultForUnlock')
   const activateLoginSetup = vi.spyOn(state, 'activateLoginSetup')
   const unlockWithPassword = vi.spyOn(state, 'unlockWithPassword')
-  const clearOauthFile = vi.spyOn(state, 'clearOauthFile')
-  const clearLocalFolder = vi.spyOn(state, 'clearLocalFolder')
+  const stageProviderDraft = vi.spyOn(state, 'stageProviderDraft')
   const connectStagedProvider = vi
     .spyOn(state, 'connectStagedProvider')
     .mockResolvedValue()
@@ -64,8 +61,8 @@ function lifecycleHarness(authenticated = false) {
     state.openActiveVault(storeId)
     return ok(storeId)
   })
-  activateLoginSetup.mockImplementation((providerType) => {
-    activateLoginSetupImplementation(providerType)
+  activateLoginSetup.mockImplementation((kind) => {
+    activateLoginSetupImplementation(kind)
   })
   unlockWithPassword.mockImplementation(async () => {
     state.isAuthenticated = true
@@ -74,8 +71,7 @@ function lifecycleHarness(authenticated = false) {
   return {
     state,
     lifecycle: new ExistingVaultImportLifecycle(state),
-    clearOauthFile,
-    clearLocalFolder,
+    stageProviderDraft,
     connectStagedProvider,
     activateConnectedExistingVault,
     clearExistingVaultRecoverySummary,
@@ -88,8 +84,7 @@ describe('ExistingVaultImportLifecycle', () => {
     const {
       state,
       lifecycle,
-      clearOauthFile,
-      clearLocalFolder,
+      stageProviderDraft,
       connectStagedProvider,
       activateConnectedExistingVault,
       clearExistingVaultRecoverySummary,
@@ -104,7 +99,8 @@ describe('ExistingVaultImportLifecycle', () => {
           kind: ActiveVaultKind.Open,
           storeId: 'current-vault',
         },
-        provider: { setupType: LOCAL_PROVIDER_TYPE },
+        kind: ProviderSetupKinds.THIS_BROWSER,
+        draft: ProviderDraftFixture.thisBrowser(),
       },
     })
 
@@ -112,9 +108,12 @@ describe('ExistingVaultImportLifecycle', () => {
 
     expect(state.clearUnlockedSession).toHaveBeenCalledOnce()
     expect(state.selectVaultForUnlock).toHaveBeenCalledWith('incoming-vault')
-    expect(state.activateLoginSetup).toHaveBeenCalledWith(LOCAL_PROVIDER_TYPE)
-    expect(clearOauthFile).toHaveBeenCalledOnce()
-    expect(clearLocalFolder).toHaveBeenCalledOnce()
+    expect(state.activateLoginSetup).toHaveBeenCalledWith(
+      ProviderSetupKinds.THIS_BROWSER,
+    )
+    expect(stageProviderDraft).toHaveBeenCalledWith(
+      ProviderDraftFixture.thisBrowser(),
+    )
     expect(connectStagedProvider).toHaveBeenCalledOnce()
     expect(lifecycle.waitingForDevice).toBe(true)
 
@@ -151,6 +150,17 @@ describe('ExistingVaultImportLifecycle', () => {
       expect(lifecycle.queue.kind).toBe(ExistingVaultImportQueueKind.Idle)
     },
   )
+
+  test('a local folder not chosen yet is not queued and says to choose one', () => {
+    const { state, lifecycle } = lifecycleHarness()
+    state.activateLoginSetup(ProviderSetupKinds.LOCAL_FOLDER)
+    state.stageProviderDraft(ProviderDraftFixture.localFolderAwaiting())
+
+    lifecycle.remember('incoming-vault')
+
+    expect(lifecycle.queue.kind).toBe(ExistingVaultImportQueueKind.Idle)
+    expect(state.errorMsg).toBe(I18N_KEYS.AuthStorageLocalFolderChooseErr)
+  })
 
   test('cancels the import, restores the previous vault, and opens the picker', async () => {
     const {

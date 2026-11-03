@@ -8,7 +8,9 @@
 use crate::NookError;
 use gloo_file::{File, futures};
 use js_sys::{Array, AsyncIterator, JsString, Object, Reflect};
-use nook_core::EventId;
+use nook_core::{
+    EventId, LocalFolderHandleId, LocalFolderName, LocalFolderProvider, ValidationError,
+};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen_futures::JsFuture;
@@ -16,9 +18,11 @@ mod handles;
 pub(crate) use handles::LocalFolderHandles;
 mod event_write;
 pub(crate) use event_write::LocalFolderEventWrite;
+mod vault_listing;
 use handles::{
     ChildLookup, ChildLookupRequest, FolderFailure, FolderMethod, FolderObject, FolderPromise,
 };
+pub(crate) use vault_listing::LocalFolderLocation;
 
 #[wasm_bindgen]
 #[derive(Clone)]
@@ -62,6 +66,27 @@ impl NookLocalFolderConfig {
     #[must_use]
     pub fn handle_id(&self) -> String {
         self.handle_id.clone()
+    }
+}
+
+impl NookLocalFolderConfig {
+    /// The chosen folder as the local-folder provider its setup holds.
+    pub(crate) fn provider(&self) -> Result<LocalFolderProvider, ValidationError> {
+        Ok(LocalFolderProvider {
+            directory_name: LocalFolderName::from(self.directory_name.clone()),
+            handle_id: LocalFolderHandleId::try_from(self.handle_id.clone())?,
+        })
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32"))]
+impl NookLocalFolderConfig {
+    /// A chooser answer for tests that cannot open the browser's picker.
+    pub(crate) fn fixture(directory_name: &str, handle_id: &str) -> Self {
+        Self {
+            directory_name: directory_name.to_owned(),
+            handle_id: handle_id.to_owned(),
+        }
     }
 }
 
@@ -439,7 +464,7 @@ impl OpenedLocalFolder {
     pub(crate) async fn delete_namespace(
         &self,
         placed: &nook_core::PlacedNamespace,
-    ) -> Result<bool, NookError> {
+    ) -> Result<(), NookError> {
         let root = placed.root();
         let parts = root.split('/').collect::<Vec<_>>();
         let [parents @ .., name, _events] = parts.as_slice() else {
@@ -450,7 +475,7 @@ impl OpenedLocalFolder {
         let mut current = FolderDirectory::Opened(self.root.clone());
         for part in parents {
             let FolderDirectory::Opened(parent) = current else {
-                return Ok(false);
+                return Ok(());
             };
             current = FolderObject::new(&parent)
                 .child_directory(ChildLookupRequest {
@@ -460,7 +485,7 @@ impl OpenedLocalFolder {
                 .await?;
         }
         let FolderDirectory::Opened(parent) = current else {
-            return Ok(false);
+            return Ok(());
         };
         if let FolderDirectory::Unavailable = FolderObject::new(&parent)
             .child_directory(ChildLookupRequest {
@@ -469,7 +494,7 @@ impl OpenedLocalFolder {
             })
             .await?
         {
-            return Ok(false);
+            return Ok(());
         }
         let FolderMethod::Callable(function) = FolderObject::new(&parent).method("removeEntry")?
         else {
@@ -496,7 +521,7 @@ impl OpenedLocalFolder {
         }
         .resolve("removeEntry failed")
         .await?;
-        Ok(true)
+        Ok(())
     }
 }
 

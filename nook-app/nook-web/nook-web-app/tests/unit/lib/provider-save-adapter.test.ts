@@ -7,23 +7,14 @@ import { describe, expect, test, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import {
-  GITHUB_PROVIDER_TYPE,
-  LOCAL_PROVIDER_TYPE,
-  LOCAL_FOLDER_PROVIDER_TYPE,
-  OAUTH_FILE_PROVIDER_TYPE,
-  configuredLocalFolder,
-  configuredOAuthFile,
-  defaultOAuthFileConfig,
-  providerPersistenceDefaults,
+  LocalVaultPresence,
+  provider_draft_gap_translation_key,
+  type ProviderDraft,
+} from '$app-wasm'
+import {
   scopedProviderVault,
-  storedGithubPat,
-  storedGithubRepository,
-  storedLocalFolderDirectory,
-  storedLocalFolderHandle,
-  type LocalFolderConfig,
-  type OAuthFileConfig,
+  type ProviderKind,
   type StorageProvider,
-  type StorageProviderType,
 } from '$lib/auth/providers'
 import type {
   ActiveProviderCredentialsContext,
@@ -38,23 +29,31 @@ import {
 import type { TranslationRequest } from '$lib/vault/translation'
 import {
   ActiveVaultKind,
-  LocalFolderDraftKind,
   LoginSetupKind,
   LoginVaultSelectionKind,
-  OAuthFileDraftKind,
-  OAuthSetupPresetKind,
 } from '$lib/vault/state/provider.svelte'
+import { ProviderSetupKinds } from '$lib/vault/provider-setup-kinds'
+import { ProviderDraftFixture, ProviderRowFixture } from '../provider-fixtures'
 
 type AdapterState = Omit<
   ProviderSaveContext,
-  'persistProviders' | 'clearLoginSetup' | 'applyActiveProviderCredentials'
+  | 'persistProviders'
+  | 'clearLoginSetup'
+  | 'applyActiveProviderCredentials'
+  | 'stageProviderDraft'
 > & {
   persistProviders: Mock<ProviderSaveContext['persistProviders']>
   clearLoginSetup: Mock<() => void>
   applyActiveProviderCredentials: Mock<() => void>
+  stageProviderDraft: Mock<(draft: ProviderDraft) => void>
 }
 
-function providerState(providerType: StorageProviderType): AdapterState {
+type SaveSetup = {
+  readonly kind: ProviderKind
+  readonly draft: ProviderDraft
+}
+
+function providerState({ kind, draft }: SaveSetup): AdapterState {
   return {
     providers: [],
     activeVault: { kind: ActiveVaultKind.Open, storeId: 'vault-1' },
@@ -64,20 +63,15 @@ function providerState(providerType: StorageProviderType): AdapterState {
     admitManager: () =>
       err(new VaultStorageFailure(VaultStorageFailureKind.ManagerUnavailable)),
     enqueueStorage: async <T>(operation: () => T | Promise<T>) => operation(),
-    loginSetup: { kind: LoginSetupKind.Active, providerType },
-    storageMode: providerType,
+    loginSetup: { kind: LoginSetupKind.Active, providerKind: kind },
     addProviderOpen: true,
     isAuthenticated: true,
-    githubPat: 'pat',
-    githubRepo: 'owner/repo',
-    oauthFileDraft: { kind: OAuthFileDraftKind.NotConfigured },
-    oauthSetupSelection: { kind: OAuthSetupPresetKind.NotSelected },
-    localFolderDraft: { kind: LocalFolderDraftKind.NotConfigured },
+    providerDraft: draft,
+    stageProviderDraft: vi.fn(),
     errorMsg: '',
     loginRequiresExistingVault: true,
     t: (request: TranslationRequest) =>
       typeof request === 'string' ? request : request.key,
-    configureOauthFile: vi.fn(),
     clearLoginSetup: vi.fn(),
     applyActiveProviderCredentials: vi.fn(),
     persistProviders: vi.fn(async () =>
@@ -86,107 +80,128 @@ function providerState(providerType: StorageProviderType): AdapterState {
   }
 }
 
-function githubProvider(): StorageProvider {
-  return {
-    ...providerPersistenceDefaults(),
-    id: 'github-existing',
-    type: GITHUB_PROVIDER_TYPE,
-    label: 'GitHub · owner/repo',
-    githubPat: storedGithubPat('pat'),
-    githubRepo: storedGithubRepository('owner/repo'),
-    storeId: scopedProviderVault('vault-1'),
-    createdAt: '2026-08-11T00:00:00Z',
-  }
+type ProjectionState = Omit<
+  ActiveProviderCredentialsContext,
+  'stageProviderDraft'
+> & {
+  stageProviderDraft: Mock<(draft: ProviderDraft) => void>
 }
 
-function projectionState(
-  provider: StorageProvider,
-): ActiveProviderCredentialsContext {
+function projectionState(provider: StorageProvider): ProjectionState {
   return {
-    localVaultPresent: false,
+    localVaultPresence: LocalVaultPresence.Absent,
     loginSetup: { kind: LoginSetupKind.Inactive },
     syncProviders: [provider],
-    storageMode: LOCAL_PROVIDER_TYPE,
-    githubPat: '',
-    githubRepo: 'nook',
-    oauthFileDraft: { kind: OAuthFileDraftKind.NotConfigured },
-    localFolderDraft: { kind: LocalFolderDraftKind.NotConfigured },
-    configureOauthFile: vi.fn(),
-    clearOauthFile: vi.fn(),
-    configureLocalFolder: vi.fn(),
-    clearLocalFolder: vi.fn(),
+    providerDraft: ProviderDraftFixture.thisBrowser(),
+    stageProviderDraft: vi.fn(),
   }
 }
 
-function oauthProvider(config: OAuthFileConfig): StorageProvider {
-  return {
-    ...providerPersistenceDefaults(),
-    id: 'oauth-existing',
-    type: OAUTH_FILE_PROVIDER_TYPE,
-    label: 'Google Drive',
-    oauthFile: configuredOAuthFile(config),
-    storeId: scopedProviderVault('vault-1'),
-    createdAt: '2026-08-11T00:00:00Z',
-  }
+/** Each persisted row's label and provider type, from the first save. */
+function persistedRows(
+  state: AdapterState,
+): ReadonlyArray<readonly [string, string]> {
+  const [call] = state.persistProviders.mock.calls
+  if (!call) throw new Error('expected the providers to be persisted')
+  const [options] = call
+  return options.providers.map((row) => [row.label, row.provider.type] as const)
 }
 
-function localFolderProvider(config: LocalFolderConfig): StorageProvider {
-  return {
-    ...providerPersistenceDefaults(),
-    id: 'folder-existing',
-    type: LOCAL_FOLDER_PROVIDER_TYPE,
-    label: 'Local folder',
-    localFolder: configuredLocalFolder(config),
-    storeId: scopedProviderVault('vault-1'),
-    createdAt: '2026-08-11T00:00:00Z',
-  }
+function scoped(row: StorageProvider): StorageProvider {
+  return { ...row, storeId: scopedProviderVault('vault-1') }
 }
 
 describe('provider save web adapter', () => {
-  test('applies a saved GitHub provider through the portable projection', () => {
-    const state = projectionState(githubProvider())
+  test.each([
+    ['GitHub', ProviderRowFixture.github(ProviderRowFixture.unscoped('gh'))],
+    [
+      'Google Drive',
+      ProviderRowFixture.googleDrive(ProviderRowFixture.unscoped('gd')),
+    ],
+    [
+      'local folder',
+      ProviderRowFixture.localFolder(ProviderRowFixture.unscoped('lf')),
+    ],
+    ['S3', ProviderRowFixture.s3(ProviderRowFixture.unscoped('s3'))],
+  ])(
+    'stages the draft of a saved %s row through the portable projection',
+    (_name, row) => {
+      const state = projectionState(row)
 
-    new ActiveProviderCredentialsActions(state).applyActiveProviderCredentials()
+      new ActiveProviderCredentialsActions(
+        state,
+      ).applyActiveProviderCredentials()
 
-    expect(state.storageMode).toBe(GITHUB_PROVIDER_TYPE)
-    expect(state.githubPat).toBe('pat')
-    expect(state.githubRepo).toBe('owner/repo')
-    expect(state.clearOauthFile).toHaveBeenCalledOnce()
-    expect(state.clearLocalFolder).toHaveBeenCalledOnce()
-  })
+      expect(state.stageProviderDraft).toHaveBeenCalledOnce()
+      const [call] = state.stageProviderDraft.mock.calls
+      if (!call) throw new Error('expected a staged draft')
+      const [staged] = call
+      expect(staged.type).toBe(row.provider.type)
+    },
+  )
 
-  test('applies a saved OAuth-file provider through the portable projection', () => {
-    const oauthFile = defaultOAuthFileConfig({
-      preset: 'google-drive',
-      fileName: 'portable-vault.yaml',
+  test('saves a new S3 provider with the connection its form produced', async () => {
+    const state = providerState({
+      kind: ProviderSetupKinds.S3,
+      draft: ProviderDraftFixture.s3Ready(),
     })
-    const state = projectionState(oauthProvider(oauthFile))
 
-    new ActiveProviderCredentialsActions(state).applyActiveProviderCredentials()
+    const saved = await new ProviderPersistenceActions(
+      state,
+    ).ensureProviderSaved()
 
-    expect(state.storageMode).toBe(OAUTH_FILE_PROVIDER_TYPE)
-    expect(state.githubRepo).toBe('portable-vault.yaml')
-    expect(state.configureOauthFile).toHaveBeenCalledWith(oauthFile)
-    expect(state.clearLocalFolder).toHaveBeenCalledOnce()
+    expect(saved).toEqual(ok(ProviderSaveOutcome.Saved))
+    expect(persistedRows(state)).toEqual([['S3 · nook-dev/e2e', 's3']])
   })
 
-  test('applies a saved local-folder provider through the portable projection', () => {
-    const localFolder: LocalFolderConfig = {
-      directoryName: storedLocalFolderDirectory('Vaults'),
-      handleId: storedLocalFolderHandle('folder-handle'),
-    }
-    const state = projectionState(localFolderProvider(localFolder))
+  test.each([
+    [
+      'an S3 setup without its connection',
+      ProviderSetupKinds.S3,
+      's3Awaiting',
+      's3Connection',
+    ],
+    [
+      'a folder setup without its folder',
+      ProviderSetupKinds.LOCAL_FOLDER,
+      'localFolderAwaiting',
+      'localFolder',
+    ],
+    [
+      'a GitHub setup without its token',
+      ProviderSetupKinds.GITHUB,
+      'githubAwaitingToken',
+      'githubToken',
+    ],
+  ] as const)(
+    'reports %s with the gap Rust names, without saving',
+    async (_name, kind, stage, gap) => {
+      const state = providerState({
+        kind,
+        draft: ProviderDraftFixture[stage](),
+      })
 
-    new ActiveProviderCredentialsActions(state).applyActiveProviderCredentials()
+      const saved = await new ProviderPersistenceActions(
+        state,
+      ).ensureProviderSaved()
 
-    expect(state.storageMode).toBe(LOCAL_FOLDER_PROVIDER_TYPE)
-    expect(state.configureLocalFolder).toHaveBeenCalledWith(localFolder)
-    expect(state.clearOauthFile).toHaveBeenCalledOnce()
-  })
+      expect(saved.isErr()).toBe(true)
+      if (saved.isOk()) return
+      expect(saved.error.translationKey).toBe(
+        provider_draft_gap_translation_key(gap),
+      )
+      expect(state.persistProviders).not.toHaveBeenCalled()
+    },
+  )
 
   test('maps an explicit duplicate to translated state without persistence', async () => {
-    const state = providerState(GITHUB_PROVIDER_TYPE)
-    state.providers = [githubProvider()]
+    const state = providerState({
+      kind: ProviderSetupKinds.GITHUB,
+      draft: ProviderDraftFixture.githubEntered(),
+    })
+    state.providers = [
+      scoped(ProviderRowFixture.github(ProviderRowFixture.unscoped('gh'))),
+    ]
 
     const saved = await new ProviderPersistenceActions(
       state,
@@ -200,34 +215,17 @@ describe('provider save web adapter', () => {
     expect(state.persistProviders).not.toHaveBeenCalled()
   })
 
-  test('maps a missing local folder to translated state', async () => {
-    const state = providerState(LOCAL_FOLDER_PROVIDER_TYPE)
-
-    const saved = await new ProviderPersistenceActions(
-      state,
-    ).ensureProviderSaved()
-
-    expect(saved.isErr()).toBe(true)
-    if (saved.isOk()) return
-    expect(saved.error.translationKey).toBe(
-      I18N_KEYS.AuthStorageLocalFolderChooseErr,
-    )
-    expect(state.persistProviders).not.toHaveBeenCalled()
-  })
-
-  test('applies and persists a successful provider snapshot', async () => {
-    const state = providerState(GITHUB_PROVIDER_TYPE)
+  test('persists the saved rows, stages the saved draft and projects again', async () => {
+    const draft = ProviderDraftFixture.githubEntered()
+    const state = providerState({ kind: ProviderSetupKinds.GITHUB, draft })
 
     const saved = await new ProviderPersistenceActions(
       state,
     ).ensureProviderSaved()
 
     expect(saved).toEqual(ok(ProviderSaveOutcome.Saved))
-    expect(state.persistProviders).toHaveBeenCalledWith(
-      expect.objectContaining({
-        providers: [expect.objectContaining({ type: GITHUB_PROVIDER_TYPE })],
-      }),
-    )
+    expect(persistedRows(state).map(([, type]) => type)).toEqual(['github'])
+    expect(state.stageProviderDraft).toHaveBeenCalledWith(draft)
     expect(state.clearLoginSetup).toHaveBeenCalledOnce()
     expect(state.applyActiveProviderCredentials).toHaveBeenCalledOnce()
     expect(state.persistProviders).toHaveBeenCalledOnce()

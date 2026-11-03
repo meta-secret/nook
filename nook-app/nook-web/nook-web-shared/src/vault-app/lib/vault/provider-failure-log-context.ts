@@ -1,27 +1,14 @@
-import { VaultStorageFailureKind } from "$lib/runtime/storage-failure";
-
-enum ProviderFailureLogHttpStatusKind {
-  NotReported = "not-reported",
-  Unauthorized = "unauthorized",
-}
+import type { VaultStorageFailureKind } from "$lib/runtime/storage-failure";
 
 type ProviderFailureLogContextRequest = {
   readonly provider_type: string;
   readonly failure_kind: VaultStorageFailureKind;
+  /** Rust's loggable category of the failure, such as `unauthorized` for a
+   * token GitHub rejected or `forbidden` for an S3 key without access. */
   readonly cause: string;
 };
 
-type ProviderFailureLogContextRecordBase = {
-  readonly provider_type: string;
-  readonly failure_kind: VaultStorageFailureKind;
-  readonly cause: string;
-};
-
-type ProviderFailureLogContextRecord =
-  | ProviderFailureLogContextRecordBase
-  | (ProviderFailureLogContextRecordBase & {
-      readonly http_status: 401;
-    });
+type ProviderFailureLogContextRecord = ProviderFailureLogContextRequest;
 
 /** Builds the provider failure context serialized into warning logs. */
 export class ProviderFailureLogContext {
@@ -32,33 +19,12 @@ export class ProviderFailureLogContext {
   static from(
     request: ProviderFailureLogContextRequest,
   ): ProviderFailureLogContext {
-    const base: ProviderFailureLogContextRecordBase = {
+    const record: ProviderFailureLogContextRecord = {
       provider_type: request.provider_type,
       failure_kind: request.failure_kind,
       cause: request.cause,
     };
-    switch (ProviderFailureLogContext.httpStatusKind(request.failure_kind)) {
-      case ProviderFailureLogHttpStatusKind.Unauthorized: {
-        const record: ProviderFailureLogContextRecord = {
-          ...base,
-          http_status: 401,
-        };
-        return new ProviderFailureLogContext(record);
-      }
-      case ProviderFailureLogHttpStatusKind.NotReported:
-        return new ProviderFailureLogContext(base);
-    }
-  }
-
-  private static httpStatusKind(
-    failure_kind: VaultStorageFailureKind,
-  ): ProviderFailureLogHttpStatusKind {
-    switch (failure_kind === VaultStorageFailureKind.GitHubTokenRejected) {
-      case true:
-        return ProviderFailureLogHttpStatusKind.Unauthorized;
-      case false:
-        return ProviderFailureLogHttpStatusKind.NotReported;
-    }
+    return new ProviderFailureLogContext(record);
   }
 
   serialize(): string {

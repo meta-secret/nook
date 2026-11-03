@@ -1,5 +1,5 @@
 //! Pure draft-versus-persisted provider reconciliation, independent of browser storage.
-use super::{AuthProvidersSnapshotData, StorageProviderType};
+use crate::{AuthProvidersSnapshot, StoredProvider};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use tsify::Tsify;
@@ -13,10 +13,11 @@ pub enum AuthProviderPersistenceMode {
 #[derive(Debug, Clone, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthProviderPersistenceRequest {
-    pub snapshot: AuthProvidersSnapshotData,
+    pub snapshot: AuthProvidersSnapshot,
     pub mode: AuthProviderPersistenceMode,
 }
-impl AuthProvidersSnapshotData {
+impl AuthProvidersSnapshot {
+    #[must_use]
     pub fn preserve_unlisted_sync_providers(mut self, stored: &Self) -> Self {
         let draft_ids: HashSet<_> = self
             .providers
@@ -28,7 +29,7 @@ impl AuthProvidersSnapshotData {
                 .providers
                 .iter()
                 .filter(|provider| {
-                    provider.provider_type != StorageProviderType::Local
+                    !matches!(provider.provider, StoredProvider::Local {})
                         && !draft_ids.contains(&provider.id)
                 })
                 .cloned(),
@@ -39,26 +40,22 @@ impl AuthProvidersSnapshotData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::StorageProviderData;
-    struct Fixture;
-    impl Fixture {
-        fn row(id: &str, provider_type: StorageProviderType) -> StorageProviderData {
-            let mut row = StorageProviderData::github(id, "Provider", "token", "owner/repo", "now");
-            row.provider_type = provider_type;
-            row
-        }
-    }
+    use crate::{ProviderKind, StorageProvider};
+
     #[test]
-    fn draft_order_and_replacements_win_without_reviving_local_rows() {
-        let draft = AuthProvidersSnapshotData {
-            providers: vec![Fixture::row("draft", StorageProviderType::Github)],
+    fn draft_order_and_replacements_win_without_reviving_local_rows() -> anyhow::Result<()> {
+        let draft = AuthProvidersSnapshot {
+            providers: vec![StorageProvider::fixture(
+                "draft",
+                StoredProvider::github_fixture()?,
+            )],
             ..Default::default()
         };
-        let stored = AuthProvidersSnapshotData {
+        let stored = AuthProvidersSnapshot {
             providers: vec![
-                Fixture::row("local", StorageProviderType::Local),
-                Fixture::row("draft", StorageProviderType::OauthFile),
-                Fixture::row("remote", StorageProviderType::Github),
+                StorageProvider::fixture("local", StoredProvider::Local {}),
+                StorageProvider::fixture("draft", StoredProvider::google_drive_fixture()?),
+                StorageProvider::fixture("remote", StoredProvider::github_fixture()?),
             ],
             ..Default::default()
         };
@@ -72,11 +69,9 @@ mod tests {
             vec!["draft", "remote"]
         );
         assert_eq!(
-            merged
-                .providers
-                .first()
-                .map(|provider| provider.provider_type),
-            Some(StorageProviderType::Github)
+            merged.providers.first().map(StorageProvider::kind),
+            Some(ProviderKind::Github)
         );
+        Ok(())
     }
 }

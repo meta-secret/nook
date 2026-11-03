@@ -295,8 +295,8 @@ mod tests {
         SigningIdentity,
     };
     use nook_auth2::{
-        IdentityCreation, IdentityVaultKeyOpening, IsoTimestamp, MemberLabel, MemberLabelState,
-        ReplicatedIdentityAdoption, ReplicatedIdentityMembership,
+        AdoptedIdentityLabel, IdentityCreation, IdentityVaultKeyOpening, IsoTimestamp, MemberLabel,
+        MemberLabelState, ReplicatedIdentityAdoption, ReplicatedIdentityMembership,
     };
     use nook_event_log::MemberVaultDek;
 
@@ -528,6 +528,7 @@ mod tests {
                         .adopt_replicated_identity(&ReplicatedIdentityAdoption {
                             local_identity_id,
                             replicated_identity_id: &state.identity_id,
+                            label: AdoptedIdentityLabel::Kept,
                         })?;
             }
             let projection = ReplicatedMembershipRequest {

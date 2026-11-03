@@ -14,6 +14,7 @@ import {
   waitForSecretOnDevice,
   waitForVaultOperationsIdle,
   waitForVaultSyncIdle,
+  e2eAccount,
 } from './helpers'
 import {
   E2eSyncProviderId,
@@ -224,7 +225,7 @@ async function addFileBackupProvider(
       label: opts.label,
       fileName: target.repoName,
       accessToken: target.pat,
-      accountEmail: `${opts.id}@e2e.local`,
+      account: e2eAccount(`${opts.id}@e2e.local`),
     },
   ])
   await invokeInitializedVaultProviderReload(page)

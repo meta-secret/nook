@@ -25,8 +25,6 @@
   <HelpPage {vault} onClose={() => vault.closeHelp()} colorMode={helpTheme} />
   <VaultStatusBar
     {vault}
-    storageMode={vault.storageMode}
-    githubRepo={vault.githubRepo}
     lastSync={vault.lastSync}
     isSyncing={vault.isSyncActivityVisible}
     successMsg={vault.successMsg}

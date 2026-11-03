@@ -4,12 +4,12 @@ import { ok } from 'neverthrow'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { CredentialCheckReport } from '$app-wasm'
 import { googleOAuthSession } from '$lib/auth/google/oauth'
-import { OAUTH_FILE_PROVIDER_TYPE } from '$lib/auth/providers'
 import {
   AccessCheckActions,
   AccessCheckTargetKind,
 } from '$lib/vault/access-check'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
+import { ProviderDraftFixture } from '../provider-fixtures'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import AccessCheckPage from '../../../../nook-web-shared/src/vault-app/lib/components/access-check/AccessCheckPage.svelte'
 
@@ -121,7 +121,10 @@ describe('Check access page', () => {
     await vi.waitFor(() =>
       expect(check).toHaveBeenCalledWith({
         kind: AccessCheckTargetKind.Source,
-        source: { kind: 'googleDrive', accessToken: 'drive-token' },
+        source: {
+          kind: 'remote',
+          source: { kind: 'googleDrive', accessToken: 'drive-token' },
+        },
       }),
     )
   })
@@ -195,7 +198,7 @@ describe('Check access sources', () => {
     ).toHaveLength(0)
 
     vault.isAuthenticated = true
-    vault.storageMode = OAUTH_FILE_PROVIDER_TYPE
+    vault.stageProviderDraft(ProviderDraftFixture.googleDriveConnected())
     await fireEvent.click(
       await view.findByTestId('access-check-source-currentProvider'),
     )

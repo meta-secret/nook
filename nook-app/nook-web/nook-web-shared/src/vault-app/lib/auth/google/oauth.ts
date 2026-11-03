@@ -23,12 +23,11 @@ import { OAuthFailure, OAuthFailureKind } from "$lib/auth/oauth-failure";
  * token still covers `drive.readonly` once the account granted it.
  */
 
-import type {
-  OAuthFileConfig,
-  StoredOAuthFileConfiguration,
-} from "$lib/auth/providers";
-import { configuredOAuthFile } from "$lib/auth/providers";
-import { google_oauth_tokens_to_config } from "$app-wasm";
+import type { OAuthAccountIdentity } from "$lib/auth/providers";
+import {
+  google_drive_authorization_freshness,
+  type GoogleDriveAccess,
+} from "$app-wasm";
 import { GOOGLE_OAUTH_CLIENT_ID } from "$lib/auth/google/config";
 
 const GIS_SCRIPT_URL = "https://accounts.google.com/gsi/client";
@@ -114,14 +113,9 @@ export type GoogleSharedDriveAccessRequest = {
   readonly accountHint: string;
 };
 
-export type GoogleOAuthConfigurationUpdate = {
+export type GoogleDriveAccessGrant = {
   readonly tokens: GoogleOAuthTokens;
-  readonly existing: StoredOAuthFileConfiguration;
-};
-
-export type GoogleOAuthExpiryAssessment = {
-  readonly config: OAuthFileConfig;
-  readonly skewMs: number;
+  readonly account: OAuthAccountIdentity;
 };
 
 type GoogleTokenCompletion = Result<GoogleOAuthTokens, OAuthFailure>;
@@ -179,6 +173,31 @@ type TokenClientSlot = {
 };
 
 /** Owns Google browser token clients and their single pending request. */
+/** The account a GIS answer names, in Rust's account vocabulary. */
+export class GoogleAccountIdentities {
+  static of(identity: GoogleAccountIdentity): OAuthAccountIdentity {
+    switch (identity.kind) {
+      case GoogleAccountIdentityKind.Available:
+        return { state: "email", email: identity.label };
+      case GoogleAccountIdentityKind.Unavailable:
+        return { state: "unknown" };
+    }
+  }
+}
+
+/** The GIS login hint for an account: its address, or the empty hint that
+ * lets the user choose. */
+export class GoogleAccountHint {
+  static of(account: OAuthAccountIdentity): string {
+    switch (account.state) {
+      case "email":
+        return account.email;
+      case "unknown":
+        return "";
+    }
+  }
+}
+
 class GoogleOAuthSession {
   private tokenClients = new Map<string, TokenClientSlot>();
   private googleIdentityServices: GoogleIdentityServices = {
@@ -371,55 +390,50 @@ class GoogleOAuthSession {
     };
     return this.requestGoogleAccessToken(accessRequest);
   }
-  oauthTokensToConfig({
-    tokens,
-    existing,
-  }: GoogleOAuthConfigurationUpdate): Result<OAuthFileConfig, OAuthFailure> {
-    try {
-      return ok(
-        google_oauth_tokens_to_config(
-          tokens.accessToken,
-          tokens.expiresAt,
-          existing,
-        ),
-      );
-    } catch {
-      return err(new OAuthFailure(OAuthFailureKind.GoogleInvalidConfiguration));
+  /** The Drive access a GIS answer grants, as Rust's sign-in DTO. */
+  driveAccess({ tokens, account }: GoogleDriveAccessGrant): GoogleDriveAccess {
+    return {
+      authorization: {
+        accessToken: tokens.accessToken,
+        expiresAt: tokens.expiresAt,
+      },
+      account,
+    };
+  }
+
+  /** The access itself while Rust says it is current; otherwise a silent
+   * GIS request for a fresh token of the same account. */
+  async ensureFreshDriveAccess(
+    access: GoogleDriveAccess,
+  ): Promise<Result<GoogleDriveAccess, OAuthFailure>> {
+    const check: Parameters<typeof google_drive_authorization_freshness>[0] = {
+      authorization: access.authorization,
+      now: new Date().toISOString(),
+    };
+    const freshness = google_drive_authorization_freshness(check);
+    switch (freshness) {
+      case "current":
+        return ok(access);
+      case "refreshDue":
+        return this.refreshDriveAccess(access);
     }
   }
-  isOAuthAccessTokenExpired({
-    config,
-    skewMs,
-  }: GoogleOAuthExpiryAssessment): boolean {
-    if (config.expiresAt.state === "unknown") return false;
-    const expiresAt = Date.parse(config.expiresAt.value);
-    if (Number.isNaN(expiresAt)) return false;
-    return Date.now() + skewMs >= expiresAt;
-  }
-  async ensureValidOAuthFileConfig(
-    config: OAuthFileConfig,
-  ): Promise<Result<OAuthFileConfig, OAuthFailure>> {
-    const expiryAssessment: GoogleOAuthExpiryAssessment = {
-      config,
-      skewMs: 60_000,
-    };
-    if (!this.isOAuthAccessTokenExpired(expiryAssessment)) return ok(config);
+
+  private async refreshDriveAccess(
+    access: GoogleDriveAccess,
+  ): Promise<Result<GoogleDriveAccess, OAuthFailure>> {
     // A silent refresh never asks for a new scope; previously granted
     // `drive.readonly` comes back through `include_granted_scopes`.
     const accessRequest: GoogleAccessTokenRequest = {
       prompt: GoogleOAuthPrompt.Default,
       scope: GoogleDriveOAuthScope.VaultFolder,
-      accountHint:
-        config.accountEmail.state === "email" ? config.accountEmail.value : "",
+      accountHint: GoogleAccountHint.of(access.account),
       includeGrantedScopes: true,
     };
     const refreshed = await this.requestGoogleAccessToken(accessRequest);
-    return refreshed.andThen((tokens) => {
-      const update: GoogleOAuthConfigurationUpdate = {
-        tokens,
-        existing: configuredOAuthFile(config),
-      };
-      return this.oauthTokensToConfig(update);
+    return refreshed.map((tokens) => {
+      const grant: GoogleDriveAccessGrant = { tokens, account: access.account };
+      return this.driveAccess(grant);
     });
   }
   async fetchGoogleAccountEmail(

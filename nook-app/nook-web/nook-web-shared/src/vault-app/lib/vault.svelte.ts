@@ -21,14 +21,14 @@ import {
   type StartSentinelGenesisArgs,
   type StoreId,
 } from "$app-wasm";
-import { type ProviderSetupRequest } from "$lib/auth/providers";
+import type { ProviderKind } from "$lib/auth/providers";
 import type { ProviderVaultIdentitySelection } from "$lib/vault/provider-vault-decision";
 import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import type {
   ProviderActionsContext,
   ProviderSyncRequest,
   SyncFromProvidersRequest,
-  NookStorageConnectArgs,
+  NookStorageConnection,
 } from "$lib/vault/action-contexts";
 import * as providersActions from "$lib/vault/providers.svelte";
 import * as localLoginActions from "$lib/vault/local-login";
@@ -109,20 +109,15 @@ interface VaultPasswordEntryUpdate {
   readonly password: string;
 }
 
-interface EnrollmentCodeIssue {
-  readonly passphrase: string;
-  readonly providerId: string;
-}
+type EnrollmentCodeIssue = passwordUnlockActions.IdentityEnrollmentIssueRequest;
 
 interface VaultPasswordUnlock {
   readonly entryId: PasswordEntryId;
   readonly password: string;
 }
 
-interface EnrollmentCodeConnectionInput {
-  readonly code: string;
-  readonly password: string;
-}
+type EnrollmentCodeConnectionInput =
+  passwordUnlockActions.EnrollmentCodeConnection;
 
 type AuthenticatorMigrationUriCollection = string[];
 
@@ -346,11 +341,13 @@ export class VaultState extends VaultRuntimeState {
     return persisted;
   }
 
-  beginProviderSetup(request: ProviderSetupRequest) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return new providersActions.VaultProviderActions(this).beginProviderSetup({
-      request,
-    });
+  beginProviderSetup(kind: ProviderKind) {
+    const setup: Parameters<
+      providersActions.VaultProviderActions["beginProviderSetup"]
+    >[0] = { kind };
+    return new providersActions.VaultProviderActions(this).beginProviderSetup(
+      setup,
+    );
   }
 
   beginExistingVaultOpen() {
@@ -402,9 +399,7 @@ export class VaultState extends VaultRuntimeState {
     ).confirmCreateFreshRemoteVault();
   }
 
-  async assessVaultConnectStatus(argsOverride?: NookStorageConnectArgs) {
-    const [args = this.connectStorageArgs()] = [argsOverride];
-
+  async assessVaultConnectStatus(args: NookStorageConnection) {
     return new providersActions.VaultProviderActions(
       this,
       // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
@@ -583,7 +578,9 @@ export class VaultState extends VaultRuntimeState {
     });
   }
 
-  eventOutboxTarget(request: EventOutboxRequest): EventOutboxTarget {
+  eventOutboxTarget(
+    request: EventOutboxRequest,
+  ): Result<EventOutboxTarget, VaultStorageFailure> {
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return new syncActions.VaultSyncActions(this).eventOutboxTarget({
       request,
@@ -648,7 +645,7 @@ export class VaultState extends VaultRuntimeState {
     });
   }
 
-  async stageStagedProviderSyncIssue(args: NookStorageConnectArgs) {
+  async stageStagedProviderSyncIssue(args: NookStorageConnection) {
     const stagedProviderSyncIssueAssessment: Parameters<
       typeof providerConflictActions.ProviderConflictActions.prototype.stageStagedProviderSyncIssue
     >[0] = { args };
@@ -715,10 +712,10 @@ export class VaultState extends VaultRuntimeState {
     if (mounted.isErr()) this.errorMsg = this.t(mounted.error.translationKey);
   }
 
-  async discoverStagedVaultStoreId() {
+  async discoverStagedVault() {
     return new providersActions.ProviderConnectionActions(
       this,
-    ).discoverStagedVaultStoreId();
+    ).discoverStagedVault();
   }
 
   chooseRemoteVault(storeId: string) {
@@ -870,13 +867,10 @@ export class VaultState extends VaultRuntimeState {
    * through one of its mounts. The passphrase encrypts the code and is shared
    * separately; a member still approves the join.
    */
-  async issueEnrollmentCode({ passphrase, providerId }: EnrollmentCodeIssue) {
-    const enrollmentArgs: Parameters<
-      passwordUnlockActions.IdentityEnrollmentIssue["issueEnrollmentCode"]
-    >[0] = { passphrase, providerId };
+  async issueEnrollmentCode(issue: EnrollmentCodeIssue) {
     return new passwordUnlockActions.IdentityEnrollmentIssue(
       this,
-    ).issueEnrollmentCode(enrollmentArgs);
+    ).issueEnrollmentCode(issue);
   }
 
   clearEnrollmentCode() {
@@ -904,14 +898,12 @@ export class VaultState extends VaultRuntimeState {
    * Joining-side: parse an enrollment code, restore provider credentials, and
    * self-enrol via `connect_with_password`. Skips approval entirely.
    */
-  async connectWithEnrollmentCode({
-    code,
-    password,
-  }: EnrollmentCodeConnectionInput): Promise<void> {
+  async connectWithEnrollmentCode(
+    connection: EnrollmentCodeConnectionInput,
+  ): Promise<void> {
     return new passwordUnlockActions.PasswordEnrollmentActions(
       this,
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    ).connectWithEnrollmentCode({ code, password });
+    ).connectWithEnrollmentCode(connection);
   }
 
   async handleAddSecret(request: SecretCreationInput) {

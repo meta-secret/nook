@@ -1,21 +1,15 @@
 import { err, ok, type Result } from 'neverthrow'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
+  draft_storage_args,
   NookLocalFolderHealth,
   NookLocalFolderHealthState,
   NookVaultManager,
   ProviderSyncFailureHandling,
   ProviderSyncVisibility,
+  type StorageConnection,
 } from '$app-wasm'
-import { LOCAL_FOLDER_PROVIDER_TYPE } from '$lib/auth/provider-types'
-import {
-  configuredLocalFolder,
-  providerPersistenceDefaults,
-  scopedProviderVault,
-  storedLocalFolderDirectory,
-  storedLocalFolderHandle,
-  type StorageProvider,
-} from '$lib/auth/providers'
+import { scopedProviderVault, type StorageProvider } from '$lib/auth/providers'
 import {
   VaultStorageFailure,
   VaultStorageFailureKind,
@@ -28,6 +22,7 @@ import type { ProviderActionsContext } from '$lib/vault/action-contexts'
 import { VaultState } from '$lib/vault.svelte'
 import { ProviderConnectionActions } from '$lib/vault/provider-connection'
 import { ProviderConnectionPhase } from '$lib/vault/provider-connection-progress'
+import { ProviderSetupKinds } from '$lib/vault/provider-setup-kinds'
 import { ProviderSaveOutcome } from '$lib/vault/providers.svelte'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
@@ -35,6 +30,7 @@ import {
   LoginSetupKind,
   StagedRemoteStorageKind,
 } from '$lib/vault/state/provider.svelte'
+import { ProviderDraftFixture, ProviderRowFixture } from '../provider-fixtures'
 
 vi.mock('$lib/runtime/log', () => ({
   browserLogRuntime: {
@@ -62,17 +58,20 @@ type OwnedManager = {
 const ownedManagers: OwnedManager[] = []
 
 function localFolderProvider(): StorageProvider {
-  return {
-    ...providerPersistenceDefaults(),
+  return ProviderRowFixture.localFolder({
     id: 'local-folder-provider',
-    type: LOCAL_FOLDER_PROVIDER_TYPE,
-    label: 'Local backup',
-    localFolder: configuredLocalFolder({
-      directoryName: storedLocalFolderDirectory('Vaults'),
-      handleId: storedLocalFolderHandle('local-folder-handle'),
-    }),
     storeId: scopedProviderVault('vault-1'),
-    createdAt: '2026-09-11T00:00:00Z',
+  })
+}
+
+/** The connection a selected local folder hands the manager. */
+function localFolderConnection(): StorageConnection {
+  const staged = draft_storage_args(ProviderDraftFixture.localFolderSelected())
+  switch (staged.state) {
+    case 'ready':
+      return staged.connection
+    case 'incomplete':
+      throw new Error(`expected a selected folder, missing ${staged.gap}`)
   }
 }
 
@@ -102,7 +101,7 @@ function providerConnectionScenario(
   state.providers = [provider]
   state.errorMsg = ''
   state.openActiveVault('vault-1')
-  state.activateLoginSetup(LOCAL_FOLDER_PROVIDER_TYPE)
+  state.activateLoginSetup(ProviderSetupKinds.LOCAL_FOLDER)
   const manager = new NookVaultManager()
   state.openManager(manager)
   ownedManagers.push({ manager, state })
@@ -153,7 +152,7 @@ describe('local-folder provider connection', () => {
     )
     vi.spyOn(scenario.state, 'stagedRemoteStorageArgs').mockReturnValue({
       kind: StagedRemoteStorageKind.Available,
-      args: scenario.state.wasmStorageArgs(),
+      args: localFolderConnection(),
     })
     vi.spyOn(scenario.state, 'assessVaultConnectStatus').mockResolvedValue(
       err(assessmentFailure),

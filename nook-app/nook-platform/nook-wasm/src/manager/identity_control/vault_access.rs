@@ -6,17 +6,15 @@
 //! revocations rotate the vault first, then the identity records the vault's
 //! current key epoch for every active member.
 
+use crate::{TypedInput, TypedOutput};
 use nook_core::{
-    AuthProvidersSnapshotData, EventId, IdentityControlState, IdentityNameStatus,
+    AuthProvidersSnapshot, EventId, IdentityControlState, IdentityNameStatus,
     IdentityVaultEpochAction, IdentityVaultEpochStatus, IdentityVaultKeyOpening,
     IdentityVaultRegistration, MultiDeviceError, OpenedVaultDek, ProviderRows, SecretTypeFilter,
-    StorageProviderData, StoreId, SymmetricKey, VaultKeys, VaultMetaState, VaultRevocationDue,
+    StorageProvider, StoreId, SymmetricKey, VaultKeys, VaultMetaState, VaultRevocationDue,
     VaultType, VaultUnlock,
 };
-use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
-
-use super::{INVALID_TYPED_INPUT, UNENCODABLE_TYPED_OUTPUT};
 
 use crate::manager::NookExternalEventLogRecords;
 use crate::manager::NookVaultManager;
@@ -125,21 +123,20 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub fn identity_vault_provider(
         &self,
-        snapshot: &tsify::Ts<AuthProvidersSnapshotData>,
+        snapshot: &tsify::Ts<AuthProvidersSnapshot>,
         store_id: &str,
-    ) -> Result<tsify::Ts<StorageProviderData>, JsError> {
-        let providers = snapshot
-            .to_rust()
-            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?
-            .providers;
+    ) -> Result<tsify::Ts<StorageProvider>, JsError> {
+        let providers = snapshot.decode()?.providers;
         let store_id = StoreId::parse(store_id)?;
         let rows = ProviderRows {
             providers: &providers,
         };
-        let row = rows.vault_row(&store_id).ok_or_else(|| {
-            NookError::Database("No saved provider replicates this vault.".to_owned())
-        })?;
-        Tsify::into_ts(row).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        let nook_core::ProviderRowLookup::Found(row) = rows.vault_row(&store_id) else {
+            return Err(
+                NookError::Database("No saved provider replicates this vault.".to_owned()).into(),
+            );
+        };
+        Ok(row.encode()?)
     }
 
     /// Open a vault of the current identity from one of its mounts with the
@@ -154,16 +151,14 @@ impl NookVaultManager {
     )]
     pub async fn connect_identity_vault(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<crate::NookStorageConnection>,
         store_id: String,
         page_limit: u32,
     ) -> Result<NookSecretPage, JsError> {
+        let connection = connection.decode()?;
         drop(self.status.tx.send("CONNECT_START".to_owned()));
         let store_id = StoreId::parse(&store_id)?;
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
-            .await?;
+        self.prepare_storage(&connection).await?;
         let keys = self.enter_identity_vault(&store_id).await?;
         let (event_log_remote, records) = self.load_password_unlock_records("", true).await?;
         let opening = IdentityVaultOpening {
@@ -195,7 +190,8 @@ impl NookVaultManager {
     ) -> Result<NookSecretPage, JsError> {
         drop(self.status.tx.send("CONNECT_START".to_owned()));
         let store_id = StoreId::parse(&store_id)?;
-        self.prepare_storage("local", "", "").await?;
+        self.prepare_storage(&nook_core::StorageConnection::Local)
+            .await?;
         let keys = self.enter_identity_vault(&store_id).await?;
         // The records name their vault; they must be this one's.
         self.vault.store_id = String::new();

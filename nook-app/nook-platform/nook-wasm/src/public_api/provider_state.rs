@@ -1,143 +1,17 @@
-use super::{NookStorageConnectArgs, wasm_bindgen};
-use nook_core::GithubPat;
-use nook_core::OAuthAccessToken;
-use nook_core::StoredGithubPat;
-use nook_core::StoredGithubRepository;
-use nook_core::StoredOAuthRemoteFileName;
+use super::{NookStorageConnection, wasm_bindgen};
+use crate::NookLocalFolderConfig;
+use crate::{TypedInput, TypedOutput};
 use nook_core::{
-    ActiveProviderCredentialsProjection, ExistingVaultProviderReadiness, GithubPatMask,
-    StorageConnectArgs, StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
+    DraftStorageConnection, ExistingVaultProviderReadiness, GithubDraft, GithubPat, GithubPatMask,
+    LocalFolderDraft, ProviderDraft, ProviderSelection, S3Draft, StagedStorageConnection,
+    StorageConnection,
 };
-use nook_core::{
-    DraftStorageConnection, GithubStorageDraft, OAuthRemoteConfigurationUpdate,
-    OAuthRemoteStorageReference, OAuthStorageDraft, ProviderSelection, StagedStorageConnection,
-};
-use tsify::Tsify;
 use wasm_bindgen::JsError;
-
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NookActiveProviderCredentialsProjectionState {
-    Unchanged,
-    Apply,
-}
-
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn active_provider_credentials_projection_state(
-    projection: &tsify::Ts<nook_core::ActiveProviderCredentialsProjection>,
-) -> Result<NookActiveProviderCredentialsProjectionState, wasm_bindgen::JsError> {
-    let projection = projection
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-    let result = {
-        match projection {
-            ActiveProviderCredentialsProjection::Unchanged => {
-                NookActiveProviderCredentialsProjectionState::Unchanged
-            }
-            ActiveProviderCredentialsProjection::Apply(_) => {
-                NookActiveProviderCredentialsProjectionState::Apply
-            }
-        }
-    };
-    Ok(result)
-}
-
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn active_provider_credentials_projection_draft(
-    projection: &tsify::Ts<nook_core::ActiveProviderCredentialsProjection>,
-) -> Result<tsify::Ts<nook_core::ActiveProviderCredentialDraft>, wasm_bindgen::JsError> {
-    let projection = projection
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
-
-    let result = match projection {
-        ActiveProviderCredentialsProjection::Unchanged => Err(JsError::new(
-            "active provider credentials projection is unchanged",
-        )),
-        ActiveProviderCredentialsProjection::Apply(draft) => Ok(*draft),
-    }?;
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
-}
-
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NookStoredOAuthFileConfigurationState {
-    NotApplicable,
-    Configured,
-}
-
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn stored_oauth_file_configuration_state(
-    configuration: &tsify::Ts<nook_core::StoredOAuthFileConfiguration>,
-) -> Result<NookStoredOAuthFileConfigurationState, wasm_bindgen::JsError> {
-    let configuration = configuration
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-    let result = {
-        match configuration {
-            StoredOAuthFileConfiguration::NotApplicable => {
-                NookStoredOAuthFileConfigurationState::NotApplicable
-            }
-            StoredOAuthFileConfiguration::Configured(_) => {
-                NookStoredOAuthFileConfigurationState::Configured
-            }
-        }
-    };
-    Ok(result)
-}
-
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NookStoredLocalFolderConfigurationState {
-    NotApplicable,
-    Configured,
-}
-
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn stored_local_folder_configuration_state(
-    configuration: &tsify::Ts<nook_core::StoredLocalFolderConfiguration>,
-) -> Result<NookStoredLocalFolderConfigurationState, wasm_bindgen::JsError> {
-    let configuration = configuration
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-    let result = {
-        match configuration {
-            StoredLocalFolderConfiguration::NotApplicable => {
-                NookStoredLocalFolderConfigurationState::NotApplicable
-            }
-            StoredLocalFolderConfiguration::Configured(_) => {
-                NookStoredLocalFolderConfigurationState::Configured
-            }
-        }
-    };
-    Ok(result)
-}
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NookExistingVaultProviderReadiness {
     Ready,
-    MissingOauthFile,
     MissingLocalFolder,
 }
 
@@ -145,57 +19,22 @@ impl From<nook_core::ExistingVaultProviderReadiness> for NookExistingVaultProvid
     fn from(value: nook_core::ExistingVaultProviderReadiness) -> Self {
         match value {
             ExistingVaultProviderReadiness::Ready => Self::Ready,
-            ExistingVaultProviderReadiness::MissingOauthFile => Self::MissingOauthFile,
             ExistingVaultProviderReadiness::MissingLocalFolder => Self::MissingLocalFolder,
         }
     }
 }
 
+/// Whether the draft can enter the existing-vault import.
 #[wasm_bindgen]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn existing_vault_provider_readiness(
-    provider_type: &tsify::Ts<nook_core::StorageProviderType>,
-    oauth_file_configured: bool,
-    local_folder_configured: bool,
+    draft: &tsify::Ts<ProviderDraft>,
 ) -> Result<NookExistingVaultProviderReadiness, wasm_bindgen::JsError> {
-    let provider_type = provider_type
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-    let result = {
-        provider_type
-            .readiness(oauth_file_configured, local_folder_configured)
-            .into()
-    };
-    Ok(result)
-}
-
-#[wasm_bindgen]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn oauth_access_token(
-    config: &tsify::Ts<nook_core::OAuthFileConfigData>,
-) -> Result<tsify::Ts<nook_core::OAuthAccessToken>, wasm_bindgen::JsError> {
-    let config = config
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-
-    let result = { config.usable_access_token().into() };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
-}
-#[wasm_bindgen]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn missing_oauth_access_token()
--> Result<tsify::Ts<nook_core::OAuthAccessToken>, wasm_bindgen::JsError> {
-    let result = { OAuthAccessToken::Missing };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+    let draft = draft.decode()?;
+    Ok(draft.existing_vault_readiness().into())
 }
 
 #[wasm_bindgen]
@@ -229,91 +68,6 @@ impl NookProviderSelection {
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NookOAuthRemoteStorageReferenceState {
-    Unresolved,
-    Resolved,
-}
-
-#[wasm_bindgen]
-pub struct NookOAuthRemoteStorageReference(OAuthRemoteStorageReference);
-
-#[wasm_bindgen]
-impl NookOAuthRemoteStorageReference {
-    #[wasm_bindgen(getter)]
-    #[must_use]
-    pub fn state(&self) -> NookOAuthRemoteStorageReferenceState {
-        match &self.0 {
-            OAuthRemoteStorageReference::Unresolved => {
-                NookOAuthRemoteStorageReferenceState::Unresolved
-            }
-            OAuthRemoteStorageReference::Resolved(_) => {
-                NookOAuthRemoteStorageReferenceState::Resolved
-            }
-        }
-    }
-    #[wasm_bindgen(getter)]
-    pub fn value(&self) -> Result<String, wasm_bindgen::JsError> {
-        match &self.0 {
-            OAuthRemoteStorageReference::Resolved(value) => Ok(value.as_str().to_owned()),
-            OAuthRemoteStorageReference::Unresolved => {
-                Err(JsError::new("OAuth remote storage is unresolved"))
-            }
-        }
-    }
-}
-
-impl NookOAuthRemoteStorageReference {
-    pub(super) const fn new(value: OAuthRemoteStorageReference) -> Self {
-        Self(value)
-    }
-}
-
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NookOAuthRemoteConfigurationUpdateState {
-    Rejected,
-    Updated,
-}
-
-#[wasm_bindgen]
-pub struct NookOAuthRemoteConfigurationUpdate(OAuthRemoteConfigurationUpdate);
-
-#[wasm_bindgen]
-impl NookOAuthRemoteConfigurationUpdate {
-    #[wasm_bindgen(getter)]
-    #[must_use]
-    pub fn state(&self) -> NookOAuthRemoteConfigurationUpdateState {
-        match &self.0 {
-            OAuthRemoteConfigurationUpdate::Unchanged => {
-                NookOAuthRemoteConfigurationUpdateState::Rejected
-            }
-            OAuthRemoteConfigurationUpdate::Updated(_) => {
-                NookOAuthRemoteConfigurationUpdateState::Updated
-            }
-        }
-    }
-    #[wasm_bindgen(getter)]
-    pub fn config(
-        &self,
-    ) -> Result<tsify::Ts<nook_core::OAuthFileConfigData>, wasm_bindgen::JsError> {
-        let result = match &self.0 {
-            OAuthRemoteConfigurationUpdate::Updated(value) => Ok((**value).clone()),
-            OAuthRemoteConfigurationUpdate::Unchanged => {
-                Err(JsError::new("OAuth remote reference was rejected"))
-            }
-        }?;
-        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
-    }
-}
-
-impl NookOAuthRemoteConfigurationUpdate {
-    pub(super) const fn new(value: OAuthRemoteConfigurationUpdate) -> Self {
-        Self(value)
-    }
-}
-
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NookStagedStorageArgsState {
     Incomplete,
     Ready,
@@ -333,14 +87,14 @@ impl NookStagedStorageArgs {
         }
     }
     #[wasm_bindgen(getter)]
-    pub fn args(&self) -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError> {
+    pub fn args(&self) -> Result<tsify::Ts<NookStorageConnection>, wasm_bindgen::JsError> {
         let result = match &self.0 {
             StagedStorageConnection::Ready(args) => Ok(args.clone()),
             StagedStorageConnection::Incomplete => {
                 Err(JsError::new("staged storage is incomplete"))
             }
         }?;
-        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        Ok(result.encode()?)
     }
 }
 
@@ -379,526 +133,417 @@ impl NookGithubPatHint {
     }
 }
 
-impl NookGithubPatHint {
-    pub(super) const fn new(value: GithubPatMask) -> Self {
-        Self(value)
-    }
-}
-
 #[wasm_bindgen]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
-pub fn local_vault_storage_args() -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError>
+pub fn local_vault_storage_args() -> Result<tsify::Ts<NookStorageConnection>, wasm_bindgen::JsError>
 {
-    let result = { StorageConnectArgs::local() };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    Ok(StorageConnection::Local.encode()?)
 }
 
 #[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn authenticated_vault_storage_args(
-    provider: &tsify::Ts<nook_core::StorageProviderData>,
-) -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError> {
-    let provider = provider
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-
-    let result = Ok::<_, wasm_bindgen::JsError>(provider.connection_args()?)?;
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    provider: &tsify::Ts<nook_core::StorageProvider>,
+) -> Result<tsify::Ts<NookStorageConnection>, wasm_bindgen::JsError> {
+    let provider = provider.decode()?;
+    Ok(provider.storage_connection().encode()?)
 }
 
-#[wasm_bindgen]
-
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn draft_github_storage_args(github_pat: &str,
-github_repo: &str) -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError> {
-
-let result = {
-    DraftStorageConnection::Github(GithubStorageDraft {
-        credential: &StoredGithubPat::Token(github_pat.to_owned()),
-        repository: &StoredGithubRepository::Repository(github_repo.to_owned()),
-    })
-    .project()
-};
-Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
-}
-
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn draft_oauth_storage_args(
-    config: &tsify::Ts<nook_core::OAuthFileConfigData>,
-) -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError> {
-    let config = config
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-    let result = {
-        DraftStorageConnection::OAuth(OAuthStorageDraft {
-            preset: config.preset,
-            credential: &config.access_token,
-            remote_reference: config.remote_storage_ref(),
-            file_name: &config.file_name,
-            alternate_name: &StoredOAuthRemoteFileName::Unresolved,
-        })
-        .project()
-    };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
-}
-
+/// Where the manager opens a vault through the draft being set up, or the
+/// gap that stops it.
 #[wasm_bindgen]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
-pub fn draft_local_storage_args() -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError>
-{
-    let result = { DraftStorageConnection::Local.project() };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+pub fn draft_storage_args(
+    draft: &tsify::Ts<ProviderDraft>,
+) -> Result<tsify::Ts<DraftStorageConnection>, wasm_bindgen::JsError> {
+    let draft = draft.decode()?;
+    Ok(draft.storage_connection().encode()?)
+}
+
+/// The kind of provider the draft sets up.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn provider_draft_kind(
+    draft: &tsify::Ts<ProviderDraft>,
+) -> Result<tsify::Ts<nook_core::ProviderKind>, wasm_bindgen::JsError> {
+    let draft = draft.decode()?;
+    Ok(draft.kind().encode()?)
+}
+
+/// A saved row as the draft of its complete setup.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn provider_row_draft(
+    row: &tsify::Ts<nook_core::StorageProvider>,
+) -> Result<tsify::Ts<ProviderDraft>, wasm_bindgen::JsError> {
+    let row = row.decode()?;
+    Ok(ProviderDraft::from(row.provider).encode()?)
+}
+
+/// The folder the local-folder chooser returned, as the draft it sets up.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn local_folder_provider_draft(
+    folder: &NookLocalFolderConfig,
+) -> Result<tsify::Ts<ProviderDraft>, wasm_bindgen::JsError> {
+    let folder = folder.provider()?;
+    Ok(ProviderDraft::LocalFolder(LocalFolderDraft::Selected(folder)).encode()?)
+}
+
+/// Whether a Google sign-in's token still serves a request, or needs a fresh
+/// sign-in first: Rust owns the one-minute margin and the comparison, and the
+/// page passes its clock as `now`.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn google_drive_authorization_freshness(
+    check: &tsify::Ts<nook_core::GoogleDriveAuthorizationCheck>,
+) -> Result<tsify::Ts<nook_core::GoogleDriveAuthorizationFreshness>, wasm_bindgen::JsError> {
+    Ok(check.decode()?.freshness()?.encode()?)
+}
+
+/// The saved rows after the draft's fresh sign-in: every row of its target
+/// and account takes it as one unit.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn put_provider_sign_in(
+    request: &tsify::Ts<nook_core::ProviderSignInUpdate>,
+) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshot>, wasm_bindgen::JsError> {
+    let request = request.decode()?;
+    Ok(request.apply().encode()?)
+}
+
+/// The remote connection a staged setup can open, if it is complete.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn staged_storage_args(
+    draft: &tsify::Ts<ProviderDraft>,
+) -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
+    let draft = draft.decode()?;
+    Ok(NookStagedStorageArgs::new(draft.staged_connection()))
+}
+
+/// The label the setup shows for the draft.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn provider_draft_label(
+    draft: &tsify::Ts<ProviderDraft>,
+) -> Result<String, wasm_bindgen::JsError> {
+    let draft = draft.decode()?;
+    Ok(draft.label())
+}
+
+/// Whether the draft holds the credentials its provider needs.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn provider_draft_credential_readiness(
+    draft: &tsify::Ts<ProviderDraft>,
+) -> Result<tsify::Ts<nook_core::ProviderCredentialReadiness>, wasm_bindgen::JsError> {
+    let draft = draft.decode()?;
+    Ok(draft.credential_readiness().encode()?)
+}
+
+/// A new setup of `kind`, with every dimension still awaiting.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn begin_provider_draft(
+    kind: &tsify::Ts<nook_core::ProviderKind>,
+) -> Result<tsify::Ts<ProviderDraft>, wasm_bindgen::JsError> {
+    let kind = kind.decode()?;
+    Ok(ProviderDraft::begin(kind).encode()?)
+}
+
+/// The GitHub setup form as its draft: trimmed once, a blank token not
+/// entered yet and a blank repository the default one.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn github_provider_draft(
+    form: &tsify::Ts<nook_core::GithubDraftForm>,
+) -> Result<tsify::Ts<ProviderDraft>, wasm_bindgen::JsError> {
+    let form = form.decode()?;
+    Ok(ProviderDraft::Github(GithubDraft::from(form)).encode()?)
+}
+
+/// A validated S3 connection as a ready S3 draft.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn s3_provider_draft(
+    connection: &tsify::Ts<nook_core::S3Connection>,
+) -> Result<tsify::Ts<ProviderDraft>, wasm_bindgen::JsError> {
+    let connection = connection.decode()?;
+    Ok(ProviderDraft::S3(S3Draft::Ready(connection)).encode()?)
+}
+
+/// A key typed for the S3 location an invite named, validated field by
+/// field: a valid key yields the connection the joiner's row is saved with.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn s3_draft_with_key(
+    draft: &tsify::Ts<ProviderDraft>,
+    key: &tsify::Ts<nook_core::S3KeyDraft>,
+) -> Result<tsify::Ts<nook_core::S3DraftValidation>, wasm_bindgen::JsError> {
+    let draft = draft.decode()?;
+    let key = key.decode()?;
+    Ok(draft.with_s3_key(&key)?.encode()?)
+}
+
+/// A GitHub draft an invite left awaiting its token, with the token typed
+/// for it. A blank token rejects with its validation key.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn github_draft_with_token(
+    draft: &tsify::Ts<ProviderDraft>,
+    token: &str,
+) -> Result<tsify::Ts<ProviderDraft>, wasm_bindgen::JsError> {
+    let draft = draft.decode()?;
+    Ok(draft.with_github_token(token)?.encode()?)
+}
+
+/// The message a connect or save that the gap stops reports.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn provider_draft_gap_translation_key(
+    gap: &tsify::Ts<nook_core::ProviderDraftGap>,
+) -> Result<String, wasm_bindgen::JsError> {
+    let gap = gap.decode()?;
+    Ok(gap.translation_key().to_owned())
+}
+
+/// What the provider needs before a backup password can unlock through it.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn provider_draft_gap_unlock_translation_key(
+    gap: &tsify::Ts<nook_core::ProviderDraftGap>,
+) -> Result<String, wasm_bindgen::JsError> {
+    let gap = gap.decode()?;
+    Ok(gap.unlock_translation_key().to_owned())
 }
 
 /// Return a masked GitHub PAT hint without exposing the full credential.
 #[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn mask_github_pat_hint(
-    pat: &tsify::Ts<nook_core::StoredGithubPat>,
-) -> Result<NookGithubPatHint, wasm_bindgen::JsError> {
-    let pat = pat
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
-    let result = {
-        NookGithubPatHint::new(match pat {
-            StoredGithubPat::Missing => GithubPatMask::NoToken,
-            StoredGithubPat::Token(pat) => GithubPat::mask(&pat),
-        })
-    };
-    Ok(result)
+#[must_use]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn mask_github_pat_hint(token: &str) -> NookGithubPatHint {
+    NookGithubPatHint(GithubPat::mask(token))
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::*;
-    use nook_core::ActiveProviderCredentialsProjection;
-    use nook_core::LocalFolderConfigData;
-    use nook_core::OAuthAccessToken;
-    use nook_core::OAuthFileConfigData;
-    use nook_core::StorageConnectArgs;
-    use nook_core::StorageProviderType;
-    use nook_core::StoredGithubPat;
-    use nook_core::StoredOAuthAccessCredential;
+    use crate::test_fixtures::WasmFixture;
+    use nook_core::{
+        ActiveVaultScope, AuthProvidersSnapshot, GithubDraftForm, GoogleDriveAccess,
+        GoogleDriveAuthorization, GoogleDriveFolderId, IsoTimestamp, LocalFolderProvider,
+        OAuthAccountIdentity, OAuthFilePreset, ProviderCredentialReadiness, ProviderDraftGap,
+        ProviderKind, ProviderSignInUpdate, ProviderVaultScope, StorageProvider, i18n_keys,
+    };
+    use serde::Serialize;
     use tsify::Tsify;
-    use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[wasm_bindgen_test]
-    fn provider_state_wrappers_project_success_and_rejection_variants() -> Result<(), JsError> {
-        let draft = nook_core::ActiveProviderCredentialDraft {
-            storage_mode: StorageProviderType::Github,
-            github_pat: "pat".into(),
-            github_repo: "owner/repo".into(),
-            oauth_file: StoredOAuthFileConfiguration::NotApplicable,
-            local_folder: StoredLocalFolderConfiguration::NotApplicable,
-        };
-        assert_eq!(
-            active_provider_credentials_projection_state(&Tsify::into_ts(
-                &(ActiveProviderCredentialsProjection::Unchanged)
-            )?)?,
-            NookActiveProviderCredentialsProjectionState::Unchanged
-        );
-        assert_eq!(
-            active_provider_credentials_projection_state(&Tsify::into_ts(
-                &(ActiveProviderCredentialsProjection::Apply(Box::new(draft.clone())))
-            )?)?,
-            NookActiveProviderCredentialsProjectionState::Apply
-        );
-        assert!(
-            active_provider_credentials_projection_draft(&Tsify::into_ts(
-                &(ActiveProviderCredentialsProjection::Unchanged)
-            )?)
-            .and_then(|value| value
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded.")))
-            .is_err()
-        );
-        let projected = active_provider_credentials_projection_draft(&Tsify::into_ts(
-            &(ActiveProviderCredentialsProjection::Apply(Box::new(draft))),
-        )?)
-        .and_then(|value| {
-            value
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))
-        })?;
-        assert_eq!(projected.github_repo, "owner/repo");
+    fn ts<T: Tsify + Serialize>(value: &T) -> Result<tsify::Ts<T>, JsError> {
+        Ok(value.encode()?)
+    }
 
+    /// A request as the host sends it, for the request types that only decode.
+    fn wire<T: Tsify>(value: &serde_json::Value) -> Result<tsify::Ts<T>, JsError> {
+        let value = value
+            .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
+            .map_err(|_| JsError::new("fixture"))?;
+        Ok(tsify::Ts::new_unchecked(value))
+    }
+
+    fn github_form(token: &str, repository: &str) -> Result<tsify::Ts<GithubDraftForm>, JsError> {
+        wire(&serde_json::json!({ "token": token, "repository": repository }))
+    }
+
+    #[wasm_bindgen_test]
+    fn draft_exports_project_connections_labels_and_readiness() -> Result<(), JsError> {
+        let github = github_provider_draft(&github_form(" github_pat_TEST-ONLY ", " team ")?)?;
+        assert_eq!(provider_draft_label(&github)?, "GitHub · team");
+        assert!(matches!(
+            draft_storage_args(&github)?.to_rust()?,
+            DraftStorageConnection::Ready {
+                connection: StorageConnection::Github { .. }
+            }
+        ));
         assert_eq!(
-            stored_oauth_file_configuration_state(&Tsify::into_ts(
-                &(StoredOAuthFileConfiguration::NotApplicable)
-            )?)?,
-            NookStoredOAuthFileConfigurationState::NotApplicable
+            staged_storage_args(&github)?.state(),
+            NookStagedStorageArgsState::Ready
         );
         assert_eq!(
-            stored_oauth_file_configuration_state(&Tsify::into_ts(
-                &(StoredOAuthFileConfiguration::configured(OAuthFileConfigData::default(),))
-            )?)?,
-            NookStoredOAuthFileConfigurationState::Configured
+            provider_draft_credential_readiness(&github)?.to_rust()?,
+            ProviderCredentialReadiness::Ready
+        );
+        let drive =
+            begin_provider_draft(&ts(&ProviderKind::OauthFile(OAuthFilePreset::GoogleDrive))?)?;
+        assert_eq!(provider_draft_label(&drive)?, "Google Drive");
+        assert_eq!(
+            draft_storage_args(&drive)?.to_rust()?,
+            DraftStorageConnection::Incomplete {
+                gap: ProviderDraftGap::OAuthSignIn
+            }
         );
         assert_eq!(
-            stored_local_folder_configuration_state(&Tsify::into_ts(
-                &(StoredLocalFolderConfiguration::NotApplicable)
-            )?)?,
-            NookStoredLocalFolderConfigurationState::NotApplicable
+            staged_storage_args(&drive)?.state(),
+            NookStagedStorageArgsState::Incomplete
         );
+        let folder = begin_provider_draft(&ts(&ProviderKind::LocalFolder)?)?;
         assert_eq!(
-            stored_local_folder_configuration_state(&Tsify::into_ts(
-                &(StoredLocalFolderConfiguration::Configured(LocalFolderConfigData::default(),))
-            )?)?,
-            NookStoredLocalFolderConfigurationState::Configured
-        );
-        assert_eq!(
-            existing_vault_provider_readiness(
-                &Tsify::into_ts(&(StorageProviderType::OauthFile))?,
-                false,
-                false
-            )?,
-            NookExistingVaultProviderReadiness::MissingOauthFile
-        );
-        assert_eq!(
-            existing_vault_provider_readiness(
-                &Tsify::into_ts(&(StorageProviderType::LocalFolder))?,
-                false,
-                false
-            )?,
+            existing_vault_provider_readiness(&folder)?,
             NookExistingVaultProviderReadiness::MissingLocalFolder
         );
         assert_eq!(
-            existing_vault_provider_readiness(
-                &Tsify::into_ts(&(StorageProviderType::Github))?,
-                false,
-                false
-            )?,
-            NookExistingVaultProviderReadiness::Ready
+            draft_storage_args(&folder)?.to_rust()?,
+            DraftStorageConnection::Ready {
+                connection: StorageConnection::Local
+            }
+        );
+        let s3 = s3_provider_draft(&ts(&WasmFixture::s3_connection()?)?)?;
+        assert_eq!(provider_draft_label(&s3)?, "S3 · nook-dev/e2e");
+        let gap = ts(&ProviderDraftGap::GithubToken)?;
+        assert_eq!(
+            provider_draft_gap_translation_key(&gap)?,
+            i18n_keys::ERRORS_VALIDATION_GITHUB_PAT_EMPTY
+        );
+        assert_eq!(
+            provider_draft_gap_unlock_translation_key(&gap)?,
+            i18n_keys::ERRORS_GITHUB_CREDENTIALS_REQUIRED
         );
         Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn provider_state_values_keep_secret_boundaries_and_defaults() -> Result<(), JsError> {
-        let missing: serde_json::Value =
-            serde_wasm_bindgen::from_value(missing_oauth_access_token()?.js_value())?;
-        assert_eq!(missing, serde_json::to_value(OAuthAccessToken::Missing)?);
-        let mut config = OAuthFileConfigData::default();
-        config.access_token = StoredOAuthAccessCredential::AccessToken(" token ".into());
-        let available: serde_json::Value = serde_wasm_bindgen::from_value(
-            oauth_access_token(&Tsify::into_ts(&(config.clone()))?)?.js_value(),
-        )?;
+    fn a_row_a_chosen_folder_and_a_fresh_sign_in_become_drafts_and_rows() -> Result<(), JsError> {
+        let row = WasmFixture::github_row("github", "github_pat_TEST-ONLY", "team")?;
+        let draft = provider_row_draft(&ts(&row)?)?;
         assert_eq!(
-            available,
-            serde_json::to_value(OAuthAccessToken::Available {
-                token: "token".to_owned()
-            })?
+            provider_draft_kind(&draft)?.to_rust()?,
+            ProviderKind::Github
+        );
+        assert_eq!(draft.to_rust()?, ProviderDraft::from(row.provider));
+
+        let folder =
+            local_folder_provider_draft(&NookLocalFolderConfig::fixture("backups", "folder_1"))?;
+        assert_eq!(
+            folder.to_rust()?,
+            ProviderDraft::LocalFolder(LocalFolderDraft::Selected(LocalFolderProvider {
+                directory_name: "backups".to_owned().into(),
+                handle_id: "folder_1".to_owned().try_into()?,
+            }))
+        );
+        assert!(
+            local_folder_provider_draft(&NookLocalFolderConfig::fixture("backups", " ")).is_err()
         );
 
-        let missing_selection = NookProviderSelection(ProviderSelection::Unavailable);
+        let authorization = |token: &str| -> Result<GoogleDriveAuthorization, JsError> {
+            Ok(GoogleDriveAuthorization {
+                access_token: WasmFixture::secret(token)?,
+                expires_at: IsoTimestamp::parse("2030-01-01T00:00:00Z")?,
+            })
+        };
+        let saved = ProviderDraft::begin(ProviderKind::OauthFile(OAuthFilePreset::GoogleDrive))
+            .with_google_drive_folder(GoogleDriveFolderId::parse("folder-1")?)?
+            .with_google_drive_access(GoogleDriveAccess {
+                authorization: authorization("TEST-ONLY-old")?,
+                account: OAuthAccountIdentity::Unknown,
+            });
+        let snapshot = AuthProvidersSnapshot {
+            providers: vec![StorageProvider::never_synced(
+                "drive".to_owned(),
+                ProviderVaultScope::Unscoped,
+                "2026-01-01T00:00:00Z".to_owned(),
+                saved
+                    .clone()
+                    .complete()
+                    .map_err(|gap| JsError::new(gap.translation_key()))?,
+            )],
+            active_vault_store_id: ActiveVaultScope::Unselected,
+        };
+        let fresh = saved.with_google_drive_access(GoogleDriveAccess {
+            authorization: authorization("TEST-ONLY-fresh")?,
+            account: OAuthAccountIdentity::Unknown,
+        });
+        let request = wire::<ProviderSignInUpdate>(&serde_json::json!({
+            "snapshot": serde_json::to_value(&snapshot)?,
+            "draft": serde_json::to_value(&fresh)?,
+        }))?;
+        let updated = put_provider_sign_in(&request)?.to_rust()?;
+        let [row] = updated.providers.as_slice() else {
+            return Err(JsError::new("the row stays"));
+        };
         assert_eq!(
-            missing_selection.state(),
-            NookProviderSelectionState::Missing
+            row.provider.secrets().first().map(|token| token.expose()),
+            Some("TEST-ONLY-fresh")
         );
-        assert!(missing_selection.provider_id().is_err());
-        let selected = NookProviderSelection(ProviderSelection::Selected("provider-1".into()));
-        assert_eq!(selected.state(), NookProviderSelectionState::Selected);
-        assert_eq!(selected.provider_id()?, "provider-1");
-
-        let unresolved =
-            NookOAuthRemoteStorageReference::new(OAuthRemoteStorageReference::Unresolved);
-        assert_eq!(
-            unresolved.state(),
-            NookOAuthRemoteStorageReferenceState::Unresolved
-        );
-        assert!(unresolved.value().is_err());
-        let resolved = NookOAuthRemoteStorageReference::new(OAuthRemoteStorageReference::Resolved(
-            "file-1".into(),
-        ));
-        assert_eq!(
-            resolved.state(),
-            NookOAuthRemoteStorageReferenceState::Resolved
-        );
-        assert_eq!(resolved.value()?, "file-1");
-
-        let rejected =
-            NookOAuthRemoteConfigurationUpdate::new(OAuthRemoteConfigurationUpdate::Unchanged);
-        assert_eq!(
-            rejected.state(),
-            NookOAuthRemoteConfigurationUpdateState::Rejected
-        );
-        assert!(rejected.config().is_err());
-        let updated = NookOAuthRemoteConfigurationUpdate::new(
-            OAuthRemoteConfigurationUpdate::Updated(Box::new(config.clone())),
-        );
-        assert_eq!(
-            updated.state(),
-            NookOAuthRemoteConfigurationUpdateState::Updated
-        );
-        assert_eq!(
-            updated
-                .config()?
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
-            config
-        );
-
-        let incomplete = NookStagedStorageArgs::new(StagedStorageConnection::Incomplete);
-        assert_eq!(incomplete.state(), NookStagedStorageArgsState::Incomplete);
-        assert!(incomplete.args().is_err());
-        let ready =
-            NookStagedStorageArgs::new(StagedStorageConnection::Ready(StorageConnectArgs::local()));
-        assert_eq!(ready.state(), NookStagedStorageArgsState::Ready);
-        assert!(ready.args().is_ok());
-
-        assert_eq!(
-            local_vault_storage_args()
-                .and_then(|value| value
-                    .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
-                .mode,
-            "local"
-        );
-        assert_eq!(
-            draft_local_storage_args()
-                .and_then(|value| value
-                    .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
-                .mode,
-            "local"
-        );
-        let github_args = draft_github_storage_args("pat", "owner/repo").and_then(|value| {
-            value
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))
-        })?;
-        assert_eq!(github_args.mode, "github");
-        assert_eq!(github_args.pat, "pat");
-        assert_eq!(github_args.repo, "owner/repo");
-        assert_eq!(
-            draft_oauth_storage_args(&Tsify::into_ts(&(config))?)
-                .and_then(|value| value
-                    .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
-                .mode,
-            "google-drive"
-        );
-
-        let no_hint = mask_github_pat_hint(&Tsify::into_ts(&(StoredGithubPat::Missing))?)?;
-        assert_eq!(no_hint.state(), NookGithubPatHintState::Missing);
-        assert!(no_hint.value().is_err());
-        let hint = mask_github_pat_hint(&Tsify::into_ts(
-            &(StoredGithubPat::Token("ghp_1234567890ABCDEF".into())),
-        )?)?;
-        assert_eq!(hint.state(), NookGithubPatHintState::Available);
-        assert_eq!(hint.value()?, "ghp_123456…");
         Ok(())
     }
-}
-
-#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
-mod browser_tests {
-    use super::*;
-    use crate::public_api;
-    use nook_core::OAuthAccessToken;
-    use nook_core::OauthFilePreset;
-    use nook_core::StorageConnectArgs;
-    use nook_core::StoredGithubPat;
-    use nook_core::StoredGoogleDriveFolder;
-    use nook_core::StoredOAuthAccessCredential;
-    use nook_core::StoredOAuthRemoteFileId;
-    use nook_core::StoredOAuthRemoteFileName;
-    use tsify::Tsify;
-    use wasm_bindgen::JsError;
-    use wasm_bindgen_test::*;
-
-    wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    fn provider_state_wrappers_cover_typed_getters_and_storage_drafts() -> Result<(), JsError> {
-        let missing = OAuthAccessToken::Missing;
-        assert_eq!(missing, OAuthAccessToken::Missing);
-        assert_eq!(
-            serde_wasm_bindgen::from_value::<serde_json::Value>(
-                missing_oauth_access_token()?.js_value()
-            )?,
-            serde_json::to_value(OAuthAccessToken::Missing)?
-        );
-
-        let configured = nook_core::OAuthFileConfigData {
-            access_token: StoredOAuthAccessCredential::AccessToken(" token ".into()),
-            file_id: StoredOAuthRemoteFileId::FileId("file-1".into()),
-            file_name: StoredOAuthRemoteFileName::FileName("Vault.yaml".into()),
-            ..Default::default()
-        };
-        let token: serde_json::Value = serde_wasm_bindgen::from_value(
-            oauth_access_token(&Tsify::into_ts(&(configured.clone()))?)?.js_value(),
-        )?;
-        assert_eq!(
-            token,
-            serde_json::to_value(OAuthAccessToken::Available {
-                token: "token".to_owned()
-            })?
-        );
-
-        let missing_selection = NookProviderSelection(ProviderSelection::Unavailable);
-        assert_eq!(
-            missing_selection.state(),
-            NookProviderSelectionState::Missing
-        );
-        assert!(missing_selection.provider_id().is_err());
-        let selected = NookProviderSelection(ProviderSelection::Selected("provider-1".into()));
-        assert_eq!(selected.state(), NookProviderSelectionState::Selected);
-        assert_eq!(selected.provider_id()?, "provider-1");
-
-        let unresolved =
-            NookOAuthRemoteStorageReference::new(OAuthRemoteStorageReference::Unresolved);
-        assert_eq!(
-            unresolved.state(),
-            NookOAuthRemoteStorageReferenceState::Unresolved
-        );
-        assert!(unresolved.value().is_err());
-        let resolved = NookOAuthRemoteStorageReference::new(OAuthRemoteStorageReference::Resolved(
-            "file-1".into(),
-        ));
-        assert_eq!(
-            resolved.state(),
-            NookOAuthRemoteStorageReferenceState::Resolved
-        );
-        assert_eq!(resolved.value()?, "file-1");
-
-        let rejected =
-            NookOAuthRemoteConfigurationUpdate::new(OAuthRemoteConfigurationUpdate::Unchanged);
-        assert_eq!(
-            rejected.state(),
-            NookOAuthRemoteConfigurationUpdateState::Rejected
-        );
-        assert!(rejected.config().is_err());
-        let updated = NookOAuthRemoteConfigurationUpdate::new(
-            OAuthRemoteConfigurationUpdate::Updated(Box::new(configured.clone())),
-        );
-        assert_eq!(
-            updated.state(),
-            NookOAuthRemoteConfigurationUpdateState::Updated
-        );
-        assert_eq!(
-            updated
-                .config()?
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))?
-                .file_name,
-            configured.file_name
-        );
-
-        let incomplete = NookStagedStorageArgs::new(StagedStorageConnection::Incomplete);
-        assert_eq!(incomplete.state(), NookStagedStorageArgsState::Incomplete);
-        assert!(incomplete.args().is_err());
-        let ready =
-            NookStagedStorageArgs::new(StagedStorageConnection::Ready(StorageConnectArgs::local()));
-        assert_eq!(ready.state(), NookStagedStorageArgsState::Ready);
-        assert_eq!(
-            ready
-                .args()?
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))?
-                .mode,
-            "local"
-        );
-
-        let no_hint = mask_github_pat_hint(&Tsify::into_ts(&(StoredGithubPat::Missing))?)?;
-        assert_eq!(no_hint.state(), NookGithubPatHintState::Missing);
-        assert!(no_hint.value().is_err());
-        let hint = mask_github_pat_hint(&Tsify::into_ts(
-            &(StoredGithubPat::Token("ghp_1234567890ABCDEF".into())),
-        )?)?;
+    fn the_pat_hint_never_shows_the_token() -> Result<(), JsError> {
+        let hint = mask_github_pat_hint("github_pat_11AAAAAAAAAAAAAA");
         assert_eq!(hint.state(), NookGithubPatHintState::Available);
-        assert_eq!(hint.value()?, "ghp_123456…");
-
+        assert_eq!(hint.value()?, "github_pat_11A…");
         assert_eq!(
-            local_vault_storage_args()
-                .and_then(|value| value
-                    .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
-                .mode,
-            "local"
+            mask_github_pat_hint(" ").state(),
+            NookGithubPatHintState::Missing
         );
+        assert!(mask_github_pat_hint(" ").value().is_err());
         assert_eq!(
-            draft_local_storage_args()
-                .and_then(|value| value
-                    .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
-                .mode,
-            "local"
-        );
-        let github = draft_github_storage_args("pat", "owner/repo").and_then(|value| {
-            value
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))
-        })?;
-        assert_eq!(github.mode, "github");
-        assert_eq!(github.pat, "pat");
-        assert_eq!(github.repo, "owner/repo");
-        let oauth = draft_oauth_storage_args(&Tsify::into_ts(&(configured.clone()))?).and_then(
-            |value| {
-                value
-                    .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded."))
-            },
-        )?;
-        assert_eq!(oauth.mode, "google-drive");
-
-        let drive = nook_core::OAuthFileConfigData {
-            preset: OauthFilePreset::GoogleDrive,
-            access_token: StoredOAuthAccessCredential::AccessToken("token".into()),
-            file_id: StoredOAuthRemoteFileId::FileId("old-file-id".into()),
-            file_name: StoredOAuthRemoteFileName::FileName("Vault.yaml".into()),
-            folder_id: StoredGoogleDriveFolder::FolderId("vault-folder".into()),
-            ..Default::default()
-        };
-        let draft_args =
-            draft_oauth_storage_args(&Tsify::into_ts(&(drive.clone()))?).and_then(|value| {
-                value
-                    .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded."))
-            })?;
-        assert_eq!(draft_args.repo, "shared:vault-folder\tVault.yaml");
-        let staged_args =
-            public_api::staged_oauth_remote_storage_args(&Tsify::into_ts(&(drive.clone()))?)?;
-        assert_eq!(
-            staged_args
-                .args()?
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))?
-                .repo,
-            "shared:vault-folder\tVault.yaml"
-        );
-        let updated =
-            public_api::update_oauth_remote_ref(&Tsify::into_ts(&(drive.clone()))?, "file-1")?;
-        let updated_config = updated
-            .config()?
-            .to_rust()
-            .map_err(|_| JsError::new("Typed test output could not be decoded."))?;
-        assert_eq!(
-            updated_config.folder_id,
-            StoredGoogleDriveFolder::FolderId("vault-folder".into())
-        );
-        assert_eq!(
-            updated_config.file_id,
-            StoredOAuthRemoteFileId::FileId("file-1".into())
+            local_vault_storage_args()?.to_rust()?,
+            StorageConnection::Local
         );
         Ok(())
     }

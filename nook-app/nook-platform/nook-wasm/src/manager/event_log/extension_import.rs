@@ -1,5 +1,5 @@
 use super::{ExtensionEventLogImportStatus, ExternalEventLogRecord, NookVaultManager};
-use crate::manager::{CeremonyState, EventLogSessionState, SyncOutboxState, VaultSessionState};
+use crate::manager::{CeremonyState, EventLogSessionState, SyncOutbox, VaultSessionState};
 use crate::storage::identity_record::ProtectedIdentityLookup;
 use crate::storage::identity_record::ProtectedLocalIdentity;
 use nook_core::ActiveVaultScope;
@@ -47,7 +47,7 @@ impl NookVaultManager {
         previous_active_store_id: &ActiveVaultScope,
         previous_vault: VaultSessionState,
         previous_event_log: EventLogSessionState,
-        previous_sync_outbox: SyncOutboxState,
+        previous_sync_outbox: SyncOutbox,
     ) -> Result<(), NookError> {
         self.vault.reset();
         self.vault = previous_vault;
@@ -144,7 +144,7 @@ impl NookVaultManager {
         previous_active_store_id: &ActiveVaultScope,
         previous_vault: VaultSessionState,
         previous_event_log: EventLogSessionState,
-        previous_sync_outbox: SyncOutboxState,
+        previous_sync_outbox: SyncOutbox,
         require_clear: bool,
     ) -> Result<(), NookError> {
         // Drop poisoned/quarantined bytes for this vault so a later Approve
@@ -206,7 +206,7 @@ impl NookVaultManager {
         let previous_active_store_id = NookDatabase::get_active_vault_id().await?;
         let mut previous_vault = mem::take(&mut self.vault);
         let mut previous_event_log = mem::take(&mut self.event_log);
-        let mut previous_sync_outbox = mem::take(&mut self.sync_outbox);
+        let previous_sync_outbox = mem::take(&mut self.sync_outbox);
         let import = async {
             let merged = self.sync_external_event_log_records(records).await?;
             self.evaluate_extension_import_grant(&targets, merged.len())
@@ -217,7 +217,8 @@ impl NookVaultManager {
             Ok(status) if status.access_granted => {
                 previous_vault.reset();
                 previous_event_log.reset();
-                previous_sync_outbox.reset();
+                // Dropping the previous outbox wipes its credential.
+                drop(previous_sync_outbox);
                 self.sentinel_genesis = CeremonyState::Inactive;
                 self.sentinel_genesis_phase = SentinelGenesisPhase::Inactive;
                 self.pending_sentinel_genesis_request = CeremonyState::Inactive;

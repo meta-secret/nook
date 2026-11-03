@@ -215,7 +215,7 @@ mod tests {
     };
     use nook_core::AppendEventInput;
     use nook_core::{
-        ActiveVaultScope, AuthProvidersSnapshotData, DeviceIdentity, EpochMetadataState,
+        ActiveVaultScope, AuthProvidersSnapshot, DeviceIdentity, EpochMetadataState,
         EpochPasswordState, IsoTimestamp, MemberLabel, Sha256Hex, SigningIdentity, StoreId,
         VaultApplication, VaultKeys, VaultOperation,
     };
@@ -255,7 +255,7 @@ mod tests {
             manager.device.id = identity.device_id().as_str().to_owned();
             manager.device.identity_private_key = identity.secret_string().into_inner();
             manager.event_log.signing_seed = signing_seed.into_inner();
-            let providers = AuthProvidersSnapshotData {
+            let providers = AuthProvidersSnapshot {
                 providers: Vec::new(),
                 active_vault_store_id: ActiveVaultScope::StoreId(manager.vault.store_id.clone()),
             };

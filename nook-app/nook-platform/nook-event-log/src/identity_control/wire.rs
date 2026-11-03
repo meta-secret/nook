@@ -10,7 +10,7 @@ use std::{fmt, str};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use nook_auth2::{
     AgeArmoredCiphertext, AppId, AuthKeyId, CompactToken, DevicePublicKey, DeviceSigningPublicKey,
-    IdentityId, IdentityInviteId, IsoTimestamp, MemberLabel, StoreId,
+    IdentityId, IdentityInviteId, IsoTimestamp, MemberLabel, S3KeyPrefix, StoreId,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -187,6 +187,28 @@ pub enum IdentityMountTarget {
     LocalFolder {
         directory_name: String,
     },
+    S3(S3MountTarget),
+}
+
+/// An S3-compatible bucket location: endpoint, bucket, and key prefix. Each
+/// installation signs with its own access key and region; neither the key id
+/// nor its secret enters the log.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct S3MountTarget {
+    pub endpoint: String,
+    pub bucket: String,
+    pub key_prefix: S3KeyPrefix,
+}
+
+impl S3MountTarget {
+    /// The location's identity, `endpoint/bucket[/prefix]`: the one formatter
+    /// for an S3 location. Rows with the same identity reach the same objects,
+    /// whatever key or region they sign with.
+    #[must_use]
+    pub fn location_identity(&self) -> String {
+        format!("{}/{}", self.endpoint, self.key_prefix.below(&self.bucket))
+    }
 }
 
 /// One sync-provider mount owned by an identity.
@@ -606,6 +628,7 @@ mod tests {
     #![allow(clippy::too_many_lines)]
 
     use crate::identity_control::test_fixtures::*;
+    use nook_auth2::S3KeyPrefix;
 
     #[test]
     fn envelopes_bind_to_one_identity_and_one_founder_genesis() -> anyhow::Result<()> {
@@ -651,6 +674,59 @@ mod tests {
                 .union_storage_bytes(&[tampered.into_bytes().into()])
                 .is_err()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn an_s3_mount_records_its_bucket_location_and_no_key() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let founder = fixture.founder();
+        let location = |key_prefix| S3MountTarget {
+            endpoint: "http://127.0.0.1:8333".to_owned(),
+            bucket: "nook-dev".to_owned(),
+            key_prefix,
+        };
+        let team = location(S3KeyPrefix::parse("team")?);
+        let root = location(S3KeyPrefix::BucketRoot);
+        assert_eq!(
+            team.location_identity(),
+            "http://127.0.0.1:8333/nook-dev/team"
+        );
+        assert_eq!(root.location_identity(), "http://127.0.0.1:8333/nook-dev");
+        let head = "kind: s3\nendpoint: http://127.0.0.1:8333\nbucket: nook-dev\n";
+        for (target, prefix) in [
+            (&team, "key_prefix:\n  state: prefix\n  value: team\n"),
+            (&root, "key_prefix:\n  state: bucketRoot\n"),
+        ] {
+            let record = IdentityMountTarget::S3(target.clone());
+            let yaml = serde_yaml::to_string(&record)?;
+            assert_eq!(yaml, format!("{head}{prefix}"));
+            assert_eq!(serde_yaml::from_str::<IdentityMountTarget>(&yaml)?, record);
+        }
+        // A bare prefix string or any key material is not a mount record.
+        for damaged in [
+            format!("{head}key_prefix: team\n"),
+            format!("{head}key_prefix:\n  state: bucketRoot\naccess_key_id: device-a\n"),
+        ] {
+            assert!(serde_yaml::from_str::<IdentityMountTarget>(&damaged).is_err());
+        }
+        let mount = IdentityProviderMount {
+            mount_id: ProviderMountId::generate()?,
+            label: "S3 · nook-dev/team".to_owned(),
+            target: IdentityMountTarget::S3(team),
+        };
+        let (event, _) = fixture.append(
+            &founder,
+            vec![IdentityControlOperation::ProviderMounted {
+                mount: mount.clone(),
+            }],
+        )?;
+        assert_eq!(fixture.state()?.mounts, vec![mount]);
+        let stored = String::from_utf8(Vec::from(event.serialize_storage_yaml()?))?;
+        assert!(stored.contains("kind: s3"));
+        assert!(stored.contains("state: prefix"));
+        assert!(stored.contains("value: team"));
+        assert!(!stored.contains("access_key"));
         Ok(())
     }
 }

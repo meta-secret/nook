@@ -2,9 +2,10 @@
 
 use super::NookVaultManager;
 use crate::NookError;
+use crate::TypedOutput;
 use nook_companion_core::SiteSecretMatches;
 use nook_core::SiteSecretOrigin;
-use tsify::{Ts, Tsify};
+use tsify::Ts;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 impl NookVaultManager {
@@ -31,9 +32,7 @@ impl NookVaultManager {
         self.ensure_passkey_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
         self.prepare_secret_search_catalog().await?;
-        self.list_matching_site_secrets(origin)?
-            .into_ts()
-            .map_err(|_| JsError::new("Site secret matches could not be encoded."))
+        Ok(self.list_matching_site_secrets(origin)?.encode()?)
     }
 }
 

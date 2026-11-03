@@ -3,8 +3,6 @@
   import { RefreshCw, ShieldCheck } from "@lucide/svelte";
   import { Button, buttonVariants } from "$lib/components/ui/button";
   import SetupWizardStep from "$lib/components/SetupWizardStep.svelte";
-  import type { OAuthFilePreset } from "$lib/auth/providers";
-  import { OAuthFilePresentation, oauth_access_token } from "$lib/auth/providers";
   import GoogleDriveVaultInventory from "$lib/components/provider-vaults/GoogleDriveVaultInventory.svelte";
   import { browserLogRuntime } from "$lib/runtime/log";
   import {
@@ -15,7 +13,16 @@
   import { cn } from "$lib/utils";
   import type { VaultState } from "$lib/vault.svelte";
   import * as oauthActions from "$lib/vault/oauth";
-  import { OAuthFileDraftKind } from "$lib/vault/state/provider.svelte";
+  import { NookDriveRootOrigin } from "$app-wasm";
+  import {
+    DraftDriveSignInKind,
+    ProviderDraftReads,
+    type OAuthProviderDraft,
+  } from "$lib/vault/provider-draft-reads";
+  import {
+    OAuthDraftView,
+    type OAuthAccountTextRequest,
+  } from "$lib/components/oauth-provider-setup-state";
   import {
     ConnectButtonLook,
     type ConnectPlanButton,
@@ -31,43 +38,39 @@
 
   let {
     vault,
-    preset = "google-drive" as OAuthFilePreset,
+    draft,
     isVerifying,
     isInitializing,
     onCancelSetup,
     onConnect,
   }: {
     vault: VaultState;
-    preset?: OAuthFilePreset;
+    /** The staged Google Drive or iCloud draft. */
+    draft: OAuthProviderDraft;
     isVerifying: boolean;
     isInitializing: boolean;
     onCancelSetup: () => void;
     onConnect: () => void | Promise<void>;
   } = $props();
 
-  const isICloud = $derived(preset === "icloud");
-  const oauthSignedIn = $derived(
-    vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
-      oauth_access_token(vault.oauthFileDraft.config).kind === "available",
-  );
-  const sharedTargetReady = $derived(
-    vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
-      (isICloud
-        ? new OAuthFilePresentation(
-            vault.oauthFileDraft.config,
-          ).hasICloudShareTarget()
-        : new OAuthFilePresentation(
-            vault.oauthFileDraft.config,
-          ).hasGoogleDriveFolder()),
-  );
+  const isICloud = $derived(draft.preset === "icloud");
+  const icloudAccountText = $derived.by(() => {
+    const request: OAuthAccountTextRequest = {
+      draft,
+      unknownAccount: vault.t(I18N_KEYS.AuthStorageIcloudSignedIn),
+    };
+    return OAuthDraftView.accountText(request);
+  });
+  const googleAccountText = $derived.by(() => {
+    const request: OAuthAccountTextRequest = {
+      draft,
+      unknownAccount: vault.t(I18N_KEYS.AuthStorageGoogleSignedIn),
+    };
+    return OAuthDraftView.accountText(request);
+  });
+  const oauthSignedIn = $derived(OAuthDraftView.signedIn(draft));
+  const sharedTargetReady = $derived(OAuthDraftView.targetReady(draft));
   const canConnect = $derived(oauthSignedIn);
-  const oauthAccount = $derived(
-    vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-      ? new OAuthFilePresentation(
-          vault.oauthFileDraft.config,
-        ).oauthAccountLabel()
-      : "",
-  );
   const oauthBusy = $derived(
     isICloud ? vault.icloudOAuthBusy : vault.googleOAuthBusy,
   );
@@ -99,13 +102,8 @@
   let preparingTarget = $state(false);
   /** Set once Connect & sync bound the provider to a folder that existed. */
   let existingFolderNotice = $state("");
-  /** The signed-in Drive account's token: listing its Nook folder needs it. */
-  const driveAccessToken = $derived.by(() => {
-    if (isICloud || vault.oauthFileDraft.kind !== OAuthFileDraftKind.Configured)
-      return "";
-    const credential = oauth_access_token(vault.oauthFileDraft.config);
-    return credential.kind === "available" ? credential.token : "";
-  });
+  /** The signed-in Drive access: listing its Nook folder needs its token. */
+  const driveSignIn = $derived(ProviderDraftReads.driveSignIn(draft));
 
   // Sign-in controls are plain elements for the providers' SDKs, so they
   // take the primary Button's classes rather than the component.
@@ -146,8 +144,7 @@
             return;
           }
           if (
-            connection.value.origin ===
-            oauthActions.GoogleVaultFolderOrigin.Existing
+            connection.value.origin === NookDriveRootOrigin.Existing
           ) {
             const noticeRequest: Parameters<typeof vault.t>[0] = {
               key: I18N_KEYS.ProviderSetupGoogleFolderExisting,
@@ -410,9 +407,7 @@
                   const translationRequest2: Parameters<typeof vault.t>[0] = {
                     key: I18N_KEYS.ProviderSetupIcloudSignedInAs,
                     replacements: {
-                      account:
-                        oauthAccount ||
-                        vault.t(I18N_KEYS.AuthStorageIcloudSignedIn),
+                      account: icloudAccountText,
                     },
                   };
                   return vault.t(translationRequest2);
@@ -421,9 +416,7 @@
                   const translationRequest3: Parameters<typeof vault.t>[0] = {
                     key: I18N_KEYS.ProviderSetupGoogleSignedInAs,
                     replacements: {
-                      account:
-                        oauthAccount ||
-                        vault.t(I18N_KEYS.AuthStorageGoogleSignedIn),
+                      account: googleAccountText,
                     },
                   };
                   return vault.t(translationRequest3);
@@ -453,13 +446,13 @@
         >
           {vault.t(I18N_KEYS.ProviderSetupIcloudSharedCreateDesc)}
         </p>
-      {:else if driveAccessToken}
+      {:else if driveSignIn.kind === DraftDriveSignInKind.SignedIn}
         <!-- What the account's Nook folder already holds, before Connect &
              sync. It owns the step's one action button: Connect & sync, or the
              identity plan followed by it. -->
         <GoogleDriveVaultInventory
           {vault}
-          accessToken={driveAccessToken}
+          accessToken={driveSignIn.access.authorization.accessToken}
           busy={isVerifying || isInitializing || preparingTarget}
           onConnect={connectWithVaultTarget}
           {connectButton}
@@ -484,7 +477,7 @@
       {/if}
       {#if isICloud && !sharedTargetReady}
         {@render connectButton(directConnect)}
-      {:else if !driveAccessToken}
+      {:else if driveSignIn.kind === DraftDriveSignInKind.NotSignedIn}
         {@render connectButton(directConnect)}
       {/if}
     </SetupWizardStep>

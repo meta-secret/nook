@@ -10,6 +10,7 @@ import {
   readLocalVaultYamlFromIdb,
   reloadUnlockWithSyncProvider,
   installOauthFileRemoteForLocalE2e,
+  E2E_UNKNOWN_ACCOUNT,
 } from './helpers'
 import { createSyncTarget, installSyncRemote } from './sync-provider'
 
@@ -50,6 +51,7 @@ test.describe('fresh vault password entries with sync provider', () => {
           label: 'File',
           fileName: target.repoName,
           accessToken: target.pat,
+          account: E2E_UNKNOWN_ACCOUNT,
         },
       ],
     })

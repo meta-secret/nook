@@ -47,13 +47,12 @@ export class VaultDeviceActions {
     try {
       const storageArgs = state.wasmStorageArgs();
       const enrolled = await state.enqueueStorage(async () => {
+        if (storageArgs.isErr()) return storageErr(storageArgs.error);
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
           await admittedManager.value.enroll_and_connect(
-            storageArgs.mode,
-            storageArgs.pat,
-            storageArgs.repo,
+            storageArgs.value,
             secretsKey,
             membersKey,
           );

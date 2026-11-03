@@ -78,7 +78,8 @@ impl NookIdentityProtectionStep {
         }
     }
 
-    /// The step that completes this task; `Done` once it is done.
+    /// The step this row offers: what completes an open task, another sync
+    /// provider beside a kept copy while no second device exists, or `Done`.
     #[wasm_bindgen(getter)]
     pub fn action(&self) -> NookIdentityNextStep {
         NookIdentityNextStep::from_core(self.0.action)
@@ -461,6 +462,14 @@ mod browser_tests {
         };
         assert_eq!(blocked.state(), NookIdentityProtectionTaskState::Blocked);
         assert_eq!(blocked.action(), NookIdentityNextStep::AddSyncProvider);
+
+        let cloud_copy = assessed([1, 1, 1, 3]);
+        let cloud_steps = cloud_copy.checklist();
+        let [kept, _] = cloud_steps.as_slice() else {
+            panic!("the checklist lists both protections");
+        };
+        assert_eq!(kept.state(), NookIdentityProtectionTaskState::Done);
+        assert_eq!(kept.action(), NookIdentityNextStep::AddSyncProvider);
 
         let protected = assessed([1, 1, 2, 3]);
         assert!(protected.is_protected());

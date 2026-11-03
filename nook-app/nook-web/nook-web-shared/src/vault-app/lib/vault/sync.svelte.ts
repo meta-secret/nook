@@ -1,6 +1,9 @@
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import { ProviderSyncOutcome } from "$lib/vault/provider-sync.svelte";
-import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
+import {
+  NativeVaultStorageFailure,
+  VaultStorageFailure,
+} from "$lib/runtime/storage-failure";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 import {
   VaultStorageFailure as StorageOperationFailure,
@@ -14,7 +17,7 @@ import type {
   RosterHydrationOutcome,
   SyncActionsContext,
   SyncFromProvidersRequest,
-  NookStorageConnectArgs,
+  NookStorageConnection,
   VaultSyncApplicationOutcome,
 } from "$lib/vault/action-contexts";
 import {
@@ -40,10 +43,10 @@ import {
   VaultSyncTimerStartDecision,
   VaultSyncTimerTickDecision,
 } from "$app-wasm";
+import { ProviderSetupKinds } from "$lib/vault/provider-setup-kinds";
 import {
   activeVaultScope,
   type AuthProvidersSnapshot,
-  LOCAL_FOLDER_PROVIDER_TYPE,
   unselectedVaultScope,
 } from "$lib/auth/providers";
 import {
@@ -155,6 +158,11 @@ export class VaultSyncActions {
         );
         return;
       }
+      // The banner names no cause; the log keeps the failure kind, its
+      // message key and the cause Rust classified, never the provider message.
+      log.warn(
+        `automatic sync failed: ${synchronized.error.kind} (${synchronized.error.translationKey}${synchronized.error instanceof VaultStorageFailure ? `, ${synchronized.error.cause}` : ""})`,
+      );
       const message = state.t(synchronized.error.translationKey);
       state.errorMsg = message;
       if (
@@ -191,7 +199,7 @@ export class VaultSyncActions {
     const mergedJoins: JoinRequest[] = [];
     try {
       for (const provider of state.syncProviders) {
-        if (provider.type === LOCAL_FOLDER_PROVIDER_TYPE) {
+        if (provider.provider.type === "local-folder") {
           const localSync: Parameters<
             ProviderSyncActions["syncLocalFolderProvider"]
           >[0] = { provider };
@@ -203,17 +211,13 @@ export class VaultSyncActions {
           }
           continue;
         }
-        const { mode, pat, repo } = state.providerWasmArgs(provider);
+        const connection = state.providerWasmArgs(provider);
         const joins = await state.enqueueStorage(async () => {
           const admitted = state.admitManager();
           if (admitted.isErr()) return storageErr(admitted.error);
           try {
             return storageOk(
-              await admitted.value.merge_remote_joins_from_provider(
-                mode,
-                pat,
-                repo,
-              ),
+              await admitted.value.merge_remote_joins_from_provider(connection),
             );
           } catch (failure) {
             return storageErr(new NativeVaultStorageFailure(failure));
@@ -396,40 +400,55 @@ export class VaultSyncActions {
 
   eventOutboxTarget({
     request,
-  }: EventOutboxTargetSelection): EventOutboxTarget {
+  }: EventOutboxTargetSelection): Result<
+    EventOutboxTarget,
+    StorageOperationFailure
+  > {
     const state = this.state;
+    const unavailable: EventOutboxTarget = {
+      kind: EventOutboxTargetKind.Unavailable,
+    };
     if (request.kind === EventOutboxRequestKind.LocalFolder) {
-      return {
+      const target: EventOutboxTarget = {
         kind: EventOutboxTargetKind.LocalFolder,
         provider: request.provider,
       };
+      return storageOk(target);
     }
     if (request.kind === EventOutboxRequestKind.Remote) {
-      return {
+      const target: EventOutboxTarget = {
         kind: EventOutboxTargetKind.Remote,
         args: state.providerWasmArgs(request.provider),
       };
+      return storageOk(target);
     }
-    if (state.syncProviders[0]?.type === LOCAL_FOLDER_PROVIDER_TYPE) {
-      return {
+    if (state.syncProviders[0]?.provider.type === "local-folder") {
+      const target: EventOutboxTarget = {
         kind: EventOutboxTargetKind.LocalFolder,
         provider: state.syncProviders[0],
       };
+      return storageOk(target);
     }
     if (state.syncProviders.length > 0) {
       const [syncProvider] = state.syncProviders;
-      if (!syncProvider) return { kind: EventOutboxTargetKind.Unavailable };
-      return {
+      if (!syncProvider) return storageOk(unavailable);
+      const target: EventOutboxTarget = {
         kind: EventOutboxTargetKind.Remote,
         args: state.providerWasmArgs(syncProvider),
       };
+      return storageOk(target);
     }
-    return state.hasRemoteCredentials()
-      ? {
+    // With no saved row, the draft in use is the target once it has its
+    // credentials; a draft with a gap fails rather than flushing nowhere.
+    switch (state.credentialReadiness().state) {
+      case "required":
+        return storageOk(unavailable);
+      case "ready":
+        return state.wasmStorageArgs().map((args): EventOutboxTarget => ({
           kind: EventOutboxTargetKind.Remote,
-          args: state.wasmStorageArgs(),
-        }
-      : { kind: EventOutboxTargetKind.Unavailable };
+          args,
+        }));
+    }
   }
 
   async flushRemoteEventOutboxNow({
@@ -441,7 +460,9 @@ export class VaultSyncActions {
     const admitted = state.admitManager();
     if (admitted.isErr()) return storageErr(admitted.error);
     const targetSelection: EventOutboxTargetSelection = { request };
-    const target = this.eventOutboxTarget(targetSelection);
+    const selected = this.eventOutboxTarget(targetSelection);
+    if (selected.isErr()) return storageErr(selected.error);
+    const target = selected.value;
     if (target.kind === EventOutboxTargetKind.LocalFolder) {
       const localSync: Parameters<
         ProviderSyncActions["syncLocalFolderProvider"]
@@ -468,11 +489,7 @@ export class VaultSyncActions {
       const admitted = state.admitManager();
       if (admitted.isErr()) return storageErr(admitted.error);
       try {
-        await admitted.value.flush_event_outbox_for_provider(
-          target.args.mode,
-          target.args.pat,
-          target.args.repo,
-        );
+        await admitted.value.flush_event_outbox_for_provider(target.args);
         const remoteOutboxOutcome: EventOutboxFlushOutcome = {
           kind: EventOutboxFlushKind.RemoteOutboxFlushed,
           requestKind: request.kind,
@@ -580,10 +597,7 @@ export class VaultSyncActions {
     state.errorMsg = "";
     state.openSection(WorkspaceSection.Sync);
     state.beginAddProvider();
-    const setupRequest: Parameters<typeof state.beginProviderSetup>[0] = {
-      type: LOCAL_FOLDER_PROVIDER_TYPE,
-    };
-    state.beginProviderSetup(setupRequest);
+    state.beginProviderSetup(ProviderSetupKinds.LOCAL_FOLDER);
   }
 
   startVaultSync() {
@@ -719,7 +733,7 @@ export class VaultSyncActions {
               StorageOperationFailureKind.VaultSelectionFailed,
             ),
           );
-        if (provider.type === "local-folder") {
+        if (provider.provider.type === "local-folder") {
           const localSync: Parameters<
             ProviderSyncActions["syncLocalFolderProvider"]
           >[0] = { provider };
@@ -734,7 +748,9 @@ export class VaultSyncActions {
           if (applied.isErr()) return storageErr(applied.error);
         }
       } else {
-        const applied = await this.synchronizeStorage(state.wasmStorageArgs());
+        const args = state.wasmStorageArgs();
+        if (args.isErr()) return storageErr(args.error);
+        const applied = await this.synchronizeStorage(args.value);
         if (applied.isErr()) return storageErr(applied.error);
       }
       // Join approval can synchronize the encrypted roster before a vault session exists.
@@ -754,13 +770,9 @@ export class VaultSyncActions {
     }
   }
 
-  private async synchronizeStorage({
-    mode,
-    pat,
-    repo,
-  }: NookStorageConnectArgs): Promise<
-    Result<VaultSyncApplicationOutcome, StorageOperationFailure>
-  > {
+  private async synchronizeStorage(
+    connection: NookStorageConnection,
+  ): Promise<Result<VaultSyncApplicationOutcome, StorageOperationFailure>> {
     const state = this.state;
     const synchronized = await state.enqueueStorage(async () => {
       const manager = state.admitManager();
@@ -769,9 +781,7 @@ export class VaultSyncActions {
         typeof VaultStorageSynchronization
       >[0] = {
         manager: manager.value,
-        mode,
-        pat,
-        repo,
+        connection,
       };
       return new VaultStorageSynchronization(synchronizationArgs).run();
     });

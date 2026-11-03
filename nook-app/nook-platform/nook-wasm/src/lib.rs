@@ -24,10 +24,8 @@
     clippy::items_after_statements
 )]
 
-use tsify::Tsify;
-
 use nook_companion_core::ExtensionConnectScope;
-use nook_core::WebsiteHostError;
+use nook_core::{WebsiteHostError, i18n_keys};
 mod application;
 mod conversion;
 mod device_access;
@@ -40,6 +38,98 @@ mod passkey_browser;
 mod passkey_observation;
 mod storage;
 mod sync_io;
+/// Rows and connections the nook-wasm tests share. Every credential here is a
+/// test-only placeholder.
+#[cfg(test)]
+mod test_fixtures {
+    #[cfg(feature = "browser-wasm-tests")]
+    use nook_core::AuthProvidersSnapshot;
+
+    #[cfg(feature = "browser-wasm-tests")]
+    use crate::NookError;
+    use nook_core::{
+        GithubProvider, ProviderSecretText, ProviderVaultScope, S3Connection, S3ConnectionDraft,
+        StorageConnection, StorageProvider, StoredGithubRepository, StoredProvider,
+        ValidationError,
+    };
+
+    /// The one owner of the fixtures the nook-wasm tests share.
+    pub(crate) struct WasmFixture;
+
+    impl WasmFixture {
+        /// The secret access key of the S3 test connection.
+        pub(crate) const S3_SECRET: &'static str = "TEST-ONLY-device-a-secret-not-real";
+
+        /// A test-only credential text.
+        pub(crate) fn secret(text: &str) -> Result<ProviderSecretText, ValidationError> {
+            ProviderSecretText::try_from(text.to_owned())
+        }
+
+        /// A GitHub connection with a test-only token.
+        pub(crate) fn github_connection(
+            token: &str,
+            repo: &str,
+        ) -> Result<StorageConnection, ValidationError> {
+            Ok(StorageConnection::Github {
+                token: Self::secret(token)?,
+                repo: repo.to_owned(),
+            })
+        }
+
+        /// A never-synced GitHub row with a test-only token.
+        pub(crate) fn github_row(
+            id: &str,
+            token: &str,
+            repository: &str,
+        ) -> Result<StorageProvider, ValidationError> {
+            Ok(StorageProvider::never_synced(
+                id.to_owned(),
+                ProviderVaultScope::Unscoped,
+                "2026-01-01T00:00:00Z".to_owned(),
+                StoredProvider::Github(GithubProvider {
+                    repository: StoredGithubRepository::Repository(repository.to_owned()),
+                    token: Self::secret(token)?,
+                }),
+            ))
+        }
+
+        /// The token of a snapshot whose first row is a GitHub row.
+        #[cfg(feature = "browser-wasm-tests")]
+        pub(crate) fn first_github_token(
+            snapshot: &AuthProvidersSnapshot,
+        ) -> Result<&ProviderSecretText, NookError> {
+            let [row, ..] = snapshot.providers.as_slice() else {
+                return Err(NookError::Database(
+                    "the snapshot should hold a row".to_owned(),
+                ));
+            };
+            let StoredProvider::Github(github) = &row.provider else {
+                return Err(NookError::Database(
+                    "the first row should be a GitHub row".to_owned(),
+                ));
+            };
+            Ok(&github.token)
+        }
+
+        /// The S3 setup form the tests fill in for the local development server.
+        pub(crate) fn s3_draft() -> S3ConnectionDraft {
+            S3ConnectionDraft {
+                endpoint: "http://127.0.0.1:8333".to_owned(),
+                region: "us-east-1".to_owned(),
+                bucket: "nook-dev".to_owned(),
+                key_prefix: "e2e".to_owned(),
+                access_key_id: "device-a".to_owned(),
+                secret_access_key: Self::S3_SECRET.to_owned(),
+            }
+        }
+
+        /// The validated S3 connection the tests reach the local development
+        /// server with.
+        pub(crate) fn s3_connection() -> Result<S3Connection, ValidationError> {
+            S3Connection::try_from(Self::s3_draft())
+        }
+    }
+}
 mod types;
 
 pub use device_access::*;
@@ -80,7 +170,7 @@ pub use types::{
     NookSecretHistory, NookSecretOriginDeviceState, NookSecretPage, NookSecretRevisionState,
     NookSecurityConflict, NookSentinelGenesisDelivery, NookSentinelGenesisFinalizeResult,
     NookSentinelGenesisParticipantStatus, NookSentinelGenesisStatus,
-    NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus, NookStorageConnectArgs,
+    NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus, NookStorageConnection,
     NookStoreId, NookStoreIdPresence, NookStoreIdPresenceState, NookSyncConflictReview,
     NookSyncConflictReviewState, NookTotpCode, NookVaultAccessReport, NookVaultArchitecture,
     NookVaultClientPolicy, NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic,
@@ -97,7 +187,7 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 pub fn extension_vault_access_scope()
 -> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
     let result = { ExtensionConnectScope::VaultAccess };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+    Ok(result.encode()?)
 }
 
 #[wasm_bindgen]
@@ -108,7 +198,7 @@ pub fn extension_vault_access_scope()
 pub fn extension_password_filling_scope()
 -> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
     let result = { ExtensionConnectScope::PasswordFilling };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+    Ok(result.encode()?)
 }
 
 #[wasm_bindgen]
@@ -119,7 +209,7 @@ pub fn extension_password_filling_scope()
 pub fn extension_passkey_management_scope()
 -> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
     let result = { ExtensionConnectScope::PasskeyManagement };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+    Ok(result.encode()?)
 }
 
 #[wasm_bindgen]
@@ -130,7 +220,7 @@ pub fn extension_passkey_management_scope()
 pub fn extension_sync_provider_credentials_scope()
 -> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
     let result = { ExtensionConnectScope::SyncProviderCredentials };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+    Ok(result.encode()?)
 }
 
 #[wasm_bindgen]
@@ -146,11 +236,9 @@ pub fn extension_sync_provider_credentials_scope()
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn companion_pairing_provider_manifest_digest(
-    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshotData>,
+    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshot>,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let snapshot = snapshot
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    let snapshot = snapshot.decode()?;
 
     Ok(snapshot
         .companion_pairing_manifest_digest()
@@ -187,7 +275,9 @@ pub enum NookError {
     #[error("GitHub error: {0}")]
     GitHub(String),
 
-    #[error("GitHub authentication failed.")]
+    /// Its message is its translation key, which the web classifies through
+    /// `provider_failure_code` like every other refusal.
+    #[error("{}", i18n_keys::AUTH_STORAGE_GITHUB_TOKEN_REJECTED)]
     GitHubTokenRejected,
 
     #[error("Drive error: {0}")]
@@ -195,6 +285,14 @@ pub enum NookError {
 
     #[error("iCloud error: {0}")]
     ICloud(String),
+
+    /// An S3 answer, as its typed failure: a refused key, or a category and
+    /// status without the request or the body.
+    #[error(transparent)]
+    S3Request(#[from] nook_core::S3RequestFailure),
+
+    #[error(transparent)]
+    S3Signing(#[from] nook_core::S3SigningError),
 
     #[error("Decryption failed: {0}")]
     Decryption(String),
@@ -213,6 +311,13 @@ pub enum NookError {
 
     #[error("Serialization error: {0}")]
     Serialization(String),
+
+    #[error(transparent)]
+    TypedBoundary(#[from] TypedBoundaryError),
+
+    /// A log level string that names none of the five levels.
+    #[error("Unknown log level.")]
+    UnknownLogLevel,
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
@@ -304,6 +409,8 @@ pub(crate) use storage::indexed_db::{
 pub(crate) use storage::indexed_db::{IndexedDbUpdate, StoredStringRecord};
 
 pub(crate) use conversion::BrowserTimestamp;
+pub use types::TypedBoundaryError;
+pub(crate) use types::{TypedInput, TypedOutput};
 
 pub(crate) use conversion::{
     LoadedVaultUnlockRequest, SyncResultSessionRequest, VaultMemberProjectionRequest,

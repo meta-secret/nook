@@ -1,29 +1,34 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
+    Archive,
     ChevronDown,
     Cloud,
     HardDrive,
     Plus,
     Settings2,
   } from '@lucide/svelte'
+  import {
+    ProviderRowGlyph,
+    ProviderRowGlyphs,
+  } from '$lib/components/provider-row-glyph'
   import ProviderPicker from '$lib/components/ProviderPicker.svelte'
   import BackButton from '$lib/components/workspace/BackButton.svelte'
   import FirstRunDiagram from '$lib/components/login/FirstRunDiagram.svelte'
   import { firstRunRecoveryDiagram } from '$lib/components/login/first-run-diagram'
-  import type {
-    ProviderSetupRequest,
-    StorageProvider,
-  } from '$lib/auth/providers'
+  import type { ProviderKind, StorageProvider } from '$lib/auth/providers'
   import {
-    GITHUB_PROVIDER_TYPE,
     localizedProviderStorageDetail,
     localizeProviderLabel,
   } from '$lib/auth/providers'
+  import { PickerRow } from '$lib/components/provider-picker-state'
   import { SentinelGenesisPhase } from '$app-wasm'
 
   import type { VaultState } from '$lib/vault.svelte'
-  import { LoginProviderManagementVariant } from './login-provider-management-state'
+  import {
+    LocalFolderPickerRow,
+    LoginProviderManagementVariant,
+  } from './login-provider-management-state'
 
   let {
     vault,
@@ -45,13 +50,19 @@
     isInitializing: boolean
     open?: boolean
     addingProvider?: boolean
-    onBeginSetup?: (request: ProviderSetupRequest) => void
+    onBeginSetup: (kind: ProviderKind) => void
     onCancelAddProvider?: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void
   } = $props()
 
   const isSetup = $derived(variant === LoginProviderManagementVariant.Setup)
+  /** A Sentinel vault delivering its shares cannot use a local folder. */
+  const localFolderRow = $derived(
+    LocalFolderPickerRow.of(
+      vault.sentinelGenesisPhase === SentinelGenesisPhase.DeliveringShares,
+    ),
+  )
 
   function confirmRemoveProvider(provider: StorageProvider) {
     if (!onRemoveProvider) return
@@ -104,15 +115,12 @@
       <FirstRunDiagram diagram={firstRunRecoveryDiagram(vault)} />
     {/if}
 
-    {#if onBeginSetup}
-      <ProviderPicker
-        {vault}
-        onSelect={onBeginSetup}
-        excludeLocal
-        excludeLocalFolder={vault.sentinelGenesisPhase ===
-          SentinelGenesisPhase.DeliveringShares}
-      />
-    {/if}
+    <ProviderPicker
+      {vault}
+      onSelect={onBeginSetup}
+      local={PickerRow.Hidden}
+      localFolder={localFolderRow}
+    />
   </div>
 {:else}
   <div
@@ -164,9 +172,14 @@
           data-testid="login-manage-providers-list"
         >
           {#each providers as provider (provider.id)}
+            {@const glyph = ProviderRowGlyphs.of(provider.provider)}
             <li class="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
-              {#if provider.type === GITHUB_PROVIDER_TYPE}
+              {#if glyph === ProviderRowGlyph.Cloud}
                 <Cloud class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+              {:else if glyph === ProviderRowGlyph.Archive}
+                <Archive
+                  class="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                />
               {:else}
                 <HardDrive
                   class="mt-0.5 size-4 shrink-0 text-muted-foreground"

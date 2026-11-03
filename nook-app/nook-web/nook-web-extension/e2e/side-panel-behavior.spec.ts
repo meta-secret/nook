@@ -315,8 +315,8 @@ test('typed rows sit under identity · vault sections; authenticators Fill code 
   const sections = page.getByTestId('side-panel-site-section')
   await expect(sections).toHaveCount(2)
   await expect(page.getByTestId('side-panel-site-group-name')).toHaveText([
-    'Alice Martin · Personal',
-    'Side project · Unnamed vault',
+    'Personal · Alice Martin',
+    'Unnamed vault · Side project',
   ])
   // Every connected vault shows, even with nothing for this site.
   await expect(
@@ -337,7 +337,7 @@ test('typed rows sit under identity · vault sections; authenticators Fill code 
     'Authenticator',
   )
   await expect(rows.nth(0).getByTestId('side-panel-item-subtitle')).toHaveText(
-    'bynull · www.namecheap.com',
+    'Namecheap · www.namecheap.com',
   )
   await expect(rows.nth(1).getByTestId('side-panel-item-type')).toHaveText(
     'Passkey',
@@ -390,7 +390,7 @@ test("a page that needs only 2FA codes shows Rust's typed empty state above the 
     'side-panel-site-section',
   )
   await expect(page.getByTestId('side-panel-site-group-name')).toHaveText(
-    'Alice Martin · Personal',
+    'Personal · Alice Martin',
   )
   await expect(page.getByTestId('side-panel-site-vault-empty')).toHaveText(
     'Nothing for this site',
@@ -469,8 +469,8 @@ test('approval on the connect page shows the new identity in the panel at once',
     kind: SidePanelSiteListingKind.PageUnavailable,
   }
   await panel.open({ ...unlockedScenario, listing: nookTab })
-  const connected = page.getByTestId('side-panel-connected-identity')
-  await expect(connected).toHaveText(['Alice Martin · Personal'])
+  const connected = page.getByTestId('side-panel-connected-vault')
+  await expect(connected).toHaveText(['Personal'])
   await page.getByTestId('side-panel-connect').click()
   // The panel listens once the Nook tab is open.
   await expect(page.getByTestId('side-panel-connect-step')).toHaveText(
@@ -490,10 +490,7 @@ test('approval on the connect page shows the new identity in the panel at once',
     port,
     message: { kind: ExtensionConnectStepKind.Approved },
   })
-  await expect(connected).toHaveText([
-    'Alice Martin · Personal',
-    'Alice Martin · Work',
-  ])
+  await expect(connected).toHaveText(['Personal', 'Work'])
   await expect(page.getByTestId('side-panel-connect-card')).toHaveCount(0)
   await expect(page.getByTestId('side-panel-connect')).toBeVisible()
   expect(await panel.pageDisconnected(port)).toBe(true)
@@ -771,16 +768,13 @@ test('a vault change the extension took shows in the panel without a click', asy
     kind: SidePanelSiteListingKind.PageUnavailable,
   }
   await panel.open({ ...unlockedScenario, listing: otherPage })
-  const connected = page.getByTestId('side-panel-connected-identity')
-  await expect(connected).toHaveText(['Alice Martin · Personal'])
+  const connected = page.getByTestId('side-panel-connected-vault')
+  await expect(connected).toHaveText(['Personal'])
   await panel.update({ vaults: SidePanelStubVaults.PairedWithNew })
   // Nothing re-reads before the service worker announces the change.
-  await expect(connected).toHaveText(['Alice Martin · Personal'])
+  await expect(connected).toHaveText(['Personal'])
   await panel.announceVaultChange()
-  await expect(connected).toHaveText([
-    'Alice Martin · Personal',
-    'Alice Martin · Work',
-  ])
+  await expect(connected).toHaveText(['Personal', 'Work'])
 })
 
 test('Refresh loads the panel again and reads its state afresh', async ({

@@ -22,6 +22,7 @@ import {
   openManagePage,
   ManagePage,
   expectLoginGateAfterLoad,
+  E2E_UNKNOWN_ACCOUNT,
 } from './helpers'
 
 test.describe('vault connect flow', () => {
@@ -245,7 +246,7 @@ test.describe('vault connect flow', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await expect(page.getByTestId('help-section-join')).toBeVisible()
-    await page.getByTestId('help-navigation').selectOption('sync')
+    await page.getByTestId('help-navigation-sync').click()
     await expect(page.getByTestId('help-section-sync')).toBeVisible()
     const diagram = page.getByTestId('help-diagram-local-first')
     await expect(diagram).toBeVisible()
@@ -354,6 +355,7 @@ test.describe('vault connect flow', () => {
           label: 'Google Drive (e2e)',
           fileName: 'nook-e2e-remove.yaml',
           accessToken: 'ya29.e2e_stub_access_token',
+          account: E2E_UNKNOWN_ACCOUNT,
         },
       ],
     })

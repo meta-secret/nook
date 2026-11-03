@@ -1,6 +1,7 @@
 //! Deleting a vault everywhere: the identity log records its removal, and
 //! every device (this one first) drops its local copy.
 
+use crate::TypedInput;
 use nook_core::{
     EventLogLocation, IdentityControlOperation, StorageMode, StoreId, VaultDeletionPlan,
     VaultDeletionRequest,
@@ -53,10 +54,9 @@ impl NookVaultManager {
     pub async fn delete_removed_vault_at_provider(
         &mut self,
         store_id: String,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
-    ) -> Result<bool, JsError> {
+        connection: &tsify::Ts<crate::NookStorageConnection>,
+    ) -> Result<(), JsError> {
+        let connection = connection.decode()?;
         let store_id = StoreId::parse(&store_id)?;
         let state = self.current_identity_state().await?;
         if !state.removed_vaults.contains(&store_id) {
@@ -65,20 +65,16 @@ impl NookVaultManager {
             )
             .into());
         }
-        let restore_local = self.storage.mode == StorageMode::Local;
+        let restore_local = self.storage.mode() == StorageMode::Local;
         let result = async {
-            self.prepare_storage_preserving_vault_metadata(
-                &storage_mode,
-                &github_pat,
-                &github_repo,
-            )
-            .await?;
+            self.prepare_storage_preserving_vault_metadata(&connection)
+                .await?;
             self.delete_provider_namespace_at(&EventLogLocation::Vault(store_id))
                 .await
         }
         .await;
         if restore_local {
-            self.prepare_storage_preserving_vault_metadata("local", "", "")
+            self.prepare_storage_preserving_vault_metadata(&nook_core::StorageConnection::Local)
                 .await?;
         }
         Ok(result?)
@@ -90,7 +86,7 @@ impl NookVaultManager {
         &mut self,
         store_id: String,
         handle_id: String,
-    ) -> Result<bool, JsError> {
+    ) -> Result<(), JsError> {
         let store_id = StoreId::parse(&store_id)?;
         let state = self.current_identity_state().await?;
         if !state.removed_vaults.contains(&store_id) {
@@ -105,7 +101,7 @@ impl NookVaultManager {
         let nook_core::VaultPlacement::Filed(placed) =
             folder.placement(&EventLogLocation::Vault(store_id)).await?
         else {
-            return Ok(false);
+            return Ok(());
         };
         Ok(folder.delete_namespace(&placed).await?)
     }

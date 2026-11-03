@@ -1,5 +1,6 @@
 use super::types::{NookOtpauthPreview, NookTotpCode};
 use super::{NookError, NookSecretFormFields, types, wasm_bindgen};
+use crate::{TypedInput, TypedOutput};
 use js_sys::Date;
 use nook_core::SecretFormFields;
 use nook_core::{
@@ -414,12 +415,9 @@ impl NookSecretFormFields {
 pub fn resolve_authenticator_enrollment_candidates(
     request: &tsify::Ts<nook_core::NookAuthenticatorEnrollmentCandidateRequest>,
 ) -> Result<tsify::Ts<nook_core::NookAuthenticatorEnrollmentCandidates>, wasm_bindgen::JsError> {
-    let request = request
-        .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let request = request.decode()?;
     let candidates = request.resolve().map_err(NookError::from)?;
-    tsify::Tsify::into_ts(&candidates)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+    Ok(candidates.encode()?)
 }
 
 /// Check the reviewed service and account labels with the same rule the save
@@ -432,11 +430,8 @@ pub fn resolve_authenticator_enrollment_candidates(
 pub fn validate_reviewed_authenticator_labels(
     labels: &tsify::Ts<nook_core::NookReviewedAuthenticatorLabels>,
 ) -> Result<tsify::Ts<nook_core::NookReviewedAuthenticatorLabelsVerdict>, wasm_bindgen::JsError> {
-    let labels = labels
-        .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
-    tsify::Tsify::into_ts(&labels.verdict())
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+    let labels = labels.decode()?;
+    Ok(labels.verdict().encode()?)
 }
 
 #[wasm_bindgen]
@@ -496,34 +491,21 @@ mod wasm_tests {
     };
     use nook_core::{
         AuthenticationApprovalRequirement, AuthenticationOutcomeVerdict, AuthenticatorIssuerHosts,
-        CreditCardFields, CreditCardSecret, OauthFilePreset, SecretId, SecretValue,
-        StorageProviderType,
+        CreditCardFields, CreditCardSecret, OAuthFilePreset, ProviderKind, SecretId, SecretValue,
     };
-    use tsify::Tsify;
-    use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
     fn provider_storage_modes_round_trip_in_wasm() -> Result<(), wasm_bindgen::JsError> {
         assert_eq!(
             wasm_storage_mode_for_provider(
-                &StorageProviderType::OauthFile
-                    .into_ts()
-                    .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
-                &OauthFilePreset::GoogleDrive
-                    .into_ts()
-                    .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
+                &ProviderKind::OauthFile(OAuthFilePreset::GoogleDrive).encode()?,
             )?,
             "google-drive"
         );
         assert_eq!(
             wasm_storage_mode_for_provider(
-                &StorageProviderType::OauthFile
-                    .into_ts()
-                    .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
-                &OauthFilePreset::ICloud
-                    .into_ts()
-                    .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
+                &ProviderKind::OauthFile(OAuthFilePreset::ICloud).encode()?,
             )?,
             "icloud"
         );
@@ -566,10 +548,7 @@ mod wasm_tests {
         assert_eq!(snapshot.current_step(), 1);
         assert_eq!(snapshot.total_steps(), 3);
         assert_eq!(
-            snapshot
-                .approval_requirement()?
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
+            snapshot.approval_requirement()?.decode()?,
             AuthenticationApprovalRequirement::ExplicitUserApproval
         );
         assert_eq!(snapshot.observation_index(), 0);

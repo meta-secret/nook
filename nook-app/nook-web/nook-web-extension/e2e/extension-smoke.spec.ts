@@ -118,7 +118,9 @@ test('sets up the extension device first and sends its public keys to Simple Vau
 
     await popupPage.getByTestId('device-protection-create-new-choice').click()
     await expect(
-      popupPage.getByTestId('device-mode-select').locator('option:checked'),
+      popupPage
+        .getByTestId('device-mode-select')
+        .locator('[aria-checked="true"]'),
     ).toHaveText('Standard')
     await expect(
       popupPage.getByTestId('device-protection-setup-btn'),

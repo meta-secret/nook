@@ -6,12 +6,8 @@ import initNookWasm, {
   DeviceProtectionStatus,
   type IdentityControlSnapshot,
 } from '$app-wasm'
-import {
-  providerPersistenceDefaults,
-  storedGithubPat,
-  storedGithubRepository,
-  type StorageProvider,
-} from '$lib/auth/providers'
+import { type StorageProvider } from '$lib/auth/providers'
+import { ProviderRowFixture } from '../provider-fixtures'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import {
   IdentityActionOutcome,
@@ -33,14 +29,8 @@ const IDENTITY = 'Personal'
 
 function cloudMount(): StorageProvider {
   return {
-    ...providerPersistenceDefaults(),
-    id: 'github-1',
-    type: 'github',
+    ...ProviderRowFixture.github(ProviderRowFixture.unscoped('github-1')),
     label: 'GitHub',
-    githubRepo: storedGithubRepository('nook-vault'),
-    githubPat: storedGithubPat('github_pat_test'),
-    syncCheckpoint: { state: 'neverSynced' },
-    createdAt: '2026-10-24T00:00:00.000Z',
   }
 }
 
@@ -52,6 +42,7 @@ function snapshot(
     identityLabel: IDENTITY,
     standing,
     members: [],
+    devices: [],
     deviceCount: 0,
     joinRequests: [],
     vaults: [],

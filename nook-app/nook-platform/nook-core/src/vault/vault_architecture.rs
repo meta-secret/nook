@@ -24,8 +24,8 @@ mod provider_replication;
 pub use application::{VaultApplication, VaultConnectIntent};
 pub use device_mode::DeviceMode;
 pub use provider_replication::{
-    ProviderJoinerIdentity, ProviderOauthPreset, ProviderReplicationCapability,
-    SharedJoinerIdentityKind,
+    ProviderJoinerIdentity, ProviderReplicationCapability, ReplicationSupport,
+    SharedJoinerIdentityKind, SharedReplication,
 };
 
 #[wasm_bindgen]

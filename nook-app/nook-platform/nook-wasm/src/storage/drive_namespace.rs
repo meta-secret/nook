@@ -8,35 +8,50 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use nook_core::ProviderSecretText;
 use nook_core::{DriveEventParent, EventLogNamespaceKind, IdentityId, PlacedNamespace};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use super::drive::wire::CreatedTime;
+use super::drive::wire::{
+    CreatedTime, DriveCreatedFolder, DrivePageRequest, PageAfter, PageCompletion,
+};
+use super::omittable_list::OmittableList;
 use crate::NookError;
+use serde::de::IgnoredAny;
 
 const DRIVE_FOLDER_MIME_TYPE: &str = "application/vnd.google-apps.folder";
 
-#[derive(Default, Deserialize)]
+/// One page of a namespace-folder listing.
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct NamespaceFolderList {
-    #[serde(default)]
-    files: Vec<NamespaceFolder>,
-    #[serde(default)]
-    next_page_token: Option<String>,
+    files: OmittableList<NamespaceFolderRow>,
+    next_page_token: PageCompletion,
 }
 
-#[derive(Default, Deserialize)]
+/// A listed row: a folder with every field the listing asks for, or a
+/// malformed or unrelated row, which is skipped.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum NamespaceFolderRow {
+    Folder(NamespaceFolder),
+    Unrelated(IgnoredAny),
+}
+
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct NamespaceFolder {
-    #[serde(default)]
     id: String,
-    #[serde(default)]
     name: String,
-    #[serde(default)]
     mime_type: String,
-    #[serde(default)]
     created_time: CreatedTime,
+}
+
+/// Whether a parent holds the one folder of a name.
+enum DriveFolderLookup {
+    Found(DriveEventParent),
+    Absent,
 }
 
 /// One namespace folder listed under a provider's root.
@@ -44,16 +59,6 @@ pub(crate) struct ListedNamespaceFolder {
     pub(crate) placed: PlacedNamespace,
     pub(crate) folder: DriveEventParent,
     pub(crate) created: CreatedTime,
-}
-
-impl ListedNamespaceFolder {
-    /// The vault this folder holds, when it is a vault's.
-    pub(crate) fn store_id(&self) -> Option<&nook_core::StoreId> {
-        match self.placed.location() {
-            nook_core::EventLogLocation::Vault(store_id) => Some(store_id),
-            nook_core::EventLogLocation::Identity(_) => None,
-        }
-    }
 }
 
 #[derive(Serialize)]
@@ -73,14 +78,14 @@ enum FolderQuery<'a> {
 
 /// Named values required by `DriveNamespace::folders`.
 struct FolderLookup<'a> {
-    token: &'a str,
+    token: &'a ProviderSecretText,
     parent: &'a DriveEventParent,
     query: FolderQuery<'a>,
 }
 
 /// Resolve the Drive folder that holds one placed namespace's events.
 pub(crate) struct DriveNamespace<'a> {
-    pub(crate) token: &'a str,
+    pub(crate) token: &'a ProviderSecretText,
     /// The provider's root folder.
     pub(crate) parent: &'a DriveEventParent,
     pub(crate) placed: &'a PlacedNamespace,
@@ -110,10 +115,12 @@ impl DriveNamespace<'_> {
         }
     }
 
-    fn select(folders: &[NamespaceFolder]) -> Result<Option<String>, NookError> {
+    fn select(folders: &[NamespaceFolder]) -> Result<DriveFolderLookup, NookError> {
         match folders {
-            [] => Ok(None),
-            [folder] if !folder.id.trim().is_empty() => Ok(Some(folder.id.trim().to_owned())),
+            [] => Ok(DriveFolderLookup::Absent),
+            [folder] if !folder.id.trim().is_empty() => Ok(DriveFolderLookup::Found(
+                Self::child_parent(folder.id.trim().to_owned()),
+            )),
             [_] => Err(NookError::Drive(
                 "Google Drive namespace folder is missing its ID.".to_owned(),
             )),
@@ -133,12 +140,12 @@ impl DriveNamespace<'_> {
         } = lookup;
         let client = Client::new();
         let q = Self::query(parent, &query);
-        let mut page_token: Option<String> = None;
+        let mut page_token = DrivePageRequest::FirstPage;
         let mut folders = Vec::new();
         loop {
             let mut request = client
                 .get("https://www.googleapis.com/drive/v3/files")
-                .header("Authorization", format!("Bearer {}", token.trim()))
+                .bearer_auth(token.expose())
                 .query(&[
                     ("q", q.as_str()),
                     (
@@ -147,8 +154,8 @@ impl DriveNamespace<'_> {
                     ),
                     ("pageSize", "1000"),
                 ]);
-            if let Some(page) = page_token.as_deref() {
-                request = request.query(&[("pageToken", page)]);
+            if let DrivePageRequest::Continuation(page) = &page_token {
+                request = request.query(&[("pageToken", page.as_str())]);
             }
             let response = request.send().await?;
             if !response.status().is_success() {
@@ -157,28 +164,35 @@ impl DriveNamespace<'_> {
                     response.status()
                 )));
             }
-            let body: NamespaceFolderList = response
+            let NamespaceFolderList {
+                files,
+                next_page_token,
+            } = response
                 .json()
                 .await
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
-            folders.extend(body.files.into_iter().filter(|folder| {
-                folder.mime_type == DRIVE_FOLDER_MIME_TYPE
+            for row in files.into_rows() {
+                if let NamespaceFolderRow::Folder(folder) = row
+                    && folder.mime_type == DRIVE_FOLDER_MIME_TYPE
                     && match query {
                         FolderQuery::Children => true,
                         FolderQuery::Named(name) => folder.name == name,
                     }
-            }));
-            page_token = body.next_page_token;
-            if page_token.is_none() {
-                return Ok(folders);
+                {
+                    folders.push(folder);
+                }
             }
+            page_token = match DrivePageRequest::after(next_page_token) {
+                PageAfter::Next(next) => next,
+                PageAfter::Done => return Ok(folders),
+            };
         }
     }
 
     async fn create(&self, parent: &DriveEventParent, name: &str) -> Result<String, NookError> {
         let response = Client::new()
             .post("https://www.googleapis.com/drive/v3/files")
-            .header("Authorization", format!("Bearer {}", self.token.trim()))
+            .bearer_auth(self.token.expose())
             .header("User-Agent", "nook-wasm")
             .json(&NamespaceFolderMetadata {
                 name,
@@ -193,7 +207,7 @@ impl DriveNamespace<'_> {
                 response.status()
             )));
         }
-        let created: NamespaceFolder = response
+        let created: DriveCreatedFolder = response
             .json()
             .await
             .map_err(|error| NookError::Serialization(error.to_string()))?;
@@ -210,14 +224,14 @@ impl DriveNamespace<'_> {
         &self,
         parent: &DriveEventParent,
         name: &str,
-    ) -> Result<Option<DriveEventParent>, NookError> {
+    ) -> Result<DriveFolderLookup, NookError> {
         let folders = Self::folders(FolderLookup {
             token: self.token,
             parent,
             query: FolderQuery::Named(name),
         })
         .await?;
-        Ok(Self::select(&folders)?.map(Self::child_parent))
+        Self::select(&folders)
     }
 
     /// The one folder named `name` in `parent`, created when missing.
@@ -226,22 +240,22 @@ impl DriveNamespace<'_> {
         parent: &DriveEventParent,
         name: &str,
     ) -> Result<DriveEventParent, NookError> {
-        if let Some(folder) = self.existing(parent, name).await? {
+        if let DriveFolderLookup::Found(folder) = self.existing(parent, name).await? {
             return Ok(folder);
         }
         let created = self.create(parent, name).await?;
         // A second lookup catches a concurrent creation before any write picks
         // one of two ambiguous parents.
-        Ok(self
-            .existing(parent, name)
-            .await?
-            .unwrap_or_else(|| Self::child_parent(created)))
+        Ok(match self.existing(parent, name).await? {
+            DriveFolderLookup::Found(folder) => folder,
+            DriveFolderLookup::Absent => Self::child_parent(created),
+        })
     }
 
     /// Every namespace of one kind under the root, each with its folder and
     /// the time Drive created it.
     pub(crate) async fn list_folders(
-        token: &str,
+        token: &ProviderSecretText,
         root: &DriveEventParent,
         kind: EventLogNamespaceKind,
     ) -> Result<Vec<ListedNamespaceFolder>, NookError> {
@@ -253,11 +267,10 @@ impl DriveNamespace<'_> {
         .await?;
         let mut listed = Vec::new();
         for identity in identities {
-            if IdentityId::parse(&identity.name)
-                .ok()
-                .is_none_or(|id| id.as_str() != identity.name)
-            {
-                continue;
+            // Only a folder named exactly by an identity id is an identity's.
+            match IdentityId::parse(&identity.name) {
+                Ok(id) if id.as_str() == identity.name => {}
+                Ok(_) | Err(_) => continue,
             }
             let identity_folder = Self::child_parent(identity.id.trim().to_owned());
             for folder in Self::folders(FolderLookup {
@@ -287,7 +300,7 @@ impl DriveNamespace<'_> {
 
     /// Every namespace of one kind under the root.
     pub(crate) async fn list_placed(
-        token: &str,
+        token: &ProviderSecretText,
         root: &DriveEventParent,
         kind: EventLogNamespaceKind,
     ) -> Result<Vec<PlacedNamespace>, NookError> {
@@ -296,40 +309,6 @@ impl DriveNamespace<'_> {
             .into_iter()
             .map(|folder| folder.placed)
             .collect())
-    }
-
-    /// Delete this namespace's folder and every event in it (a vault deleted
-    /// everywhere). Nothing to do when the folder does not exist; a duplicate
-    /// fails closed.
-    pub(crate) async fn delete(&self) -> Result<bool, NookError> {
-        let Some(identity_folder) = self
-            .existing(self.parent, self.placed.identity().as_str())
-            .await?
-        else {
-            return Ok(false);
-        };
-        let Some(folder) = self
-            .existing(&identity_folder, self.placed.folder_name())
-            .await?
-        else {
-            return Ok(false);
-        };
-        let response = Client::new()
-            .delete(format!(
-                "https://www.googleapis.com/drive/v3/files/{}",
-                urlencoding::encode(&folder.folder_id)
-            ))
-            .header("Authorization", format!("Bearer {}", self.token.trim()))
-            .query(&[("supportsAllDrives", "true")])
-            .send()
-            .await?;
-        if !response.status().is_success() {
-            return Err(NookError::Drive(format!(
-                "Google Drive namespace deletion failed with status {}",
-                response.status()
-            )));
-        }
-        Ok(true)
     }
 
     /// Resolve or create the namespace's folder inside its identity's folder;
@@ -370,9 +349,31 @@ mod tests {
             DriveNamespace::query(&shared, &FolderQuery::Children),
             "mimeType = 'application/vnd.google-apps.folder' and 'shared-root' in parents and trashed = false"
         );
-        assert!(DriveNamespace::select(&[]).is_ok_and(|selected| selected.is_none()));
-        let duplicate = [NamespaceFolder::default(), NamespaceFolder::default()];
-        assert!(DriveNamespace::select(&duplicate).is_err());
+        assert!(matches!(
+            DriveNamespace::select(&[]),
+            Ok(DriveFolderLookup::Absent)
+        ));
+        let folder: NamespaceFolder = serde_json::from_value(serde_json::json!({
+            "id": "f",
+            "name": "n",
+            "mimeType": DRIVE_FOLDER_MIME_TYPE,
+            "createdTime": "2026-11-01T12:00:00Z",
+        }))?;
+        let duplicate: NamespaceFolder = serde_json::from_value(serde_json::json!({
+            "id": "g",
+            "name": "n",
+            "mimeType": DRIVE_FOLDER_MIME_TYPE,
+            "createdTime": "2026-11-01T12:00:00Z",
+        }))?;
+        assert!(DriveNamespace::select(&[folder, duplicate]).is_err());
+        // A page may omit files and token; a row missing a field is skipped.
+        let page: NamespaceFolderList = serde_json::from_str(r#"{"files":[{"id":"x"}]}"#)?;
+        assert_eq!(page.next_page_token, PageCompletion::Complete);
+        assert!(matches!(
+            page.files.into_rows().first(),
+            Some(NamespaceFolderRow::Unrelated(_))
+        ));
+        assert!(serde_json::from_str::<NamespaceFolderList>("{}").is_ok());
         Ok(())
     }
 }
@@ -380,8 +381,15 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod fetch_tests {
     use super::*;
+    use crate::storage::checked_event_write::tests::EventFixture;
+    use crate::storage::drive_events::DriveEventStore;
+    use crate::storage::event_store::EventStore;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+    use crate::storage::remote_event::RemoteEventRead;
+    use crate::test_fixtures::WasmFixture;
     use nook_core::StoreId;
+    use nook_core::{EventId, EventLogLocation};
+    use std::str;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     const FILES: &str = "drive/v3/files";
@@ -396,8 +404,11 @@ mod fetch_tests {
         ))
     }
 
+    /// A folder row as Drive answers the listing's requested fields.
     fn folder(id: &str, name: &str) -> String {
-        format!(r#"{{"id":"{id}","name":"{name}","mimeType":"{DRIVE_FOLDER_MIME_TYPE}"}}"#)
+        format!(
+            r#"{{"id":"{id}","name":"{name}","mimeType":"{DRIVE_FOLDER_MIME_TYPE}","createdTime":"2026-11-01T12:00:00Z"}}"#
+        )
     }
 
     fn listing(folders: &[String]) -> String {
@@ -413,6 +424,7 @@ mod fetch_tests {
         )
     )]
     async fn resolve_reuses_the_identity_and_vault_folders_across_pages() -> anyhow::Result<()> {
+        let token = WasmFixture::secret("drive-token")?;
         let placed = placed()?;
         let stub = FetchStub::install(vec![
             FetchRoute::ok("GET", LIST, &listing(&[folder("identity", IDENTITY)])),
@@ -420,7 +432,7 @@ mod fetch_tests {
             FetchRoute::ok("GET", LIST, &listing(&[folder("existing", STORE)])),
         ])?;
         let resolved = DriveNamespace {
-            token: "drive-token",
+            token: &token,
             parent: &DriveEventParent::shared_folder_id("root-folder"),
             placed: &placed,
         }
@@ -445,6 +457,7 @@ mod fetch_tests {
         )
     )]
     async fn resolve_creates_missing_folders_and_rechecks_them() -> anyhow::Result<()> {
+        let token = WasmFixture::secret("drive-token")?;
         let placed = placed()?;
         let root = DriveEventParent::shared_folder_id("root-folder");
         let stub = FetchStub::install(vec![
@@ -456,7 +469,7 @@ mod fetch_tests {
             FetchRoute::ok("GET", LIST, &listing(&[])),
         ])?;
         let resolved = DriveNamespace {
-            token: "drive-token",
+            token: &token,
             parent: &root,
             placed: &placed,
         }
@@ -473,7 +486,7 @@ mod fetch_tests {
         ])?;
         assert!(
             DriveNamespace {
-                token: "drive-token",
+                token: &token,
                 parent: &root,
                 placed: &placed,
             }
@@ -493,9 +506,10 @@ mod fetch_tests {
         )
     )]
     async fn duplicate_or_failed_lookups_fail_closed() -> anyhow::Result<()> {
+        let token = WasmFixture::secret("drive-token")?;
         let placed = placed()?;
         let namespace = DriveNamespace {
-            token: "drive-token",
+            token: &token,
             parent: &DriveEventParent::shared_folder_id("root-folder"),
             placed: &placed,
         };
@@ -536,6 +550,7 @@ mod fetch_tests {
         )
     )]
     async fn listing_walks_each_identity_folder() -> anyhow::Result<()> {
+        let token = WasmFixture::secret("drive-token")?;
         let routes = || {
             vec![
                 FetchRoute::ok(
@@ -568,7 +583,7 @@ mod fetch_tests {
 
         let stub = FetchStub::install(routes())?;
         let vaults =
-            DriveNamespace::list_placed("drive-token", &root, EventLogNamespaceKind::Vault).await?;
+            DriveNamespace::list_placed(&token, &root, EventLogNamespaceKind::Vault).await?;
         assert_eq!(
             vaults,
             [
@@ -582,15 +597,14 @@ mod fetch_tests {
 
         let stub = FetchStub::install(routes())?;
         assert_eq!(
-            DriveNamespace::list_placed("drive-token", &root, EventLogNamespaceKind::Identity)
-                .await?,
+            DriveNamespace::list_placed(&token, &root, EventLogNamespaceKind::Identity).await?,
             [PlacedNamespace::identity_log(first)]
         );
         drop(stub);
 
         let _stub = FetchStub::install(vec![FetchRoute::failing("GET", LIST, 401)])?;
         assert!(
-            DriveNamespace::list_placed("drive-token", &root, EventLogNamespaceKind::Vault)
+            DriveNamespace::list_placed(&token, &root, EventLogNamespaceKind::Vault)
                 .await
                 .is_err()
         );
@@ -605,39 +619,78 @@ mod fetch_tests {
             reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
         )
     )]
-    async fn delete_removes_the_one_namespace_folder() -> anyhow::Result<()> {
+    async fn deleting_a_namespace_removes_its_folder() -> anyhow::Result<()> {
+        let token = WasmFixture::secret("drive-token")?;
         let placed = placed()?;
-        let namespace = DriveNamespace {
-            token: "drive-token",
-            parent: &DriveEventParent::shared_folder_id("root-folder"),
-            placed: &placed,
+        // The store's parent is the namespace folder itself.
+        let store = DriveEventStore {
+            token: &token,
+            parent: DriveEventParent::shared_folder_id("doomed"),
+            location: placed.location(),
+        };
+        let stub = FetchStub::install(vec![FetchRoute::ok("DELETE", "drive/v3/files/doomed", "")])?;
+        store.delete_events().await?;
+        assert_eq!(stub.calls().len(), 1);
+        drop(stub);
+
+        let _stub = FetchStub::install(vec![FetchRoute::failing(
+            "DELETE",
+            "drive/v3/files/doomed",
+            500,
+        )])?;
+        assert!(store.delete_events().await.is_err());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn an_event_with_no_file_reads_as_unavailable() -> anyhow::Result<()> {
+        let token = WasmFixture::secret("drive-token")?;
+        let placed = placed()?;
+        let store = DriveEventStore {
+            token: &token,
+            parent: DriveEventParent::shared_folder_id("vault"),
+            location: placed.location(),
+        };
+        let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
+        let _stub = FetchStub::install(vec![FetchRoute::ok("GET", LIST, r#"{"files":[]}"#)])?;
+        assert_eq!(store.read(&event_id).await?, RemoteEventRead::Unavailable);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn a_stored_event_settles_its_write_without_an_upload() -> anyhow::Result<()> {
+        let token = WasmFixture::secret("drive-token")?;
+        let fixture = EventFixture::new()?;
+        let location = EventLogLocation::Vault(StoreId::parse("store_testtoken11")?);
+        let store = DriveEventStore {
+            token: &token,
+            parent: DriveEventParent::shared_folder_id("vault"),
+            location: &location,
         };
         let stub = FetchStub::install(vec![
-            FetchRoute::ok("GET", LIST, &listing(&[folder("identity", IDENTITY)])),
-            FetchRoute::ok("GET", LIST, &listing(&[folder("doomed", STORE)])),
-            FetchRoute::ok("DELETE", "drive/v3/files/doomed", ""),
+            FetchRoute::ok("GET", LIST, r#"{"files":[{"id":"event-file"}]}"#),
+            FetchRoute::ok(
+                "GET",
+                "files/event-file?alt=media",
+                str::from_utf8(&fixture.bytes)?,
+            ),
         ])?;
-        assert!(namespace.delete().await?);
-        assert!(stub.calls()[2].starts_with("DELETE"));
-        drop(stub);
-
-        // Nothing to delete without the identity folder or the vault folder.
-        let stub = FetchStub::install(vec![FetchRoute::ok("GET", LIST, &listing(&[]))])?;
-        assert!(!namespace.delete().await?);
-        drop(stub);
-        let stub = FetchStub::install(vec![
-            FetchRoute::ok("GET", LIST, &listing(&[folder("identity", IDENTITY)])),
-            FetchRoute::ok("GET", LIST, &listing(&[])),
-        ])?;
-        assert!(!namespace.delete().await?);
-        drop(stub);
-
-        let _stub = FetchStub::install(vec![
-            FetchRoute::ok("GET", LIST, &listing(&[folder("identity", IDENTITY)])),
-            FetchRoute::ok("GET", LIST, &listing(&[folder("doomed", STORE)])),
-            FetchRoute::failing("DELETE", "drive/v3/files/doomed", 500),
-        ])?;
-        assert!(namespace.delete().await.is_err());
+        store.put_checked(fixture.checked(&location)?).await?;
+        assert!(stub.calls().iter().all(|call| call.starts_with("GET")));
         Ok(())
     }
 }

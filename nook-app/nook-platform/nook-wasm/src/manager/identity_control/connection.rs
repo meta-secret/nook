@@ -2,8 +2,9 @@
 //! keeps it: which vaults of its identity it still has to pair, and which
 //! app key connects it to one more identity.
 
+use crate::{TypedInput, TypedOutput};
 use nook_core::{
-    AppKeyIdentityMembership, AuthProvidersSnapshotData, IdentityConnectionKey,
+    AppKeyIdentityMembership, AuthProvidersSnapshot, IdentityConnectionKey,
     IdentityConnectionKeyRequest, IdentityVaultPairingPlan, IdentityVaultPairingRequest,
     LocalIdentityLog,
 };
@@ -11,7 +12,6 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
-use super::{INVALID_TYPED_INPUT, UNENCODABLE_TYPED_OUTPUT};
 use crate::manager::NookVaultManager;
 use crate::{NookDatabase, NookError};
 
@@ -60,23 +60,18 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn identity_vault_pairing_plan(
         &self,
-        snapshot: &tsify::Ts<AuthProvidersSnapshotData>,
+        snapshot: &tsify::Ts<AuthProvidersSnapshot>,
         paired: &tsify::Ts<NookPairedVaults>,
     ) -> Result<tsify::Ts<IdentityVaultPairingPlan>, JsError> {
-        let providers = snapshot
-            .to_rust()
-            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?
-            .providers;
-        let paired = paired
-            .to_rust()
-            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
+        let providers = snapshot.decode()?.providers;
+        let paired = paired.decode()?;
         let identity = self.current_identity_snapshot(&providers).await?;
         let plan = IdentityVaultPairingRequest {
             snapshot: &identity,
             paired_store_ids: &paired.store_ids,
         }
         .plan();
-        Tsify::into_ts(&plan).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        Ok(plan.encode()?)
     }
 
     /// Start connecting one more identity. While the unlocked app key is
@@ -95,7 +90,7 @@ impl NookVaultManager {
                 NookIdentityConnectionStart::NewKeyStaged
             }
         };
-        Tsify::into_ts(&start).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        Ok(start.encode()?)
     }
 }
 
@@ -110,12 +105,11 @@ mod browser_tests {
         manager: &mut NookVaultManager,
         label: &str,
     ) -> anyhow::Result<NookIdentityConnectionStart> {
-        manager
+        Ok(manager
             .begin_identity_connection(label)
             .await
             .map_err(|error| anyhow::anyhow!("{error:?}"))?
-            .to_rust()
-            .map_err(|error| anyhow::anyhow!("{error:?}"))
+            .decode()?)
     }
 
     #[wasm_bindgen_test]

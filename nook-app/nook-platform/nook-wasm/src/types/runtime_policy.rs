@@ -1,3 +1,4 @@
+use crate::{TypedInput, TypedOutput};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 use nook_core::VaultEditMessage;
@@ -153,28 +154,14 @@ impl NookVaultClientPolicy {
         })
     }
 
+    /// Where connect reads the vault from while this browser joins an
+    /// identity: the first sync row's connection, or the draft being set up.
     #[wasm_bindgen]
-    #[must_use]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "FFI boundary: projects the `should_use_join_provider_for_connect` count through a JavaScript Number scalar"
-        )
-    )]
-    pub fn should_use_join_provider_for_connect(
+    pub fn join_connect_source(
         &self,
-        authenticated: bool,
-        sync_provider_count: u32,
-        join_state: nook_core::JoinEnrollmentState,
-    ) -> bool {
-        VaultClientPolicy::should_use_join_provider_for_connect(
-            nook_core::ShouldUseJoinProviderForConnectRequest {
-                authenticated: (authenticated).into(),
-                sync_provider_count: (sync_provider_count as usize).into(),
-                join_state,
-            },
-        )
+        request: &tsify::Ts<nook_core::JoinConnectRequest>,
+    ) -> Result<tsify::Ts<nook_core::JoinConnectSource>, JsError> {
+        Ok(request.decode()?.source().encode()?)
     }
 
     #[wasm_bindgen]
@@ -588,16 +575,6 @@ mod tests {
         );
         assert!(policy.edits_blocked(0, false, false));
         assert!(!policy.edits_blocked(0, false, true));
-        assert!(policy.should_use_join_provider_for_connect(
-            false,
-            1,
-            nook_core::JoinEnrollmentState::Pending
-        ));
-        assert!(!policy.should_use_join_provider_for_connect(
-            true,
-            1,
-            nook_core::JoinEnrollmentState::Pending
-        ));
 
         assert!(policy.should_sync_from_providers(false, false, false, false, false, false, 1));
         assert!(policy.should_sync_from_providers(false, true, true, true, true, true, 1));
@@ -851,11 +828,6 @@ mod browser_tests {
         let _ = policy.edits_blocked(0, false, true);
         let _ = policy.edit_block_message(1, true, false, "{}", "en");
         let _ = policy.is_sync_activity_visible(true, false, false, false);
-        let _ = policy.should_use_join_provider_for_connect(
-            false,
-            1,
-            nook_core::JoinEnrollmentState::Pending,
-        );
         let _ = policy.should_sync_from_providers(false, true, true, true, true, true, 1);
         let _ = policy.vault_sync_timer_start_decision(
             true,

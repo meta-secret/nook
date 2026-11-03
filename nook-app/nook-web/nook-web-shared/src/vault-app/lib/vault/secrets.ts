@@ -579,34 +579,34 @@ export class VaultSecretActions {
     >
   > {
     const state = this.state;
-    if (state.storageMode !== "local" && !state.hasRemoteCredentials()) {
-      state.passwordEntries = [];
-      const snapshot: PasswordEntriesRefreshSnapshot = {
-        entries: state.passwordEntries,
-      };
-      return storageOk(snapshot);
-    }
-    if (state.storageMode !== "local") {
-      const refreshed = await state.ensureOAuthTokensFresh();
-      if (refreshed.isErr()) return storageErr(refreshed.error);
-      if (refreshed.value instanceof VaultOperationStale) {
+    // A provider that still lacks its credentials lists no passwords.
+    switch (state.credentialReadiness().state) {
+      case "required": {
+        state.passwordEntries = [];
         const snapshot: PasswordEntriesRefreshSnapshot = {
           entries: state.passwordEntries,
         };
         return storageOk(snapshot);
       }
+      case "ready":
+        break;
+    }
+    const refreshed = await state.ensureOAuthTokensFresh();
+    if (refreshed.isErr()) return storageErr(refreshed.error);
+    if (refreshed.value instanceof VaultOperationStale) {
+      const snapshot: PasswordEntriesRefreshSnapshot = {
+        entries: state.passwordEntries,
+      };
+      return storageOk(snapshot);
     }
     const entries = await state.enqueueStorage(async () => {
       const manager = state.admitManager();
       if (manager.isErr()) return storageErr(manager.error);
       const args = state.wasmStorageArgs();
+      if (args.isErr()) return storageErr(args.error);
       try {
         return storageOk(
-          await manager.value.fetch_vault_password_entries(
-            args.mode,
-            args.pat,
-            args.repo,
-          ),
+          await manager.value.fetch_vault_password_entries(args.value),
         );
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));

@@ -28,7 +28,7 @@ pub use wire::{
     IdentityControlOperation, IdentityEvent, IdentityEventBody, IdentityEventSchemaVersion,
     IdentityInvite, IdentityInviteProof, IdentityMemberKeys, IdentityMountTarget,
     IdentityProviderMount, IdentityVaultDekGrant, MemberDevice, MemberSealedName, MemberVaultDek,
-    ProviderMountId,
+    ProviderMountId, S3MountTarget,
 };
 
 #[cfg(test)]

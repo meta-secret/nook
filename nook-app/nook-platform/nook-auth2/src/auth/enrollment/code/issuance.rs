@@ -95,7 +95,7 @@ impl<'a> EnrollmentIssuance<'a> {
             return Err(EnrollmentError::EntryIdRequired);
         }
 
-        self.input.provider.validate()?;
+        self.input.providers.validate()?;
         self.input.identity.check()?;
         self.input.invite.check()?;
         let identity_label = self.input.identity.label.trim();
@@ -112,7 +112,7 @@ impl<'a> EnrollmentIssuance<'a> {
 impl CheckedEnrollmentIssuance<'_> {
     pub fn issue(self) -> EnrollmentResult<String> {
         let inner = EnrollmentProviderPayload {
-            provider: self.input.provider.clone(),
+            providers: self.input.providers.clone(),
             identity: EnrollmentIdentityTarget {
                 identity_id: self.input.identity.identity_id.clone(),
                 label: self.identity_label.to_owned(),
@@ -166,17 +166,25 @@ mod tests {
     use crate::auth::enrollment::{
         CheckedEnrollmentEnvelope, EnrollmentEntryLabel, EnrollmentIdentityTarget,
         EnrollmentInvite, EnrollmentIssueInput, EnrollmentProvider, EnrollmentProviderDataRef,
-        OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry,
-        PersonalEnrollmentProvider, SharedEnrollmentProvider, SharedEnrollmentProviderData,
+        EnrollmentProviders, GithubEnrollmentToken, OAuthAccountIdentity, OAuthFileEnrollment,
+        PersonalEnrollmentProvider, S3EnrollmentConnection, S3EnrollmentKey, S3EnrollmentLocation,
+        SharedEnrollmentProvider, SharedEnrollmentProviderData,
     };
+    use crate::{IsoTimestamp, ProviderSecretText, S3KeyPrefix};
     use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     use serde_json::json;
     impl EnrollmentIssueInput {
         fn github_fixture() -> anyhow::Result<Self> {
             Ok(Self {
-                provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::github(
-                    "github_pat_11AAAAbbbbCCCC".to_owned(),
-                    "team-vault".to_owned(),
+                providers: EnrollmentProviders::single(EnrollmentProvider::personal(
+                    PersonalEnrollmentProvider::github(
+                        GithubEnrollmentToken::Included {
+                            pat: ProviderSecretText::try_from(
+                                "github_pat_11AAAAbbbbCCCC".to_owned(),
+                            )?,
+                        },
+                        "team-vault".to_owned(),
+                    ),
                 )),
                 identity: EnrollmentIdentityTarget::fixture("Team vault"),
                 invite: EnrollmentInvite::fixture()?,
@@ -203,9 +211,13 @@ mod tests {
         let mut input = EnrollmentIssueInput::github_fixture()?;
         input.entry_id = " ".to_owned();
         input.identity.label = "\n".to_owned();
-        input.provider = EnrollmentProvider::personal(PersonalEnrollmentProvider::github(
-            String::new(),
-            "repo".to_owned(),
+        input.providers = EnrollmentProviders::single(EnrollmentProvider::personal(
+            PersonalEnrollmentProvider::github(
+                GithubEnrollmentToken::Included {
+                    pat: ProviderSecretText::try_from("github_pat_11AAAAbbbbCCCC".to_owned())?,
+                },
+                String::new(),
+            ),
         ));
         EnrollmentIssuance {
             input: &input,
@@ -226,7 +238,9 @@ mod tests {
             entry_label: "",
         }
         .expect_rejection(&EnrollmentError::MalformedGithubProvider)?;
-        input.provider = EnrollmentProvider::personal(PersonalEnrollmentProvider::local());
+        input.providers = EnrollmentProviders::single(EnrollmentProvider::personal(
+            PersonalEnrollmentProvider::local(),
+        ));
         EnrollmentIssuance {
             input: &input,
             password: "pw",
@@ -242,9 +256,13 @@ mod tests {
     fn checked_issuance_trims_only_the_existing_fields_and_keeps_wire_parameters()
     -> anyhow::Result<()> {
         let input = EnrollmentIssueInput {
-            provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::github(
-                " token ".to_owned(),
-                " repo ".to_owned(),
+            providers: EnrollmentProviders::single(EnrollmentProvider::personal(
+                PersonalEnrollmentProvider::github(
+                    GithubEnrollmentToken::Included {
+                        pat: ProviderSecretText::try_from(" token ".to_owned())?,
+                    },
+                    " repo ".to_owned(),
+                ),
             )),
             identity: EnrollmentIdentityTarget::fixture("  Vault \n"),
             invite: EnrollmentInvite::fixture()?,
@@ -278,7 +296,7 @@ mod tests {
             12
         );
         let decrypted = checked.decrypt("password")?;
-        assert_eq!(decrypted.provider, input.provider);
+        assert_eq!(decrypted.providers, input.providers);
         assert_eq!(decrypted.identity.label, "Vault");
         Ok(())
     }
@@ -301,14 +319,16 @@ mod tests {
         let decrypted = CheckedEnrollmentEnvelope::parse(&rewritten)?.decrypt("password")?;
         assert_eq!(decrypted.entry_id, "reported-entry");
         assert_eq!(decrypted.issued_at, "reported-time");
-        assert_eq!(decrypted.provider, input.provider);
+        assert_eq!(decrypted.providers, input.providers);
         Ok(())
     }
 
     #[test]
     fn preserves_local_provider() -> anyhow::Result<()> {
         let input = EnrollmentIssueInput {
-            provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::local()),
+            providers: EnrollmentProviders::single(EnrollmentProvider::personal(
+                PersonalEnrollmentProvider::local(),
+            )),
             identity: EnrollmentIdentityTarget::fixture("Local vault"),
             invite: EnrollmentInvite::fixture()?,
             entry_id: "entry-local".to_owned(),
@@ -323,8 +343,10 @@ mod tests {
         .and_then(CheckedEnrollmentIssuance::issue)?;
         let decrypted = CheckedEnrollmentEnvelope::parse(&code)?.decrypt("hunter2")?;
         assert_eq!(
-            decrypted.provider,
-            EnrollmentProvider::personal(PersonalEnrollmentProvider::local())
+            decrypted.providers,
+            EnrollmentProviders::single(EnrollmentProvider::personal(
+                PersonalEnrollmentProvider::local()
+            ))
         );
         Ok(())
     }
@@ -332,9 +354,11 @@ mod tests {
     #[test]
     fn shared_provider_grant_roundtrips_without_provider_credentials() -> anyhow::Result<()> {
         let input = EnrollmentIssueInput {
-            provider: EnrollmentProvider::shared(SharedEnrollmentProvider::google_drive(
-                "joiner@example.com".to_owned(),
-                "shared-folder-abc".to_owned(),
+            providers: EnrollmentProviders::single(EnrollmentProvider::shared(
+                SharedEnrollmentProvider::google_drive(
+                    "joiner@example.com".to_owned(),
+                    "shared-folder-abc".to_owned(),
+                ),
             )),
             identity: EnrollmentIdentityTarget::fixture("Shared vault"),
             invite: EnrollmentInvite::fixture()?,
@@ -349,8 +373,8 @@ mod tests {
         .check()
         .and_then(CheckedEnrollmentIssuance::issue)?;
         let decrypted = CheckedEnrollmentEnvelope::parse(&code)?.decrypt("hunter2")?;
-        assert_eq!(decrypted.provider, input.provider);
-        match decrypted.provider.data() {
+        assert_eq!(decrypted.providers, input.providers);
+        match decrypted.providers.first().data() {
             EnrollmentProviderDataRef::Shared(SharedEnrollmentProviderData::GoogleDrive {
                 storage_target_id,
                 ..
@@ -370,6 +394,93 @@ mod tests {
     }
 
     #[test]
+    fn an_s3_invite_carries_the_connection_and_key_only_inside_the_ciphertext() -> anyhow::Result<()>
+    {
+        let secret = "TEST-ONLY-device-a-secret-not-real";
+        let input = EnrollmentIssueInput {
+            providers: EnrollmentProviders::single(EnrollmentProvider::personal(
+                PersonalEnrollmentProvider::s3(S3EnrollmentConnection {
+                    location: S3EnrollmentLocation {
+                        endpoint: "http://127.0.0.1:8333".to_owned(),
+                        region: "us-east-1".to_owned(),
+                        bucket: "nook-dev".to_owned(),
+                        key_prefix: S3KeyPrefix::parse("team/vaults")?,
+                    },
+                    key: S3EnrollmentKey::Included {
+                        access_key_id: "device-a".to_owned(),
+                        secret_access_key: ProviderSecretText::try_from(secret.to_owned())?,
+                    },
+                }),
+            )),
+            identity: EnrollmentIdentityTarget::fixture("S3 keyring"),
+            invite: EnrollmentInvite::fixture()?,
+            entry_id: "entry-s3".to_owned(),
+            issued_at: "2026-10-31T12:00:00Z".to_owned(),
+        };
+        let code = EnrollmentIssuance {
+            input: &input,
+            password: "invite passphrase",
+            entry_label: "",
+        }
+        .check()?
+        .issue()?;
+        let checked = CheckedEnrollmentEnvelope::parse(&code)?;
+        let outer = serde_json::to_string(checked.envelope())?;
+        for clear in [secret, "device-a", "nook-dev", "127.0.0.1"] {
+            assert!(!code.contains(clear));
+            assert!(!outer.contains(clear));
+        }
+        assert!(
+            CheckedEnrollmentEnvelope::parse(&code)?
+                .decrypt("another passphrase")
+                .is_err()
+        );
+        let decrypted = checked.decrypt("invite passphrase")?;
+        assert_eq!(decrypted.providers, input.providers);
+        Ok(())
+    }
+
+    #[test]
+    fn an_invite_carries_every_chosen_provider_in_order_and_no_key_left_to_the_joiner()
+    -> anyhow::Result<()> {
+        let token = "github_pat_TEST-ONLY-another-key";
+        let s3 =
+            EnrollmentProvider::personal(PersonalEnrollmentProvider::s3(S3EnrollmentConnection {
+                location: S3EnrollmentLocation {
+                    endpoint: "http://127.0.0.1:8333".to_owned(),
+                    region: "us-east-1".to_owned(),
+                    bucket: "nook-dev".to_owned(),
+                    key_prefix: S3KeyPrefix::BucketRoot,
+                },
+                key: S3EnrollmentKey::JoinerProvides,
+            }));
+        let github = EnrollmentProvider::personal(PersonalEnrollmentProvider::github(
+            GithubEnrollmentToken::Included {
+                pat: ProviderSecretText::try_from(token.to_owned())?,
+            },
+            "team-vault".to_owned(),
+        ));
+        let drive = EnrollmentProvider::shared(SharedEnrollmentProvider::google_drive(
+            "joiner@example.com".to_owned(),
+            "folder-1".to_owned(),
+        ));
+        let mut input = EnrollmentIssueInput::github_fixture()?;
+        input.providers = EnrollmentProviders::new(s3, vec![github, drive]);
+        let code = EnrollmentIssuance {
+            input: &input,
+            password: "invite passphrase",
+            entry_label: "",
+        }
+        .check()?
+        .issue()?;
+        assert!(!code.contains(token));
+        let decrypted = CheckedEnrollmentEnvelope::parse(&code)?.decrypt("invite passphrase")?;
+        assert_eq!(decrypted.providers, input.providers);
+        assert_eq!(decrypted.providers.iter().count(), 3);
+        Ok(())
+    }
+
+    #[test]
     fn shared_icloud_target_roundtrips_without_provider_credentials() -> anyhow::Result<()> {
         let storage_target_id = concat!(
             "icloud-share-v1:",
@@ -377,9 +488,11 @@ mod tests {
         )
         .to_owned();
         let input = EnrollmentIssueInput {
-            provider: EnrollmentProvider::shared(SharedEnrollmentProvider::icloud(
-                "member@icloud.com".to_owned(),
-                storage_target_id.clone(),
+            providers: EnrollmentProviders::single(EnrollmentProvider::shared(
+                SharedEnrollmentProvider::icloud(
+                    "member@icloud.com".to_owned(),
+                    storage_target_id.clone(),
+                ),
             )),
             identity: EnrollmentIdentityTarget::fixture("Shared iCloud vault"),
             invite: EnrollmentInvite::fixture()?,
@@ -394,7 +507,7 @@ mod tests {
         .check()
         .and_then(CheckedEnrollmentIssuance::issue)?;
         let decrypted = CheckedEnrollmentEnvelope::parse(&code)?.decrypt("hunter2")?;
-        assert_eq!(decrypted.provider, input.provider);
+        assert_eq!(decrypted.providers, input.providers);
         assert!(!code.contains("web-auth-token"));
         assert!(storage_target_id.contains("shortGuid"));
         Ok(())
@@ -403,16 +516,13 @@ mod tests {
     #[test]
     fn personal_oauth_file_provider_roundtrips_inside_encrypted_payload() -> anyhow::Result<()> {
         let input = EnrollmentIssueInput {
-            provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::oauth_file(
-                "google-drive".to_owned(),
-                "ya29.secret".to_owned(),
-                OAuthRefreshCredential::Token("refresh.secret".to_owned()),
-                OAuthTokenExpiry::ExpiresAt("2026-07-09T00:00:00Z".to_owned()),
-                OAuthRemoteFile::Identified {
-                    file_id: "drive-file-id".to_owned(),
-                    file_name: "nook-backup.yaml".to_owned(),
-                },
-                OAuthAccountIdentity::Email("owner@example.com".to_owned()),
+            providers: EnrollmentProviders::single(EnrollmentProvider::personal(
+                PersonalEnrollmentProvider::oauth_file(OAuthFileEnrollment::GoogleDrive {
+                    access_token: ProviderSecretText::try_from("ya29.secret".to_owned())?,
+                    expires_at: IsoTimestamp::parse("2026-07-09T00:00:00Z")?,
+                    account: OAuthAccountIdentity::Email("owner@example.com".to_owned()),
+                    folder_id: "drive-folder-id".to_owned(),
+                }),
             )),
             identity: EnrollmentIdentityTarget::fixture("OAuth vault"),
             invite: EnrollmentInvite::fixture()?,
@@ -427,23 +537,22 @@ mod tests {
         .check()
         .and_then(CheckedEnrollmentIssuance::issue)?;
         assert!(!code.contains("ya29.secret"));
-        assert!(!code.contains("refresh.secret"));
+        assert!(!code.contains("drive-folder-id"));
 
         let decrypted = CheckedEnrollmentEnvelope::parse(&code)?.decrypt("correct horse")?;
-        assert_eq!(decrypted.provider, input.provider);
+        assert_eq!(decrypted.providers, input.providers);
         Ok(())
     }
 
     #[test]
     fn malformed_oauth_file_provider_has_provider_specific_error() -> anyhow::Result<()> {
         let input = EnrollmentIssueInput {
-            provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::oauth_file(
-                "unsupported".to_owned(),
-                String::new(),
-                OAuthRefreshCredential::NotIssued,
-                OAuthTokenExpiry::Unknown,
-                OAuthRemoteFile::Unresolved,
-                OAuthAccountIdentity::Unknown,
+            providers: EnrollmentProviders::single(EnrollmentProvider::personal(
+                PersonalEnrollmentProvider::oauth_file(OAuthFileEnrollment::ICloud {
+                    web_auth_token: ProviderSecretText::try_from("web-auth".to_owned())?,
+                    account: OAuthAccountIdentity::Unknown,
+                    share_target: " ".to_owned(),
+                }),
             )),
             identity: EnrollmentIdentityTarget::fixture("OAuth vault"),
             invite: EnrollmentInvite::fixture()?,
@@ -510,7 +619,7 @@ mod tests {
         let checked = CheckedEnrollmentEnvelope::parse(&format!("  {code}  "))?;
         assert_eq!(checked.envelope().entry_id, input.entry_id);
         let decrypted = checked.decrypt("  vault-pass-99  ")?;
-        assert_eq!(decrypted.provider, input.provider);
+        assert_eq!(decrypted.providers, input.providers);
         assert_eq!(decrypted.identity.label, "Team vault");
         assert_eq!(decrypted.entry_id, input.entry_id);
         assert_eq!(decrypted.issued_at, input.issued_at);

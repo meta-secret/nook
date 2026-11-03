@@ -10,8 +10,12 @@ import {
   type AuthorizedAccountList,
   type ICloudSharedTarget,
 } from "$app-wasm";
-import { oauth_access_token, type OAuthFileConfig } from "$lib/auth/providers";
+import type {
+  GoogleDriveProvider,
+  OAuthFileProvider,
+} from "$lib/auth/providers";
 import {
+  GoogleAccountHint,
   GoogleOAuthPrompt,
   googleOAuthSession,
   type GoogleOAuthTokens,
@@ -137,51 +141,46 @@ type InviteAccountChoice = {
 
 /** Reads and changes the accounts authorized on a shared provider target. */
 class AuthorizedAccountsClient {
-  /** Resolve a provider's shared target with a fresh credential. */
+  /** Resolve a saved provider's shared target with a fresh credential. */
   async access(
-    config: OAuthFileConfig,
+    payload: OAuthFileProvider,
   ): Promise<Result<AuthorizedAccountsAccess, AuthorizedAccountsFailure>> {
-    if (config.preset === "icloud") {
-      if (config.iCloudShareTarget.state !== "sharedTarget")
-        return err(
-          new AuthorizedAccountsFailure(
-            AuthorizedAccountsFailureKind.TargetRequired,
-          ),
-        );
-      let target: ICloudSharedTarget;
-      try {
-        target = parse_icloud_shared_storage_target(
-          config.iCloudShareTarget.value,
-        );
-      } catch {
-        return err(
-          new AuthorizedAccountsFailure(
-            AuthorizedAccountsFailureKind.TargetRequired,
-          ),
-        );
-      }
-      const access: ICloudAccess = {
-        source: AuthorizedAccountsSource.ICloud,
-        target,
-      };
-      return ok(access);
+    switch (payload.preset) {
+      case "icloud":
+        return this.iCloudAccess(payload.shareTarget);
+      case "google-drive":
+        return this.driveAccess(payload);
     }
-    if (config.folderId.state !== "folderId")
+  }
+
+  private iCloudAccess(
+    shareTarget: string,
+  ): Result<AuthorizedAccountsAccess, AuthorizedAccountsFailure> {
+    let target: ICloudSharedTarget;
+    try {
+      target = parse_icloud_shared_storage_target(shareTarget);
+    } catch {
       return err(
         new AuthorizedAccountsFailure(
           AuthorizedAccountsFailureKind.TargetRequired,
         ),
       );
-    const refreshed =
-      await googleOAuthSession.ensureValidOAuthFileConfig(config);
+    }
+    const access: ICloudAccess = {
+      source: AuthorizedAccountsSource.ICloud,
+      target,
+    };
+    return ok(access);
+  }
+
+  private async driveAccess(
+    drive: GoogleDriveProvider,
+  ): Promise<Result<AuthorizedAccountsAccess, AuthorizedAccountsFailure>> {
+    const current: Parameters<
+      typeof googleOAuthSession.ensureFreshDriveAccess
+    >[0] = { authorization: drive.authorization, account: drive.account };
+    const refreshed = await googleOAuthSession.ensureFreshDriveAccess(current);
     if (refreshed.isErr())
-      return err(
-        new AuthorizedAccountsFailure(
-          AuthorizedAccountsFailureKind.SignInRequired,
-        ),
-      );
-    const credential = oauth_access_token(refreshed.value);
-    if (credential.kind === "missing")
       return err(
         new AuthorizedAccountsFailure(
           AuthorizedAccountsFailureKind.SignInRequired,
@@ -189,12 +188,9 @@ class AuthorizedAccountsClient {
       );
     const access: GoogleDriveAccess = {
       source: AuthorizedAccountsSource.GoogleDrive,
-      accessToken: credential.token,
-      folderId: config.folderId.value,
-      accountHint:
-        refreshed.value.accountEmail.state === "email"
-          ? refreshed.value.accountEmail.value
-          : "",
+      accessToken: refreshed.value.authorization.accessToken,
+      folderId: drive.folderId,
+      accountHint: GoogleAccountHint.of(refreshed.value.account),
     };
     return ok(access);
   }

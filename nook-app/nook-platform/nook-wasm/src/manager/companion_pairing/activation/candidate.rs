@@ -10,7 +10,7 @@ use nook_companion_core::{
 use nook_core::VaultEvent;
 use nook_core::{ActiveVaultScope, ProviderVaultScope};
 use nook_core::{
-    AuthEnvelopes, AuthProvidersSnapshotData, DeviceIdentity, EventId, EventStorageBytes,
+    AuthEnvelopes, AuthProvidersSnapshot, DeviceIdentity, EventId, EventStorageBytes,
     SigningIdentity, StoreId, SymmetricKey, VaultApplication, VaultType,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -37,7 +37,7 @@ struct PairingActivationCandidate {
     application: VaultApplication,
     events: Vec<PairingActivationEvent>,
     event_heads: Vec<EventId>,
-    providers: AuthProvidersSnapshotData,
+    providers: AuthProvidersSnapshot,
     stored_at: CompanionPairingEpochMilliseconds,
 }
 
@@ -229,7 +229,7 @@ impl ActivationClock for BrowserActivationClock {
 struct CurrentActivationBinding<'a> {
     approval: &'a CompanionPairingApproval,
     store_id: &'a StoreId,
-    providers: &'a AuthProvidersSnapshotData,
+    providers: &'a AuthProvidersSnapshot,
     manager: &'a NookVaultManager,
     observed_at: CompanionPairingEpochMilliseconds,
 }

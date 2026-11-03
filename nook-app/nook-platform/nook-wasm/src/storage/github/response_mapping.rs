@@ -1,8 +1,6 @@
 //! GitHub REST response decoding and status mapping.
 
-use super::discovery::{
-    GitHubDirectoryListing, GitHubFileWrite, GitHubVaultDiscovery, GitHubVaultFile,
-};
+use super::discovery::{GitHubDirectoryListing, GitHubVaultDiscovery, GitHubVaultFile};
 use crate::NookError;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -99,12 +97,12 @@ struct GitHubDirEntry {
     entry_type: String,
 }
 
+/// A contents PUT that creates a file: every event write is a create, so it
+/// names no blob to replace.
 #[derive(Serialize)]
 pub(super) struct GitHubPutBody {
     pub(super) message: String,
     pub(super) content: String,
-    #[serde(skip_serializing_if = "GitHubFileWrite::is_create")]
-    pub(super) sha: GitHubFileWrite,
 }
 
 #[derive(Deserialize)]
@@ -314,14 +312,6 @@ pub mod tests {
     use super::*;
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[derive(Deserialize)]
-    struct SerializedPutBody {
-        message: String,
-        content: String,
-        #[serde(default)]
-        sha: GitHubFileWrite,
-    }
-
     #[wasm_bindgen_test]
     fn base64_decode_reports_success_and_serialization_failures() -> anyhow::Result<()> {
         assert_eq!(GitHubApiResponses::base64_decode("bm9vaw==")?, b"nook");
@@ -354,22 +344,14 @@ pub mod tests {
         assert_eq!(first.entry_type, "file");
         assert_eq!(second.entry_type, "dir");
 
-        let without_sha = serde_json::to_value(GitHubPutBody {
-            message: "Update".to_owned(),
-            content: "bm9vaw==".to_owned(),
-            sha: GitHubFileWrite::Create,
-        })?;
-        let without_sha: SerializedPutBody = serde_json::from_value(without_sha)?;
-        assert_eq!(without_sha.message, "Update");
-        assert_eq!(without_sha.content, "bm9vaw==");
-        assert!(matches!(without_sha.sha, GitHubFileWrite::Create));
-        let with_sha = serde_json::to_value(GitHubPutBody {
-            message: "Update".to_owned(),
-            content: "bm9vaw==".to_owned(),
-            sha: GitHubFileWrite::Update("sha-1".to_owned()),
-        })?;
-        let with_sha: SerializedPutBody = serde_json::from_value(with_sha)?;
-        assert_eq!(with_sha.sha, GitHubFileWrite::Update("sha-1".to_owned()));
+        // A create names no blob to replace.
+        assert_eq!(
+            serde_json::to_value(GitHubPutBody {
+                message: "Update".to_owned(),
+                content: "bm9vaw==".to_owned(),
+            })?,
+            serde_json::json!({"message": "Update", "content": "bm9vaw=="})
+        );
         Ok(())
     }
 

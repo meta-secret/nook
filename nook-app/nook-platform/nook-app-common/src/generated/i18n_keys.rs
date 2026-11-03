@@ -58,9 +58,6 @@ pub const ADD_DEVICE_COPIED: &str = "add_device.copied";
 pub const ADD_DEVICE_COPY: &str = "add_device.copy";
 pub const ADD_DEVICE_DONE: &str = "add_device.done";
 pub const ADD_DEVICE_EYEBROW: &str = "add_device.eyebrow";
-pub const ADD_DEVICE_HOW_IT_WORKS: &str = "add_device.how_it_works";
-pub const ADD_DEVICE_INTRO: &str = "add_device.intro";
-pub const ADD_DEVICE_INVITE_BODY: &str = "add_device.invite_body";
 pub const ADD_DEVICE_INVITE_TITLE: &str = "add_device.invite_title";
 pub const ADD_DEVICE_JOIN_MANUAL: &str = "add_device.join_manual";
 pub const ADD_DEVICE_NEW_INVITE: &str = "add_device.new_invite";
@@ -402,6 +399,11 @@ pub const AUTH_STORAGE_PROVIDER_VAULT_USE_PROVIDER: &str =
 pub const AUTH_STORAGE_PROVIDER_VAULT_USE_RECOMMENDED: &str =
     "auth_storage.provider_vault_use_recommended";
 pub const AUTH_STORAGE_RECONNECT: &str = "auth_storage.reconnect";
+pub const AUTH_STORAGE_S3_ADD_KEY: &str = "auth_storage.s3_add_key";
+pub const AUTH_STORAGE_S3_KEY_IN_USE: &str = "auth_storage.s3_key_in_use";
+pub const AUTH_STORAGE_S3_KEYS: &str = "auth_storage.s3_keys";
+pub const AUTH_STORAGE_S3_REMOVE_KEY: &str = "auth_storage.s3_remove_key";
+pub const AUTH_STORAGE_S3_SAVE_KEY: &str = "auth_storage.s3_save_key";
 pub const AUTH_STORAGE_SAVED_PROVIDERS: &str = "auth_storage.saved_providers";
 pub const AUTH_STORAGE_SECURITY_CONFLICT_EDITS: &str = "auth_storage.security_conflict_edits";
 pub const AUTH_STORAGE_SETUP_DESC: &str = "auth_storage.setup_desc";
@@ -526,6 +528,7 @@ pub const COMMON_ITEM: &str = "common.item";
 pub const COMMON_ITEMS: &str = "common.items";
 pub const COMMON_LOADING: &str = "common.loading";
 pub const COMMON_NONE: &str = "common.none";
+pub const COMMON_OPTIONAL: &str = "common.optional";
 pub const COMMON_REMOVE: &str = "common.remove";
 pub const COMMON_RENAME: &str = "common.rename";
 pub const COMMON_SAVE: &str = "common.save";
@@ -751,6 +754,7 @@ pub const ERRORS_IDENTITY_JOIN_PASSKEY_IN_USE: &str = "errors.identity_join.pass
 pub const ERRORS_IDENTITY_JOIN_PASSKEY_LOCKED: &str = "errors.identity_join.passkey_locked";
 pub const ERRORS_LOCAL_BACKUP_FOLDER_REQUIRED: &str = "errors.local_backup_folder_required";
 pub const ERRORS_MANAGER_UNINITIALIZED: &str = "errors.manager_uninitialized";
+pub const ERRORS_S3_KEY_ACCESS_DENIED: &str = "errors.s3_key_access_denied";
 pub const ERRORS_SHARED_PROVIDER_ACCESS_REQUIRED: &str = "errors.shared_provider_access_required";
 pub const ERRORS_SHARED_PROVIDER_OAUTH_REQUIRED: &str = "errors.shared_provider_oauth_required";
 pub const ERRORS_VALIDATION_ADDRESS_LINE1_REQUIRED: &str =
@@ -796,6 +800,8 @@ pub const ERRORS_VALIDATION_DRIVE_FILE_NAME_INVALID: &str =
     "errors.validation.drive_file_name_invalid";
 pub const ERRORS_VALIDATION_DRIVE_FILE_NAME_LENGTH: &str =
     "errors.validation.drive_file_name_length";
+pub const ERRORS_VALIDATION_ENROLLMENT_CREDENTIAL_MISMATCH: &str =
+    "errors.validation.enrollment_credential_mismatch";
 pub const ERRORS_VALIDATION_EXTENSION_APPROVAL_APPLICATION_FORBIDDEN: &str =
     "errors.validation.extension_approval_application_forbidden";
 pub const ERRORS_VALIDATION_GITHUB_PAT_EMPTY: &str = "errors.validation.github_pat_empty";
@@ -831,10 +837,34 @@ pub const ERRORS_VALIDATION_PERSON_NAME_REQUIRED: &str = "errors.validation.pers
 pub const ERRORS_VALIDATION_PERSON_PHONE_INVALID: &str = "errors.validation.person_phone_invalid";
 pub const ERRORS_VALIDATION_PERSONAL_DATA_TEXT_INVALID: &str =
     "errors.validation.personal_data_text_invalid";
+pub const ERRORS_VALIDATION_PROVIDER_CREDENTIAL_SEALED: &str =
+    "errors.validation.provider_credential_sealed";
+pub const ERRORS_VALIDATION_PROVIDER_SECRET_REQUIRED: &str =
+    "errors.validation.provider_secret_required";
 pub const ERRORS_VALIDATION_ROUTING_NUMBER_INVALID: &str =
     "errors.validation.routing_number_invalid";
 pub const ERRORS_VALIDATION_ROUTING_NUMBER_REQUIRED: &str =
     "errors.validation.routing_number_required";
+pub const ERRORS_VALIDATION_S3_ACCESS_KEY_ID_DUPLICATE: &str =
+    "errors.validation.s3_access_key_id_duplicate";
+pub const ERRORS_VALIDATION_S3_ACCESS_KEY_ID_INVALID: &str =
+    "errors.validation.s3_access_key_id_invalid";
+pub const ERRORS_VALIDATION_S3_ACCESS_KEY_ID_REQUIRED: &str =
+    "errors.validation.s3_access_key_id_required";
+pub const ERRORS_VALIDATION_S3_ACCESS_KEY_NOT_SAVED: &str =
+    "errors.validation.s3_access_key_not_saved";
+pub const ERRORS_VALIDATION_S3_BUCKET_INVALID: &str = "errors.validation.s3_bucket_invalid";
+pub const ERRORS_VALIDATION_S3_BUCKET_REQUIRED: &str = "errors.validation.s3_bucket_required";
+pub const ERRORS_VALIDATION_S3_ENDPOINT_INSECURE: &str = "errors.validation.s3_endpoint_insecure";
+pub const ERRORS_VALIDATION_S3_ENDPOINT_INVALID: &str = "errors.validation.s3_endpoint_invalid";
+pub const ERRORS_VALIDATION_S3_ENDPOINT_REQUIRED: &str = "errors.validation.s3_endpoint_required";
+pub const ERRORS_VALIDATION_S3_KEY_PREFIX_INVALID: &str = "errors.validation.s3_key_prefix_invalid";
+pub const ERRORS_VALIDATION_S3_REGION_INVALID: &str = "errors.validation.s3_region_invalid";
+pub const ERRORS_VALIDATION_S3_REGION_REQUIRED: &str = "errors.validation.s3_region_required";
+pub const ERRORS_VALIDATION_S3_SECRET_ACCESS_KEY_REQUIRED: &str =
+    "errors.validation.s3_secret_access_key_required";
+pub const ERRORS_VALIDATION_S3_STORAGE_TARGET_INVALID: &str =
+    "errors.validation.s3_storage_target_invalid";
 pub const ERRORS_VALIDATION_SECRET_DATA_REQUIRED: &str = "errors.validation.secret_data_required";
 pub const ERRORS_VALIDATION_SECRET_ID_REQUIRED: &str = "errors.validation.secret_id_required";
 pub const ERRORS_VALIDATION_SECRET_ID_RESERVED: &str = "errors.validation.secret_id_reserved";
@@ -1388,6 +1418,7 @@ pub const FIRST_RUN_CONNECT_BODY: &str = "first_run.connect_body";
 pub const FIRST_RUN_CONNECT_RETRY: &str = "first_run.connect_retry";
 pub const FIRST_RUN_CONNECT_SKIP: &str = "first_run.connect_skip";
 pub const FIRST_RUN_CONNECT_TITLE: &str = "first_run.connect_title";
+pub const FIRST_RUN_CONNECT_TITLE_S3: &str = "first_run.connect_title_s3";
 pub const FIRST_RUN_CREATE: &str = "first_run.create";
 pub const FIRST_RUN_DIAGRAM_IDENTITY: &str = "first_run.diagram_identity";
 pub const FIRST_RUN_DIAGRAM_LABEL: &str = "first_run.diagram_label";
@@ -1411,6 +1442,7 @@ pub const FIRST_RUN_NAME_FAILED: &str = "first_run.name_failed";
 pub const FIRST_RUN_NAME_LABEL: &str = "first_run.name_label";
 pub const FIRST_RUN_NAME_ON_BROWSER: &str = "first_run.name_on_browser";
 pub const FIRST_RUN_NAME_ON_PROVIDER: &str = "first_run.name_on_provider";
+pub const FIRST_RUN_NAME_ON_S3: &str = "first_run.name_on_s3";
 pub const FIRST_RUN_NAME_PLACEHOLDER: &str = "first_run.name_placeholder";
 pub const FIRST_RUN_NAME_TITLE: &str = "first_run.name_title";
 pub const FIRST_RUN_OR: &str = "first_run.or";
@@ -1434,10 +1466,12 @@ pub const FIRST_RUN_SYNC_BODY: &str = "first_run.sync_body";
 pub const FIRST_RUN_SYNC_CHOOSE_BODY: &str = "first_run.sync_choose_body";
 pub const FIRST_RUN_SYNC_CHOOSE_TITLE: &str = "first_run.sync_choose_title";
 pub const FIRST_RUN_SYNC_CREATE_BODY: &str = "first_run.sync_create_body";
+pub const FIRST_RUN_SYNC_CREATE_BODY_S3: &str = "first_run.sync_create_body_s3";
 pub const FIRST_RUN_SYNC_CREATE_TITLE: &str = "first_run.sync_create_title";
 pub const FIRST_RUN_SYNC_DIAGRAM_DEVICES: &str = "first_run.sync_diagram_devices";
 pub const FIRST_RUN_SYNC_DIAGRAM_LABEL: &str = "first_run.sync_diagram_label";
 pub const FIRST_RUN_SYNC_EMPTY: &str = "first_run.sync_empty";
+pub const FIRST_RUN_SYNC_EMPTY_S3: &str = "first_run.sync_empty_s3";
 pub const FIRST_RUN_SYNC_SKIP: &str = "first_run.sync_skip";
 pub const FIRST_RUN_SYNC_TITLE: &str = "first_run.sync_title";
 pub const FIRST_RUN_TITLE: &str = "first_run.title";
@@ -1484,7 +1518,6 @@ pub const HELP_DIAGRAM_PROVIDER_EVENTS: &str = "help.diagram.provider_events";
 pub const HELP_DIAGRAM_SET_UNION: &str = "help.diagram.set_union";
 pub const HELP_DIAGRAM_SYNC: &str = "help.diagram.sync";
 pub const HELP_IN_THIS_GUIDE: &str = "help.in_this_guide";
-pub const HELP_JUMP_TO_SECTION: &str = "help.jump_to_section";
 pub const HELP_SECTIONS_CONFLICTS_BULLET1: &str = "help.sections.conflicts.bullet1";
 pub const HELP_SECTIONS_CONFLICTS_BULLET2: &str = "help.sections.conflicts.bullet2";
 pub const HELP_SECTIONS_CONFLICTS_BULLET3: &str = "help.sections.conflicts.bullet3";
@@ -1614,6 +1647,8 @@ pub const IDENTITY_OVERVIEW_THIS_BROWSER: &str = "identity_overview.this_browser
 pub const IDENTITY_OVERVIEW_VAULTS_CAPTION: &str = "identity_overview.vaults_caption";
 pub const IDENTITY_OVERVIEW_VAULTS_EMPTY: &str = "identity_overview.vaults_empty";
 pub const IDENTITY_OVERVIEW_VIEW_ALL: &str = "identity_overview.view_all";
+pub const IDENTITY_PROTECTION_ACTION_ADD_ANOTHER_SYNC: &str =
+    "identity_protection.action_add_another_sync";
 pub const IDENTITY_PROTECTION_ACTION_ADD_CLOUD: &str = "identity_protection.action_add_cloud";
 pub const IDENTITY_PROTECTION_ACTION_ADD_DEVICE: &str = "identity_protection.action_add_device";
 pub const IDENTITY_PROTECTION_ACTION_ADD_SYNC: &str = "identity_protection.action_add_sync";
@@ -1630,13 +1665,15 @@ pub const IDENTITY_PROTECTION_ROW_PROGRESS: &str = "identity_protection.row_prog
 pub const IDENTITY_PROTECTION_ROW_TITLE: &str = "identity_protection.row_title";
 pub const JOIN_DIAGRAM_LABEL: &str = "join.diagram_label";
 pub const JOIN_INSTRUCTION: &str = "join.instruction";
+pub const JOIN_KEYS_OPTIONAL: &str = "join.keys_optional";
+pub const JOIN_KEYS_REQUIRED: &str = "join.keys_required";
+pub const JOIN_KEYS_TITLE: &str = "join.keys_title";
 pub const JOIN_LINK_LABEL: &str = "join.link_label";
 pub const JOIN_LINK_RECEIVED: &str = "join.link_received";
 pub const JOIN_NODE_JOINER: &str = "join.node_joiner";
 pub const JOIN_NODE_MEMBER: &str = "join.node_member";
 pub const JOIN_NODE_PROVIDER: &str = "join.node_provider";
 pub const JOIN_PASSPHRASE_LABEL: &str = "join.passphrase_label";
-pub const JOIN_REQUIREMENT: &str = "join.requirement";
 pub const JOIN_SUBMIT: &str = "join.submit";
 pub const JOIN_SUBMITTING: &str = "join.submitting";
 pub const JOIN_SUBTITLE: &str = "join.subtitle";
@@ -2106,6 +2143,15 @@ pub const ONBOARD_DEVICE_FAILED_QR_ERR: &str = "onboard_device.failed_qr_err";
 pub const ONBOARD_DEVICE_GENERATE_BTN: &str = "onboard_device.generate_btn";
 pub const ONBOARD_DEVICE_GENERATING: &str = "onboard_device.generating";
 pub const ONBOARD_DEVICE_GENERATING_QR: &str = "onboard_device.generating_qr";
+pub const ONBOARD_DEVICE_INVITE_ADD_KEY: &str = "onboard_device.invite_add_key";
+pub const ONBOARD_DEVICE_INVITE_JOINER_HINT: &str = "onboard_device.invite_joiner_hint";
+pub const ONBOARD_DEVICE_INVITE_KEY: &str = "onboard_device.invite_key";
+pub const ONBOARD_DEVICE_INVITE_KEY_JOINER: &str = "onboard_device.invite_key_joiner";
+pub const ONBOARD_DEVICE_INVITE_KEY_MINE: &str = "onboard_device.invite_key_mine";
+pub const ONBOARD_DEVICE_INVITE_KEY_SPARE: &str = "onboard_device.invite_key_spare";
+pub const ONBOARD_DEVICE_INVITE_PROVIDERS: &str = "onboard_device.invite_providers";
+pub const ONBOARD_DEVICE_INVITE_TOKEN_JOINER: &str = "onboard_device.invite_token_joiner";
+pub const ONBOARD_DEVICE_INVITE_TOKEN_MINE: &str = "onboard_device.invite_token_mine";
 pub const ONBOARD_DEVICE_ISSUED_JUST_NOW: &str = "onboard_device.issued_just_now";
 pub const ONBOARD_DEVICE_ISSUED_TIME: &str = "onboard_device.issued_time";
 pub const ONBOARD_DEVICE_LINK_DESC: &str = "onboard_device.link_desc";
@@ -2245,6 +2291,8 @@ pub const PROVIDER_PICKER_LOCAL_FOLDER_UNAVAILABLE_BRAVE: &str =
     "provider_picker.local_folder_unavailable_brave";
 pub const PROVIDER_PICKER_LOCAL_FOLDER_UNAVAILABLE_DESC: &str =
     "provider_picker.local_folder_unavailable_desc";
+pub const PROVIDER_PICKER_S3: &str = "provider_picker.s3";
+pub const PROVIDER_PICKER_S3_DESC: &str = "provider_picker.s3_desc";
 pub const PROVIDER_PICKER_THIS_DEVICE: &str = "provider_picker.this_device";
 pub const PROVIDER_PICKER_THIS_DEVICE_DESC: &str = "provider_picker.this_device_desc";
 pub const PROVIDER_PICKER_UNSUPPORTED_CURRENT_VAULT: &str =
@@ -2319,6 +2367,34 @@ pub const PROVIDER_SETUP_OAUTH_PREVIEW_ORIGIN_UNSUPPORTED: &str =
     "provider_setup.oauth_preview_origin_unsupported";
 pub const PROVIDER_SETUP_PAT_LABEL: &str = "provider_setup.pat_label";
 pub const PROVIDER_SETUP_REPO_NAME: &str = "provider_setup.repo_name";
+pub const PROVIDER_SETUP_S3_ACCESS_KEY_ID_LABEL: &str = "provider_setup.s3_access_key_id_label";
+pub const PROVIDER_SETUP_S3_ACCESS_KEY_ID_PLACEHOLDER: &str =
+    "provider_setup.s3_access_key_id_placeholder";
+pub const PROVIDER_SETUP_S3_BUCKET_LABEL: &str = "provider_setup.s3_bucket_label";
+pub const PROVIDER_SETUP_S3_BUCKET_PLACEHOLDER: &str = "provider_setup.s3_bucket_placeholder";
+pub const PROVIDER_SETUP_S3_CONNECTION_SUBTITLE: &str = "provider_setup.s3_connection_subtitle";
+pub const PROVIDER_SETUP_S3_CREATE_KEY: &str = "provider_setup.s3_create_key";
+pub const PROVIDER_SETUP_S3_CREATE_KEY_HINT: &str = "provider_setup.s3_create_key_hint";
+pub const PROVIDER_SETUP_S3_ENDPOINT_LABEL: &str = "provider_setup.s3_endpoint_label";
+pub const PROVIDER_SETUP_S3_ENDPOINT_PLACEHOLDER: &str = "provider_setup.s3_endpoint_placeholder";
+pub const PROVIDER_SETUP_S3_KEY_PREFIX_LABEL: &str = "provider_setup.s3_key_prefix_label";
+pub const PROVIDER_SETUP_S3_KEY_PREFIX_PLACEHOLDER: &str =
+    "provider_setup.s3_key_prefix_placeholder";
+pub const PROVIDER_SETUP_S3_LIST_FAILED: &str = "provider_setup.s3_list_failed";
+pub const PROVIDER_SETUP_S3_REGION_LABEL: &str = "provider_setup.s3_region_label";
+pub const PROVIDER_SETUP_S3_REGION_PLACEHOLDER: &str = "provider_setup.s3_region_placeholder";
+pub const PROVIDER_SETUP_S3_SECRET_ACCESS_KEY_LABEL: &str =
+    "provider_setup.s3_secret_access_key_label";
+pub const PROVIDER_SETUP_S3_SECRET_NOTE: &str = "provider_setup.s3_secret_note";
+pub const PROVIDER_SETUP_S3_SERVICE_AWS: &str = "provider_setup.s3_service_aws";
+pub const PROVIDER_SETUP_S3_SERVICE_BACKBLAZE_B2: &str = "provider_setup.s3_service_backblaze_b2";
+pub const PROVIDER_SETUP_S3_SERVICE_CLOUDFLARE_R2: &str = "provider_setup.s3_service_cloudflare_r2";
+pub const PROVIDER_SETUP_S3_SERVICE_DIGITALOCEAN_SPACES: &str =
+    "provider_setup.s3_service_digitalocean_spaces";
+pub const PROVIDER_SETUP_S3_SERVICE_LABEL: &str = "provider_setup.s3_service_label";
+pub const PROVIDER_SETUP_S3_SERVICE_OTHER: &str = "provider_setup.s3_service_other";
+pub const PROVIDER_SETUP_S3_SERVICE_WASABI: &str = "provider_setup.s3_service_wasabi";
+pub const PROVIDER_SETUP_S3_USE_LOCAL_DEV: &str = "provider_setup.s3_use_local_dev";
 pub const PROVIDER_SETUP_SIGN_IN_WITH_GOOGLE: &str = "provider_setup.sign_in_with_google";
 pub const PROVIDER_SETUP_SIGN_IN_WITH_ICLOUD: &str = "provider_setup.sign_in_with_icloud";
 pub const PROVIDER_SETUP_STORED_LOCALLY_DESC: &str = "provider_setup.stored_locally_desc";
@@ -2334,6 +2410,7 @@ pub const PROVIDER_VAULTS_IMPORT_SEPARATELY: &str = "provider_vaults.import_sepa
 pub const PROVIDER_VAULTS_LAST_ACTIVITY: &str = "provider_vaults.last_activity";
 pub const PROVIDER_VAULTS_LIST_TITLE: &str = "provider_vaults.list_title";
 pub const PROVIDER_VAULTS_LOADING: &str = "provider_vaults.loading";
+pub const PROVIDER_VAULTS_LOADING_S3: &str = "provider_vaults.loading_s3";
 pub const PROVIDER_VAULTS_NEWEST_DEVICE: &str = "provider_vaults.newest_device";
 pub const PROVIDER_VAULTS_RECOVER_IDENTITY: &str = "provider_vaults.recover_identity";
 pub const PROVIDER_VAULTS_REPLACE_CONFIRM: &str = "provider_vaults.replace_confirm";
@@ -2443,6 +2520,7 @@ pub const TOASTS_PASSWORD_SET: &str = "toasts.password_set";
 pub const TOASTS_PASSWORD_UPDATED: &str = "toasts.password_updated";
 pub const TOASTS_PROTON_PASS_IMPORTED: &str = "toasts.proton_pass_imported";
 pub const TOASTS_REMOVED_DEVICE: &str = "toasts.removed_device";
+pub const TOASTS_S3_CONNECTED: &str = "toasts.s3_connected";
 pub const TOASTS_SECRET_CONFLICT_RESOLVED: &str = "toasts.secret_conflict_resolved";
 pub const TOASTS_SECRET_DELETED: &str = "toasts.secret_deleted";
 pub const TOASTS_SECRET_SAVED: &str = "toasts.secret_saved";

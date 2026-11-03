@@ -177,6 +177,8 @@ impl CompletionCheckpoint {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::manager::{OutboxTarget, PreparedProvider, SyncOutbox};
+    use crate::test_fixtures::WasmFixture;
     use nook_core::{
         DeviceMode, SentinelGenesisOutput, SentinelUnlockSigning, SentinelVaultUnlockState,
         SigningIdentity, VaultArchitecture,
@@ -280,9 +282,16 @@ mod tests {
             manager.vault.architecture = self.output.architecture.clone();
             manager.vault.meta = VaultMetaState::from_stored_records(&self.output.stored_records)?;
             manager.device.identity_private_key = self.identity.secret_string().as_str().to_owned();
-            manager.storage.access_token = "configured-test-provider".to_owned();
+            manager.storage.provider =
+                PreparedProvider::github_fixture("configured-test-provider", "owner/repository")?;
             manager.event_log.signing_seed = "ephemeral-test-seed".to_owned();
-            manager.sync_outbox.access_token = "pending-test-token".to_owned();
+            manager.sync_outbox = SyncOutbox::Bound(OutboxTarget {
+                provider: manager.storage.provider.cache_ref(),
+                connection: WasmFixture::github_connection(
+                    "pending-test-token",
+                    "owner/repository",
+                )?,
+            });
             Ok(manager)
         }
 
@@ -307,8 +316,9 @@ mod tests {
             assert!(manager.event_log.signing_seed.is_empty());
             assert!(manager.event_log.key_epoch.is_empty());
             assert!(manager.event_log.heads.is_empty());
-            assert!(manager.sync_outbox.access_token.is_empty());
-            assert_eq!(manager.storage.access_token, "configured-test-provider");
+            assert!(matches!(manager.sync_outbox, SyncOutbox::Unbound));
+            // The configured provider stays prepared.
+            assert_eq!(manager.local_cache_ref(), "github:owner/repository:");
             assert_eq!(
                 manager.device.identity_private_key,
                 self.identity.secret_string().as_str()

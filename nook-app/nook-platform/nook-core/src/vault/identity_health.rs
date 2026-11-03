@@ -63,7 +63,10 @@ pub enum IdentityProtectionTaskState {
 }
 
 /// One row of the protection checklist: the task, where it stands, and the
-/// step that completes it (`Done` once it is done).
+/// step it offers. An open or blocked task offers the step that completes it.
+/// A kept copy offers another sync provider while the second device is still
+/// to be added through a cloud one, so a second copy can be added before the
+/// first device is lost; otherwise a done task offers `Done`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IdentityProtectionStep {
     pub task: IdentityProtectionTask,
@@ -138,6 +141,12 @@ impl IdentityHealth {
             IdentityProtectionStep {
                 task: IdentityProtectionTask::CopyOutsideBrowser,
                 state: IdentityProtectionTaskState::Open,
+                action: IdentityNextStep::AddSyncProvider,
+            }
+        } else if device_count.is_at_most_one() && !device_join_provider_count.is_zero() {
+            IdentityProtectionStep {
+                task: IdentityProtectionTask::CopyOutsideBrowser,
+                state: IdentityProtectionTaskState::Done,
                 action: IdentityNextStep::AddSyncProvider,
             }
         } else {
@@ -320,6 +329,15 @@ mod tests {
         let health = assess(1, 1, 1, 5);
 
         assert_eq!(
+            health.checklist[0],
+            step(
+                IdentityProtectionTask::CopyOutsideBrowser,
+                IdentityProtectionTaskState::Done,
+                IdentityNextStep::AddSyncProvider,
+            ),
+            "until a second device joins, the kept copy offers another provider"
+        );
+        assert_eq!(
             health.checklist[1],
             step(
                 IdentityProtectionTask::SecondDevice,
@@ -336,6 +354,11 @@ mod tests {
 
         assert!(health.is_protected());
         assert_eq!(health.next_step, IdentityNextStep::Done);
+        assert_eq!(
+            health.checklist[0].action,
+            IdentityNextStep::Done,
+            "a second device ends the offer of another provider"
+        );
     }
 
     #[test]

@@ -10,14 +10,8 @@ import {
   VaultStorageSyncDecision,
   type NookVaultSyncResult,
 } from '$app-wasm'
-import {
-  GITHUB_PROVIDER_TYPE,
-  providerPersistenceDefaults,
-  scopedProviderVault,
-  storedGithubPat,
-  storedGithubRepository,
-  type StorageProvider,
-} from '$lib/auth/providers'
+import { scopedProviderVault, type StorageProvider } from '$lib/auth/providers'
+import { ProviderRowFixture } from '../provider-fixtures'
 import { VaultStorageSynchronization } from '$lib/nook'
 import {
   VaultStorageFailure,
@@ -51,15 +45,11 @@ const ownedScenarios: ProviderSyncScenario[] = []
 
 function githubProvider(): StorageProvider {
   return {
-    ...providerPersistenceDefaults(),
-    id: 'joiner-provider',
-    type: GITHUB_PROVIDER_TYPE,
+    ...ProviderRowFixture.github({
+      id: 'joiner-provider',
+      storeId: scopedProviderVault('joiner-store'),
+    }),
     label: 'Joiner GitHub',
-    githubPat: storedGithubPat('github-token'),
-    githubRepo: storedGithubRepository('owner/vault'),
-    storeId: scopedProviderVault('joiner-store'),
-    syncCheckpoint: { state: 'neverSynced' },
-    createdAt: '2026-09-12T00:00:00Z',
   }
 }
 

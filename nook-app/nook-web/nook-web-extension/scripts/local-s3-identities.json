@@ -1,0 +1,63 @@
+{
+  "identities": [
+    {
+      "name": "device-a",
+      "credentials": [
+        {
+          "accessKey": "device-a",
+          "secretKey": "TEST-ONLY-device-a-secret-not-real"
+        }
+      ],
+      "actions": [
+        "Read:nook-dev",
+        "Write:nook-dev",
+        "List:nook-dev",
+        "Tagging:nook-dev"
+      ]
+    },
+    {
+      "name": "device-b",
+      "credentials": [
+        {
+          "accessKey": "device-b",
+          "secretKey": "TEST-ONLY-device-b-secret-not-real"
+        }
+      ],
+      "actions": [
+        "Read:nook-dev",
+        "Write:nook-dev",
+        "List:nook-dev",
+        "Tagging:nook-dev"
+      ]
+    },
+    {
+      "name": "device-c",
+      "credentials": [
+        {
+          "accessKey": "device-c",
+          "secretKey": "TEST-ONLY-device-c-secret-not-real"
+        }
+      ],
+      "actions": [
+        "Read:nook-dev",
+        "Write:nook-dev",
+        "List:nook-dev",
+        "Tagging:nook-dev"
+      ]
+    },
+    {
+      "name": "no-access",
+      "credentials": [
+        {
+          "accessKey": "no-access",
+          "secretKey": "TEST-ONLY-no-access-secret-not-real"
+        }
+      ],
+      "actions": []
+    },
+    {
+      "name": "anonymous",
+      "actions": ["List:nook-dev/ready-probe/*"]
+    }
+  ]
+}

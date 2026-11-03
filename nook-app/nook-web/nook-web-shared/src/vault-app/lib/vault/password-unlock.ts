@@ -18,7 +18,10 @@ import {
   VaultStorageFailure as StorageOperationFailure,
   VaultStorageFailureKind as StorageOperationFailureKind,
 } from "$lib/runtime/storage-failure";
-import { VaultRecoveryErrorKind } from "$app-wasm";
+import {
+  provider_draft_gap_unlock_translation_key,
+  VaultRecoveryErrorKind,
+} from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import { VaultState } from "$lib/vault.svelte";
 import { EnrollmentEntryKind } from "$lib/vault/state/session.svelte";
@@ -66,6 +69,8 @@ export {
   PasswordEnrollmentActions,
   IdentityEnrollmentIssue,
 } from "$lib/vault/password-enrollment-flow";
+export type { EnrollmentCodeConnection } from "$lib/vault/password-enrollment-flow";
+export type { EnrollmentCodeIssueRequest as IdentityEnrollmentIssueRequest } from "$lib/vault/password-enrollment-issue";
 
 /** Owns browser orchestration for one password unlock context. */
 export class VaultPasswordActions {
@@ -264,21 +269,24 @@ export class VaultPasswordActions {
       state.sentinelCeremonyPrompt = true;
       return;
     }
-    if (state.storageMode !== "local" && !state.hasRemoteCredentials()) {
-      state.errorMsg =
-        state.storageMode === "oauth-file"
-          ? state.t(I18N_KEYS.ErrorsGoogleSignInRequired)
-          : state.t(I18N_KEYS.ErrorsGithubCredentialsRequired);
+    // What the provider in use needs before a backup password can unlock
+    // through it; Rust names the gap and its message.
+    const readiness = state.credentialReadiness();
+    switch (readiness.state) {
+      case "required":
+        state.errorMsg = state.t(
+          provider_draft_gap_unlock_translation_key(readiness.gap),
+        );
+        return;
+      case "ready":
+        break;
+    }
+    const refreshedTokens = await state.ensureOAuthTokensFresh();
+    if (refreshedTokens.isErr()) {
+      state.errorMsg = state.t(refreshedTokens.error.translationKey);
       return;
     }
-    if (state.storageMode !== "local") {
-      const refreshedTokens = await state.ensureOAuthTokensFresh();
-      if (refreshedTokens.isErr()) {
-        state.errorMsg = state.t(refreshedTokens.error.translationKey);
-        return;
-      }
-      if (refreshedTokens.value instanceof VaultOperationStale) return;
-    }
+    if (refreshedTokens.value instanceof VaultOperationStale) return;
     if (!entryId.trim()) {
       state.errorMsg = state.t(I18N_KEYS.ErrorsVaultPasswordRequired);
       return;
@@ -288,15 +296,17 @@ export class VaultPasswordActions {
     state.isVerifying = true;
     try {
       const storageArgs = state.wasmStorageArgs();
+      if (storageArgs.isErr()) {
+        state.errorMsg = state.t(storageArgs.error.translationKey);
+        return;
+      }
       const page = await state.enqueueStorage(async () => {
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
           return storageOk(
             await admittedManager.value.connect_with_password(
-              storageArgs.mode,
-              storageArgs.pat,
-              storageArgs.repo,
+              storageArgs.value,
               entryId,
               password,
               state.secretPageSize,

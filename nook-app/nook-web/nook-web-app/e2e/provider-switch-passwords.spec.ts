@@ -15,6 +15,7 @@ import {
   installOauthFileRemoteForLocalE2e,
   UI_TIMEOUT_MS,
   openVaultPage,
+  E2E_UNKNOWN_ACCOUNT,
 } from './helpers'
 import {
   createSyncTarget,
@@ -55,6 +56,7 @@ test.describe('unified vault backup passwords with sync provider', () => {
           label: 'File',
           fileName: target.repoName,
           accessToken: target.pat,
+          account: E2E_UNKNOWN_ACCOUNT,
         },
       ],
       sharedStub: target.stub,

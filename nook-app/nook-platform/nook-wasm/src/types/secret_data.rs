@@ -1,6 +1,7 @@
 use super::{
     NookError, NookJoinRequest, NookSecretListItem, NookSecretRecord, NookVaultMember, wasm_bindgen,
 };
+use crate::TypedInput;
 use nook_core::SecretFormFields;
 use serde::de::DeserializeOwned;
 use std::mem;
@@ -322,8 +323,7 @@ impl NookSecretFormFields {
         T: tsify::Tsify + DeserializeOwned,
         <T as tsify::Tsify>::JsType: Clone,
     {
-        form.to_rust()
-            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+        Ok(form.decode()?)
     }
 }
 

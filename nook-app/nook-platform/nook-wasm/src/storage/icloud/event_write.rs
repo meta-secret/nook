@@ -17,7 +17,7 @@ use super::wire::{
 };
 use super::{CloudKitRecordQuery, ICLOUD_EVENT_RECORD_TYPE, ICloudEventStore};
 use crate::NookError;
-use crate::storage::checked_event_write::{CheckedEventWrite, CheckedEventWriteRequest};
+use crate::storage::checked_event_write::CheckedEventWrite;
 use nook_core::{EventId, ICloudSharedTarget};
 
 impl ICloudEventStore<'_> {
@@ -137,30 +137,15 @@ impl ICloudEventStore<'_> {
         )
     }
 
-    pub(crate) async fn put_icloud_event_if_absent(
-        &self,
-        event_id: &EventId,
-        bytes: &[u8],
-    ) -> Result<(), NookError> {
-        let web_auth_token = self.web_auth_token;
-        let token = nook_core::OauthAccessToken::parse(web_auth_token)?;
-        let content = str::from_utf8(bytes)
-            .map_err(|e| NookError::Serialization(format!("Event YAML must be UTF-8: {e}")))?;
-        let checked = CheckedEventWrite::parse(CheckedEventWriteRequest {
-            bytes,
-            event_id,
-            location: self.placed.location(),
-            provider: "CloudKit",
-        })?;
-        self.put_checked(checked, token.as_ref(), content).await
-    }
-
-    async fn put_checked(
+    /// Create the event's record unless the namespace already holds it; the
+    /// record's text is the checked event's UTF-8 bytes.
+    pub(super) async fn put_icloud_event(
         &self,
         checked: CheckedEventWrite<'_>,
-        token: &str,
-        content: &str,
     ) -> Result<(), NookError> {
+        let token = self.web_auth_token.expose();
+        let content = str::from_utf8(checked.bytes())
+            .map_err(|e| NookError::Serialization(format!("Event YAML must be UTF-8: {e}")))?;
         let target = self.target;
         let event_id = checked.event_id();
         let bytes = checked.bytes();
@@ -332,7 +317,7 @@ mod tests {
                 .get(ICLOUD_CONTENT_FIELD)
                 .ok_or_else(|| anyhow::anyhow!("content field must be present"))?
                 .value,
-            FieldText::Text("encrypted-event".to_owned())
+            "encrypted-event"
         );
         // The record names the log it belongs to, so a vault can be listed and
         // deleted on its own.
@@ -342,7 +327,7 @@ mod tests {
                 .get(ICLOUD_LOCATION_FIELD)
                 .ok_or_else(|| anyhow::anyhow!("location field must be present"))?
                 .value,
-            FieldText::Text("vault:store_abcdefghijk".to_owned())
+            "vault:store_abcdefghijk"
         );
         Ok(())
     }
@@ -352,7 +337,9 @@ mod tests {
 mod fetch_tests {
     use super::*;
     use crate::storage::checked_event_write::tests::EventFixture;
+    use crate::storage::event_store::EventStore;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+    use crate::test_fixtures::WasmFixture;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     const LOOKUP: &str = "records/lookup";
@@ -385,8 +372,9 @@ mod fetch_tests {
             nook_core::IdentityId::parse("idn_abcdefghijk")?,
             nook_core::StoreId::parse("store_testtoken11")?,
         );
+        let web_token = WasmFixture::secret("web-token")?;
         let store = ICloudEventStore {
-            web_auth_token: "web-token",
+            web_auth_token: &web_token,
             target: &super::super::owner_share_fixture()?,
             placed: &location,
         };
@@ -395,7 +383,7 @@ mod fetch_tests {
             FetchRoute::ok("POST", MODIFY, r#"{"records":[]}"#),
         ])?;
         store
-            .put_icloud_event_if_absent(&fixture.event_id, &fixture.bytes)
+            .put_checked(fixture.checked(location.location())?)
             .await?;
         assert_eq!(stub.calls().len(), 2);
         drop(stub);
@@ -407,7 +395,7 @@ mod fetch_tests {
             &existing(&fixture, content)?,
         )])?;
         store
-            .put_icloud_event_if_absent(&fixture.event_id, &fixture.bytes)
+            .put_checked(fixture.checked(location.location())?)
             .await?;
         assert_eq!(stub.calls().len(), 1);
         drop(stub);
@@ -419,7 +407,7 @@ mod fetch_tests {
         )])?;
         assert!(
             store
-                .put_icloud_event_if_absent(&fixture.event_id, &fixture.bytes)
+                .put_checked(fixture.checked(location.location())?)
                 .await
                 .is_err()
         );
@@ -440,8 +428,9 @@ mod fetch_tests {
             nook_core::IdentityId::parse("idn_abcdefghijk")?,
             nook_core::StoreId::parse("store_testtoken11")?,
         );
+        let web_token = WasmFixture::secret("web-token")?;
         let store = ICloudEventStore {
-            web_auth_token: "web-token",
+            web_auth_token: &web_token,
             target: &super::super::owner_share_fixture()?,
             placed: &location,
         };
@@ -458,7 +447,7 @@ mod fetch_tests {
             FetchRoute::ok("POST", LOOKUP, &existing(&fixture, content)?),
         ])?;
         store
-            .put_icloud_event_if_absent(&fixture.event_id, &fixture.bytes)
+            .put_checked(fixture.checked(location.location())?)
             .await?;
         assert_eq!(stub.calls().len(), 3);
         drop(stub);
@@ -476,7 +465,7 @@ mod fetch_tests {
         ])?;
         assert!(
             store
-                .put_icloud_event_if_absent(&fixture.event_id, &fixture.bytes)
+                .put_checked(fixture.checked(location.location())?)
                 .await
                 .is_err()
         );
@@ -488,13 +477,7 @@ mod fetch_tests {
         ])?;
         assert!(
             store
-                .put_icloud_event_if_absent(&fixture.event_id, &fixture.bytes)
-                .await
-                .is_err()
-        );
-        assert!(
-            store
-                .put_icloud_event_if_absent(&fixture.event_id, b"not an event")
+                .put_checked(fixture.checked(location.location())?)
                 .await
                 .is_err()
         );

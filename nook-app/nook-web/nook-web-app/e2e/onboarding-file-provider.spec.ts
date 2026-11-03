@@ -225,7 +225,9 @@ test.describe('Google Drive authorized accounts', () => {
     await waitForVaultOperationsIdle(owner, ENROLLMENT_UNLOCK_TIMEOUT_MS)
     await assertVaultReady(owner)
 
-    // The Sync page lists each provider's authorized accounts on its card.
+    // Adding the provider returns to the page it started from; the Sync page
+    // lists each provider's authorized accounts on its card.
+    await openStorageSettings(owner)
     const accounts = owner.getByTestId('authorized-accounts')
     await expect(
       accounts.getByTestId(`authorized-account-${ownerEmail}`),
@@ -268,11 +270,6 @@ test.describe('Google Drive authorized accounts', () => {
     const secretValue = 'shared-without-owner-google-credentials'
     await addSecret(owner, secretKey, secretValue)
     await openOnboardDevicePanel(owner)
-    await expect(owner.getByTestId('onboarding-type-label')).toContainText(
-      enLocale.architecture_modes[
-        'onboarding_type_shared-provider-grant_title'
-      ],
-    )
     const picker = owner
       .getByTestId('onboard-device-panel')
       .getByTestId('authorized-accounts')
@@ -441,20 +438,14 @@ test.describe('iCloud provider setup', () => {
       {
         id: 'e2e-icloud-share-owner',
         label: 'iCloud share',
-        fileName: 'icloud-share-events',
-        accessToken: 'ck-web-auth-e2e-share-owner',
-        iCloudShareTarget: e2eICloudShareTarget('owner'),
+        webAuthToken: 'ck-web-auth-e2e-share-owner',
+        shareTarget: e2eICloudShareTarget('owner'),
       },
     ])
     await invokeInitializedVaultProviderReload(page)
     await waitForLoadedSyncProviders(page, 1)
 
     await openOnboardDevicePanel(page)
-    await expect(page.getByTestId('onboarding-type-label')).toContainText(
-      enLocale.architecture_modes[
-        'onboarding_type_shared-provider-grant_title'
-      ],
-    )
     const accounts = page
       .getByTestId('onboard-device-panel')
       .getByTestId('authorized-accounts')

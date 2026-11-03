@@ -55,7 +55,8 @@ identity decrypts in memory and changes nothing.
 
   const choices = $derived.by(() => {
     const request: IdentityChoicesRequest = {
-      vaults: vault.remoteVaultChoices,
+      vaults: vault.remoteVaultChoices.vaults,
+      identities: vault.remoteVaultChoices.identities,
       checks,
       authenticated: vault.isAuthenticated,
     }

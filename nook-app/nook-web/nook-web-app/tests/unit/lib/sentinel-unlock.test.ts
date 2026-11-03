@@ -235,8 +235,7 @@ class SentinelFinalizationFixture {
       kind: PasswordEntrySelectionKind.NotSelected,
     }
     this.state.clearExistingVaultRecoverySummary()
-    this.state.clearOauthFile()
-    this.state.clearOauthSetupPreset()
+    this.state.useThisBrowser()
     this.state.prepareLocalLogin = vi.fn()
     this.state.refreshSentinelUnlockStatus = vi.fn()
     vi.spyOn(this.state, 'showLoginVaultPicker', 'get').mockReturnValue(false)
@@ -308,8 +307,6 @@ class SentinelFinalizationFixture {
       appKind: VaultApplication.UnifiedDevelopment,
       providers: [],
       loginSetup: { kind: LoginSetupKind.Inactive },
-      githubPat: '',
-      githubRepo: '',
       onBeginSetup: vi.fn(),
       onCancelSetup: vi.fn(),
       onCreateDeviceVault: vi.fn(),

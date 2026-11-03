@@ -6,32 +6,26 @@ import {
   getServiceWorker,
   installMockPasskeyRuntime,
   isHostedSmoke,
+  PAIRING_GRANT_PREFIX,
   readExtensionStorage,
   setupPasskeyExtensionPopup,
   simpleVaultBaseUrl,
   reuseNookTabForConnect,
+  showKeyringConsent,
 } from './helpers/extension-smoke-runtime'
 import {
   connectGithubSyncProviderFromSettings,
   createLocalE2eGithubVaultStub,
   createLocalVaultOnLogin,
   readLocalVaultYamlFromIdb,
+  storeIdOfVaultYaml,
 } from '../../nook-web-app/e2e/helpers'
 
 const GITHUB_REPO = 'nook-extension-identity'
 const GITHUB_PAT = 'ghp_test_token'
-const PAIRING_GRANT_PREFIX = 'nook:extension-pairing-grant:'
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
 )
-
-function storeIdOf(yaml: string): string {
-  const storeId = yaml.match(/^store_id:\s*(\S+)/mu)?.[1]
-  if (!storeId) {
-    throw new Error('store_id missing from vault yaml')
-  }
-  return storeId
-}
 
 // The vault page reaches GitHub through Playwright's stub. The extension's
 // offscreen session is outside Playwright's routing, so GitHub resolves
@@ -74,7 +68,9 @@ test('the extension joins the keyring from the approval without reaching its pro
       'Personal vault',
       'authenticated-shell',
     )
-    const storeId = storeIdOf(await readLocalVaultYamlFromIdb(vaultPage))
+    const storeId = storeIdOfVaultYaml(
+      await readLocalVaultYamlFromIdb(vaultPage),
+    )
     await connectGithubSyncProviderFromSettings(
       vaultPage,
       GITHUB_REPO,
@@ -98,28 +94,7 @@ test('the extension joins the keyring from the approval without reaching its pro
       nookPage: vaultPage,
       connect: () => pairPopup.getByTestId('connect-simple-vault-btn').click(),
     })
-    const consent = connectPage.getByTestId('extension-connect-consent')
-    // The request unlocks the keyring, not a vault; the consent follows in
-    // place with no vault opened.
-    const unlockKeyring = connectPage.getByTestId('extension-request-unlock')
-    // The page may unlock the keyring by itself as it loads; otherwise the
-    // request's unlock does. Either way the consent replaces the request.
-    await expect
-      .poll(
-        async () => {
-          if (await consent.isVisible()) return true
-          if (
-            (await unlockKeyring.isVisible()) &&
-            (await unlockKeyring.isEnabled())
-          ) {
-            await unlockKeyring.click({ timeout: 2_000 }).catch(() => false)
-          }
-          return consent.isVisible()
-        },
-        { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
-      )
-      .toBe(true)
-    await expect(consent).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
+    const consent = await showKeyringConsent(connectPage)
     // The extension joins the keyring, never one vault alone.
     await expect(
       consent.getByTestId('extension-connect-diagram-keyring'),

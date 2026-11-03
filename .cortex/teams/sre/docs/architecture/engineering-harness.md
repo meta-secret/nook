@@ -223,6 +223,7 @@ Observed execution and cache-proof status are recorded in
 - It joins both successful branches into the same sealed image.
 - Verification is not serialized after the build.
 - `web-e2e-base` adds Playwright Chromium for Main and manual e2e.
+- It also installs the pinned SeaweedFS `weed` binary, which Playwright starts as the local S3 server.
 - It uses a separate `:web-e2e-*` cache.
 - Browser-free PR web solves never pull the browser layer.
 - Neither lineage contains Cargo or `target/`.

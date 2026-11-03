@@ -62,6 +62,7 @@ impl RegisteredType {
                 | "nook_auth2::wire::SigningSeedHex"
                 | "nook_auth2::wire::DecryptedPlaintext"
                 | "nook_auth2::wire::DeviceIdentitySecret"
+                | "nook_auth2::wire::ProviderSecretText"
         )
     }
 }
@@ -195,6 +196,7 @@ mod tests {
             "nook_auth2::wire::SigningSeedHex",
             "nook_auth2::wire::DecryptedPlaintext",
             "nook_auth2::wire::DeviceIdentitySecret",
+            "nook_auth2::wire::ProviderSecretText",
         ] {
             assert!(RegisteredType::secret(path));
         }

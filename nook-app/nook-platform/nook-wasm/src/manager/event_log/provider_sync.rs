@@ -24,7 +24,7 @@ use super::{
     LocalFolderEventWrite, LocalFolderHandles, NookDatabase, NookError, NookVaultManager,
     RemoteEventLogClassification, VaultCryptoState,
 };
-use crate::manager::ChosenProviderVault;
+use crate::manager::{ChosenProviderVault, PreparedProvider, SyncOutbox};
 
 mod outbox;
 use outbox::{OutboxIndexScope, PendingOutboxEvent};
@@ -124,14 +124,13 @@ impl NookVaultManager {
         event_id: &EventId,
         bytes: &[u8],
     ) -> Result<(), NookError> {
-        let provider_id = if self.storage.mode == StorageMode::Local {
-            if self.sync_outbox.provider_id.is_empty() {
-                return Ok(());
-            }
-            self.sync_outbox.provider_id.clone()
-        } else {
-            self.local_cache_ref()
-        };
+        let provider_id = match (&self.storage.provider, &self.sync_outbox) {
+            (PreparedProvider::Remote(remote), _) => remote.cache_ref(),
+            (PreparedProvider::ThisBrowser, SyncOutbox::Bound(target)) => target.provider.clone(),
+            (PreparedProvider::ThisBrowser, SyncOutbox::Unbound) => return Ok(()),
+        }
+        .as_str()
+        .to_owned();
         NookDatabase::queue_outbox_entry(EventDbQueueOutboxEntry {
             provider_id: &provider_id,
             event_id: event_id.as_str(),
@@ -245,29 +244,26 @@ impl NookVaultManager {
     }
 
     pub(in crate::manager) async fn flush_sync_event_outbox(&mut self) -> Result<(), NookError> {
-        if self.storage.mode != StorageMode::Local {
-            return self.flush_event_outbox().await;
-        }
-        if self.sync_outbox.provider_id.is_empty() {
-            return Ok(());
-        }
-        let mode = self.sync_outbox.storage_mode.to_string();
-        let pat = self.sync_outbox.access_token.clone();
-        let repo = self.sync_outbox.repo_arg.clone();
+        // The clone keeps the outbox bound when the flush fails.
+        let connection = match (&self.storage.provider, &self.sync_outbox) {
+            (PreparedProvider::Remote(_), _) => return self.flush_event_outbox().await,
+            (PreparedProvider::ThisBrowser, SyncOutbox::Unbound) => return Ok(()),
+            (PreparedProvider::ThisBrowser, SyncOutbox::Bound(target)) => target.connection.clone(),
+        };
         let sync_result = async {
-            self.prepare_storage_preserving_vault_metadata(&mode, &pat, &repo)
+            self.prepare_storage_preserving_vault_metadata(&connection)
                 .await?;
             self.flush_event_outbox().await
         }
         .await;
         let restore_result = self
-            .prepare_storage_preserving_vault_metadata("local", "", "")
+            .prepare_storage_preserving_vault_metadata(&nook_core::StorageConnection::Local)
             .await;
         sync_result.and(restore_result)
     }
 
     pub(in crate::manager) async fn flush_event_outbox(&mut self) -> Result<(), NookError> {
-        if self.storage.mode == StorageMode::Local {
+        if self.storage.mode() == StorageMode::Local {
             return Ok(());
         }
         let provider_id = self.local_cache_ref();

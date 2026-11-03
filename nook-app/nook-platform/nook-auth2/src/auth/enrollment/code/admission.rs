@@ -123,18 +123,18 @@ impl CheckedEnrollmentEnvelope {
         let provider_payload: EnrollmentProviderPayload =
             serde_json::from_slice(&plaintext).map_err(|_| EnrollmentError::WrongPassword)?;
         let EnrollmentProviderPayload {
-            provider,
+            providers,
             identity,
             invite,
         } = provider_payload;
-        provider.validate()?;
+        providers.validate()?;
         if identity.check().is_err() {
             return Err(EnrollmentError::WrongPassword);
         }
         invite.check()?;
 
         Ok(DecryptedEnrollmentPayload {
-            provider,
+            providers,
             identity,
             invite,
             entry_id: envelope.entry_id,

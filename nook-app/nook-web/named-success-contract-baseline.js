@@ -13,9 +13,4 @@
  */
 
 /** @type {readonly NamedSuccessContractBaselineEntry[]} */
-export const namedSuccessContractBaseline = [
-  {
-    file: "nook-web-shared/src/vault-app/lib/vault/provider-selection.svelte.ts",
-    gitBlobSha1: "8ebb17c2f2be5123da7e1f86f38cae3199952d79",
-  },
-];
+export const namedSuccessContractBaseline = [];

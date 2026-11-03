@@ -1,30 +1,10 @@
 import { beforeAll, beforeEach, describe, expect, test } from 'vitest'
 import { default as initNookWasm, NookVaultManager } from '$app-wasm'
-import {
-  DEFAULT_DRIVE_BACKUP_NAME,
-  configuredOAuthFile,
-  decodeStoredOAuthFileConfiguration,
-  defaultOAuthFileConfig,
-  githubPatValue,
-  StoredOAuthFileConfigurationDecodeKind,
-  oauth_access_token,
-  providerPersistenceDefaults,
-  storedGithubPat,
-  storedGithubRepository,
-  storedOAuthAccountEmail,
-  storedOAuthCredential,
-  storedOAuthRefreshCredential,
-  unselectedVaultScope,
-  type StorageProvider,
-} from '$lib/auth/providers'
+import { unselectedVaultScope, type StorageProvider } from '$lib/auth/providers'
+import { ProviderRowFixture } from '../provider-fixtures'
 
 const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
 let manager: NookVaultManager
-
-type PersistedAuthProvider = {
-  githubPat?: unknown
-  oauthFile?: unknown
-}
 
 async function clearAuthProviderStore(): Promise<void> {
   await new Promise<void>((resolve, reject) => {
@@ -60,15 +40,28 @@ async function clearAuthProviderStore(): Promise<void> {
 }
 
 function githubProvider(id: string, pat: string): StorageProvider {
+  const row = ProviderRowFixture.github(ProviderRowFixture.unscoped(id))
   return {
-    ...providerPersistenceDefaults(),
-    id,
-    type: 'github',
-    label: 'GitHub',
-    githubPat: storedGithubPat(pat),
-    githubRepo: storedGithubRepository('nook'),
-    syncCheckpoint: { state: 'neverSynced' },
-    createdAt: '2026-06-24T00:00:00.000Z',
+    ...row,
+    provider: {
+      type: 'github',
+      repository: { state: 'repository', value: 'nook' },
+      token: pat,
+    },
+  }
+}
+
+function driveProvider(id: string, accessToken: string): StorageProvider {
+  const row = ProviderRowFixture.googleDrive(ProviderRowFixture.unscoped(id))
+  return {
+    ...row,
+    provider: {
+      type: 'oauth-file',
+      preset: 'google-drive',
+      authorization: { accessToken, expiresAt: '2099-01-01T00:00:00.000Z' },
+      account: { state: 'email', email: 'me@example.com' },
+      folderId: 'drive-folder-test',
+    },
   }
 }
 
@@ -128,68 +121,47 @@ async function readRawAuthProvidersFromIdb(): Promise<unknown> {
   return (await readStoredProviderRecord()).value
 }
 
-function persistedProvider(rawSnapshot: unknown): PersistedAuthProvider {
+/** The tagged payload of the first persisted row. */
+function persistedPayload(rawSnapshot: unknown): unknown {
   if (
     !rawSnapshot ||
     typeof rawSnapshot !== 'object' ||
-    Array.isArray(rawSnapshot) ||
-    !('providers' in rawSnapshot)
+    !('providers' in rawSnapshot) ||
+    !Array.isArray(rawSnapshot.providers)
   ) {
     throw new Error('expected a persisted auth-provider snapshot')
   }
-  const providers = rawSnapshot.providers
-  if (!Array.isArray(providers) || providers.length === 0) {
-    throw new Error('expected a persisted auth provider')
+  const row: unknown = rawSnapshot.providers[0]
+  if (!(row instanceof Object) || !('provider' in row)) {
+    throw new Error('expected a persisted provider row')
   }
-  for (const candidate of providers) {
-    const provider: unknown = candidate
-    if (!(provider instanceof Object) || Array.isArray(provider)) {
-      continue
-    }
-    const persisted: PersistedAuthProvider = {}
-    if ('githubPat' in provider) persisted.githubPat = provider.githubPat
-    if ('oauthFile' in provider) persisted.oauthFile = provider.oauthFile
-    return persisted
-  }
-  throw new Error('expected the persisted provider to be an object')
-}
-
-function storedTokenValue(stored: unknown): string {
-  if (
-    !stored ||
-    typeof stored !== 'object' ||
-    !('value' in stored) ||
-    typeof stored.value !== 'string'
-  ) {
-    throw new Error('expected a persisted credential token')
-  }
-  return stored.value
+  return row.provider
 }
 
 function persistedGithubPat(rawSnapshot: unknown): string {
-  return storedTokenValue(persistedProvider(rawSnapshot).githubPat)
+  const payload = persistedPayload(rawSnapshot)
+  if (
+    !(payload instanceof Object) ||
+    !('token' in payload) ||
+    typeof payload.token !== 'string'
+  ) {
+    throw new Error('expected a persisted GitHub token')
+  }
+  return payload.token
 }
 
-function persistedOAuthCredentials(rawSnapshot: unknown): {
-  accessToken: string
-  refreshToken: string
-} {
-  const oauthFile = persistedProvider(rawSnapshot).oauthFile
+function persistedDriveAccessToken(rawSnapshot: unknown): string {
+  const payload = persistedPayload(rawSnapshot)
   if (
-    !oauthFile ||
-    typeof oauthFile !== 'object' ||
-    !('config' in oauthFile) ||
-    !oauthFile.config ||
-    typeof oauthFile.config !== 'object' ||
-    !('accessToken' in oauthFile.config) ||
-    !('refreshToken' in oauthFile.config)
+    !(payload instanceof Object) ||
+    !('authorization' in payload) ||
+    !(payload.authorization instanceof Object) ||
+    !('accessToken' in payload.authorization) ||
+    typeof payload.authorization.accessToken !== 'string'
   ) {
-    throw new Error('expected persisted OAuth credentials')
+    throw new Error('expected a persisted Drive access token')
   }
-  return {
-    accessToken: storedTokenValue(oauthFile.config.accessToken),
-    refreshToken: storedTokenValue(oauthFile.config.refreshToken),
-  }
+  return payload.authorization.accessToken
 }
 
 describe('sync provider credential encryption (wasm + IndexedDB)', () => {
@@ -232,9 +204,9 @@ describe('sync provider credential encryption (wasm + IndexedDB)', () => {
     })
 
     const loaded = await manager.load_auth_providers_snapshot()
-    const provider = loaded.providers[0]
-    if (!provider) throw new Error('expected a loaded GitHub provider')
-    expect(githubPatValue(provider.githubPat)).toBe(pat)
+    expect(loaded.providers).toMatchObject([
+      { provider: { type: 'github', token: pat } },
+    ])
   })
 
   test('loadAuthProviders rejects plaintext credentials', async () => {
@@ -254,11 +226,11 @@ describe('sync provider credential encryption (wasm + IndexedDB)', () => {
     ) {
       throw new Error('expected a persisted GitHub provider row')
     }
-    const row: unknown = plaintext.providers[0]
-    if (!(row instanceof Object)) {
-      throw new Error('expected a persisted GitHub provider row')
+    const payload = persistedPayload(plaintext)
+    if (!(payload instanceof Object)) {
+      throw new Error('expected a persisted GitHub provider payload')
     }
-    Object.assign(row, { githubPat: { state: 'token', value: pat } })
+    Object.assign(payload, { token: pat })
     await new Promise<void>((resolve, reject) => {
       const request = indexedDB.open('nook_auth', 1)
       request.onerror = () =>
@@ -288,57 +260,27 @@ describe('sync provider credential encryption (wasm + IndexedDB)', () => {
     expect(persistedGithubPat(raw)).toBe(pat)
   })
 
-  test('saveAuthProviders seals OAuth access and refresh tokens', async () => {
+  test('saveAuthProviders seals the OAuth access token', async () => {
     const access = 'ya29.unit-oauth-access-token'
-    const refresh = '1//unit-refresh-token-secret'
-    const oauthFile = {
-      ...defaultOAuthFileConfig({
-        preset: 'google-drive',
-        fileName: DEFAULT_DRIVE_BACKUP_NAME,
-      }),
-      accessToken: storedOAuthCredential(access),
-      refreshToken: storedOAuthRefreshCredential(refresh),
-      accountEmail: storedOAuthAccountEmail('me@example.com'),
-    }
     await manager.save_auth_providers_snapshot({
-      providers: [
-        {
-          ...providerPersistenceDefaults(),
-          id: 'gd-unit',
-          type: 'oauth-file',
-          label: 'Google Drive',
-          oauthFile: configuredOAuthFile(oauthFile),
-          syncCheckpoint: { state: 'neverSynced' },
-          createdAt: '2026-06-24T00:00:00.000Z',
-        },
-      ],
+      providers: [driveProvider('gd-unit', access)],
       activeVaultStoreId: unselectedVaultScope(),
     })
 
     const raw = await readRawAuthProvidersFromIdb()
-    const oauth = persistedOAuthCredentials(raw)
-    expect(oauth.accessToken).toContain(AGE_ARMOR_MARKER)
-    expect(oauth.refreshToken).toContain(AGE_ARMOR_MARKER)
-    expect(oauth.accessToken).not.toContain(access)
-    expect(oauth.refreshToken).not.toContain(refresh)
+    const storedAccess = persistedDriveAccessToken(raw)
+    expect(storedAccess).toContain(AGE_ARMOR_MARKER)
+    expect(storedAccess).not.toContain(access)
+    expect(JSON.stringify(raw)).not.toContain(access)
 
     const loaded = await manager.load_auth_providers_snapshot()
-    const provider = loaded.providers[0]
-    if (!provider) throw new Error('expected a loaded OAuth provider')
-    const loadedOauth = decodeStoredOAuthFileConfiguration(provider.oauthFile)
-    if (
-      loadedOauth.kind !== StoredOAuthFileConfigurationDecodeKind.Configured
-    ) {
-      throw new Error('expected configured OAuth credentials')
-    }
-    const loadedAccess = oauth_access_token(loadedOauth.config)
-    if (loadedAccess.kind !== 'available') {
-      throw new Error('expected a loaded OAuth access token')
-    }
-    expect(loadedAccess.token).toBe(access)
-    if (loadedOauth.config.refreshToken.state !== 'token') {
-      throw new Error('expected a loaded OAuth refresh token')
-    }
-    expect(loadedOauth.config.refreshToken.value).toBe(refresh)
+    expect(loaded.providers).toMatchObject([
+      {
+        provider: {
+          type: 'oauth-file',
+          authorization: { accessToken: access },
+        },
+      },
+    ])
   })
 })

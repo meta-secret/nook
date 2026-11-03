@@ -47,7 +47,10 @@ mod auth;
 mod crypto;
 mod ids;
 mod records;
+mod s3_key_prefix;
 mod wire;
+
+pub use s3_key_prefix::{S3KeyPrefix, S3KeyPrefixPath};
 
 pub use auth::device_key_protection::{
     AwaitingPasskeyAssertion, DeviceIdentityProtection, DeviceKeyProtectionSetup,
@@ -62,11 +65,12 @@ pub use auth::enrollment::{
     CheckedEnrollmentEnvelope, CheckedEnrollmentIssuance, DecryptedEnrollmentPayload,
     EnrollmentCodeEnvelope, EnrollmentEmail, EnrollmentEntryLabel, EnrollmentIdentityTarget,
     EnrollmentInvite, EnrollmentInviteVault, EnrollmentIssuance, EnrollmentIssueInput,
-    EnrollmentLinkInput, EnrollmentProvider, EnrollmentProviderDataRef, EnrollmentState,
-    InviteSigningSeed, OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile,
-    OAuthTokenExpiry, PersonalCredentialTransfer, PersonalEnrollmentProvider,
-    PersonalEnrollmentProviderData, SharedEnrollmentProvider, SharedEnrollmentProviderData,
-    SharedProviderGrant, TypedEnrollmentProvider,
+    EnrollmentLinkInput, EnrollmentProvider, EnrollmentProviderDataRef, EnrollmentProviders,
+    EnrollmentState, GithubEnrollmentToken, InviteSigningSeed, OAuthAccountIdentity,
+    OAuthFileEnrollment, PersonalCredentialTransfer, PersonalEnrollmentProvider,
+    PersonalEnrollmentProviderData, S3EnrollmentConnection, S3EnrollmentKey, S3EnrollmentLocation,
+    SharedEnrollmentProvider, SharedEnrollmentProviderData, SharedProviderGrant,
+    TypedEnrollmentProvider,
 };
 pub use auth::identity::{
     IdentityId, IdentityInviteId, IdentityLegacyVaultImport, IdentityLegacyVaultReconciliation,
@@ -76,13 +80,13 @@ pub use auth::identity::{
     IdentityVaultDekReconciliation, IdentityVaultKeyOpening, IdentityVaultKeys, MemberDekEnvelope,
 };
 pub use auth::identity_directory::{
-    AppKeyIdentityMembership, DirectoryLegacyVaultImport, DirectoryMemberSigningUpdate,
-    DirectoryOwnedVaultOpening, FreshIdentityNaming, IdentityConnectionKey,
-    IdentityConnectionKeyRequest, IdentityCreation, IdentityDirectory, IdentityDirectoryRejection,
-    IdentityDirectoryResolution, IdentityDirectoryVaultKeys, IdentityInvitationBinding,
-    IdentityInvitationBindingRequest, IdentitySelection, LocalIdentityKeyRetirement,
-    LocalIdentityLog, RecoveryRetirement, ReplicatedIdentityAddition, ReplicatedIdentityAdoption,
-    ReplicatedIdentityMembership, ReplicatedVaultGrant,
+    AdoptedIdentityLabel, AppKeyIdentityMembership, DirectoryLegacyVaultImport,
+    DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, FreshIdentityNaming,
+    IdentityConnectionKey, IdentityConnectionKeyRequest, IdentityCreation, IdentityDirectory,
+    IdentityDirectoryRejection, IdentityDirectoryResolution, IdentityDirectoryVaultKeys,
+    IdentityInvitationBinding, IdentityInvitationBindingRequest, IdentitySelection,
+    LocalIdentityKeyRetirement, LocalIdentityLog, RecoveryRetirement, ReplicatedIdentityAddition,
+    ReplicatedIdentityAdoption, ReplicatedIdentityMembership, ReplicatedVaultGrant,
 };
 
 pub use auth::local_identity_keyring::{
@@ -151,7 +155,8 @@ pub use records::{
 pub use wire::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
     DeviceSigningPublicKey, IdentityVaultEventId, IsoTimestamp, MemberLabel, OpaqueCiphertext,
-    PasswordEntryId, Sha256Hex, SigningSeedHex, SymmetricKey, Url64EncodedString,
+    PasswordEntryId, ProviderSecretText, Sha256Hex, SigningSeedHex, SymmetricKey,
+    Url64EncodedString,
 };
 
 pub use auth::identity_genesis::IdentityVaultGenesisRecordsRequest;

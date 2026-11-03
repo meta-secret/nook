@@ -20,6 +20,7 @@ mod sentinel;
 mod store_id;
 mod sync;
 mod sync_state;
+mod typed_boundary;
 
 pub use access::*;
 pub use authentication::*;
@@ -36,3 +37,5 @@ pub use sentinel::*;
 pub use store_id::*;
 pub use sync::*;
 pub use sync_state::*;
+pub use typed_boundary::TypedBoundaryError;
+pub(crate) use typed_boundary::{TypedInput, TypedOutput};

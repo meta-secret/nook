@@ -46,8 +46,12 @@ const uiKeys = [
   "firstRun",
   "firstRunVaultName",
   "joinICloudSignIn",
+  "inviteKeyRequest",
+  "s3KeyFormRequest",
   "identityPage",
+  "providerAddReturn",
   "firstRunPlace",
+  "firstRunSyncSource",
   "firstRunJoin",
   "newIdentity",
   "newIdentityName",
@@ -84,23 +88,16 @@ const providerKeys = [
   "recordExistingVaultRecovery",
   "clearExistingVaultRecoverySummary",
   "addProviderOpen",
-  "storageMode",
-  "githubPat",
-  "githubRepo",
-  "oauthFileDraft",
-  "configureOauthFile",
-  "clearOauthFile",
-  "localFolderDraft",
-  "configureLocalFolder",
-  "clearLocalFolder",
+  "providerDraft",
+  "stageProviderDraft",
+  "useThisBrowser",
+  "forgetDraftCredentials",
+  "localVaultPresence",
   "localFolderBackupSupported",
   "vaultArchitecture",
   "draftDeviceMode",
   "draftVaultType",
   "draftReplicationType",
-  "oauthSetupSelection",
-  "selectOauthSetupPreset",
-  "clearOauthSetupPreset",
   "clearIdentityProviderSession",
   "googleOAuthBusy",
   "icloudOAuthPreparing",
@@ -124,7 +121,6 @@ const sessionKeys = [
   "vaultMembers",
   "enrollSecretsKey",
   "enrollMembersKey",
-  "sharedJoinerIdentity",
   "joinEnrollmentPrompt",
   "awaitingJoinApproval",
   "loginPasswordPrompt",
@@ -222,8 +218,12 @@ class VaultStateSlicesImplementation {
   declare firstRun: VaultUiState["firstRun"];
   declare firstRunVaultName: VaultUiState["firstRunVaultName"];
   declare joinICloudSignIn: VaultUiState["joinICloudSignIn"];
+  declare inviteKeyRequest: VaultUiState["inviteKeyRequest"];
+  declare s3KeyFormRequest: VaultUiState["s3KeyFormRequest"];
   declare identityPage: VaultUiState["identityPage"];
+  declare providerAddReturn: VaultUiState["providerAddReturn"];
   declare firstRunPlace: VaultUiState["firstRunPlace"];
+  declare firstRunSyncSource: VaultUiState["firstRunSyncSource"];
   declare firstRunJoin: VaultUiState["firstRunJoin"];
   declare newIdentity: VaultUiState["newIdentity"];
   declare newIdentityName: VaultUiState["newIdentityName"];
@@ -258,23 +258,16 @@ class VaultStateSlicesImplementation {
   declare recordExistingVaultRecovery: VaultProviderState["recordExistingVaultRecovery"];
   declare clearExistingVaultRecoverySummary: VaultProviderState["clearExistingVaultRecoverySummary"];
   declare addProviderOpen: VaultProviderState["addProviderOpen"];
-  declare storageMode: VaultProviderState["storageMode"];
-  declare githubPat: VaultProviderState["githubPat"];
-  declare githubRepo: VaultProviderState["githubRepo"];
-  declare readonly oauthFileDraft: VaultProviderState["oauthFileDraft"];
-  declare configureOauthFile: VaultProviderState["configureOauthFile"];
-  declare clearOauthFile: VaultProviderState["clearOauthFile"];
-  declare readonly localFolderDraft: VaultProviderState["localFolderDraft"];
-  declare configureLocalFolder: VaultProviderState["configureLocalFolder"];
-  declare clearLocalFolder: VaultProviderState["clearLocalFolder"];
+  declare readonly providerDraft: VaultProviderState["providerDraft"];
+  declare stageProviderDraft: VaultProviderState["stageProviderDraft"];
+  declare useThisBrowser: VaultProviderState["useThisBrowser"];
+  declare forgetDraftCredentials: VaultProviderState["forgetDraftCredentials"];
+  declare readonly localVaultPresence: VaultProviderState["localVaultPresence"];
   declare localFolderBackupSupported: VaultProviderState["localFolderBackupSupported"];
   declare vaultArchitecture: VaultProviderState["vaultArchitecture"];
   declare draftDeviceMode: VaultProviderState["draftDeviceMode"];
   declare draftVaultType: VaultProviderState["draftVaultType"];
   declare draftReplicationType: VaultProviderState["draftReplicationType"];
-  declare readonly oauthSetupSelection: VaultProviderState["oauthSetupSelection"];
-  declare selectOauthSetupPreset: VaultProviderState["selectOauthSetupPreset"];
-  declare clearOauthSetupPreset: VaultProviderState["clearOauthSetupPreset"];
   declare clearIdentityProviderSession: VaultProviderState["clearIdentityProviderSession"];
   declare googleOAuthBusy: VaultProviderState["googleOAuthBusy"];
   declare icloudOAuthPreparing: VaultProviderState["icloudOAuthPreparing"];
@@ -296,7 +289,6 @@ class VaultStateSlicesImplementation {
   declare vaultMembers: VaultSessionState["vaultMembers"];
   declare enrollSecretsKey: VaultSessionState["enrollSecretsKey"];
   declare enrollMembersKey: VaultSessionState["enrollMembersKey"];
-  declare sharedJoinerIdentity: VaultSessionState["sharedJoinerIdentity"];
   declare joinEnrollmentPrompt: VaultSessionState["joinEnrollmentPrompt"];
   declare awaitingJoinApproval: VaultSessionState["awaitingJoinApproval"];
   declare loginPasswordPrompt: VaultSessionState["loginPasswordPrompt"];

@@ -6,6 +6,7 @@
 //! completes its join from that log (`join_identity_from_log`). Nothing is
 //! read from a sync provider, so it works before the keyring has one.
 
+use crate::TypedOutput;
 use nook_core::{
     AppId, DevicePublicKey, DeviceSigningPublicKey, IdentityMemberAdd, IdentityMemberKeys,
     MemberLabel,
@@ -14,7 +15,6 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
-use super::UNENCODABLE_TYPED_OUTPUT;
 use crate::manager::NookVaultManager;
 use crate::{NookDatabase, NookError};
 
@@ -92,13 +92,14 @@ impl NookVaultManager {
             identity_id: identity_id.as_str().to_owned(),
             events,
         };
-        Tsify::into_ts(&export).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        Ok(export.encode()?)
     }
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::TypedInput;
     use nook_core::{AppKey, SigningIdentity};
     use wasm_bindgen_test::*;
 
@@ -151,9 +152,7 @@ mod browser_tests {
         let state = manager.current_identity_state().await?;
         assert!(state.member(extension.app.app_id()).is_some());
 
-        let export = js(manager.export_identity_log().await)?
-            .to_rust()
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        let export = js(manager.export_identity_log().await)?.decode()?;
         let identity_id =
             NookVaultManager::current_identity_id(&manager.unlocked_app_key()?).await?;
         assert_eq!(export.identity_id, identity_id.as_str());

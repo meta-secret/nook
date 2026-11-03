@@ -1,6 +1,7 @@
 use super::NookVaultManager;
 use crate::BrowserTimestamp;
 use crate::IdentityDbValidateVaultIdentityEnrollment;
+use crate::TypedInput;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use crate::storage::indexed_db::ImportVaultLabel;
 
@@ -10,7 +11,7 @@ use crate::NookDatabase;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use nook_core::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
 
-use crate::{NookError, NookSecretPage};
+use crate::{NookError, NookSecretPage, NookStorageConnection};
 use nook_core::{
     BuildMembersRecordsRequest, MemberFromIdentityRequest, ResolveMemberRosterRequest,
     RosterAddMemberRequest, VaultMember,
@@ -38,16 +39,14 @@ impl NookVaultManager {
     )]
     pub async fn connect_with_password(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<NookStorageConnection>,
         entry_id: String,
         password: String,
         page_limit: u32,
     ) -> Result<NookSecretPage, JsError> {
+        let connection = connection.decode()?;
         drop(self.status.tx.send("CONNECT_START".to_owned()));
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
-            .await?;
+        self.prepare_storage(&connection).await?;
         // A backup password is an alternate vault-key credential. After an
         // explicit Lock the wrapped device identity stays protected, but the
         // password must still be able to open the local vault without first
@@ -139,6 +138,7 @@ impl NookVaultManager {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::TypedOutput;
 
     use nook_core::{
         Database, DeviceIdentity, DeviceMode, SecretId, SecretValue, SentinelPolicy,
@@ -213,9 +213,7 @@ mod browser_tests {
         let mut manager = NookVaultManager::new();
         let result = manager
             .connect_with_password(
-                "local".to_owned(),
-                String::new(),
-                String::new(),
+                &nook_core::StorageConnection::Local.encode()?,
                 password_entry.id,
                 "correct horse battery staple".to_owned(),
                 50,
@@ -265,9 +263,7 @@ mod browser_tests {
         let mut manager = NookVaultManager::new();
         let result = manager
             .connect_with_password(
-                "local".to_owned(),
-                String::new(),
-                String::new(),
+                &nook_core::StorageConnection::Local.encode()?,
                 String::new(),
                 "correct horse battery staple".to_owned(),
                 50,
@@ -309,9 +305,7 @@ mod browser_tests {
         let mut recovered = NookVaultManager::new();
         let page = recovered
             .connect_with_password(
-                "local".to_owned(),
-                String::new(),
-                String::new(),
+                &nook_core::StorageConnection::Local.encode()?,
                 "unknown-entry-id".to_owned(),
                 "correct horse battery staple".to_owned(),
                 50,
@@ -420,8 +414,8 @@ impl NookVaultManager {
         content: &str,
         vault_missing: bool,
     ) -> Result<(bool, Vec<nook_core::StoredSecretRecord>), NookError> {
-        let event_log_remote =
-            self.storage.mode != StorageMode::Local && (vault_missing || content.trim().is_empty());
+        let event_log_remote = self.storage.mode() != StorageMode::Local
+            && (vault_missing || content.trim().is_empty());
         if event_log_remote {
             self.sync_events_from_current_provider().await?;
             if self.vault.store_id.is_empty() || !self.event_log_has_events().await? {

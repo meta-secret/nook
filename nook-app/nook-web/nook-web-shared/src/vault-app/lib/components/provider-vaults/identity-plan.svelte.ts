@@ -4,6 +4,7 @@ import { I18N_KEYS } from "../../../../generated/i18n-keys";
 import {
   provider_identity_choices,
   type CredentialCheckReport,
+  type FilingIdentity,
   type IdentityDecision,
   type IdentitySession,
   type NookProviderIdentityChoicesRequest,
@@ -14,6 +15,7 @@ import {
 /** A listing and the checks run on its page, for one session. */
 export type IdentityChoicesRequest = {
   readonly vaults: readonly ProviderVaultSummary[];
+  readonly identities: readonly FilingIdentity[];
   readonly checks: readonly CredentialCheckReport[];
   readonly authenticated: boolean;
 };
@@ -35,6 +37,7 @@ export function identityChoices(
     : "noIdentity";
   const typed: NookProviderIdentityChoicesRequest = {
     vaults: [...request.vaults],
+    identities: [...request.identities],
     checks: [...request.checks],
     session,
   };

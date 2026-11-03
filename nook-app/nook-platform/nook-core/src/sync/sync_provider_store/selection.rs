@@ -1,5 +1,5 @@
 //! Compatible provider selection retains the requested preference as domain policy.
-use super::{ReplicationType, StorageProviderData};
+use crate::{ReplicationSupport, ReplicationType, StorageProvider};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProviderId(String);
 impl From<String> for ProviderId {
@@ -33,7 +33,7 @@ pub enum ProviderSelection {
     Selected(ProviderId),
 }
 pub struct ProviderSelectionRequest<'a> {
-    pub providers: &'a [StorageProviderData],
+    pub providers: &'a [StorageProvider],
     pub replication_type: ReplicationType,
     pub policy: ProviderSelectionPolicy,
 }
@@ -48,15 +48,15 @@ impl ProviderSelectionRequest<'_> {
         if let ProviderSelectionPolicy::Prefer(preferred_id) = policy
             && let Some(provider) = providers.iter().find(|provider| {
                 provider.id == preferred_id.as_str()
-                    && provider.supports_replication(replication_type)
+                    && provider.replication_support(replication_type)
+                        == ReplicationSupport::Supported
             })
         {
             return ProviderSelection::Selected(provider.id.clone().into());
         }
-        match providers
-            .iter()
-            .find(|provider| provider.supports_replication(replication_type))
-        {
+        match providers.iter().find(|provider| {
+            provider.replication_support(replication_type) == ReplicationSupport::Supported
+        }) {
             Some(provider) => ProviderSelection::Selected(provider.id.clone().into()),
             None => ProviderSelection::Unavailable,
         }

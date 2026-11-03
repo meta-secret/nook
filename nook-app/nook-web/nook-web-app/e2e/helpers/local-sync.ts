@@ -12,7 +12,7 @@ import {
   E2E_OAUTH_ONBOARD_PROVIDER,
   seedExtraGithubProviders,
   seedExtraOauthFileProviders,
-  type E2eOauthSyncProvider,
+  type SeededDriveProviderInput,
 } from './auth-providers'
 import { keepVaultIdleLockDisabled } from './device-enrollment'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, sleep } from './environment'
@@ -40,6 +40,13 @@ import { requireRecord } from './guards'
 export type E2eOauthFileStub =
   | ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
   | ReturnType<typeof createLocalE2eFileSyncVaultStub>
+
+/** The `store_id` a local vault's YAML names. */
+export function storeIdOfVaultYaml(yaml: string): string {
+  const storeId = yaml.match(/^store_id:\s*(\S+)/m)?.[1]
+  if (!storeId) throw new Error('store_id missing from vault yaml')
+  return storeId
+}
 
 /** Read canonical local vault YAML bytes stored in IndexedDB (active vault). */
 export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
@@ -562,7 +569,7 @@ export async function seedGithubSyncProvidersWhileUnlocked(
   await seedExtraGithubProviders(page, providers)
   for (const provider of providers) {
     await stubGithubVaultForLocalE2e(page, {
-      repoName: provider.githubRepo,
+      repoName: provider.repository,
       vaultYaml,
     })
   }
@@ -602,7 +609,7 @@ export async function reloadUnlockWithSyncProvider(
   opts?: {
     password?: string
     entryLabel?: string
-    providers?: E2eOauthSyncProvider[]
+    providers?: SeededDriveProviderInput[]
     sharedStub?: E2eOauthFileStub
   },
 ) {

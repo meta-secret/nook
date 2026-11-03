@@ -4,19 +4,10 @@ import {
   DRIVE_READONLY_SCOPE,
   GoogleOAuthPrompt,
   type GoogleSharedDriveAccessRequest,
-  type GoogleOAuthConfigurationUpdate,
-  type GoogleOAuthExpiryAssessment,
   type GoogleTokenPromptRequest,
   googleOAuthSession,
 } from '$lib/auth/google/oauth'
 import { OAuthFailure, OAuthFailureKind } from '$lib/auth/oauth-failure'
-import {
-  configuredOAuthFile,
-  defaultOAuthFileConfig,
-  oauth_access_token,
-  oauthConfigurationNotApplicable,
-  storedOAuthAccountEmail,
-} from '$lib/auth/providers'
 
 type TokenCallback = (response: {
   access_token: string
@@ -82,45 +73,31 @@ describe('google-oauth', () => {
     expect(googleOAuthSession.isGoogleOAuthConfigured()).toBe(true)
   })
 
-  it('detects expired oauth access tokens with skew', () => {
-    const configurationUpdate: GoogleOAuthConfigurationUpdate = {
+  it('keeps a current Drive authorization without asking Google', async () => {
+    const { requests } = stubGoogleIdentityServices()
+    const access = googleOAuthSession.driveAccess({
       tokens: {
-        accessToken: 'token',
-        expiresAt: new Date(Date.now() - 1000).toISOString(),
+        accessToken: 'current-token',
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
       },
-      existing: oauthConfigurationNotApplicable(),
-    }
-    const expired = googleOAuthSession.oauthTokensToConfig(configurationUpdate)
-    expect(expired.isOk()).toBe(true)
-    if (expired.isErr()) return
-    const expiryAssessment: GoogleOAuthExpiryAssessment = {
-      config: expired.value,
-      skewMs: 60_000,
-    }
-    expect(googleOAuthSession.isOAuthAccessTokenExpired(expiryAssessment)).toBe(
-      true,
-    )
+      account: { state: 'email', email: 'owner@example.com' },
+    })
+    const fresh = await googleOAuthSession.ensureFreshDriveAccess(access)
+    expect(fresh._unsafeUnwrap()).toEqual(access)
+    expect(requests.size).toBe(0)
   })
 
   it('refreshes silently with drive.file alone, never asking for drive.readonly', async () => {
     const { callbacks, requests } = stubGoogleIdentityServices()
-    const expiredUpdate: GoogleOAuthConfigurationUpdate = {
+    const expired = googleOAuthSession.driveAccess({
       tokens: {
         accessToken: 'expired-token',
         expiresAt: new Date(Date.now() - 1000).toISOString(),
       },
-      existing: configuredOAuthFile({
-        ...defaultOAuthFileConfig({
-          preset: 'google-drive',
-          fileName: 'vault',
-        }),
-        accountEmail: storedOAuthAccountEmail('owner@example.com'),
-      }),
-    }
-    const expired = googleOAuthSession.oauthTokensToConfig(expiredUpdate)
-    if (expired.isErr()) throw new Error('expected an expired Drive config')
+      account: { state: 'email', email: 'owner@example.com' },
+    })
 
-    const refresh = googleOAuthSession.ensureValidOAuthFileConfig(expired.value)
+    const refresh = googleOAuthSession.ensureFreshDriveAccess(expired)
     await vi.waitFor(() => {
       expect(requests.get(DRIVE_FILE_SCOPE)).toHaveBeenCalledOnce()
     })
@@ -135,13 +112,9 @@ describe('google-oauth', () => {
     if (!callback) throw new Error('expected a Google token callback')
     callback({ access_token: 'fresh-token', expires_in: 3600 })
 
-    const refreshed = await refresh
-    expect(refreshed.isOk()).toBe(true)
-    if (refreshed.isErr()) return
-    expect(oauth_access_token(refreshed.value)).toEqual({
-      kind: 'available',
-      token: 'fresh-token',
-    })
+    const refreshed = (await refresh)._unsafeUnwrap()
+    expect(refreshed.authorization.accessToken).toBe('fresh-token')
+    expect(refreshed.account).toEqual(expired.account)
   })
 
   it('requests the shared Drive scope with the invited account preselected', async () => {

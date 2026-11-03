@@ -4,10 +4,10 @@ use super::super::event_log::{
 use super::NookVaultManager;
 use crate::NookReplacementConflict;
 use crate::NookSecurityConflict;
+use crate::{TypedInput, TypedOutput};
 use nook_core::StoreId;
 #[cfg(all(test, target_arch = "wasm32"))]
 use serde::Serialize;
-use tsify::Tsify;
 #[cfg(all(test, target_arch = "wasm32"))]
 use wasm_bindgen::JsCast;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
@@ -23,11 +23,10 @@ impl NookEventLogRecords {
     #[wasm_bindgen]
     pub fn to_array(&self) -> Result<Vec<tsify::Ts<EventLogStorageRecord>>, wasm_bindgen::JsError> {
         let result = { self.0.clone() };
-        result
+        Ok(result
             .iter()
-            .map(Tsify::into_ts)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+            .map(TypedOutput::encode)
+            .collect::<Result<Vec<_>, _>>()?)
     }
 }
 
@@ -42,9 +41,8 @@ impl NookExternalEventLogRecords {
     ) -> Result<Self, wasm_bindgen::JsError> {
         let records = records
             .into_iter()
-            .map(|value| value.to_rust())
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+            .map(|value| value.decode())
+            .collect::<Result<Vec<_>, _>>()?;
         let result = { Self(records) };
         Ok(result)
     }
@@ -71,8 +69,7 @@ impl NookExtensionEventLogImportStatus {
         let result = evidence
             .admit()
             .map_err(|error| JsError::new(&error.to_string()))?;
-        Tsify::into_ts(&result)
-            .map_err(|_| JsError::new("Typed WASM value could not be converted."))
+        Ok(result.encode()?)
     }
 }
 

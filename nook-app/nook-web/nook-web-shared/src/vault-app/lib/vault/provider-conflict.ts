@@ -9,11 +9,10 @@ import {
   NookEventLogSyncIssueState,
   NookPendingSyncConflict,
   NookProviderSyncRevision,
-  type NookStorageConnectArgs,
+  type NookStorageConnection,
   type NookSyncConflictReview,
   read_local_vault_yaml,
 } from "$app-wasm";
-import { LOCAL_PROVIDER_TYPE } from "$lib/auth/providers";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
   VaultOperationStale,
@@ -53,7 +52,7 @@ interface ProviderConflictPersistence {
 }
 
 interface StagedProviderSyncIssueAssessment {
-  readonly args: NookStorageConnectArgs;
+  readonly args: NookStorageConnection;
 }
 
 const log = browserLogRuntime.createLogger("vault-sync");
@@ -88,7 +87,7 @@ export class ProviderConflictActions {
     const [provider = state.providers[state.providers.length - 1]] = [
       state.syncProviders[state.syncProviders.length - 1],
     ];
-    if (!provider || provider.type === LOCAL_PROVIDER_TYPE) {
+    if (!provider || provider.provider.type === "local") {
       return storageErr(
         new StorageOperationFailure(
           StorageOperationFailureKind.OperationFailed,
@@ -203,9 +202,7 @@ export class ProviderConflictActions {
           state.stagedProviderLabel(),
           localYaml,
           "",
-          args.mode,
-          args.pat,
-          args.repo,
+          args,
           revision,
           localStoreId,
           remoteStoreId,

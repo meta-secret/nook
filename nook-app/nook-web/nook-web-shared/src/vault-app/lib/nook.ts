@@ -7,7 +7,7 @@ import {
   VaultEngineFailure,
 } from "$lib/runtime/wasm-bootstrap";
 import { err, ok, type Result } from "neverthrow";
-import type { NookStorageConnectArgs } from "$app-wasm";
+import type { NookStorageConnection } from "$app-wasm";
 import type {
   NookImportResult,
   NookJoinRequest,
@@ -125,9 +125,7 @@ export type SecretHistoryView = {
 
 export interface VaultStorageSynchronizationRequest {
   readonly manager: NookVaultManager;
-  readonly mode: NookStorageConnectArgs["mode"];
-  readonly pat: NookStorageConnectArgs["pat"];
-  readonly repo: NookStorageConnectArgs["repo"];
+  readonly connection: NookStorageConnection;
 }
 
 export function isoTimestamp(): string {
@@ -169,9 +167,9 @@ export class VaultStorageSynchronization {
   constructor(private readonly request: VaultStorageSynchronizationRequest) {}
 
   async run(): Promise<Result<NookVaultSyncResult, VaultStorageFailure>> {
-    const { manager, mode, pat, repo } = this.request;
+    const { manager, connection } = this.request;
     try {
-      return ok(await manager.sync_vault_from_storage(mode, pat, repo));
+      return ok(await manager.sync_vault_from_storage(connection));
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     }

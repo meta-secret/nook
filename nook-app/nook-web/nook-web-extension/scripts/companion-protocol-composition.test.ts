@@ -50,6 +50,10 @@ import {
   VaultApplication,
   type CompanionPairingRequest,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
+import {
+  ProviderRowFixture,
+  type VaultRowRequest,
+} from './provider-row-fixture'
 
 type GeneralLoginCompositionContext = {
   readonly self: GeneralLoginCompositionScenario
@@ -243,23 +247,14 @@ class CompanionPairingApprovalFixture {
       request: structuredClone(pairingRequest),
       observedAt: 120,
     })
+    const vaultRow: VaultRowRequest = {
+      row: ProviderRowFixture.github(ProviderRowFixture.PLAINTEXT),
+      storeId: extension.vaultStoreId,
+    }
     const providers = seal_auth_providers_for_device_public_key(
       extension.device_public_key,
       {
-        providers: [
-          {
-            id: `github-${requestId}`,
-            type: 'github',
-            label: 'Composition GitHub',
-            githubPat: { state: 'token', value: 'github_pat_pairing_secret' },
-            githubRepo: { state: 'defaultRepository' },
-            oauthFile: { state: 'notApplicable' },
-            localFolder: { state: 'notApplicable' },
-            storeId: { state: 'storeId', value: extension.vaultStoreId },
-            syncCheckpoint: { state: 'neverSynced' },
-            createdAt: '2026-09-07T00:00:00Z',
-          },
-        ],
+        providers: [ProviderRowFixture.inVault(vaultRow)],
         activeVaultStoreId: {
           state: 'storeId',
           value: extension.vaultStoreId,
@@ -413,7 +408,7 @@ beforeAll(() => {
     } finally {
       setup.free()
     }
-    await extension.connect_fresh('local', '', '')
+    await extension.connect_fresh({ mode: 'local' })
     await extension.set_vault_name('Composition Vault')
     extensionAppId = extension.device_id
     extensionSigningPublicKey = await extension.device_signing_public_key_js()

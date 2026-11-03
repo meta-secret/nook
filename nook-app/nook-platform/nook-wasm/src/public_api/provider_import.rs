@@ -1,3 +1,4 @@
+use crate::{TypedInput, TypedOutput};
 use nook_core::{ProviderCredentialStorageAdmission, StorageProvider};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -28,22 +29,10 @@ impl ExtensionPairingStorageProviderAdmission {
     }
 }
 
-impl Drop for ExtensionPairingStorageProviderAdmission {
-    fn drop(&mut self) {
-        self.0.zeroize_credentials();
-    }
-}
-
 /// Generated provider payload returned to Web after Rust admission.
 #[derive(Serialize, Tsify)]
 #[serde(transparent)]
 pub struct ExtensionPairingStorageProviderPayload(StorageProvider);
-
-impl Drop for ExtensionPairingStorageProviderPayload {
-    fn drop(&mut self) {
-        self.0.zeroize_credentials();
-    }
-}
 
 /// Decode one extension-pairing provider and reject plaintext credentials.
 #[wasm_bindgen]
@@ -55,14 +44,12 @@ impl Drop for ExtensionPairingStorageProviderPayload {
 pub fn decode_extension_pairing_storage_provider(
     admission: &tsify::Ts<ExtensionPairingStorageProviderAdmission>,
 ) -> Result<tsify::Ts<ExtensionPairingStorageProviderPayload>, wasm_bindgen::JsError> {
-    let admission = admission
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let admission = admission.decode()?;
 
     let result = admission.decode().map_err(|_| {
         JsError::new("Extension pairing provider credentials are not storage-safe.")
     })?;
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+    Ok(result.encode()?)
 }
 
 /// Decode external provider snapshots through the Rust-owned serde contract.
@@ -76,20 +63,17 @@ pub fn decode_extension_pairing_storage_provider(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn decode_storage_providers(
-    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshotData>,
-) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshotData>, wasm_bindgen::JsError> {
-    let snapshot = snapshot
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshot>,
+) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshot>, wasm_bindgen::JsError> {
+    let snapshot = snapshot.decode()?;
     let result = { snapshot };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    Ok(result.encode()?)
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
     use super::*;
     use js_sys::JSON;
-    use nook_core::ProviderSyncCheckpoint;
     use tsify::Ts;
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -103,11 +87,20 @@ mod wasm_tests {
             "githubRepo": { "state": "repository", "value": "owner/repo" },
             "oauthFile": { "state": "notApplicable" },
             "localFolder": { "state": "notApplicable" },
+            "s3": { "state": "notApplicable" },
             "storeId": { "state": "unscoped" },
             "createdAt": "2026-08-08T00:00:00.000Z"
         }],
         "activeVaultStoreId": { "state": "unselected" }
     }"#;
+
+    /// A current-shape snapshot; `checkpoint` is spliced in before the
+    /// creation time.
+    fn nested_provider_snapshot(checkpoint: &str) -> String {
+        format!(
+            r#"{{"providers":[{{"id":"github","label":"GitHub","storeId":{{"state":"unscoped"}},{checkpoint}"createdAt":"2026-08-08T00:00:00.000Z","provider":{{"type":"github","repository":{{"state":"repository","value":"repo"}},"token":"github_pat_fixture"}}}}],"activeVaultStoreId":{{"state":"unselected"}}}}"#
+        )
+    }
 
     const MALFORMED_PROVIDER_SNAPSHOT: &str = r#"{
         "providers": [{
@@ -118,6 +111,7 @@ mod wasm_tests {
             "githubRepo": { "state": "repository", "value": "owner/repo" },
             "oauthFile": { "state": "notApplicable" },
             "localFolder": { "state": "notApplicable" },
+            "s3": { "state": "notApplicable" },
             "storeId": { "state": "unscoped" },
             "createdAt": "2026-08-08T00:00:00.000Z"
         }],
@@ -126,28 +120,26 @@ mod wasm_tests {
 
     fn decode_snapshot_json(
         input: &str,
-    ) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshotData>, wasm_bindgen::JsError> {
+    ) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshot>, wasm_bindgen::JsError> {
         let value = JSON::parse(input).map_err(|_| JsError::new("provider fixture must parse"))?;
         // Preserve the actual JavaScript fixture for the typed owning export.
         Ok(Ts::new_unchecked(value))
     }
 
     #[wasm_bindgen_test]
-    fn provider_decoder_normalizes_legacy_javascript_snapshot() -> Result<(), wasm_bindgen::JsError>
-    {
-        let snapshot = decode_snapshot_json(LEGACY_PROVIDER_SNAPSHOT)?;
-        let decoded = decode_storage_providers(&snapshot)?
-            .to_rust()
-            .map_err(|_| JsError::new("Typed test output could not be decoded."))?;
-
-        assert_eq!(
-            decoded
-                .providers
-                .first()
-                .ok_or_else(|| JsError::new("Expected decoded provider."))?
-                .sync_checkpoint,
-            ProviderSyncCheckpoint::NeverSynced
+    fn provider_decoder_rejects_the_flat_shape_and_a_missing_checkpoint()
+    -> Result<(), wasm_bindgen::JsError> {
+        // No snapshot is migrated: the old flat row and a row without its
+        // sync checkpoint both fail, and only the complete row decodes.
+        assert!(
+            decode_storage_providers(&decode_snapshot_json(LEGACY_PROVIDER_SNAPSHOT)?).is_err()
         );
+        assert!(
+            decode_storage_providers(&decode_snapshot_json(&nested_provider_snapshot(""))?)
+                .is_err()
+        );
+        let complete = nested_provider_snapshot(r#""syncCheckpoint":{"state":"neverSynced"},"#);
+        assert!(decode_storage_providers(&decode_snapshot_json(&complete)?).is_ok());
         Ok(())
     }
 
@@ -164,19 +156,15 @@ mod wasm_tests {
 #[cfg(test)]
 mod extension_pairing_provider_tests {
     use super::*;
-    use nook_core::{
-        OAuthFileConfigData, StoredGithubPat, StoredOAuthAccessCredential,
-        StoredOAuthFileConfiguration, StoredOAuthRefreshCredential,
-    };
 
     const ARMORED_SECRET: &str = "-----BEGIN AGE ENCRYPTED FILE-----\\nfixture";
 
     struct ProviderFixture;
 
     impl ProviderFixture {
-        fn json(github_pat: &str) -> String {
+        fn json(token: &str) -> String {
             format!(
-                r#"{{"id":"github","type":"github","label":"GitHub","githubPat":{{"state":"token","value":"{github_pat}"}},"githubRepo":{{"state":"repository","value":"owner/repo"}},"oauthFile":{{"state":"notApplicable"}},"localFolder":{{"state":"notApplicable"}},"storeId":{{"state":"unscoped"}},"syncCheckpoint":{{"state":"neverSynced"}},"createdAt":"2026-08-08T00:00:00.000Z"}}"#
+                r#"{{"id":"github","label":"GitHub","storeId":{{"state":"unscoped"}},"syncCheckpoint":{{"state":"neverSynced"}},"createdAt":"2026-08-08T00:00:00.000Z","provider":{{"type":"github","repository":{{"state":"repository","value":"repo"}},"token":"{token}"}}}}"#
             )
         }
     }
@@ -191,31 +179,27 @@ mod extension_pairing_provider_tests {
         let payload = admission
             .decode()
             .map_err(|_| anyhow::anyhow!("armored provider must be admitted"))?;
-        assert!(matches!(&payload.0.github_pat, StoredGithubPat::Token(_)));
+        assert_eq!(payload.0.provider.secrets().len(), 1);
         Ok(())
     }
 
     #[test]
-    fn pairing_provider_admission_rejects_missing_fields_and_wrong_types() {
-        let extended = ProviderFixture::json(ARMORED_SECRET)
-            .replace("\"createdAt\"", "\"futureField\":true,\"createdAt\"");
-        assert!(
-            serde_json::from_str::<ExtensionPairingStorageProviderAdmission>(&extended).is_ok()
-        );
-        let missing = ProviderFixture::json(ARMORED_SECRET).replace("\"label\":\"GitHub\",", "");
-        assert!(
-            serde_json::from_str::<ExtensionPairingStorageProviderAdmission>(&missing).is_err()
-        );
-        let wrong_type = ProviderFixture::json(ARMORED_SECRET)
-            .replace("\"label\":\"GitHub\"", "\"label\":false");
-        assert!(
-            serde_json::from_str::<ExtensionPairingStorageProviderAdmission>(&wrong_type).is_err()
-        );
+    fn pairing_provider_admission_rejects_unknown_missing_and_wrong_fields() {
+        for damaged in [
+            ProviderFixture::json(ARMORED_SECRET)
+                .replace("\"createdAt\"", "\"futureField\":true,\"createdAt\""),
+            ProviderFixture::json(ARMORED_SECRET).replace("\"label\":\"GitHub\",", ""),
+            ProviderFixture::json(ARMORED_SECRET)
+                .replace("\"label\":\"GitHub\"", "\"label\":false"),
+        ] {
+            assert!(
+                serde_json::from_str::<ExtensionPairingStorageProviderAdmission>(&damaged).is_err()
+            );
+        }
     }
 
     #[test]
-    fn pairing_provider_decoder_rejects_plaintext_before_drop_owned_cleanup() -> anyhow::Result<()>
-    {
+    fn pairing_provider_decoder_rejects_plaintext() -> anyhow::Result<()> {
         let admission = serde_json::from_str::<ExtensionPairingStorageProviderAdmission>(
             &ProviderFixture::json("plaintext-token"),
         )?;
@@ -223,27 +207,6 @@ mod extension_pairing_provider_tests {
             admission.decode(),
             Err(ExtensionPairingStorageProviderFailure::PlaintextCredential)
         ));
-        let mut provider =
-            serde_json::from_str::<StorageProvider>(&ProviderFixture::json(ARMORED_SECRET))?;
-        provider.oauth_file = StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
-            access_token: StoredOAuthAccessCredential::AccessToken(ARMORED_SECRET.to_owned()),
-            refresh_token: StoredOAuthRefreshCredential::Token(ARMORED_SECRET.to_owned()),
-            ..OAuthFileConfigData::default()
-        });
-        provider.zeroize_credentials();
-        assert_eq!(provider.github_pat, StoredGithubPat::Token(String::new()));
-        if let StoredOAuthFileConfiguration::Configured(oauth) = provider.oauth_file {
-            assert_eq!(
-                oauth.access_token,
-                StoredOAuthAccessCredential::AccessToken(String::new())
-            );
-            assert_eq!(
-                oauth.refresh_token,
-                StoredOAuthRefreshCredential::Token(String::new())
-            );
-        } else {
-            anyhow::bail!("configured OAuth credentials must remain structurally configured");
-        }
         Ok(())
     }
 }

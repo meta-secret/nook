@@ -1,36 +1,16 @@
 import { describe, expect, test } from 'vitest'
-import {
-  DEFAULT_DRIVE_BACKUP_NAME,
-  configuredOAuthFile,
-  defaultOAuthFileConfig,
-  providerPersistenceDefaults,
-  storedGoogleDriveFolder,
-  storedOAuthCredential,
-  type StorageProvider,
-} from '$lib/auth/providers'
+import type { StorageProvider } from '$lib/auth/providers'
 import {
   findSharedGrantProvider,
   SharedStorageTargetKind,
 } from '$lib/vault/password-unlock'
+import { ProviderRowFixture } from '../provider-fixtures'
 
 function driveProvider(id: string, folderId: string): StorageProvider {
-  const config = {
-    ...defaultOAuthFileConfig({
-      preset: 'google-drive',
-      fileName: DEFAULT_DRIVE_BACKUP_NAME,
-    }),
-    accessToken: storedOAuthCredential(`token-${id}`),
-    folderId: storedGoogleDriveFolder(folderId),
-  }
-  return {
-    ...providerPersistenceDefaults(),
-    id,
-    type: 'oauth-file',
-    label: 'Google Drive',
-    oauthFile: configuredOAuthFile(config),
-    syncCheckpoint: { state: 'neverSynced' },
-    createdAt: '2026-07-15T00:00:00.000Z',
-  }
+  return ProviderRowFixture.googleDriveIn({
+    request: ProviderRowFixture.unscoped(id),
+    folderId,
+  })
 }
 
 describe('shared enrollment provider selection', () => {

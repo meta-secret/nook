@@ -45,8 +45,8 @@ describe('device protection recovery', () => {
       devicePublicKey: 'retired-key',
       providers: [],
       providersLoaded: false,
-      githubPat: '',
-      storageMode: 'local',
+      forgetDraftCredentials: vi.fn(),
+      useThisBrowser: vi.fn(),
       enqueueExclusiveStorage: async <Value, Failure>(
         operation: () =>
           Result<Value, Failure> | Promise<Result<Value, Failure>>,
@@ -54,8 +54,6 @@ describe('device protection recovery', () => {
       admitManager: () => ok(manager),
       adoptLocalDataStorageGeneration: vi.fn(),
       clearUnlockedSession: vi.fn(),
-      clearOauthFile: vi.fn(),
-      clearLocalFolder: vi.fn(),
       dismissSuccess: vi.fn(),
       showSuccess: vi.fn(),
       t: vi.fn(() => 'Recovery failed'),

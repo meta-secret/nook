@@ -14,6 +14,7 @@ vaults, this browser), then the details (sign-in keys). Each action says what it
     ChevronRight,
     Cloud,
     FolderKey,
+    KeyRound,
     Lock,
     MonitorSmartphone,
     Plus,
@@ -22,7 +23,10 @@ vaults, this browser), then the details (sign-in keys). Each action says what it
     TriangleAlert,
   } from "@lucide/svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { localizeProviderLabel, type StorageProvider } from "$lib/auth/providers";
+  import {
+    localizeProviderLabel,
+    type StorageProvider,
+  } from "$lib/auth/providers";
   import { ProviderSyncStatusView } from "$lib/auth/provider-sync-status";
   import { NookIdentityNextStep, type NookIdentityHealth } from "$app-wasm";
   import { CurrentDeviceName } from "$lib/components/settings/current-device-name";
@@ -131,27 +135,52 @@ vaults, this browser), then the details (sign-in keys). Each action says what it
     return new ProviderSyncStatusView(statusRequest).text;
   }
 
-  type DeviceRow = { readonly name: string; readonly current: boolean };
+  /** One device and the apps on it, each holding its own key. */
+  type DeviceRow = {
+    readonly name: string;
+    readonly current: boolean;
+    readonly apps: readonly string[];
+  };
 
-  /** This browser counts as a device before the device list loads; its
-   * name says so, so it carries no "This device" tag. */
+  /** One row per device, named after the app that brought it, with every
+   * app on it when there are several: the web app and the extension it
+   * added are two keys on one device. This browser counts as a device
+   * before the device list loads; its name says so, so it carries no
+   * "This device" tag. */
   const devices = $derived<readonly DeviceRow[]>(
-    members.length > 0
-      ? members.map((member) => ({
-          name: memberName(
-            member.label,
-            member.appId,
-            member.isCurrentInstallation,
-          ),
-          current: member.onCurrentDevice,
-        }))
+    control.snapshot !== false && control.snapshot.devices.length > 0
+      ? [
+          // This device first, then the others in the order they joined.
+          ...control.snapshot.devices.filter((device) => device.current),
+          ...control.snapshot.devices.filter((device) => !device.current),
+        ].map((device) => {
+          const apps = device.apps.map((app) =>
+            memberName(app.label, app.appId, app.isCurrentInstallation),
+          );
+          const [first] = apps;
+          const row: DeviceRow = {
+            name: first ? first : "",
+            current: device.current,
+            apps,
+          };
+          return row;
+        })
       : [
           {
             name: vault.t(I18N_KEYS.IdentityOverviewThisBrowser),
             current: false,
+            apps: [],
           },
         ],
   );
+
+  function appCountText(count: number): string {
+    const request: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.WorkspaceCardKeyCountPlural,
+      replacements: { count: String(count) },
+    };
+    return vault.t(request);
+  }
 
   onMount(() => {
     void control.followOpenVault();
@@ -221,7 +250,10 @@ vaults, this browser), then the details (sign-in keys). Each action says what it
 {#snippet vaultsIcon()}<FolderKey class="size-4" />{/snippet}
 {#snippet browserIcon()}<SlidersHorizontal class="size-4" />{/snippet}
 {#snippet cloudIcon()}<Cloud class="size-4" aria-hidden="true" />{/snippet}
-{#snippet deviceIcon()}<MonitorSmartphone class="size-4" aria-hidden="true" />{/snippet}
+{#snippet deviceIcon()}<MonitorSmartphone
+    class="size-4"
+    aria-hidden="true"
+  />{/snippet}
 
 <!-- The one thing the panel most needs done: the panel's only primary
      button. It leads by contrast with the quiet slots and outline buttons
@@ -262,7 +294,9 @@ vaults, this browser), then the details (sign-in keys). Each action says what it
       data-testid="identity-panel-providers"
     >
       <div class="flex items-center gap-2.5">
-        <span class="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+        <span
+          class="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm font-medium text-foreground"
+        >
           {vault.t(I18N_KEYS.IdentityOverviewProvidersHeading)}
           {#if copiesAtRisk}
             <span class="nk-tag nk-tag-warning">
@@ -290,7 +324,7 @@ vaults, this browser), then the details (sign-in keys). Each action says what it
           {#each vault.syncProviders as provider (provider.id)}
             <li
               class="flex min-h-11 min-w-0 items-center gap-3 px-2.5 py-2"
-              data-testid="identity-panel-provider-{provider.type}"
+              data-testid="identity-panel-provider-{provider.provider.type}"
             >
               <span class="nk-vault-icon" aria-hidden="true">
                 <Cloud class="size-4" />
@@ -344,7 +378,9 @@ vaults, this browser), then the details (sign-in keys). Each action says what it
       data-testid="identity-panel-devices"
     >
       <div class="flex items-center gap-2.5">
-        <span class="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+        <span
+          class="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm font-medium text-foreground"
+        >
           {`${vault.t(I18N_KEYS.WorkspaceSectionDevices)} · ${deviceCount}`}
           {#if devicesAtRisk}
             <span class="nk-tag nk-tag-warning">
@@ -368,19 +404,44 @@ vaults, this browser), then the details (sign-in keys). Each action says what it
       <ul class="divide-y divide-border/60">
         {#each devices as device, index (index)}
           <li
-            class="flex min-h-11 min-w-0 items-center gap-3 px-2.5 py-2"
+            class="grid min-w-0 gap-1.5 px-2.5 py-2"
             data-testid="identity-panel-device"
           >
-            <span class="nk-vault-icon" aria-hidden="true">
-              <MonitorSmartphone class="size-4" />
-            </span>
-            <span class="min-w-0 flex-1 truncate text-sm text-foreground"
-              >{device.name}</span
-            >
-            {#if device.current}
-              <span class="nk-tag flex-none"
-                >{vault.t(I18N_KEYS.JoinThisDevice)}</span
+            <div class="flex min-h-7 min-w-0 items-center gap-3">
+              <span class="nk-vault-icon" aria-hidden="true">
+                <MonitorSmartphone class="size-4" />
+              </span>
+              <span class="min-w-0 flex-1 truncate text-sm text-foreground"
+                >{device.name}</span
               >
+              {#if device.apps.length > 1}
+                <span
+                  class="nk-tag flex-none"
+                  data-testid="identity-panel-device-key-count"
+                  >{appCountText(device.apps.length)}</span
+                >
+              {/if}
+              {#if device.current}
+                <span class="nk-tag flex-none"
+                  >{vault.t(I18N_KEYS.JoinThisDevice)}</span
+                >
+              {/if}
+            </div>
+            {#if device.apps.length > 1}
+              <!-- Several apps on one device: each is a key of its own. -->
+              <ul
+                class="grid min-w-0 gap-1 border-l border-border pl-3 ml-4"
+                data-testid="identity-panel-device-apps"
+              >
+                {#each device.apps as app, appIndex (appIndex)}
+                  <li
+                    class="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"
+                  >
+                    <KeyRound class="size-3 flex-none" aria-hidden="true" />
+                    <span class="min-w-0 truncate">{app}</span>
+                  </li>
+                {/each}
+              </ul>
             {/if}
           </li>
         {/each}

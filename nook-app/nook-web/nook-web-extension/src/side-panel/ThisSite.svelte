@@ -11,7 +11,13 @@ its address, the panel's visibility or the lock state changes.
 -->
 <script lang="ts">
   import { tick, untrack } from 'svelte'
-  import { CircleAlert, LoaderCircle } from '@lucide/svelte'
+  import {
+    AppWindow,
+    Ban,
+    CircleAlert,
+    Globe,
+    LoaderCircle,
+  } from '@lucide/svelte'
   import {
     I18N_KEYS,
     type I18nKey,
@@ -28,7 +34,10 @@ its address, the panel's visibility or the lock state changes.
     SiteSecretSection,
   } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
   import type { ExtensionSessionDeviceState } from '../lib/nook-wasm'
-  import type { PairedVaultGroup } from '../lib/paired-vaults'
+  import type {
+    PairedVaultGroup,
+    PairedVaultSummary,
+  } from '../lib/paired-vaults'
   import {
     SidePanelSiteListingKind,
     sidePanelSite,
@@ -57,6 +66,7 @@ its address, the panel's visibility or the lock state changes.
     ThisSiteFillActivity,
     ThisSiteFillChoiceKind,
     ThisSiteFillKind,
+    ThisSiteHeadlineTone,
     ThisSiteHostKind,
     ThisSiteLiveAnnouncementKind,
     ThisSiteMemory,
@@ -112,6 +122,57 @@ its address, the panel's visibility or the lock state changes.
   const fill = $derived(site.fill)
   const notice = $derived(site.notice)
 
+  /** The heading: an icon tile, one line, and the hint a state carries. */
+  type Headline = {
+    readonly icon: typeof Globe
+    readonly text: string
+    readonly tone: ThisSiteHeadlineTone
+    readonly hints: readonly string[]
+  }
+
+  const headline = $derived.by((): Headline => {
+    switch (view.host.kind) {
+      case ThisSiteHostKind.Named:
+        return {
+          icon: Globe,
+          text: view.host.host,
+          tone: ThisSiteHeadlineTone.Host,
+          hints: [],
+        }
+      case ThisSiteHostKind.NoWebsite:
+        return {
+          icon: AppWindow,
+          text: translatePlain(I18N_KEYS.ExtensionActionSiteNotWeb),
+          tone: ThisSiteHeadlineTone.State,
+          hints: [translatePlain(I18N_KEYS.ExtensionActionSiteNotWebHint)],
+        }
+      case ThisSiteHostKind.Unnamed:
+        break
+    }
+    switch (view.body.kind) {
+      case ThisSiteBodyKind.Restricted:
+        return {
+          icon: Ban,
+          text: translatePlain(I18N_KEYS.ExtensionActionSiteRestricted),
+          tone: ThisSiteHeadlineTone.State,
+          hints: [],
+        }
+      case ThisSiteBodyKind.Loading:
+      case ThisSiteBodyKind.Matches:
+      case ThisSiteBodyKind.Empty:
+      case ThisSiteBodyKind.NotWeb:
+      case ThisSiteBodyKind.NoFillingVault:
+      case ThisSiteBodyKind.Locked:
+      case ThisSiteBodyKind.Failed:
+        return {
+          icon: Globe,
+          text: translatePlain(I18N_KEYS.ExtensionActionSiteLabel),
+          tone: ThisSiteHeadlineTone.State,
+          hints: [],
+        }
+    }
+  })
+
   function translatePlain(key: I18nKey): string {
     return i18n.t(extensionLocaleCatalog.plainExtensionTranslation(key))
   }
@@ -153,6 +214,41 @@ its address, the panel's visibility or the lock state changes.
       device,
     }
     return SidePanelViews.sectionRelation(request)
+  }
+
+  /** A section's caption: its vault, then its keyring when the names differ. */
+  function sectionCaption(section: SiteSecretSection): string {
+    const vault = labelText(section.vault)
+    const keyring = labelText(section.identity)
+    return keyring === vault ? vault : `${vault} · ${keyring}`
+  }
+
+  /** A connected vault's name: saved, or the unnamed label. */
+  function vaultName(vault: PairedVaultSummary): string {
+    return vault.vaultName
+      ? vault.vaultName
+      : translatePlain(I18N_KEYS.LoginVaultPickerUnnamed)
+  }
+
+  /** One connected vault in its keyring's group. */
+  type ConnectedVault = {
+    readonly group: PairedVaultGroup
+    readonly vault: PairedVaultSummary
+  }
+
+  /** Every connected vault with its keyring's group, in the groups' order. */
+  const connectedVaults = $derived(
+    groups.flatMap((group) =>
+      group.vaults.map((vault): ConnectedVault => ({ group, vault })),
+    ),
+  )
+
+  /** Its keyring's name under a connected vault, when the two differ. */
+  function keyringLines({ group, vault }: ConnectedVault): readonly string[] {
+    const keyring = group.identityLabel
+      ? group.identityLabel
+      : translatePlain(I18N_KEYS.ExtensionCompanionOtherVaults)
+    return keyring === vaultName(vault) ? [] : [keyring]
   }
 
   function groupRelation(group: PairedVaultGroup): SidePanelIdentityRelation {
@@ -365,32 +461,48 @@ its address, the panel's visibility or the lock state changes.
   })
 </script>
 
-<!-- A page Nook does not fill still names every connected identity and
-vault, so an identity connected a moment ago shows at once. -->
+<!-- A page Nook does not fill still lists every connected vault, so a keyring
+connected a moment ago shows at once: a letter tile, the vault's name, its
+keyring's name below when the two differ, and the other-keyring tag. -->
 {#snippet connectedSections()}
-  {#each groups as group (`${group.deviceId}:${group.identityLabel}`)}
-    {#each group.vaults as vault (vault.vaultStoreId)}
-      <h2
-        class="side-panel-site-group is-connected"
-        data-testid="side-panel-connected-identity"
-      >
-        <span class="side-panel-site-group-name">
-          {group.identityLabel ||
-            translatePlain(I18N_KEYS.ExtensionCompanionOtherVaults)} · {vault.vaultName ||
-            translatePlain(I18N_KEYS.LoginVaultPickerUnnamed)}
-        </span>
-        {#if groupRelation(group) === SidePanelIdentityRelation.Other}
-          <span class="side-panel-tag">
-            {translatePlain(I18N_KEYS.ExtensionActionOtherIdentity)}
+  <div class="side-panel-connected">
+    <h2 class="side-panel-label side-panel-connected-caption">
+      {translatePlain(I18N_KEYS.ExtensionCompanionVaultsTitle)}
+    </h2>
+    <ul class="side-panel-connected-list">
+      {#each connectedVaults as connected (connected.vault.vaultStoreId)}
+        <li
+          class="side-panel-connected-row"
+          data-testid="side-panel-connected-identity"
+        >
+          <span class="side-panel-vault-tile" aria-hidden="true">
+            {vaultName(connected.vault).slice(0, 1)}
           </span>
-        {/if}
-      </h2>
-    {/each}
-  {/each}
+          <span class="side-panel-connected-copy">
+            <span
+              class="side-panel-connected-name"
+              data-testid="side-panel-connected-vault"
+            >
+              {vaultName(connected.vault)}
+            </span>
+            {#each keyringLines(connected) as keyring (keyring)}
+              <span class="side-panel-connected-keyring">{keyring}</span>
+            {/each}
+          </span>
+          {#if groupRelation(connected.group) === SidePanelIdentityRelation.Other}
+            <span class="side-panel-tag">
+              {translatePlain(I18N_KEYS.ExtensionActionOtherIdentity)}
+            </span>
+          {/if}
+        </li>
+      {/each}
+    </ul>
+  </div>
 {/snippet}
 
-<!-- One section per identity:vault, in Rust's order: "identity · vault",
-the other-identity tag, then its rows or Rust's muted empty line. -->
+<!-- One section per vault, in Rust's order: its name (with its keyring's
+when the two differ), the other-keyring tag, then its rows or Rust's muted
+empty line. -->
 {#snippet siteSections(list: ThisSiteSectionList)}
   {#each list.sections as section (section.vault_store_id)}
     <div class="side-panel-site-section" data-testid="side-panel-site-section">
@@ -399,7 +511,7 @@ the other-identity tag, then its rows or Rust's muted empty line. -->
           class="side-panel-site-group-name"
           data-testid="side-panel-site-group-name"
         >
-          {labelText(section.identity)} · {labelText(section.vault)}
+          {sectionCaption(section)}
         </span>
         {#if relation(section) === SidePanelIdentityRelation.Other}
           <span
@@ -446,24 +558,28 @@ the other-identity tag, then its rows or Rust's muted empty line. -->
   <h1
     id="side-panel-site-heading"
     class="side-panel-site-heading"
+    data-tone={headline.tone}
     tabindex="-1"
     {@attach focus.attachHeading}
   >
-    <span class="side-panel-label">
+    <span class="side-panel-sr-only">
       {translatePlain(I18N_KEYS.ExtensionActionSiteLabel)}
     </span>
-    {#if view.host.kind === ThisSiteHostKind.Named}
-      <span class="side-panel-site-host" data-testid="side-panel-site-host">
-        {view.host.host}
-      </span>
-    {:else if view.host.kind === ThisSiteHostKind.NoWebsite}
-      <span
-        class="side-panel-site-host is-absent"
-        data-testid="side-panel-site-host"
-      >
-        {translatePlain(I18N_KEYS.ExtensionActionSiteNotWeb)}
-      </span>
-    {/if}
+    <span class="side-panel-site-tile" aria-hidden="true">
+      <headline.icon size={16} />
+    </span>
+    <span class="side-panel-site-heading-copy">
+      {#if view.host.kind === ThisSiteHostKind.Unnamed}
+        <span class="side-panel-site-host">{headline.text}</span>
+      {:else}
+        <span class="side-panel-site-host" data-testid="side-panel-site-host">
+          {headline.text}
+        </span>
+      {/if}
+      {#each headline.hints as hint (hint)}
+        <span class="side-panel-site-hint">{hint}</span>
+      {/each}
+    </span>
   </h1>
   <p class="side-panel-sr-only" aria-live="polite" aria-atomic="true">
     {liveText()}
@@ -503,14 +619,8 @@ the other-identity tag, then its rows or Rust's muted empty line. -->
     </div>
     {@render siteSections(view.body)}
   {:else if view.body.kind === ThisSiteBodyKind.NotWeb}
-    <div class="side-panel-site-status">
-      <p>{translatePlain(I18N_KEYS.ExtensionActionSiteNotWebHint)}</p>
-    </div>
     {@render connectedSections()}
   {:else if view.body.kind === ThisSiteBodyKind.Restricted}
-    <div class="side-panel-site-status">
-      <p>{translatePlain(I18N_KEYS.ExtensionActionSiteRestricted)}</p>
-    </div>
     {@render connectedSections()}
   {:else if view.body.kind === ThisSiteBodyKind.NoFillingVault}
     <div

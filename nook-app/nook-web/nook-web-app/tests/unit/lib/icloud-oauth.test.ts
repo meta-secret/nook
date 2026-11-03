@@ -6,7 +6,6 @@ import {
   ICloudAccountNameKind,
   iCloudOAuthSession,
 } from '$lib/auth/icloud/oauth'
-import { oauthConfigurationNotApplicable } from '$lib/auth/providers'
 import { ICloudOAuthTestFixture } from './icloud-oauth-test-fixture'
 
 import {
@@ -21,29 +20,25 @@ describe('icloud-oauth', () => {
     expect(ICLOUD_ENVIRONMENT).toBe('production')
   })
 
-  it('maps tokens to oauth-file icloud config', () => {
-    const config = iCloudOAuthSession.oauthTokensToICloudConfig({
-      tokens: {
+  it('maps a web-auth answer to the iCloud sign-in Rust keeps', () => {
+    expect(
+      iCloudOAuthSession.iCloudAccess({
         accessToken: 'ck-web-auth-token',
         accountName: {
           kind: ICloudAccountNameKind.Available,
           value: 'Apple User',
         },
-      },
-      existing: oauthConfigurationNotApplicable(),
+      }),
+    ).toEqual({
+      webAuthToken: 'ck-web-auth-token',
+      account: { state: 'email', email: 'Apple User' },
     })
-    expect(config.isOk()).toBe(true)
-    if (config.isErr()) return
-    expect(config.value.preset).toBe('icloud')
-    expect(config.value.accessToken).toEqual({
-      state: 'accessToken',
-      value: 'ck-web-auth-token',
-    })
-    expect(config.value.accountEmail).toEqual({
-      state: 'email',
-      value: 'Apple User',
-    })
-    expect(config.value.iCloudShareTarget).toEqual({ state: 'unbound' })
+    expect(
+      iCloudOAuthSession.iCloudAccess({
+        accessToken: 'ck-web-auth-token',
+        accountName: { kind: ICloudAccountNameKind.Unavailable },
+      }).account,
+    ).toEqual({ state: 'unknown' })
   })
 
   describe('shared CloudKit target', () => {

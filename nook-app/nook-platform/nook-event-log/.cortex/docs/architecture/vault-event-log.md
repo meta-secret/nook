@@ -66,7 +66,9 @@ artifact for event-log vaults.
 - **Remote path**
   - **Rule:** `meta-secret-nook/{identity_id}/{store_id}/events/{digest}.yaml`,
     in the folder of the identity that filed the vault. `PlacedNamespace` owns
-    the shape; see [the identity control log](identity-control-log.md).
+    the shape; see [the identity control log](identity-control-log.md). An S3
+    location uses the same path as the object key, below the mount's optional
+    key prefix.
 - **Writes**
   - **Rule:** append-only; `put_event_if_absent`
 - **Duplicate identical event**
@@ -225,7 +227,8 @@ put_event_if_absent(provider, store_id, event_id, bytes)
 
 No `update_event` or `delete_event` in v1.
 
-The active provider adapters are GitHub, Google Drive, and iCloud.
+The active provider adapters are GitHub, Google Drive, iCloud, and
+S3-compatible storage.
 
 ### Shared provider targets
 
@@ -245,7 +248,8 @@ Every target keeps one namespace per identity log and per vault, each vault
 in the folder of the identity that filed it:
 
 - **Path-addressed targets:** each vault is its own
-  `meta-secret-nook/{identity_id}/{store_id}/` subdirectory.
+  `meta-secret-nook/{identity_id}/{store_id}/` subdirectory. An S3 location
+  holds the same paths as object keys.
 - **Google Drive:** each vault is its own `{store_id}` subfolder of its
   identity's folder in the root.
 - **iCloud:** each record's queryable `location` names its namespace,
@@ -260,6 +264,48 @@ No event files are automatically moved, renamed, or deleted. The event
 classification guard still runs inside each namespace: a different
 `store_id`, multiple store IDs, unreadable files, or invalid event bytes fail
 closed before any writes.
+
+### S3 objects and create-only writes
+
+An S3 location is a path-addressed target. Its event objects use the
+local-folder paths as keys, below the mount's optional key prefix:
+
+- **Vault event:**
+  `[prefix/]meta-secret-nook/{identity_id}/{store_id}/events/{digest}.yaml`.
+- **Identity log event:**
+  `[prefix/]meta-secret-nook/{identity_id}/log/events/{digest}.yaml`.
+- **Reading keys back:** only `{digest}.yaml` directly in a namespace's
+  `events/` folder is an event. Every other key is unrelated and ignored.
+- **Addressing:** requests are path-style, `{endpoint}/{bucket}/{key}`, so a
+  bucket name never joins the host name.
+- **Listing:** `ListObjectsV2` with the `/` delimiter, in pages of up to 1,000
+  keys. Identity folders and namespaces are the common prefixes. A listed key
+  is read back against this layout and is never sent in a request.
+
+A write is create-only: a `PUT` with `If-None-Match: *`. The adapter does not
+retry it.
+
+1. A `2xx` answer means the event is created.
+2. A `412` answer means the key is taken. Read the object back and settle it as
+   the local-folder adapter settles an existing event file.
+   - The same bytes mean the event is already stored. The write succeeds.
+   - Different bytes are corruption. The write fails and names the event.
+   - A missing object is an unresolved conflict. The write fails.
+3. A `403` answer is the typed key refusal that
+   [the S3 provider](../../../../.cortex/docs/architecture/auth-providers.md#s3-compatible-storage)
+   describes.
+4. Any other answer fails with its category and status only.
+
+**Prohibited:** overwrite a taken key with the new bytes, or send the `PUT`
+again until the key looks free.
+
+**Required:** read the object back and compare. The key names the event by its
+digest, so the same bytes are a success and any other bytes are corruption.
+
+Deleting a vault everywhere deletes its event objects and nothing else. S3 has
+no folders, so a namespace stays listed while any object sits under it. A
+foreign object therefore keeps a deleted vault's namespace listed with no
+events.
 
 ### Provider vault listing
 
@@ -284,8 +330,8 @@ Transports report what their listings carry cheaply:
 
 - **Google Drive:** the `createdTime` of each namespace folder and event
   file. A malformed timestamp fails the listing closed.
-- **GitHub, iCloud, local folder:** the event count and short id only. Their
-  times stay `Unreported` and the UI omits them.
+- **GitHub, iCloud, local folder, S3:** the event count and short id only.
+  Their times stay `Unreported` and the UI omits them.
 
 A namespace duplicated by hand fails the listing closed, as sync does. How
 setup classifies and acts on each listed vault is owned by
@@ -407,6 +453,10 @@ These behaviors must be covered by **Rust tests** (~99% of sync correctness). E2
   - **Test location:** `nook-event-log/src/projection.rs` (`assert_projection_permutation_invariant`)
 - **Provider outbox + union**
   - **Test location:** `event_log_workflow.rs`, `nook-event-log/src/store.rs`
+- **S3 object keys, SigV4 signing, answer classification, listing pages**
+  - **Test location:** `nook-core/src/sync/s3_protocol/` unit tests. A
+    published AWS SigV4 example pins the signer wiring. The `nook-wasm` S3
+    adapter has browser tests in `nook-wasm/src/storage/s3.rs`.
 
 When adding operations or merge rules, add colocated unit tests **and** extend the harness scenarios if multi-device behavior changes.
 

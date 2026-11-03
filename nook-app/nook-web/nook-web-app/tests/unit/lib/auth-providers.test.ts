@@ -1,281 +1,36 @@
 import { describe, expect, test } from 'vitest'
 import {
-  DEFAULT_DRIVE_BACKUP_NAME,
-  DriveFileIdentityKind,
-  configuredOAuthFile,
-  defaultOAuthFileConfig,
-  findDuplicateSyncProvider,
-  findDuplicateSyncProviderExcluding,
-  formatDriveStorageRef,
-  GithubPatDisplayKind,
-  maskGithubPat,
-  providerDefaultLabel,
-  providerLabelWithoutDetail,
-  providerPersistenceDefaults,
-  providerStorageDetail,
-  storedGithubPat,
-  storedGithubRepository,
-  storedOAuthAccountEmail,
-  storedOAuthCredential,
-  storedOAuthRemoteFileName,
-  type GithubPatDisplay,
-  type GithubPatHintRequest,
-  type ProviderLabelRequest,
-  type ProviderLabelWithoutDetailRequest,
-  type ProviderStorageDescriptionRequest,
+  localizedProviderStorageDetail,
   type StorageProvider,
 } from '$lib/auth/providers'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
+import {
+  ProviderFixtureCredentials,
+  ProviderRowFixture,
+} from '../provider-fixtures'
 
-function githubProvider(
-  overrides: Partial<StorageProvider> = {},
-): StorageProvider {
-  return {
-    ...providerPersistenceDefaults(),
-    id: 'gh-1',
-    type: 'github',
-    label: 'GitHub',
-    githubRepo: storedGithubRepository('nook'),
-    githubPat: storedGithubPat('github_pat_11AAAAAAAAAA'),
-    syncCheckpoint: { state: 'neverSynced' },
-    createdAt: '2026-06-24T00:00:00.000Z',
-    ...overrides,
-  }
+/** The detail line Rust writes for a row, with the keys as the words. */
+function detail(provider: StorageProvider): string {
+  return localizedProviderStorageDetail({ provider, t: (key) => key })
 }
 
-function githubPatHintRequest(state: GithubPatDisplay): GithubPatHintRequest {
-  return { state }
-}
-
-function providerStorageDescriptionRequest(
-  provider: StorageProvider,
-): ProviderStorageDescriptionRequest {
-  return { provider }
-}
-
-describe('maskGithubPat', () => {
-  test('masks fine-grained tokens with github_pat_ prefix', () => {
-    const display: GithubPatDisplay = {
-      kind: GithubPatDisplayKind.Stored,
-      pat: 'github_pat_11AAAAAAAAAA',
-    }
-    expect(maskGithubPat(githubPatHintRequest(display))).toBe('github_pat_11A…')
+describe('localizedProviderStorageDetail', () => {
+  test('names the repository and never the full GitHub token', () => {
+    const github = ProviderRowFixture.github(ProviderRowFixture.unscoped('gh'))
+    const line = detail(github)
+    expect(line).toContain('nook')
+    expect(line).not.toContain(ProviderFixtureCredentials.GITHUB_TOKEN)
   })
 
-  test('masks classic tokens with shorter prefix', () => {
-    const display: GithubPatDisplay = {
-      kind: GithubPatDisplayKind.Stored,
-      pat: 'ghp_1234567890ABCDEF',
-    }
-    expect(maskGithubPat(githubPatHintRequest(display))).toBe('ghp_123456…')
-  })
-
-  test('handles missing token', () => {
-    const display: GithubPatDisplay = { kind: GithubPatDisplayKind.NoToken }
-    expect(maskGithubPat(githubPatHintRequest(display))).toBe('No token saved')
-  })
-})
-
-describe('providerStorageDetail', () => {
-  test('distinguishes two GitHub repositories', () => {
-    const alpha = githubProvider({
-      id: 'gh-alpha',
-      label: 'GitHub · alpha',
-      githubRepo: storedGithubRepository('alpha'),
-      githubPat: storedGithubPat('github_pat_11AAAAbbbb'),
-    })
-    const beta = githubProvider({
-      id: 'gh-beta',
-      label: 'GitHub · beta',
-      githubRepo: storedGithubRepository('beta'),
-      githubPat: storedGithubPat('github_pat_22CCCCdddd'),
-    })
-
-    expect(
-      providerStorageDetail(providerStorageDescriptionRequest(alpha)),
-    ).toBe('alpha · github_pat_11A…')
-    expect(providerStorageDetail(providerStorageDescriptionRequest(beta))).toBe(
-      'beta · github_pat_22C…',
-    )
-    expect(
-      providerStorageDetail(providerStorageDescriptionRequest(alpha)),
-    ).not.toBe(providerStorageDetail(providerStorageDescriptionRequest(beta)))
-  })
-
-  test('never exposes the full token', () => {
-    const pat = 'github_pat_11BBBBCCCCDDDDEEEEFFFF'
-    const provider = githubProvider({ githubPat: storedGithubPat(pat) })
-    const detail = providerStorageDetail(
-      providerStorageDescriptionRequest(provider),
-    )
-    expect(detail).not.toContain(pat)
-    expect(detail).toContain('…')
-  })
-
-  test('describes local browser storage', () => {
-    const local: StorageProvider = {
-      ...providerPersistenceDefaults(),
-      id: 'local-1',
-      type: 'local',
-      label: 'This device',
-      syncCheckpoint: { state: 'neverSynced' },
-      createdAt: '2026-06-24T00:00:00.000Z',
-    }
-    expect(
-      providerStorageDetail(providerStorageDescriptionRequest(local)),
-    ).toBe('Vault in browser storage on this device')
+  test('describes local browser storage with the host words', () => {
+    const local = ProviderRowFixture.local(ProviderRowFixture.unscoped('l'))
+    expect(detail(local)).toBe(I18N_KEYS.ProviderPickerThisDeviceDesc)
   })
 
   test('names the Google account a Drive provider syncs with', () => {
-    const drive: StorageProvider = {
-      ...providerPersistenceDefaults(),
-      id: 'gd-1',
-      type: 'oauth-file',
-      label: 'Google Drive',
-      oauthFile: configuredOAuthFile({
-        ...defaultOAuthFileConfig({
-          preset: 'google-drive',
-          fileName: DEFAULT_DRIVE_BACKUP_NAME,
-        }),
-        accessToken: storedOAuthCredential('ya29.test'),
-        fileName: storedOAuthRemoteFileName('personal.yaml'),
-        accountEmail: storedOAuthAccountEmail('me@example.com'),
-      }),
-      syncCheckpoint: { state: 'neverSynced' },
-      createdAt: '2026-06-24T00:00:00.000Z',
-    }
-
-    expect(
-      providerStorageDetail(providerStorageDescriptionRequest(drive)),
-    ).toBe('me@example.com')
-  })
-})
-
-describe('formatDriveStorageRef', () => {
-  test('includes cached file id when present', () => {
-    expect(
-      formatDriveStorageRef({
-        identity: { kind: DriveFileIdentityKind.Existing, fileId: 'abc123' },
-        fileName: 'work.yaml',
-      }),
-    ).toBe('abc123\twork.yaml')
-  })
-
-  test('omits empty file id for new vaults', () => {
-    expect(
-      formatDriveStorageRef({
-        identity: { kind: DriveFileIdentityKind.New },
-        fileName: 'work.yaml',
-      }),
-    ).toBe('work.yaml')
-    expect(
-      formatDriveStorageRef({
-        identity: { kind: DriveFileIdentityKind.New },
-        fileName: DEFAULT_DRIVE_BACKUP_NAME,
-      }),
-    ).toBe(DEFAULT_DRIVE_BACKUP_NAME)
-  })
-
-  test('formats without validating draft file names', () => {
-    expect(
-      formatDriveStorageRef({
-        identity: { kind: DriveFileIdentityKind.Existing, fileId: ' abc ' },
-        fileName: ' work vault.yaml ',
-      }),
-    ).toBe('abc\twork vault.yaml')
-  })
-})
-
-describe('providerDefaultLabel', () => {
-  test('includes repo name for non-default GitHub repositories', () => {
-    const request: ProviderLabelRequest = {
-      type: 'github',
-      detail: 'team-vault',
-      oauthPreset: 'google-drive',
-    }
-    expect(providerDefaultLabel(request)).toBe('GitHub · team-vault')
-  })
-
-  test('includes file name for non-default Google Drive vaults', () => {
-    const detailedRequest: ProviderLabelRequest = {
-      type: 'oauth-file',
-      detail: 'work.yaml',
-      oauthPreset: 'google-drive',
-    }
-    expect(providerDefaultLabel(detailedRequest)).toBe(
-      'Google Drive · work.yaml',
+    const drive = ProviderRowFixture.googleDrive(
+      ProviderRowFixture.unscoped('gd'),
     )
-    const defaultRequest: ProviderLabelWithoutDetailRequest = {
-      type: 'oauth-file',
-      oauthPreset: 'google-drive',
-    }
-    expect(providerLabelWithoutDetail(defaultRequest)).toBe('Google Drive')
-  })
-
-  test('includes file name for non-default iCloud vaults', () => {
-    const detailedRequest: ProviderLabelRequest = {
-      type: 'oauth-file',
-      detail: 'work.yaml',
-      oauthPreset: 'icloud',
-    }
-    expect(providerDefaultLabel(detailedRequest)).toBe('iCloud · work.yaml')
-    const defaultRequest: ProviderLabelWithoutDetailRequest = {
-      type: 'oauth-file',
-      oauthPreset: 'icloud',
-    }
-    expect(providerLabelWithoutDetail(defaultRequest)).toBe('iCloud')
-  })
-})
-
-describe('findDuplicateSyncProvider', () => {
-  test('finds an existing GitHub duplicate', () => {
-    const existing = githubProvider({
-      id: 'gh-existing',
-      githubRepo: storedGithubRepository('nook-crdt-test-1'),
-      githubPat: storedGithubPat('github_pat_11AAAAAAAAAA'),
-    })
-    const candidate = githubProvider({
-      id: 'gh-new',
-      githubRepo: storedGithubRepository('nook-crdt-test-1'),
-      githubPat: storedGithubPat('github_pat_11AAAAAAAAAA'),
-    })
-    expect(
-      findDuplicateSyncProvider({
-        providers: [existing],
-        candidate: candidate,
-      }),
-    ).toEqual({
-      state: 'duplicate',
-      provider: existing,
-    })
-  })
-
-  test('ignores the excluded provider id', () => {
-    const existing = githubProvider({ id: 'gh-self' })
-    expect(
-      findDuplicateSyncProviderExcluding({
-        providers: [existing],
-        candidate: existing,
-        excludeId: 'gh-self',
-      }),
-    ).toEqual({ state: 'unique' })
-  })
-
-  test('returns the unique state when no duplicate exists', () => {
-    const existing = githubProvider({
-      githubRepo: storedGithubRepository('alpha'),
-      githubPat: storedGithubPat('github_pat_11AAAA'),
-    })
-    const candidate = githubProvider({
-      githubRepo: storedGithubRepository('beta'),
-      githubPat: storedGithubPat('github_pat_11AAAA'),
-    })
-    expect(
-      findDuplicateSyncProvider({
-        providers: [existing],
-        candidate: candidate,
-      }),
-    ).toEqual({
-      state: 'unique',
-    })
+    expect(detail(drive)).toBe(ProviderFixtureCredentials.ACCOUNT)
   })
 })

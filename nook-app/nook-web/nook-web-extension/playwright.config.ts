@@ -1,5 +1,6 @@
 import { defineConfig } from '@playwright/test'
 import { availableParallelism } from 'node:os'
+import { localS3WebServer } from './scripts/local-s3'
 
 const isCi = !!process.env.CI
 const isHostedSmoke = process.env.NOOK_EXTENSION_E2E_HOSTED === 'true'
@@ -40,17 +41,20 @@ export default defineConfig({
   ...(isHostedSmoke
     ? {}
     : {
-        webServer: {
-          command: 'bun run dev -- --host 127.0.0.1 --port 5174',
-          cwd: '../nook-vault-simple',
-          url: 'http://127.0.0.1:5174',
-          reuseExistingServer: !isCi,
-          timeout: isCi ? 120_000 : 30_000,
-          env: {
-            VITE_E2E_EXPOSE_VAULT: 'true',
-            VITE_VAULT_IDLE_TIMEOUT_MS: '300000',
-            VITE_VAULT_IDLE_WARNING_MS: '0',
+        webServer: [
+          {
+            command: 'bun run dev -- --host 127.0.0.1 --port 5174',
+            cwd: '../nook-vault-simple',
+            url: 'http://127.0.0.1:5174',
+            reuseExistingServer: !isCi,
+            timeout: isCi ? 120_000 : 30_000,
+            env: {
+              VITE_E2E_EXPOSE_VAULT: 'true',
+              VITE_VAULT_IDLE_TIMEOUT_MS: '300000',
+              VITE_VAULT_IDLE_WARNING_MS: '0',
+            },
           },
-        },
+          localS3WebServer(isCi),
+        ],
       }),
 })

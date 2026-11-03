@@ -8,6 +8,7 @@ use crate::LoadedVaultUnlockRequest;
 use crate::NookDatabase;
 use crate::SentinelDbLoadSentinelGenesisShareDelivery;
 use crate::SentinelDbSaveSentinelGenesisShareDelivery;
+use crate::TypedInput;
 use crate::manager::session::VaultKeyMaterial;
 use crate::storage::indexed_db::{SentinelFinalizationJournal, StoredSentinelShareDelivery};
 use nook_core::CheckedSentinelGenesisDelivery;
@@ -55,9 +56,7 @@ impl NookVaultManager {
         &mut self,
         args: &tsify::Ts<nook_core::StartSentinelGenesisArgs>,
     ) -> Result<NookSentinelGenesisStatus, wasm_bindgen::JsError> {
-        let mut args = args
-            .to_rust()
-            .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+        let mut args = args.decode()?;
 
         let pending = NookDatabase::load_sentinel_genesis_finalization_pending().await;
         if let SentinelFinalizationJournal::Pending(_) =
@@ -787,7 +786,7 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
-    use nook_core::AuthProvidersSnapshotData;
+    use nook_core::AuthProvidersSnapshot;
     #[cfg(test)]
     #[cfg(test)]
     use nook_core::SentinelShareVersion;
@@ -959,7 +958,7 @@ mod browser_tests {
                 .create_sentinel_onboarding_package(
                     "{}",
                     "{}",
-                    &AuthProvidersSnapshotData::default().into_ts()?
+                    &AuthProvidersSnapshot::default().into_ts()?
                 )
                 .is_err()
         );

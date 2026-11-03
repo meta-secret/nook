@@ -10,7 +10,7 @@ import {
   type NookExternalEventLogRecords,
   type StorageProvider,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import { GITHUB_PROVIDER_TYPE } from '../../nook-web-shared/src/vault-app/lib/auth/provider-types'
+import { ProviderRowFixture } from './provider-row-fixture'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../src/offscreen/session-request-adapter'
 import {
@@ -46,18 +46,14 @@ class EventLogRecordsFixture {
 }
 
 function githubProvider(): StorageProvider {
-  return {
-    id: 'github',
-    type: GITHUB_PROVIDER_TYPE,
-    label: 'Personal GitHub',
-    githubPat: { state: 'token', value: 'github_pat_session_secret' },
-    githubRepo: { state: 'defaultRepository' },
-    oauthFile: { state: 'notApplicable' },
-    localFolder: { state: 'notApplicable' },
-    storeId: { state: 'unscoped' },
-    createdAt: '2026-08-11T00:00:00Z',
-    syncCheckpoint: { state: 'neverSynced' },
-  }
+  return ProviderRowFixture.github(ProviderRowFixture.PLAINTEXT)
+}
+
+/** A GitHub row as the import must leave it: wiped. */
+function wipedGithubProvider(): StorageProvider[] {
+  return ProviderRowFixture.afterWipe([
+    ProviderRowFixture.github(ProviderRowFixture.OTHER),
+  ])
 }
 
 function importRequest(
@@ -190,7 +186,7 @@ describe('extension vault import operations', () => {
       value: 'vault',
     })
     expect(state.saved).toBe(false)
-    expect(provider.githubPat).toEqual({ state: 'missing' })
+    expect([provider]).toEqual(wipedGithubProvider())
   })
 
   test('saves the locked vault provider snapshot without requiring unlock', async () => {
@@ -217,7 +213,7 @@ describe('extension vault import operations', () => {
     })
     expect(state.operationOrder).toEqual(['activate', 'import'])
     expect(state.activatedAppId).toBe('device')
-    expect(provider.githubPat).toEqual({ state: 'missing' })
+    expect([provider]).toEqual(wipedGithubProvider())
   })
 
   test('preserves another unlocked identity instead of rebinding it', async () => {
@@ -240,7 +236,7 @@ describe('extension vault import operations', () => {
     expect(state.operationOrder).toEqual([])
     expect(state.deviceId).toBe('other-device')
     expect(state.protection).toBe(DeviceProtectionStatus.Unlocked)
-    expect(provider.githubPat).toEqual({ state: 'missing' })
+    expect([provider]).toEqual(wipedGithubProvider())
   })
 
   test('scrubs decoded provider credentials when event import rejects', async () => {
@@ -259,7 +255,7 @@ describe('extension vault import operations', () => {
     expect(state.replaced).toBe(false)
     expect(state.saved).toBe(false)
     expect(state.operationOrder).toEqual(['activate', 'import'])
-    expect(provider.githubPat).toEqual({ state: 'missing' })
+    expect([provider]).toEqual(wipedGithubProvider())
   })
 
   test('restores the prior locked identity selection when import rejects', async () => {
@@ -281,7 +277,7 @@ describe('extension vault import operations', () => {
     expect(state.deviceId).toBe('other-device')
     expect(state.replaced).toBe(false)
     expect(state.saved).toBe(false)
-    expect(provider.githubPat).toEqual({ state: 'missing' })
+    expect([provider]).toEqual(wipedGithubProvider())
   })
 
   test('aborts before event and provider mutation when identity activation rejects', async () => {
@@ -301,6 +297,6 @@ describe('extension vault import operations', () => {
     expect(state.replaced).toBe(false)
     expect(state.saved).toBe(false)
     expect(state.operationOrder).toEqual(['activate'])
-    expect(provider.githubPat).toEqual({ state: 'missing' })
+    expect([provider]).toEqual(wipedGithubProvider())
   })
 })

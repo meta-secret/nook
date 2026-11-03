@@ -1,11 +1,28 @@
 import { err, ok, type Result } from "neverthrow";
-import type { NookProviderSource, ProviderIdentityChoice } from "$app-wasm";
 import {
-  GOOGLE_DRIVE_OAUTH_FILE_PRESET,
-  OAUTH_FILE_PROVIDER_TYPE,
-  type ProviderSetupRequest,
-} from "$lib/auth/providers";
+  list_s3_vaults,
+  provider_draft_credential_readiness,
+  provider_failure_translation_key,
+  type NookProviderSource,
+  type LocalFolderHandleId,
+  type NookRemoteSource,
+  type S3Connection,
+  type ProviderDraft,
+  type ProviderIdentityChoice,
+} from "$app-wasm";
+import type { OAuthFailure } from "$lib/auth/oauth-failure";
+import {
+  listedVaults,
+  type ListedVaults,
+} from "$lib/components/provider-vaults/drive-vault-inventory";
 import { IdentityDecisionText } from "$lib/components/provider-vaults/identity-plan.svelte";
+import { ProviderSetupKinds } from "$lib/vault/provider-setup-kinds";
+import {
+  DraftDriveSignInKind,
+  DraftS3ConnectionKind,
+  ProviderDraftReads,
+  S3DraftReads,
+} from "$lib/vault/provider-draft-reads";
 import type { VaultState } from "$lib/vault.svelte";
 import {
   FirstRunJoinKind,
@@ -20,13 +37,71 @@ import {
   type IdentityPlanRun,
 } from "$lib/vault/identity-plan-actions";
 import { VaultOAuthActions } from "$lib/vault/oauth";
-import { OAuthFileDraftKind } from "$lib/vault/state/provider.svelte";
+import { ProviderVaultActions } from "$lib/vault/provider-vaults";
 import {
   FirstRunPlace,
   FirstRunStage,
+  FirstRunSyncSource,
   WorkspaceSection,
 } from "$lib/vault/state/ui.svelte";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
+
+/** Where first run lists keyrings from: the signed-in Google account, or an
+ * S3 location, which is staged only once it lists. */
+export type FirstRunProviderSource = Exclude<
+  NookRemoteSource,
+  { readonly handleId: LocalFolderHandleId }
+>;
+
+export enum FirstRunS3LocationKind {
+  /** The picked provider is not a listed S3 location. */
+  Absent = "absent",
+  Shown = "shown",
+}
+
+/** The S3 location the Sync step names once it listed. */
+export type FirstRunS3Location =
+  | { readonly kind: FirstRunS3LocationKind.Absent }
+  | {
+      readonly kind: FirstRunS3LocationKind.Shown;
+      readonly configuration: S3Connection;
+    };
+
+export enum FirstRunConnectionKind {
+  NotConnected = "not-connected",
+  Connected = "connected",
+}
+
+/** Whether the provider picked last can list: Google Drive once signed in,
+ * S3 once its form connected. */
+export type FirstRunConnection =
+  | { readonly kind: FirstRunConnectionKind.NotConnected }
+  | {
+      readonly kind: FirstRunConnectionKind.Connected;
+      readonly source: FirstRunProviderSource;
+    };
+
+export enum FirstRunInventoryKind {
+  Loading = "loading",
+  Loaded = "loaded",
+  Failed = "failed",
+}
+
+/** One read of the sync provider's keyrings. */
+export type FirstRunVaultRead =
+  | {
+      readonly kind: FirstRunInventoryKind.Loaded;
+      readonly listing: ListedVaults;
+    }
+  | {
+      readonly kind: FirstRunInventoryKind.Failed;
+      /** Why, in the user's words: a message key Rust or the step picked. */
+      readonly failure: string;
+    };
+
+/** What the Sync step knows about the sync provider's keyrings. */
+export type FirstRunInventory =
+  { readonly kind: FirstRunInventoryKind.Loading } | FirstRunVaultRead;
 
 /** One identity a sync provider holds, and the provider it was read from. */
 export type FirstRunIdentity = {
@@ -57,6 +132,27 @@ enum FirstRunNamingOutcome {
 /** The identity could not be named. */
 class FirstRunNamingFailure {
   readonly translationKey = I18N_KEYS.FirstRunNameFailed;
+}
+
+/** The provider the new identity was named on, staged before its vault
+ * was made on this browser. */
+type FirstRunStagedProvider = {
+  readonly source: FirstRunSyncSource;
+  readonly draft: ProviderDraft;
+};
+
+/** Whether the named identity's provider is staged again to connect. */
+enum FirstRunRestage {
+  Staged = "staged",
+  NothingStaged = "nothing-staged",
+}
+
+/** What connecting needed before the provider is saved. */
+enum FirstRunProviderBinding {
+  /** Google Drive's Nook folder is opened or created. */
+  FolderBound = "folder-bound",
+  /** An S3 location names everything already. */
+  NothingToBind = "nothing-to-bind",
 }
 
 /**
@@ -98,11 +194,140 @@ export class FirstRunActions {
 
   /** Stage Google Drive, ready for its sign-in. */
   beginGoogleDrive(): void {
-    const request: ProviderSetupRequest = {
-      type: OAUTH_FILE_PROVIDER_TYPE,
-      oauthPreset: GOOGLE_DRIVE_OAUTH_FILE_PRESET,
-    };
-    this.vault.beginProviderSetup(request);
+    this.vault.beginProviderSetup(ProviderSetupKinds.GOOGLE_DRIVE);
+    this.vault.firstRunSyncSource = FirstRunSyncSource.GoogleDrive;
+  }
+
+  /** Stage S3 in place of Google Drive; its form supplies the connection. */
+  beginS3(): void {
+    this.vault.beginProviderSetup(ProviderSetupKinds.S3);
+    this.vault.firstRunSyncSource = FirstRunSyncSource.S3;
+  }
+
+  /** Stage Google Drive when the step opens, unless the draft already is
+   * the picked source's: Back keeps a staged S3 location or Drive sign-in. */
+  stageOnEntry(): void {
+    switch (this.vault.providerDraft.type) {
+      case "s3":
+      case "oauth-file":
+        return;
+      case "local":
+      case "local-folder":
+      case "github":
+        this.beginGoogleDrive();
+    }
+  }
+
+  /** The listed S3 location the connection reads from, if it is one. */
+  static s3Location(connection: FirstRunConnection): FirstRunS3Location {
+    switch (connection.kind) {
+      case FirstRunConnectionKind.NotConnected:
+        return { kind: FirstRunS3LocationKind.Absent };
+      case FirstRunConnectionKind.Connected:
+        return FirstRunActions.listedS3(connection.source);
+    }
+  }
+
+  private static listedS3(source: FirstRunProviderSource): FirstRunS3Location {
+    switch (source.kind) {
+      case "s3":
+        return {
+          kind: FirstRunS3LocationKind.Shown,
+          configuration: source.configuration,
+        };
+      case "googleDrive":
+        return { kind: FirstRunS3LocationKind.Absent };
+    }
+  }
+
+  /** The source the picked provider lists from, read from the draft. */
+  connection(): FirstRunConnection {
+    const draft = this.vault.providerDraft;
+    switch (this.syncSource()) {
+      case FirstRunSyncSource.GoogleDrive:
+        return FirstRunActions.driveConnection(draft);
+      case FirstRunSyncSource.S3:
+        return FirstRunActions.s3Connection(draft);
+    }
+  }
+
+  private static driveConnection(draft: ProviderDraft): FirstRunConnection {
+    const signIn = ProviderDraftReads.driveSignIn(draft);
+    switch (signIn.kind) {
+      case DraftDriveSignInKind.SignedIn:
+        return {
+          kind: FirstRunConnectionKind.Connected,
+          source: {
+            kind: "googleDrive",
+            accessToken: signIn.access.authorization.accessToken,
+          },
+        };
+      case DraftDriveSignInKind.NotSignedIn:
+        return { kind: FirstRunConnectionKind.NotConnected };
+    }
+  }
+
+  private static s3Connection(draft: ProviderDraft): FirstRunConnection {
+    const s3 = S3DraftReads.connection(draft);
+    switch (s3.kind) {
+      case DraftS3ConnectionKind.Ready:
+        return {
+          kind: FirstRunConnectionKind.Connected,
+          source: { kind: "s3", configuration: s3.connection },
+        };
+      case DraftS3ConnectionKind.NotReady:
+        return { kind: FirstRunConnectionKind.NotConnected };
+    }
+  }
+
+  /** The provider picked last: S3 once its row was picked, Google Drive
+   * otherwise. It stays picked after the save, so a retried connect runs
+   * on the same provider. */
+  syncSource(): FirstRunSyncSource {
+    return this.vault.firstRunSyncSource;
+  }
+
+  /** The keyrings a sync provider holds, read without saving or connecting
+   * it. Google Drive reads with the staged sign-in the source's token comes
+   * from. An S3 key the server refuses says so; Rust reads the refusal. */
+  async listVaults(source: FirstRunProviderSource): Promise<FirstRunVaultRead> {
+    const vault = this.vault;
+    const localVault = new ProviderVaultActions(vault).localVaultOccupancy();
+    switch (source.kind) {
+      case "googleDrive": {
+        const listed = await new VaultOAuthActions(vault).listGoogleDriveVaults(
+          localVault,
+        );
+        if (listed.isErr())
+          return {
+            kind: FirstRunInventoryKind.Failed,
+            failure: listed.error.translationKey,
+          };
+        return {
+          kind: FirstRunInventoryKind.Loaded,
+          listing: listedVaults(listed.value),
+        };
+      }
+      case "s3":
+        try {
+          const listing = await list_s3_vaults(
+            source.configuration,
+            localVault,
+          );
+          return { kind: FirstRunInventoryKind.Loaded, listing };
+        } catch (cause) {
+          const keyRequest: Parameters<
+            typeof provider_failure_translation_key
+          >[0] = {
+            message: cause instanceof Error ? cause.message : String(cause),
+            operationFailedKey: I18N_KEYS.ProviderSetupS3ListFailed,
+          };
+          return {
+            kind: FirstRunInventoryKind.Failed,
+            failure: provider_failure_translation_key(keyRequest),
+          };
+        }
+    }
   }
 
   /** Name a new identity next: on the signed-in sync provider, or on this
@@ -138,7 +363,10 @@ export class FirstRunActions {
       vault.firstRun = FirstRunStage.Vault;
       return;
     }
-    const draft = vault.oauthFileDraft;
+    const staged: FirstRunStagedProvider = {
+      source: this.syncSource(),
+      draft: vault.providerDraft,
+    };
     vault.firstRunVaultName = label;
     // The vault is made on this browser first. A sign-in still staged would
     // be saved with it as a Google Drive provider without its Nook folder,
@@ -148,14 +376,33 @@ export class FirstRunActions {
     if (!vault.isAuthenticated) return;
     if (
       vault.firstRunPlace === FirstRunPlace.SyncProvider &&
-      draft.kind === OAuthFileDraftKind.Configured
+      this.restage(staged) === FirstRunRestage.Staged
     ) {
-      this.beginGoogleDrive();
-      vault.configureOauthFile(draft.config);
       vault.firstRun = FirstRunStage.Connect;
       return;
     }
     vault.firstRun = FirstRunStage.Off;
+  }
+
+  /** Stage the provider the identity was named on again, so the Connect
+   * step connects it without another sign-in or form. */
+  private restage(staged: FirstRunStagedProvider): FirstRunRestage {
+    switch (provider_draft_credential_readiness(staged.draft).state) {
+      case "required":
+        return FirstRunRestage.NothingStaged;
+      case "ready":
+        break;
+    }
+    switch (staged.source) {
+      case FirstRunSyncSource.GoogleDrive:
+        this.beginGoogleDrive();
+        break;
+      case FirstRunSyncSource.S3:
+        this.beginS3();
+        break;
+    }
+    this.vault.stageProviderDraft(staged.draft);
+    return FirstRunRestage.Staged;
   }
 
   /** The identity kept on this browser gets its first vault, named here. */
@@ -269,11 +516,9 @@ export class FirstRunActions {
   async connectProvider(): Promise<boolean> {
     const vault = this.vault;
     vault.errorMsg = "";
-    const folder = await new VaultOAuthActions(
-      vault,
-    ).connectGoogleVaultFolder();
-    if (folder.isErr()) {
-      vault.errorMsg = vault.t(folder.error.translationKey);
+    const bound = await this.bindProvider();
+    if (bound.isErr()) {
+      vault.errorMsg = vault.t(bound.error.translationKey);
       return false;
     }
     const saved = await vault.ensureProviderSaved();
@@ -298,6 +543,23 @@ export class FirstRunActions {
     vault.openSection(WorkspaceSection.Identities);
     if (away !== false) vault.vaultPanelStoreId = away.storeId;
     return true;
+  }
+
+  /** Google Drive opens or creates its Nook folder before the provider is
+   * saved; an S3 location names everything already. */
+  private async bindProvider(): Promise<
+    Result<FirstRunProviderBinding, OAuthFailure>
+  > {
+    switch (this.syncSource()) {
+      case FirstRunSyncSource.GoogleDrive: {
+        const folder = await new VaultOAuthActions(
+          this.vault,
+        ).connectGoogleVaultFolder();
+        return folder.map(() => FirstRunProviderBinding.FolderBound);
+      }
+      case FirstRunSyncSource.S3:
+        return ok(FirstRunProviderBinding.NothingToBind);
+    }
   }
 
   private intent({ choice, source }: FirstRunIdentity): IdentityJoinIntent {

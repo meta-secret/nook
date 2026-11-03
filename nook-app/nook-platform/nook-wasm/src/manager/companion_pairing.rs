@@ -1,12 +1,12 @@
 use super::{NookVaultManager, VaultNameState};
+use crate::{TypedInput, TypedOutput};
 use nook_companion_core::{
     AdmittedCompanionPairingApproval, CompanionExtensionPairingEndpoint, CompanionPairingApproval,
     CompanionPairingApprovalAttempt, CompanionPairingFailure, CompanionPairingRequest,
     ConsumedCompanionPairingAuthority, ExtensionConnectScope,
 };
 use nook_core::{ActiveVaultScope, ProviderVaultScope};
-use nook_core::{AuthProvidersSnapshotData, SigningIdentity, VaultApplication, VaultType};
-use tsify::Tsify;
+use nook_core::{AuthProvidersSnapshot, SigningIdentity, VaultApplication, VaultType};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 mod activation;
@@ -28,9 +28,7 @@ impl NookCompanionPairingExtensionEndpoint {
     pub fn new(
         request: &tsify::Ts<CompanionPairingRequest>,
     ) -> Result<Self, wasm_bindgen::JsError> {
-        let request = request
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        let request = request.decode()?;
 
         Ok(Self {
             inner: CompanionExtensionPairingEndpoint::issue(request)
@@ -43,7 +41,7 @@ impl NookCompanionPairingExtensionEndpoint {
             .inner
             .request()
             .map_err(|error| JsError::new(&error.to_string()))?;
-        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        Ok(result.encode()?)
     }
 
     pub fn take_authority(self) -> Result<NookCompanionPairingApprovalAuthority, JsError> {
@@ -71,15 +69,11 @@ impl NookCompanionPairingApprovalAuthority {
         manager: &NookVaultManager,
 
         attempt: &tsify::Ts<CompanionPairingApprovalAttempt>,
-        providers: &tsify::Ts<AuthProvidersSnapshotData>,
+        providers: &tsify::Ts<AuthProvidersSnapshot>,
     ) -> Result<NookPrevalidatedCompanionPairingApproval, wasm_bindgen::JsError> {
-        let providers = providers
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        let providers = providers.decode()?;
 
-        let attempt = attempt
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        let attempt = attempt.decode()?;
 
         self.prevalidate_inner(manager, attempt, providers)
             .map_err(NookVaultManager::failure_js_error)
@@ -91,7 +85,7 @@ impl NookCompanionPairingApprovalAuthority {
         self,
         manager: &NookVaultManager,
         attempt: CompanionPairingApprovalAttempt,
-        providers: AuthProvidersSnapshotData,
+        providers: AuthProvidersSnapshot,
     ) -> Result<NookPrevalidatedCompanionPairingApproval, CompanionPairingFailure> {
         let authorized = self.inner.authorize_approval(attempt)?;
         let approval = authorized.approval();
@@ -159,12 +153,13 @@ impl NookVaultManager {
 pub struct NookPrevalidatedCompanionPairingApproval {
     binding: CompanionPairingApproval,
     _approval: AdmittedCompanionPairingApproval,
-    providers: AuthProvidersSnapshotData,
+    providers: AuthProvidersSnapshot,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_fixtures::WasmFixture;
     use nook_companion_core::{
         CompanionPairingApproval, CompanionPairingEpochMilliseconds, CompanionPairingInstallation,
         CompanionPairingProviderManifestDigest, ExtensionPairingVaultType,
@@ -173,16 +168,15 @@ mod tests {
     #[cfg(test)]
     use nook_core::ProviderCredentialRejection;
     use nook_core::StoreId;
-    use nook_core::{ActiveVaultScope, DeviceIdentity, ProviderVaultScope, StorageProviderData};
+    use nook_core::{ActiveVaultScope, DeviceIdentity, ProviderVaultScope};
     use tsify::Tsify;
-    use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     struct PairingFixture {
         manager: NookVaultManager,
         request: CompanionPairingRequest,
         approval: CompanionPairingApproval,
-        providers: AuthProvidersSnapshotData,
+        providers: AuthProvidersSnapshot,
     }
 
     impl PairingFixture {
@@ -201,7 +195,7 @@ mod tests {
             manager.device.identity_private_key = identity.secret_string().into_inner();
             manager.event_log.signing_seed = signing_seed.into_inner();
 
-            let mut providers = AuthProvidersSnapshotData {
+            let mut providers = AuthProvidersSnapshot {
                 providers: Vec::new(),
                 active_vault_store_id: ActiveVaultScope::StoreId(
                     StoreId::before_genesis_placeholder().into_inner(),
@@ -209,13 +203,8 @@ mod tests {
             };
             let mut scopes = vec![ExtensionConnectScope::VaultAccess];
             if with_provider {
-                let mut provider = StorageProviderData::github(
-                    "github-1",
-                    "GitHub",
-                    "github_pat_pairing",
-                    "nook",
-                    "2026-09-07T00:00:00Z",
-                );
+                let mut provider =
+                    WasmFixture::github_row("github-1", "github_pat_pairing", "nook")?;
                 provider.store_id =
                     ProviderVaultScope::StoreId(StoreId::before_genesis_placeholder().into_inner());
                 providers.providers.push(provider);
@@ -311,9 +300,7 @@ mod tests {
         assert_eq!(
             endpoint
                 .request()
-                .and_then(|value| value
-                    .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))
+                .and_then(|value| Ok(value.decode()?))
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?,
             request
         );
@@ -477,14 +464,12 @@ mod tests {
     fn sealed_provider_must_authenticate_for_exact_manager_recipient() -> anyhow::Result<()> {
         let mut fixture = PairingFixture::new(true)?;
         let other = DeviceIdentity::generate()?;
-        let mut replacement = AuthProvidersSnapshotData {
-            providers: vec![StorageProviderData::github(
+        let mut replacement = AuthProvidersSnapshot {
+            providers: vec![WasmFixture::github_row(
                 "github-other",
-                "GitHub",
                 "github_pat_other",
                 "nook",
-                "2026-09-07T00:00:00Z",
-            )],
+            )?],
             active_vault_store_id: ActiveVaultScope::StoreId(
                 StoreId::before_genesis_placeholder().into_inner(),
             ),

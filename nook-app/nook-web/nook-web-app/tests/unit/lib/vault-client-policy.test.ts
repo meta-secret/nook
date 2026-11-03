@@ -14,52 +14,28 @@ import {
   VaultSyncTimerTickDecision,
   active_vault_providers,
   providers_visible_while_device_locked,
-  staged_oauth_remote_storage_args,
+  staged_storage_args,
   sync_providers_for_active_vault,
   type AuthProvidersSnapshot,
+  type ProviderDraft,
 } from '$app-wasm'
 import {
   activeVaultScope,
-  DEFAULT_DRIVE_BACKUP_NAME,
-  defaultOAuthFileConfig,
-  providerPersistenceDefaults,
   scopedProviderVault,
-  unscopedProviderVault,
-  storedGithubPat,
-  storedGithubRepository,
   type StorageProvider,
 } from '$lib/auth/providers'
+import { ProviderDraftFixture, ProviderRowFixture } from '../provider-fixtures'
 
 const providers: StorageProvider[] = [
-  {
-    ...providerPersistenceDefaults(),
+  ProviderRowFixture.local({
     id: 'local-a',
-    type: 'local',
-    label: 'This device',
     storeId: scopedProviderVault('store-a'),
-    syncCheckpoint: { state: 'neverSynced' as const },
-    createdAt: '2026-07-17T00:00:00.000Z',
-  },
-  {
-    ...providerPersistenceDefaults(),
-    id: 'github',
-    type: 'github',
-    label: 'GitHub',
-    githubPat: storedGithubPat('pat'),
-    githubRepo: storedGithubRepository('owner/nook'),
-    storeId: unscopedProviderVault(),
-    syncCheckpoint: { state: 'neverSynced' as const },
-    createdAt: '2026-07-17T00:00:00.000Z',
-  },
-  {
-    ...providerPersistenceDefaults(),
+  }),
+  ProviderRowFixture.github(ProviderRowFixture.unscoped('github')),
+  ProviderRowFixture.local({
     id: 'local-b',
-    type: 'local',
-    label: 'This device',
     storeId: scopedProviderVault('store-b'),
-    syncCheckpoint: { state: 'neverSynced' as const },
-    createdAt: '2026-07-17T00:00:00.000Z',
-  },
+  }),
 ]
 const snapshot: AuthProvidersSnapshot = {
   providers,
@@ -307,12 +283,11 @@ describe('portable vault client policy', () => {
   })
 
   test('rejects an invalid OAuth preset without a legacy fallback', () => {
-    const invalidConfig = defaultOAuthFileConfig({
-      preset: 'google-drive',
-      fileName: DEFAULT_DRIVE_BACKUP_NAME,
-    })
-    Object.defineProperty(invalidConfig, 'preset', { value: '' })
-    expect(() => staged_oauth_remote_storage_args(invalidConfig)).toThrow(
+    const invalidDraft: ProviderDraft = {
+      ...ProviderDraftFixture.googleDriveConnected(),
+    }
+    Object.defineProperty(invalidDraft, 'preset', { value: '' })
+    expect(() => staged_storage_args(invalidDraft)).toThrow(
       'Invalid typed WASM input.',
     )
   })

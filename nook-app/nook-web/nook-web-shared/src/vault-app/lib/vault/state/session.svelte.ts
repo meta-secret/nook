@@ -76,7 +76,6 @@ export class VaultSessionState {
   vaultMembers = $state<VaultMember[]>([]);
   enrollSecretsKey = $state("");
   enrollMembersKey = $state("");
-  sharedJoinerIdentity = $state("");
   joinEnrollmentPrompt = $state<JoinEnrollmentState>(JoinEnrollmentState.None);
   /**
    * True from the moment this device sends a join request until it unlocks.

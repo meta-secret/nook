@@ -87,20 +87,6 @@ class SessionMessageWireFixture {
 }
 const sessionMessageWireFixture = new SessionMessageWireFixture()
 const decodeProviders = sessionMessageWireFixture.decodeProviders
-function githubProvider(token: string): StorageProvider {
-  return {
-    id: 'github',
-    type: 'github',
-    label: 'GitHub',
-    githubPat: { state: 'token', value: token },
-    githubRepo: { state: 'defaultRepository' },
-    oauthFile: { state: 'notApplicable' },
-    localFolder: { state: 'notApplicable' },
-    storeId: { state: 'unscoped' },
-    syncCheckpoint: { state: 'neverSynced' },
-    createdAt: '2026-08-10T00:00:00.000Z',
-  }
-}
 function vaultImportRequest(
   providers: StorageProvider[],
   queue: ExtensionSessionQueue = MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
@@ -131,7 +117,6 @@ export {
   ExtensionSessionRequestParseKind,
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
   decodeProviders,
-  githubProvider,
   parseExtensionSessionRequest,
   sessionMessageWireFixture,
   vaultImportRequest,

@@ -5,7 +5,6 @@ import { ProviderCredentialBuffer } from '../lib/provider-credential-staging'
 import {
   decode_extension_session_request,
   type ExtensionSessionRequest as GeneratedExtensionSessionRequest,
-  type ExtensionStorageProviderIdentity,
   type PasskeyCeremonyQueueDisposition,
   type QueueDisposition,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -131,14 +130,6 @@ const importProvidersDecodeFailure: ExtensionSessionRequestDecodeFailure = {
   kind: ExtensionSessionRequestDecodeFailureKind.ImportProviders,
 }
 
-type MissingGithubCredential = { readonly state: 'missing' }
-type SignedOutProviderToken = { readonly state: 'signedOut' }
-type UnissuedProviderToken = { readonly state: 'notIssued' }
-
-const missingGithubCredential: MissingGithubCredential = { state: 'missing' }
-const signedOutProviderToken: SignedOutProviderToken = { state: 'signedOut' }
-const unissuedProviderToken: UnissuedProviderToken = { state: 'notIssued' }
-
 type ExtensionSessionRawEnvelope = {
   type: string
   payload: ExtensionSessionRuntimeMessageValue
@@ -164,11 +155,6 @@ const extensionSessionRawEnvelopeHeaderSchema = Schema.Struct(
 enum ExtensionSessionPayloadField {
   Payload = 'payload',
   Providers = 'providers',
-  GithubPat = 'githubPat',
-  OauthFile = 'oauthFile',
-  Config = 'config',
-  AccessToken = 'accessToken',
-  RefreshToken = 'refreshToken',
 }
 
 enum ExtensionSessionSensitiveField {
@@ -504,65 +490,21 @@ class ExtensionSessionIngressAdmission {
   }
 }
 
-function clearRawProviderCredentials(
-  value: ExtensionSessionRuntimeMessageValue,
-): void {
-  if (!Array.isArray(value)) return
-  for (const provider of value) {
-    if (!provider || typeof provider !== 'object' || Array.isArray(provider)) {
-      continue
-    }
-    if (ExtensionSessionPayloadField.GithubPat in provider) {
-      safeReflect.set(
-        provider,
-        ExtensionSessionPayloadField.GithubPat,
-        missingGithubCredential,
-      )
-    }
-    if (ExtensionSessionPayloadField.OauthFile in provider) {
-      const oauthFile = safeReflect.get(
-        provider,
-        ExtensionSessionPayloadField.OauthFile,
-      )
-      if (
-        oauthFile &&
-        typeof oauthFile === 'object' &&
-        !Array.isArray(oauthFile)
-      ) {
-        if (ExtensionSessionPayloadField.Config in oauthFile) {
-          const config = safeReflect.get(
-            oauthFile,
-            ExtensionSessionPayloadField.Config,
-          )
-          if (config && typeof config === 'object' && !Array.isArray(config)) {
-            if (ExtensionSessionPayloadField.AccessToken in config)
-              safeReflect.set(
-                config,
-                ExtensionSessionPayloadField.AccessToken,
-                signedOutProviderToken,
-              )
-            if (ExtensionSessionPayloadField.RefreshToken in config)
-              safeReflect.set(
-                config,
-                ExtensionSessionPayloadField.RefreshToken,
-                unissuedProviderToken,
-              )
-          }
-        }
-        if (ExtensionSessionPayloadField.AccessToken in oauthFile)
-          safeReflect.set(
-            oauthFile,
-            ExtensionSessionPayloadField.AccessToken,
-            '',
-          )
-        if (ExtensionSessionPayloadField.RefreshToken in oauthFile)
-          safeReflect.set(
-            oauthFile,
-            ExtensionSessionPayloadField.RefreshToken,
-            '',
-          )
-      }
-    }
+/** A raw import payload's `providers` value. TypeScript never decodes it:
+ * Rust decodes the staged copy. */
+class RawProviderRows {
+  constructor(private readonly rows: ExtensionSessionRuntimeMessageValue) {}
+
+  /** Empty every raw row in place, whatever its provider or damage, so the
+   * caller's copy keeps no credential. */
+  release(): void {
+    if (!Array.isArray(this.rows)) return
+    for (const row of this.rows) this.empty(row)
+  }
+
+  private empty(row: ExtensionSessionRuntimeMessageValue): void {
+    if (typeof row !== 'object') return
+    for (const member of Object.keys(row)) Reflect.deleteProperty(row, member)
   }
 }
 
@@ -576,7 +518,7 @@ function clearRawExtensionSessionSecrets(
       payload,
       ExtensionSessionPayloadField.Providers,
     )
-    clearRawProviderCredentials(providers)
+    new RawProviderRows(providers).release()
     safeReflect.set(payload, ExtensionSessionPayloadField.Providers, [])
     return
   }
@@ -717,12 +659,9 @@ function decodeExtensionSessionIngress(
       }
       decodedProviders.push(decodedProvider.success)
     }
-    const identities: ExtensionStorageProviderIdentity[] = decodedProviders.map(
-      (provider) => ({
-        id: provider.id,
-        type: provider.type,
-      }),
-    )
+    const identities = new ProviderCredentialBuffer(
+      decodedProviders,
+    ).identities()
     if (
       !safeReflect.set(
         rawPayload,

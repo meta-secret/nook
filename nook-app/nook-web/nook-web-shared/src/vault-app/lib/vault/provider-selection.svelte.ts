@@ -6,9 +6,8 @@ import {
 } from "$lib/runtime/storage-failure";
 import {
   activeVaultScope,
-  storedLocalFolderDirectory,
-  storedLocalFolderHandle,
   unselectedVaultScope,
+  type AuthProvidersSnapshot,
   type StorageProvider,
 } from "$lib/auth/providers";
 import {
@@ -16,6 +15,7 @@ import {
   choose_local_folder_backup_directory,
   is_local_folder_backup_supported,
   is_vault_session_locked,
+  local_folder_provider_draft,
   local_provider_for_active_vault,
   NookManagerStoreScope,
   NookProviderSelectionState,
@@ -29,13 +29,18 @@ import {
   type LocalProviderLookup,
 } from "$lib/vault/state/provider.svelte";
 
+/** A folder the user picked, staged as the local-folder draft. */
+export enum LocalFolderChoice {
+  Chosen = "chosen",
+}
+
 /** Owns browser orchestration for one provider selection.svelte context. */
 export class ProviderSelectionActions {
   constructor(private readonly state: ProviderActionsContext) {}
 
-  private providerSnapshot() {
+  providerSnapshot(): AuthProvidersSnapshot {
     const state = this.state;
-    const snapshotArgs: Parameters<typeof $state.snapshot>[0] = {
+    const snapshotArgs: AuthProvidersSnapshot = {
       providers: state.providers,
       activeVaultStoreId:
         state.activeVault.kind === ActiveVaultKind.Open
@@ -45,7 +50,9 @@ export class ProviderSelectionActions {
     return $state.snapshot(snapshotArgs);
   }
 
-  async chooseLocalFolder(): Promise<Result<void, VaultStorageFailure>> {
+  async chooseLocalFolder(): Promise<
+    Result<LocalFolderChoice, VaultStorageFailure>
+  > {
     const state = this.state;
     this.refreshLocalFolderBackupSupport();
     if (!state.localFolderBackupSupported) {
@@ -71,12 +78,8 @@ export class ProviderSelectionActions {
       return err(new NativeVaultStorageFailure(failure));
     }
     try {
-      const request: Parameters<typeof state.configureLocalFolder>[0] = {
-        directoryName: storedLocalFolderDirectory(folder.directoryName),
-        handleId: storedLocalFolderHandle(folder.handleId),
-      };
-      state.configureLocalFolder(request);
-      return ok();
+      state.stageProviderDraft(local_folder_provider_draft(folder));
+      return ok(LocalFolderChoice.Chosen);
     } finally {
       folder.free();
     }

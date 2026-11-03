@@ -101,6 +101,17 @@ The operation set is closed. Every operation is kebab-case tagged on the wire.
     registration.
 - **`provider-mounted`** and **`provider-unmounted`**
   - Add or remove one credential-free mount record.
+  - An S3 target is `kind: s3` with `endpoint`, `bucket`, and `key_prefix`.
+    The prefix has two states: `{ state: bucketRoot }` for the bucket root, and
+    `{ state: prefix, value }` with the path as segments joined by `/`. An
+    empty string is not a state and fails to decode.
+  - It holds no region, no access key ID, and no secret. Each app signs with
+    its own key and region.
+  - A provider row matches its mount by this record, whatever region the row
+    signs with.
+  - The `s3` target kind is new. The event schema stays `1`. Nook has no
+    released versions, so this change adds no migration and no compatibility
+    branch.
 - **`identity-named`**
   - Holds the identity's name sealed to each active member's X25519
     encryption key, one recipient per member.
@@ -110,12 +121,12 @@ A member tuple carries `app_id`, the X25519 encryption public key, the Ed25519
 signing public key, and a label. Validation derives `app_id` from the
 encryption key and requires the signing key.
 
-**Prohibited:** record a GitHub PAT or OAuth token inside `provider-mounted` so
-a joining installation can sync without signing in.
+**Prohibited:** record a GitHub PAT, an OAuth token, or an S3 access key inside
+`provider-mounted` so a joining installation can sync without signing in.
 
-**Required:** record only the repository, Drive folder, iCloud share target, or
-local folder name. Each installation supplies and seals its own credential
-locally, as [auth-providers.md](../../../../.cortex/docs/architecture/auth-providers.md)
+**Required:** record only the repository, Drive folder, iCloud share target,
+local folder name, or S3 location. Each installation supplies and seals its own
+credential locally, as [auth-providers.md](../../../../.cortex/docs/architecture/auth-providers.md)
 requires.
 
 ### Keep names sealed in the signed log
@@ -205,9 +216,13 @@ identity. An identity's folder holds its log in `log` and each vault it filed
 in a folder named by the store id. Events are immutable and content-addressed,
 so replicas converge by set union. `PlacedNamespace` owns the layout.
 
-- **Path-addressed providers (GitHub, local folder)**
+- **Path-addressed providers (GitHub, local folder, S3)**
   - Identity log: `meta-secret-nook/{identity_id}/log/events/{digest}.yaml`.
   - Vault: `meta-secret-nook/{identity_id}/{store_id}/events/{digest}.yaml`.
+  - S3 keeps the same paths as object keys below the mount's optional key
+    prefix, `[prefix/]meta-secret-nook/...`. The
+    [vault event log](vault-event-log.md#s3-objects-and-create-only-writes)
+    owns the object rules.
 - **Google Drive**
   - The same layout as nested folders: the root, an `{identity_id}` folder in
     it, and `log` or `{store_id}` inside that.

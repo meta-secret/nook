@@ -139,7 +139,10 @@ describe('saving sync providers', () => {
       ),
     )
 
-    const persisted = await vault.persistProviders({ replace: false })
+    const persisted = await vault.persistProviders({
+      replace: false,
+      providers: vault.providers,
+    })
 
     expect(persisted.isOk()).toBe(true)
     expect(vault.errorMsg).toBe(
@@ -157,7 +160,10 @@ describe('saving sync providers', () => {
     )
     const handOver = vi.spyOn(KeyringProvidersHandOver.prototype, 'deliver')
 
-    const persisted = await vault.persistProviders({ replace: false })
+    const persisted = await vault.persistProviders({
+      replace: false,
+      providers: vault.providers,
+    })
 
     expect(persisted.isErr()).toBe(true)
     expect(handOver).not.toHaveBeenCalled()

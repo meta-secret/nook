@@ -126,6 +126,7 @@ pub enum ExtensionStorageProviderType {
     Github,
     #[serde(rename = "oauth-file")]
     OAuthFile,
+    S3,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
@@ -550,6 +551,49 @@ impl ExtensionSessionRequestValidation {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct ProviderTypeWire {
+        tag: &'static str,
+        provider_type: ExtensionStorageProviderType,
+    }
+
+    #[test]
+    fn provider_identities_name_every_storage_provider_type() -> anyhow::Result<()> {
+        for case in [
+            ProviderTypeWire {
+                tag: "local",
+                provider_type: ExtensionStorageProviderType::Local,
+            },
+            ProviderTypeWire {
+                tag: "local-folder",
+                provider_type: ExtensionStorageProviderType::LocalFolder,
+            },
+            ProviderTypeWire {
+                tag: "github",
+                provider_type: ExtensionStorageProviderType::Github,
+            },
+            ProviderTypeWire {
+                tag: "oauth-file",
+                provider_type: ExtensionStorageProviderType::OAuthFile,
+            },
+            ProviderTypeWire {
+                tag: "s3",
+                provider_type: ExtensionStorageProviderType::S3,
+            },
+        ] {
+            let wire = serde_json::json!({ "id": "provider", "type": case.tag });
+            let identity: ExtensionStorageProviderIdentity = serde_json::from_value(wire.clone())?;
+            assert_eq!(identity.provider_type, case.provider_type);
+            assert_eq!(serde_json::to_value(&identity)?, wire);
+        }
+        assert!(
+            serde_json::from_value::<ExtensionStorageProviderIdentity>(
+                serde_json::json!({ "id": "provider", "type": "S3" })
+            )
+            .is_err()
+        );
+        Ok(())
+    }
 
     #[test]
     fn focused_reveal_transport_preserves_one_typed_value_selection() -> anyhow::Result<()> {

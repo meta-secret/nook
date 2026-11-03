@@ -12,7 +12,7 @@ can be tried again, or left for the Sync page.
   import FirstRunProgress from './FirstRunProgress.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import { FirstRunActions } from '$lib/vault/first-run'
-  import { FirstRunStage } from '$lib/vault/state/ui.svelte'
+  import { FirstRunStage, FirstRunSyncSource } from '$lib/vault/state/ui.svelte'
 
   let {
     vault,
@@ -25,6 +25,14 @@ can be tried again, or left for the Sync page.
 
   const actions = $derived(new FirstRunActions(vault))
   let connecting = $state(true)
+  const title = $derived.by(() => {
+    switch (actions.syncSource()) {
+      case FirstRunSyncSource.GoogleDrive:
+        return I18N_KEYS.FirstRunConnectTitle
+      case FirstRunSyncSource.S3:
+        return I18N_KEYS.FirstRunConnectTitleS3
+    }
+  })
 
   async function connect(): Promise<void> {
     connecting = true
@@ -48,7 +56,7 @@ can be tried again, or left for the Sync page.
     <h1
       class="text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-foreground"
     >
-      {vault.t(I18N_KEYS.FirstRunConnectTitle)}
+      {vault.t(title)}
     </h1>
     <p class="text-sm text-pretty text-muted-foreground">
       {vault.t(I18N_KEYS.FirstRunConnectBody)}

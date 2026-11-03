@@ -1,9 +1,10 @@
 //! Shared vault-package boundary for paired encrypted event-log admission.
 
+use crate::{TypedInput, TypedOutput};
 use nook_companion_core::{
     ExtensionVaultEventLogResponse, ExtensionVaultEventLogResponseDecodeRequest,
 };
-use tsify::{Ts, Tsify};
+use tsify::Ts;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[wasm_bindgen]
@@ -14,13 +15,11 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 pub fn decode_extension_vault_event_log_response(
     request: &Ts<ExtensionVaultEventLogResponseDecodeRequest>,
 ) -> Result<Ts<ExtensionVaultEventLogResponse>, JsError> {
-    let request = request
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid extension event-log response."))?;
+    let request = request.decode()?;
     let response = request
         .decode()
         .map_err(|error| JsError::new(&error.to_string()))?;
-    Tsify::into_ts(&response).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    Ok(response.encode()?)
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]

@@ -7,9 +7,9 @@ import initNookWasm, {
   type IdentityControlSnapshot,
   type IdentityVaultPairingPlan,
   type NookPairedVaults,
+  type NookStorageConnection,
   type StorageProvider,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import { GITHUB_PROVIDER_TYPE } from '../../nook-web-shared/src/vault-app/lib/auth/provider-types'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../src/offscreen/session-request-adapter'
 import {
@@ -18,6 +18,8 @@ import {
   type ExtensionMembershipManager,
   type RefreshExtensionIdentityVaultsRequest,
 } from '../src/offscreen/session-identity-membership'
+import { ProviderRowFixture } from './provider-row-fixture'
+import { localS3Credentials, LocalS3Identity } from './local-s3'
 
 beforeAll(async () => {
   const wasm: Parameters<typeof initNookWasm>[0] = {
@@ -32,26 +34,15 @@ beforeAll(async () => {
   configure_vault_application(VaultApplication.Extension)
 })
 
-function githubProvider(id: string): StorageProvider {
-  return {
-    id,
-    type: GITHUB_PROVIDER_TYPE,
-    label: 'Family GitHub',
-    githubPat: { state: 'token', value: 'github_pat_session_secret' },
-    githubRepo: { state: 'repository', value: 'family/vaults' },
-    oauthFile: { state: 'notApplicable' },
-    localFolder: { state: 'notApplicable' },
-    storeId: { state: 'unscoped' },
-    createdAt: '2026-10-16T00:00:00Z',
-    syncCheckpoint: { state: 'neverSynced' },
-  }
+function githubProvider(): StorageProvider {
+  return ProviderRowFixture.github(ProviderRowFixture.PLAINTEXT)
 }
 
-type SyncedProvider = { mode: string; pat: string; repo: string }
+const S3_SECRET = localS3Credentials(LocalS3Identity.DeviceA).secretAccessKey
 
 /** The offscreen session's WASM manager, as far as membership uses it. */
 class MembershipManager {
-  readonly synced: SyncedProvider[] = []
+  readonly synced: NookStorageConnection[] = []
   readonly paired: NookPairedVaults[] = []
   readonly started: string[] = []
   constructor(
@@ -74,6 +65,7 @@ class MembershipManager {
           identityLabel: 'Family',
           standing: this.standing,
           members: [],
+          devices: [],
           deviceCount: 0,
           joinRequests: [],
           vaults: [],
@@ -83,8 +75,8 @@ class MembershipManager {
       },
       identity_replication_providers: () =>
         Promise.resolve(this.snapshot(this.mounts)),
-      sync_identity_log_with_provider: (mode, pat, repo) => {
-        this.synced.push({ mode, pat, repo })
+      sync_identity_log_with_provider: (connection) => {
+        this.synced.push(connection)
         if (this.syncFails)
           return Promise.reject(new Error('GitHub authentication failed.'))
         return Promise.resolve({
@@ -132,19 +124,15 @@ function refresh(
 
 describe('refreshing the unlocked identity in the offscreen session', () => {
   test('syncs the identity log through each provider, then plans pairing', async () => {
-    const manager = new MembershipManager(
-      'member',
-      [githubProvider('github-family')],
-      false,
-    )
+    const manager = new MembershipManager('member', [githubProvider()], false)
 
     const refreshed = await refresh(manager)
 
     expect(manager.synced).toEqual([
       {
         mode: 'github',
-        pat: 'github_pat_session_secret',
-        repo: 'family/vaults',
+        token: ProviderRowFixture.PLAINTEXT,
+        repo: 'nook',
       },
     ])
     expect(manager.paired).toEqual([{ storeIds: ['store_approved'] }])
@@ -154,14 +142,56 @@ describe('refreshing the unlocked identity in the offscreen session', () => {
       identityLabel: 'Family',
       toPair: ['store_later'],
       awaitingGrant: ['store_unshared'],
-      mountProviderIds: ['github-family'],
+      mountProviderIds: ['github'],
+    })
+  })
+
+  test('syncs the identity log through an S3 mount and opens vaults through it', async () => {
+    const manager = new MembershipManager(
+      'member',
+      [ProviderRowFixture.s3(S3_SECRET)],
+      false,
+    )
+
+    const refreshed = await refresh(manager)
+
+    expect(manager.synced).toEqual([
+      {
+        mode: 's3',
+        // A storage request signs with the row's own key and carries no spare.
+        connection: {
+          ...ProviderRowFixture.s3Connection(S3_SECRET),
+          spareKeys: [],
+        },
+      },
+    ])
+    expect(refreshed._unsafeUnwrap()).toMatchObject({
+      mountProviderIds: ['s3'],
+    })
+  })
+
+  test('syncs through a local folder but opens no vault through it', async () => {
+    const manager = new MembershipManager(
+      'member',
+      [ProviderRowFixture.localFolder(), githubProvider()],
+      false,
+    )
+
+    const refreshed = await refresh(manager)
+
+    expect(manager.synced).toEqual([
+      { mode: 'local' },
+      { mode: 'github', token: ProviderRowFixture.PLAINTEXT, repo: 'nook' },
+    ])
+    expect(refreshed._unsafeUnwrap()).toMatchObject({
+      mountProviderIds: ['github'],
     })
   })
 
   test('an extension that never joined an identity syncs nothing', async () => {
     const manager = new MembershipManager(
       'notReplicated',
-      [githubProvider('github-family')],
+      [githubProvider()],
       false,
     )
 
@@ -175,11 +205,7 @@ describe('refreshing the unlocked identity in the offscreen session', () => {
   })
 
   test('a provider that fails ends the refresh with the failure', async () => {
-    const manager = new MembershipManager(
-      'member',
-      [githubProvider('github-family')],
-      true,
-    )
+    const manager = new MembershipManager('member', [githubProvider()], true)
 
     const refreshed = await refresh(manager)
 

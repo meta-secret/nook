@@ -18,7 +18,7 @@ use tsify::Tsify;
 use crate::errors::VaultResult;
 use crate::{
     AppId, EventStorageBytes, IdentityControlLog, IdentityControlState, IdentityId,
-    IdentityJoinProgress, ProviderInstant, ProviderVaultTime,
+    IdentityJoinProgress, IdentitySession, ProviderInstant, ProviderVaultTime,
 };
 
 /// How many devices or vaults a control log lists.
@@ -124,6 +124,27 @@ impl ListingAppKey {
     }
 }
 
+/// What a listing relates every identity's log and every vault to on this
+/// browser.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ListingIdentity {
+    /// No identity is in use here, so no app key was checked.
+    NoIdentityInUse,
+    /// The identity in use and this browser's app key under it.
+    InUse(ListingAppKey),
+}
+
+impl ListingIdentity {
+    /// Whether an identity is in use on this browser.
+    #[must_use]
+    pub fn session(&self) -> IdentitySession {
+        match self {
+            Self::NoIdentityInUse => IdentitySession::NoIdentity,
+            Self::InUse(_) => IdentitySession::IdentityInUse,
+        }
+    }
+}
+
 /// One identity's control log events, as a provider holds them.
 #[derive(Clone, Debug)]
 pub struct ProviderIdentityLogEvents {
@@ -141,7 +162,7 @@ pub struct ListedIdentityLog {
 impl ProviderIdentityLogEvents {
     /// Verify the log and read its facts. Every event must parse and carry a
     /// valid signature, as when the identity syncs its own log.
-    pub fn read(self, this_browser: Option<&ListingAppKey>) -> VaultResult<ListedIdentityLog> {
+    pub fn read(self, this_browser: &ListingIdentity) -> VaultResult<ListedIdentityLog> {
         let Self {
             identity_id,
             events,
@@ -164,10 +185,10 @@ impl ProviderIdentityLogEvents {
                 )?);
             }
         }
-        let (held_here, join) = this_browser
-            .map_or((false, ProviderIdentityJoin::NotAsked), |key| {
-                key.standing_in(&state)
-            });
+        let (held_here, join) = match this_browser {
+            ListingIdentity::NoIdentityInUse => (false, ProviderIdentityJoin::NotAsked),
+            ListingIdentity::InUse(key) => key.standing_in(&state),
+        };
         Ok(ListedIdentityLog {
             identity_id,
             log: ProviderIdentityLog::Read {
@@ -308,7 +329,7 @@ mod tests {
     #[test]
     fn a_signed_log_tells_its_devices_their_newest_join_and_its_vaults() -> anyhow::Result<()> {
         let (log, founder) = two_device_log()?;
-        let listed = provider_events(&log)?.read(None)?;
+        let listed = provider_events(&log)?.read(&ListingIdentity::NoIdentityInUse)?;
 
         assert_eq!(
             listed.log,
@@ -329,7 +350,7 @@ mod tests {
             identity_id: log.identity_id().clone(),
             local: ListingLocalIdentity::InUse,
         };
-        let here = provider_events(&log)?.read(Some(&key))?;
+        let here = provider_events(&log)?.read(&ListingIdentity::InUse(key))?;
         assert!(matches!(
             here.log,
             ProviderIdentityLog::Read {
@@ -346,7 +367,10 @@ mod tests {
         log: &IdentityControlLog,
         key: &ListingAppKey,
     ) -> anyhow::Result<(bool, ProviderIdentityJoin)> {
-        match provider_events(log)?.read(Some(key))?.log {
+        match provider_events(log)?
+            .read(&ListingIdentity::InUse(key.clone()))?
+            .log
+        {
             ProviderIdentityLog::Read {
                 this_browser, join, ..
             } => Ok((this_browser, join)),
@@ -506,7 +530,7 @@ mod tests {
             identity_id: identity_id.clone(),
             events: Vec::new(),
         }
-        .read(None)?;
+        .read(&ListingIdentity::NoIdentityInUse)?;
         assert_eq!(empty.log, ProviderIdentityLog::Absent);
         assert_eq!(
             ListedIdentityLog::of(&identity_id, &[empty]),
@@ -518,7 +542,7 @@ mod tests {
         damaged.events.push(EventStorageBytes::from(
             b"not: an identity event\n".to_vec(),
         ));
-        assert!(damaged.read(None).is_err());
+        assert!(damaged.read(&ListingIdentity::NoIdentityInUse).is_err());
         Ok(())
     }
 }

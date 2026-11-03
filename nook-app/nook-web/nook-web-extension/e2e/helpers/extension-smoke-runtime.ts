@@ -6,6 +6,7 @@ import {
   expect,
   type BrowserContext,
   type CDPSession,
+  type Locator,
   type Page,
   type Worker,
 } from '@playwright/test'
@@ -130,7 +131,8 @@ const chromiumExecutablePath = ((v) => (v ? v : ''))(
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
 )
 export const setupStorageKey = 'nook:extension-setup'
-export const pairingGrantStorageKey = 'nook:extension-pairing-grant:store-e2e'
+export const PAIRING_GRANT_PREFIX = 'nook:extension-pairing-grant:'
+export const pairingGrantStorageKey = `${PAIRING_GRANT_PREFIX}store-e2e`
 export const connectedSetupState = {
   status: 'ready',
   deviceLabel: 'Nook Extension - Chromium test profile',
@@ -611,6 +613,31 @@ export async function reuseNookTabForConnect(
   }
   expect(opened.map((page) => page.url())).toEqual([])
   return nookPage
+}
+
+/** The keyring's consent on the connect route. The request unlocks the
+ * keyring, not a vault. The page may unlock the keyring by itself as it
+ * loads; otherwise the request's unlock does. Either way the consent replaces
+ * the request. */
+export async function showKeyringConsent(connectPage: Page): Promise<Locator> {
+  const consent = connectPage.getByTestId('extension-connect-consent')
+  const unlockKeyring = connectPage.getByTestId('extension-request-unlock')
+  await expect
+    .poll(
+      async () => {
+        if (await consent.isVisible()) return true
+        if (
+          (await unlockKeyring.isVisible()) &&
+          (await unlockKeyring.isEnabled())
+        ) {
+          await unlockKeyring.click({ timeout: 2_000 }).catch(() => false)
+        }
+        return consent.isVisible()
+      },
+      { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe(true)
+  return consent
 }
 
 export async function readExtensionStorage(context: BrowserContext) {

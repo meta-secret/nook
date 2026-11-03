@@ -9,10 +9,7 @@
     IdentityVaultTarget,
   } from '$lib/components/identities/identity-card-model'
   import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
-  type EnrollmentCodeUnlock = {
-    readonly code: string
-    readonly password: string
-  }
+  import type { EnrollmentCodeUnlock } from '$lib/components/login/login-create-vault-chooser-contract'
 
   type VaultPasswordUnlock = {
     readonly entryId: string
@@ -21,6 +18,10 @@
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import {
+    SetupDraftForm,
+    SetupDraftViews,
+  } from '$lib/components/setup-draft-view'
   import BackButton from '$lib/components/workspace/BackButton.svelte'
   import { onMount, tick, untrack, type ComponentProps } from 'svelte'
   import type { VaultState } from '$lib/vault.svelte'
@@ -39,18 +40,11 @@
     type StartSentinelGenesisArgs,
   } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
-  import type {
-    OAuthFilePreset,
-    ProviderSetupRequest,
-    StorageProvider,
-    StorageProviderType,
-  } from '$lib/auth/providers'
+  import type { ProviderKind, StorageProvider } from '$lib/auth/providers'
   import {
-    DEFAULT_GITHUB_REPO,
-    LocalFolderPresentation,
-    LocalFolderHandleKind,
-    oauth_access_token,
-  } from '$lib/auth/providers'
+    ConnectQuestions,
+    type AskedConnectQuestion,
+  } from '$lib/components/connect-button-state'
   import { WorkspaceRoute } from '$lib/app/workspace-route'
   import { WorkspaceSectionRoute } from '$lib/vault/ui'
   import { IdentityPages } from '$lib/vault/identity-pages'
@@ -59,6 +53,7 @@
   import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
   import LocalFolderProviderSetupWizard from '$lib/components/LocalFolderProviderSetupWizard.svelte'
+  import S3ProviderSetupWizard from '$lib/components/S3ProviderSetupWizard.svelte'
   import {
     LoginVaultEntryKind,
     type LoginVaultEntry,
@@ -89,16 +84,17 @@
     SentinelLoginPresentationReader,
     SentinelLoginPresentationKind,
   } from '$lib/vault/sentinel-login-presentation.svelte'
-  import RemoteVaultRecoveryPanel from '$lib/components/login/RemoteVaultRecoveryPanel.svelte'
+  import RemoteVaultRecoveryPrompt from '$lib/components/login/RemoteVaultRecoveryPrompt.svelte'
   import RemoteVaultChoice from '$lib/components/login/RemoteVaultChoice.svelte'
+  import {
+    ProviderSetupName,
+    type ProviderSetupNameRequest,
+  } from '$lib/components/provider-setup-name'
   import { SentinelGenesisPhase, VaultApplication } from '$app-wasm'
   import {
     ActiveVaultKind,
-    LocalFolderDraftKind,
     LoginSetupKind,
     LoginVaultSelectionKind,
-    OAuthFileDraftKind,
-    OAuthSetupPresetKind,
     RecoveryDiscoveryKind,
     type LoginSetup,
   } from '$lib/vault/state/provider.svelte'
@@ -109,8 +105,6 @@
     appKind,
     providers,
     loginSetup,
-    githubPat = $bindable(''),
-    githubRepo = $bindable(DEFAULT_GITHUB_REPO),
     isVerifying,
     isInitializing,
     addProviderOpen = false,
@@ -144,8 +138,6 @@
     appKind: VaultApplication
     providers: StorageProvider[]
     loginSetup: LoginSetup
-    githubPat: string
-    githubRepo: string
     isVerifying: boolean
     isInitializing: boolean
     addProviderOpen?: boolean
@@ -158,7 +150,7 @@
     identityHealth?: NookIdentityHealth
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
-    onBeginSetup: (request: ProviderSetupRequest) => void
+    onBeginSetup: (kind: ProviderKind) => void
     onCancelSetup: () => void
     onUseEnrollmentCode?: (args: EnrollmentCodeUnlock) => void | Promise<void>
     onUnlockWithPassword: (args: VaultPasswordUnlock) => void | Promise<void>
@@ -450,10 +442,13 @@
    * when asked for (New vault, Add provider). */
   let identityCardsShown = $state(false)
   const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active)
-  function setupIs(type: StorageProviderType): boolean {
+  /** Rust keeps the draft's kind equal to the setup's, so the draft picks
+   * the wizard and each wizard gets exactly its own draft. */
+  const setupView = $derived(SetupDraftViews.of(vault.providerDraft))
+  function setupIs(type: ProviderKind['type']): boolean {
     return (
       loginSetup.kind === LoginSetupKind.Active &&
-      loginSetup.providerType === type
+      loginSetup.providerKind.type === type
     )
   }
   const showVaultPicker = $derived(
@@ -544,18 +539,6 @@
   const isUnlocking = $derived(
     isVerifying && (showLocalUnlock || showSetup) && !showSetup,
   )
-  const setupCanConnect = $derived(
-    setupIs('local') ||
-      (setupIs('local-folder') &&
-        vault.localFolderDraft.kind === LocalFolderDraftKind.Configured &&
-        new LocalFolderPresentation(
-          vault.localFolderDraft.config,
-        ).localFolderHandle().kind === LocalFolderHandleKind.Selected) ||
-      (setupIs('oauth-file') &&
-        vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
-        oauth_access_token(vault.oauthFileDraft.config).kind === 'available') ||
-      (setupIs('github') && Boolean(githubPat.trim())),
-  )
   const recoveryPasswordEntries = $derived(
     vault.recoveryDiscovery.kind === RecoveryDiscoveryKind.Found
       ? vault.recoveryDiscovery.summary.passwordEntries
@@ -567,13 +550,28 @@
       ? vault.passwordEntries
       : recoveryPasswordEntries,
   )
-  const oauthPreset = $derived<OAuthFilePreset>(
-    vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-      ? vault.oauthFileDraft.config.preset
-      : vault.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
-        ? vault.oauthSetupSelection.preset
-        : 'google-drive',
+  const setupProviderName = $derived.by(() => {
+    const request: ProviderSetupNameRequest = {
+      vault,
+      setup: loginSetup,
+      localWords: I18N_KEYS.OnboardingLocalStorage,
+    }
+    return new ProviderSetupName(request).text()
+  })
+  const recoveryPromptVisible = $derived(
+    vault.clientPolicy.remote_recovery_prompt_visible(
+      vault.remoteVaultRecoveryState,
+    ),
   )
+  /** The remote-recovery question the GitHub and S3 setups ask above
+   * Connect, which waits while it is open. */
+  const recoveryQuestion = $derived.by(() => {
+    const asked: AskedConnectQuestion = {
+      prompt: recoveryPrompt,
+      open: recoveryPromptVisible,
+    }
+    return ConnectQuestions.asked(asked)
+  })
 
   function handleFirstConnectSubmit(e: Event) {
     e.preventDefault()
@@ -641,6 +639,9 @@
 {#snippet sentinelCeremony()}
   <SentinelCeremonyPanel {vault} {isVerifying} {isInitializing} />
 {/snippet}
+{#snippet recoveryPrompt()}
+  <RemoteVaultRecoveryPrompt {vault} {isVerifying} />
+{/snippet}
 {#snippet cardPinUnlock()}
   <CardPinUnlock
     {vault}
@@ -706,17 +707,7 @@
             {(() => {
               const tArgs: Parameters<typeof vault.t>[0] = {
                 key: I18N_KEYS.OnboardingConnectTo,
-                replacements: {
-                  provider: setupIs('github')
-                    ? 'GitHub'
-                    : setupIs('oauth-file')
-                      ? oauthPreset === 'icloud'
-                        ? vault.t(I18N_KEYS.ProviderPickerIcloud)
-                        : vault.t(I18N_KEYS.ProviderPickerGoogleDrive)
-                      : setupIs('local-folder')
-                        ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
-                        : vault.t(I18N_KEYS.OnboardingLocalStorage),
-                },
+                replacements: { provider: setupProviderName },
               }
               return vault.t(tArgs)
             })()}
@@ -740,6 +731,8 @@
           <p class="text-sm text-pretty text-muted-foreground">
             {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
           </p>
+        {:else if showSetup && setupIs('s3')}
+          <!-- The title names the task; the S3 form carries its one line. -->
         {:else if showSetup}
           <p class="text-sm text-pretty text-muted-foreground">
             {vault.t(I18N_KEYS.OnboardingLocalDescription)}
@@ -761,51 +754,41 @@
           {...sentinelCeremonyOptionalProps}
         />
       {:else if showSetup}
-        {#if vault.remoteVaultChoices.length > 0}
+        {#if vault.remoteVaultChoices.vaults.length > 0}
           <RemoteVaultChoice {vault} busy={isVerifying} onApplied={onUnlock} />
-        {:else if setupIs('oauth-file')}
+        {:else if setupView.kind === SetupDraftForm.OAuth}
           <OAuthProviderSetupWizard
             {vault}
-            preset={oauthPreset}
+            draft={setupView.draft}
             {isVerifying}
             {isInitializing}
             {onCancelSetup}
             onConnect={onUnlock}
           />
-        {:else if setupIs('github')}
+        {:else if setupView.kind === SetupDraftForm.Github}
           <GitHubProviderSetupWizard
             {vault}
-            bind:githubPat
-            bind:githubRepo
+            draft={setupView.draft}
+            {isVerifying}
+            {isInitializing}
+            question={recoveryQuestion}
+            {onCancelSetup}
+            onConnect={onUnlock}
+          />
+        {:else if setupView.kind === SetupDraftForm.S3}
+          <S3ProviderSetupWizard
+            {vault}
             idPrefix="login"
             {isVerifying}
             {isInitializing}
-            connectDisabled={vault.clientPolicy.remote_recovery_prompt_visible(
-              vault.remoteVaultRecoveryState,
-            )}
+            question={recoveryQuestion}
             {onCancelSetup}
             onConnect={onUnlock}
-          >
-            {#snippet beforeConnect()}
-              {#if vault.clientPolicy.remote_recovery_prompt_visible(vault.remoteVaultRecoveryState)}
-                <RemoteVaultRecoveryPanel
-                  {vault}
-                  state={vault.remoteVaultRecoveryState}
-                  isBusy={isVerifying}
-                  onRecover={() => vault.confirmRecoverRemoteVault()}
-                  onCreateFresh={() => vault.confirmCreateFreshRemoteVault()}
-                  onDismiss={() => {
-                    const cleared = vault.clearRemoteVaultRecovery()
-                    if (cleared.isErr())
-                      vault.errorMsg = vault.t(cleared.error.translationKey)
-                  }}
-                />
-              {/if}
-            {/snippet}
-          </GitHubProviderSetupWizard>
-        {:else if setupIs('local-folder')}
+          />
+        {:else if setupView.kind === SetupDraftForm.LocalFolder}
           <LocalFolderProviderSetupWizard
             {vault}
+            folder={setupView.draft}
             idPrefix="login"
             {isVerifying}
             {isInitializing}
@@ -824,7 +807,6 @@
                 type="submit"
                 class="sm:min-w-[180px]"
                 data-testid="connect-provider-btn"
-                disabled={!setupCanConnect}
               >
                 {#if isInitializing}
                   <RefreshCw class="size-4 animate-spin" />

@@ -5,10 +5,11 @@ import {
   authorizeDeviceProtection,
   createLocalVaultOnLogin,
   disableLoginAutoUnlock,
-  e2eDriveFolderId,
+  E2E_GOOGLE_ACCOUNT,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   readLocalVaultYamlFromIdb,
   saveAuthProvidersInBrowser,
+  SeededProviderKind,
   unlockVaultOnLogin,
   openVaultPage,
   openManagePage,
@@ -16,17 +17,9 @@ import {
   switchToVaultFromIdentities,
   ManagePage,
   listLocalVaultEntries,
+  storeIdOfVaultYaml,
 } from './helpers'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
-import { E2E_GOOGLE_ACCOUNT_EMAIL } from './google-identity-stub'
-
-function parseStoreId(yaml: string): string {
-  const storeId = yaml.match(/^store_id:\s*(\S+)/m)?.[1]
-  if (!storeId) {
-    throw new Error('store_id missing from vault yaml')
-  }
-  return storeId
-}
 
 type ViewportBox = {
   x: number
@@ -71,32 +64,22 @@ async function seedScopedSyncProviders(
     {
       providers: [
         {
+          kind: SeededProviderKind.GoogleDrive,
           id: 'provider-a',
-          type: 'oauth-file',
           label: 'File · nook-multi-vault-a',
-          oauthFile: {
-            preset: 'google-drive',
-            accessToken: 'ya29.e2e_file_sync_token',
-            fileName: 'nook-multi-vault-a.yaml',
-            folderId: e2eDriveFolderId('nook-multi-vault-a.yaml'),
-            accountEmail: E2E_GOOGLE_ACCOUNT_EMAIL,
-          },
-          storeId: storeA,
-          createdAt: new Date().toISOString(),
+          accessToken: 'ya29.e2e_file_sync_token',
+          fileName: 'nook-multi-vault-a.yaml',
+          account: E2E_GOOGLE_ACCOUNT,
+          scope: activeAuthProviderSeedScope(storeA),
         },
         {
+          kind: SeededProviderKind.GoogleDrive,
           id: 'provider-b',
-          type: 'oauth-file',
           label: 'File · nook-multi-vault-b',
-          oauthFile: {
-            preset: 'google-drive',
-            accessToken: 'ya29.e2e_file_sync_token',
-            fileName: 'nook-multi-vault-b.yaml',
-            folderId: e2eDriveFolderId('nook-multi-vault-b.yaml'),
-            accountEmail: E2E_GOOGLE_ACCOUNT_EMAIL,
-          },
-          storeId: storeB,
-          createdAt: new Date().toISOString(),
+          accessToken: 'ya29.e2e_file_sync_token',
+          fileName: 'nook-multi-vault-b.yaml',
+          account: E2E_GOOGLE_ACCOUNT,
+          scope: activeAuthProviderSeedScope(storeB),
         },
       ],
     },
@@ -120,7 +103,7 @@ test.describe('multi-vault on one browser profile', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible()
 
     const vaultAYaml = await readLocalVaultYamlFromIdb(page)
-    const storeA = parseStoreId(vaultAYaml)
+    const storeA = storeIdOfVaultYaml(vaultAYaml)
 
     await openIdentitiesPage(page)
     await expect(page.getByTestId('identity-vault-row')).toHaveCount(1)
@@ -132,13 +115,13 @@ test.describe('multi-vault on one browser profile', () => {
       .poll(
         async () => {
           const yaml = await readLocalVaultYamlFromIdb(page)
-          return parseStoreId(yaml)
+          return storeIdOfVaultYaml(yaml)
         },
         { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
       )
       .not.toBe(storeA)
     const vaultBYaml = await readLocalVaultYamlFromIdb(page)
-    const storeB = parseStoreId(vaultBYaml)
+    const storeB = storeIdOfVaultYaml(vaultBYaml)
     await openManagePage(page, ManagePage.Vaults)
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
 
@@ -230,12 +213,12 @@ test.describe('multi-vault on one browser profile', () => {
     await switchToVaultFromIdentities(page, storeA)
 
     let activeYaml = await readLocalVaultYamlFromIdb(page)
-    expect(parseStoreId(activeYaml)).toEqual(storeA)
+    expect(storeIdOfVaultYaml(activeYaml)).toEqual(storeA)
 
     await openIdentitiesPage(page)
     await switchToVaultFromIdentities(page, storeB)
     activeYaml = await readLocalVaultYamlFromIdb(page)
-    expect(parseStoreId(activeYaml)).toEqual(storeB)
+    expect(storeIdOfVaultYaml(activeYaml)).toEqual(storeB)
 
     await seedScopedSyncProviders(page, storeA, storeB)
     await openManagePage(page, ManagePage.Sync)

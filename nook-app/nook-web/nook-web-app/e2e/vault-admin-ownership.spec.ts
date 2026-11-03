@@ -9,17 +9,10 @@ import {
   openManagePage,
   readLocalVaultYamlFromIdb,
   UI_TIMEOUT_MS,
+  storeIdOfVaultYaml,
 } from './helpers'
 
 const TRAVEL_PIN = '246810'
-
-function parseStoreId(yaml: string): string {
-  const storeId = yaml.match(/^store_id:\s*(\S+)/m)?.[1]
-  if (!storeId) {
-    throw new Error('store_id missing from vault yaml')
-  }
-  return storeId
-}
 
 function vaultAdminEntry(page: Page, storeId: string) {
   return page.locator(
@@ -35,7 +28,7 @@ test('Manage → Vaults lists only the vaults the identity in use owns', async (
   })
   await installPasskeyMock(page)
   await connectLocalVault(page)
-  const firstStoreId = parseStoreId(await readLocalVaultYamlFromIdb(page))
+  const firstStoreId = storeIdOfVaultYaml(await readLocalVaultYamlFromIdb(page))
 
   // The first identity's Vaults page lists its own vault.
   await openManagePage(page, ManagePage.Vaults)
@@ -68,11 +61,14 @@ test('Manage → Vaults lists only the vaults the identity in use owns', async (
   await page.getByTestId('new-identity-vault-input').fill('Trip')
   await page.getByTestId('new-identity-create-vault').click()
   await expect
-    .poll(async () => parseStoreId(await readLocalVaultYamlFromIdb(page)), {
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    .poll(
+      async () => storeIdOfVaultYaml(await readLocalVaultYamlFromIdb(page)),
+      {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      },
+    )
     .not.toBe(firstStoreId)
-  const tripStoreId = parseStoreId(await readLocalVaultYamlFromIdb(page))
+  const tripStoreId = storeIdOfVaultYaml(await readLocalVaultYamlFromIdb(page))
   await openIdentitiesPage(page)
   await expect(page.getByTestId('identity-card')).toHaveCount(2, {
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

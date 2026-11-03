@@ -9,22 +9,35 @@
 use futures_util::{StreamExt, TryStreamExt, stream};
 #[cfg(test)]
 use nook_core::GenesisImportRequest;
+use nook_core::ProviderSecretText;
 use reqwest::Client;
 use serde::{Deserialize, Serialize, de::IgnoredAny};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::str;
 
-use super::checked_event_write::{CheckedEventWrite, CheckedEventWriteRequest, ParsedLogEvent};
-use super::drive::wire::{CreatedTime, FileIdentity, FileName, PageCompletion};
+use super::checked_event_write::{CheckedEventWrite, ParsedLogEvent};
+use super::drive::wire::{
+    CreatedTime, DriveFileId, DriveFileIds, DrivePageRequest, PageAfter, PageCompletion,
+};
+use super::event_store::{EventStore, StoredEventRead};
+use super::omittable_list::OmittableList;
 use super::remote_event::RemoteEventRead;
 use crate::NookError;
 
-#[derive(Default, Deserialize)]
-#[serde(untagged)]
+/// Boundary conversion: Drive's optional `appProperties`, read here as declared or unattested.
+#[derive(Deserialize)]
+#[serde(from = "Option<DriveEventProperties>")]
 enum EventAttestation {
     Declared(DriveEventProperties),
-    #[default]
     Unattested,
+}
+impl From<Option<DriveEventProperties>> for EventAttestation {
+    fn from(properties: Option<DriveEventProperties>) -> Self {
+        match properties {
+            Some(properties) => Self::Declared(properties),
+            None => Self::Unattested,
+        }
+    }
 }
 #[derive(Debug, PartialEq, Eq)]
 enum ListedEvent {
@@ -49,54 +62,43 @@ impl DriveCandidateSelection {
         Self::Accepted(Box::new(event))
     }
 }
-enum DrivePageRequest {
-    FirstPage,
-    Continuation(String),
-}
 /// One admitted event file of a listing: its event, when Drive created it,
-/// and the file it downloads from when the listing reported one.
+/// and the file it downloads from.
 struct ListedDriveEvent {
-    event_id: String,
+    event_id: EventId,
     created: CreatedTime,
-    file_id: Option<String>,
+    file_id: String,
 }
 /// One event of a listing to read, from the files the listing named for it.
 struct ListedEventRead<'a> {
     client: &'a Client,
-    raw_id: String,
+    event_id: EventId,
     file_ids: Vec<String>,
 }
 
-/// How many Drive downloads one namespace keeps in flight at once.
-const DRIVE_READ_CONCURRENCY: usize = 8;
-
-use nook_core::{DriveEventParent, EventId, EventLogLocation};
+use nook_core::{DriveEventParent, EventId, EventLogLocation, LocalEventWrite};
 
 /// Event IO under an already resolved namespace parent; see `DriveNamespace`.
 pub(crate) struct DriveEventStore<'a> {
-    pub(crate) token: &'a str,
-    pub(crate) parent: &'a DriveEventParent,
+    pub(crate) token: &'a ProviderSecretText,
+    pub(crate) parent: DriveEventParent,
     pub(crate) location: &'a EventLogLocation,
 }
 
-#[derive(Default, Deserialize)]
+/// One page of the event listing.
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct DriveEventListResponse {
-    #[serde(default)]
-    files: Vec<DriveEventListRow>,
-    #[serde(default)]
+    files: OmittableList<DriveEventListRow>,
     next_page_token: PageCompletion,
 }
-#[derive(Default, Deserialize)]
+/// An event file row with every field the listing asks for.
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct DriveEventFile {
-    #[serde(default)]
-    id: FileIdentity,
-    #[serde(default)]
-    name: FileName,
-    #[serde(default)]
+    id: String,
+    name: String,
     app_properties: EventAttestation,
-    #[serde(default)]
     created_time: CreatedTime,
 }
 /// Drive listings can contain unrelated or malformed files. Only admitted rows
@@ -120,7 +122,6 @@ struct DriveEventMetadata<'a> {
     app_properties: DriveEventProperties,
 }
 
-const DRIVE_EVENT_MISSING: &str = "Drive event file missing.";
 const SHA256_BASE64URL_LEN: usize = 43;
 
 impl DriveEventStore<'_> {
@@ -137,11 +138,10 @@ impl DriveEventStore<'_> {
 /// / sync do not download leftover non-event files.
 impl DriveEventStore<'_> {
     fn drive_listed_event_id(file: &DriveEventFile) -> ListedEvent {
-        let (FileName::Reported(name), EventAttestation::Declared(properties)) =
-            (&file.name, &file.app_properties)
-        else {
+        let EventAttestation::Declared(properties) = &file.app_properties else {
             return ListedEvent::Unrelated;
         };
+        let name = &file.name;
         let Some(digest) = name.strip_suffix(".yaml") else {
             return ListedEvent::Unrelated;
         };
@@ -155,44 +155,33 @@ impl DriveEventStore<'_> {
             ListedEvent::Unrelated
         }
     }
-    fn listed_events_from_response(body: &DriveEventListResponse) -> Vec<ListedDriveEvent> {
+    /// The admitted event files of one page's rows; the event id is parsed
+    /// here, once.
+    fn listed_events_from_rows(
+        rows: Vec<DriveEventListRow>,
+    ) -> Result<Vec<ListedDriveEvent>, NookError> {
         let mut events = Vec::new();
-        for row in &body.files {
+        for row in rows {
             if let DriveEventListRow::File(file) = row
-                && let ListedEvent::Event(event_id) = Self::drive_listed_event_id(file)
+                && let ListedEvent::Event(event_id) = Self::drive_listed_event_id(&file)
             {
                 events.push(ListedDriveEvent {
-                    event_id,
-                    created: file.created_time.clone(),
-                    file_id: match &file.id {
-                        FileIdentity::Reported(id) => Some(id.clone()),
-                        FileIdentity::Unreported => None,
-                    },
+                    event_id: EventId::parse(&event_id)?,
+                    created: file.created_time,
+                    file_id: file.id,
                 });
             }
         }
-        events
+        Ok(events)
     }
-    #[cfg(test)]
-    fn list_event_ids_from_response(body: &DriveEventListResponse) -> Vec<String> {
-        Self::listed_events_from_response(body)
-            .into_iter()
-            .map(|listed| listed.event_id)
-            .collect()
-    }
+
     /// Each listed event with the files that hold it, duplicates together.
-    fn files_by_event(listed: Vec<ListedDriveEvent>) -> BTreeMap<String, Vec<String>> {
-        let mut files: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    fn files_by_event(listed: Vec<ListedDriveEvent>) -> BTreeMap<EventId, Vec<String>> {
+        let mut files: BTreeMap<EventId, Vec<String>> = BTreeMap::new();
         for event in listed {
-            let ids = files.entry(event.event_id).or_default();
-            if let Some(file_id) = event.file_id {
-                ids.push(file_id);
-            }
+            files.entry(event.event_id).or_default().push(event.file_id);
         }
         files
-    }
-    fn list_page_token(body: &DriveEventListResponse) -> PageCompletion {
-        body.next_page_token.clone()
     }
 }
 
@@ -246,15 +235,6 @@ impl DriveEventStore<'_> {
         parent.folder_id.as_str()
     }
 
-    pub(crate) async fn list_drive_event_ids(&self) -> Result<Vec<String>, NookError> {
-        Ok(self
-            .list_drive_events()
-            .await?
-            .into_iter()
-            .map(|listed| listed.event_id)
-            .collect())
-    }
-
     /// When Drive created each event file in this namespace: one entry per
     /// event, read from the listing alone. Duplicate files of one event
     /// count once.
@@ -270,8 +250,8 @@ impl DriveEventStore<'_> {
 
     async fn list_drive_events(&self) -> Result<Vec<ListedDriveEvent>, NookError> {
         let token = self.token;
-        let parent = self.parent;
-        let token = token.trim();
+        let parent = &self.parent;
+        let token = token.expose();
         let query = format!(
             "name contains '.yaml' and {} and trashed=false",
             Self::parent_query_fragment(parent)
@@ -290,25 +270,24 @@ impl DriveEventStore<'_> {
                 request_url.push_str("&pageToken=");
                 request_url.push_str(&urlencoding::encode(page));
             }
-            let response = client
-                .get(&request_url)
-                .header("Authorization", format!("Bearer {token}"))
-                .send()
-                .await?;
+            let response = client.get(&request_url).bearer_auth(token).send().await?;
             if !response.status().is_success() {
                 return Err(NookError::Drive(format!(
                     "Drive list events failed: {}",
                     response.status()
                 )));
             }
-            let body: DriveEventListResponse = response
+            let DriveEventListResponse {
+                files,
+                next_page_token,
+            } = response
                 .json()
                 .await
                 .map_err(|e| NookError::Serialization(e.to_string()))?;
-            event_ids.extend(Self::listed_events_from_response(&body));
-            page_token = match Self::list_page_token(&body) {
-                PageCompletion::Complete => break,
-                PageCompletion::Continue(token) => DrivePageRequest::Continuation(token),
+            event_ids.extend(Self::listed_events_from_rows(files.into_rows())?);
+            page_token = match DrivePageRequest::after(next_page_token) {
+                PageAfter::Next(next) => next,
+                PageAfter::Done => break,
             };
         }
         Ok(event_ids)
@@ -317,19 +296,17 @@ impl DriveEventStore<'_> {
     /// Every event in this namespace, from one listing: each event downloads
     /// from the files the listing names, several at a time, instead of one
     /// name lookup and one download per event in turn.
-    pub(crate) async fn read_drive_events(
-        &self,
-    ) -> Result<Vec<(EventId, RemoteEventRead)>, NookError> {
+    async fn read_drive_events(&self) -> Result<Vec<StoredEventRead>, NookError> {
         let client = Client::new();
         stream::iter(Self::files_by_event(self.list_drive_events().await?))
-            .map(|(raw_id, file_ids)| {
+            .map(|(event_id, file_ids)| {
                 self.read_listed_event(ListedEventRead {
                     client: &client,
-                    raw_id,
+                    event_id,
                     file_ids,
                 })
             })
-            .buffered(DRIVE_READ_CONCURRENCY)
+            .buffered(<Self as EventStore>::READ_CONCURRENCY)
             .try_collect()
             .await
     }
@@ -337,9 +314,9 @@ impl DriveEventStore<'_> {
     async fn read_listed_event(
         &self,
         read: ListedEventRead<'_>,
-    ) -> Result<(EventId, RemoteEventRead), NookError> {
-        let event_id = EventId::parse(&read.raw_id)?;
-        let token = self.token.trim();
+    ) -> Result<StoredEventRead, NookError> {
+        let event_id = read.event_id;
+        let token = self.token.expose();
         let mut candidates = Vec::with_capacity(read.file_ids.len());
         for file_id in &read.file_ids {
             candidates.push(Self::download_drive_event_file(read.client, token, file_id).await?);
@@ -349,23 +326,16 @@ impl DriveEventStore<'_> {
             location: self.location,
             candidates,
         })?;
-        Ok((event_id, selected))
+        Ok(StoredEventRead {
+            event_id,
+            read: selected,
+        })
     }
 
-    pub(crate) async fn fetch_drive_event(&self, event_id: &EventId) -> Result<Vec<u8>, NookError> {
-        match self.read_drive_event(event_id).await? {
-            RemoteEventRead::Retrieved(bytes) => Ok(bytes.into()),
-            RemoteEventRead::Unavailable => Err(NookError::Drive(DRIVE_EVENT_MISSING.to_owned())),
-        }
-    }
-
-    pub(crate) async fn read_drive_event(
-        &self,
-        event_id: &EventId,
-    ) -> Result<RemoteEventRead, NookError> {
+    async fn read_drive_event(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
         let token = self.token;
-        let parent = self.parent;
-        let token = token.trim();
+        let parent = &self.parent;
+        let token = token.expose();
         let file_ids = Self::lookup_drive_event_file_ids(
             token,
             parent,
@@ -406,32 +376,23 @@ impl DriveEventStore<'_> {
             urlencoding::encode(&query)
         );
         let client = Client::new();
-        let response = client
-            .get(&list_url)
-            .header("Authorization", format!("Bearer {token}"))
-            .send()
-            .await?;
+        let response = client.get(&list_url).bearer_auth(token).send().await?;
         if !response.status().is_success() {
             return Err(NookError::Drive(format!(
                 "Drive lookup event failed: {}",
                 response.status()
             )));
         }
-        let body: DriveEventListResponse = response
+        let body: DriveFileIds = response
             .json()
             .await
             .map_err(|e| NookError::Serialization(e.to_string()))?;
-        let mut ids = Vec::new();
-        for row in body.files {
-            if let DriveEventListRow::File(DriveEventFile {
-                id: FileIdentity::Reported(id),
-                ..
-            }) = row
-            {
-                ids.push(id);
-            }
-        }
-        Ok(ids)
+        Ok(body
+            .files
+            .into_rows()
+            .into_iter()
+            .map(|file| file.id)
+            .collect())
     }
 
     async fn download_drive_event_file(
@@ -440,11 +401,7 @@ impl DriveEventStore<'_> {
         file_id: &str,
     ) -> Result<Vec<u8>, NookError> {
         let download_url = format!("https://www.googleapis.com/drive/v3/files/{file_id}?alt=media");
-        let download = client
-            .get(&download_url)
-            .header("Authorization", format!("Bearer {token}"))
-            .send()
-            .await?;
+        let download = client.get(&download_url).bearer_auth(token).send().await?;
         if !download.status().is_success() {
             return Err(NookError::Drive(format!(
                 "Drive download event failed: {}",
@@ -458,36 +415,23 @@ impl DriveEventStore<'_> {
         Ok(bytes.to_vec())
     }
 
-    pub(crate) async fn put_drive_event_if_absent(
-        &self,
-        event_id: &EventId,
-        bytes: &[u8],
-    ) -> Result<String, NookError> {
-        let checked = CheckedEventWrite::parse(CheckedEventWriteRequest {
-            bytes,
-            event_id,
-            location: self.location,
-            provider: "Drive",
-        })?;
-        self.put_checked(checked).await
-    }
-
-    async fn put_checked(&self, checked: CheckedEventWrite<'_>) -> Result<String, NookError> {
-        let token = self.token.trim();
-        let parent = self.parent;
+    /// The same event already stored is a success; other bytes fail. The
+    /// created file's id is required in Drive's answer.
+    async fn put_drive_event(&self, checked: CheckedEventWrite<'_>) -> Result<(), NookError> {
+        let token = self.token.expose();
+        let parent = &self.parent;
         let event_id = checked.event_id();
         let bytes = checked.bytes();
-        match self.fetch_drive_event(event_id).await {
-            Ok(existing) if checked.matches(&existing) => {
-                return Ok(String::new());
+        match self.read_drive_event(event_id).await? {
+            RemoteEventRead::Retrieved(existing) if checked.matches(existing.as_ref()) => {
+                return Ok(());
             }
-            Ok(_) => {
+            RemoteEventRead::Retrieved(_) => {
                 return Err(NookError::Drive(
                     "Drive event path already exists with different bytes.".to_owned(),
                 ));
             }
-            Err(NookError::Drive(message)) if message == DRIVE_EVENT_MISSING => {}
-            Err(err) => return Err(err),
+            RemoteEventRead::Unavailable => {}
         }
         let file_name = format!("{}.yaml", event_id.encoded_digest());
         let content = str::from_utf8(bytes)
@@ -498,7 +442,7 @@ impl DriveEventStore<'_> {
         let client = Client::new();
         let response = client
             .post("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart")
-            .header("Authorization", format!("Bearer {token}"))
+            .bearer_auth(token)
             .header(
                 "Content-Type",
                 format!("multipart/related; boundary={boundary}"),
@@ -513,16 +457,11 @@ impl DriveEventStore<'_> {
                 response.status()
             )));
         }
-        let parsed: DriveEventFile = response
-            .json()
-            .await
-            .map_err(|e| NookError::Serialization(e.to_string()))?;
-        match parsed.id {
-            FileIdentity::Reported(id) => Ok(id),
-            FileIdentity::Unreported => Err(NookError::Drive(
-                "Drive event create response missing file id.".to_owned(),
-            )),
-        }
+        // The answer must name the created file.
+        let _created: DriveFileId = response.json().await.map_err(|e| {
+            NookError::Drive(format!("Drive event create response missing file id: {e}"))
+        })?;
+        Ok(())
     }
 
     fn event_upload_body(
@@ -552,6 +491,58 @@ impl DriveEventStore<'_> {
         body.push_str(boundary);
         body.push_str("--");
         Ok((boundary.to_owned(), body))
+    }
+}
+
+impl EventStore for DriveEventStore<'_> {
+    async fn event_ids(&self) -> Result<BTreeSet<EventId>, NookError> {
+        Ok(self
+            .list_drive_events()
+            .await?
+            .into_iter()
+            .map(|listed| listed.event_id)
+            .collect())
+    }
+
+    /// No file of the event's name in the namespace folder reads as an
+    /// event the namespace does not hold.
+    async fn read(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
+        self.read_drive_event(event_id).await
+    }
+
+    async fn put_checked(&self, event: CheckedEventWrite<'_>) -> Result<(), NookError> {
+        self.put_drive_event(event).await
+    }
+
+    /// Delete the namespace folder, which is this store's parent.
+    async fn delete_events(&self) -> Result<(), NookError> {
+        let response = Client::new()
+            .delete(format!(
+                "https://www.googleapis.com/drive/v3/files/{}",
+                urlencoding::encode(self.parent.folder_id.as_str())
+            ))
+            .bearer_auth(self.token.expose())
+            .query(&[("supportsAllDrives", "true")])
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            return Err(NookError::Drive(format!(
+                "Google Drive namespace deletion failed with status {}",
+                response.status()
+            )));
+        }
+        Ok(())
+    }
+
+    /// One listing and several downloads at once, instead of one name lookup
+    /// and one download per event.
+    async fn events(&self) -> Result<Vec<LocalEventWrite>, NookError> {
+        Ok(self
+            .read_drive_events()
+            .await?
+            .into_iter()
+            .flat_map(StoredEventRead::into_events)
+            .collect())
     }
 }
 
@@ -728,34 +719,6 @@ mod tests {
         dylint_lib = "nook_domain_api",
         expect(
             unowned_function,
-            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-        )
-    )]
-    async fn event_write_rejects_mismatched_event_id_before_network() -> anyhow::Result<()> {
-        let EventFixture(_, _, bytes) = EventFixture::new()?;
-        let requested_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
-        let store = DriveEventStore {
-            token: "",
-            parent: &DriveEventParent::shared_folder_id("vault-folder"),
-            location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
-                "store_abcdefghijk",
-            )?),
-        };
-        let Err(error) = store.put_drive_event_if_absent(&requested_id, &bytes).await else {
-            anyhow::bail!("mismatched event id must fail before network");
-        };
-        assert!(matches!(
-            error,
-            NookError::Serialization(message) if message.contains("Drive event id mismatch")
-        ));
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
             reason = "framework boundary: wasm-bindgen-test callback"
         )
     )]
@@ -771,6 +734,27 @@ mod tests {
         );
     }
 
+    const FIRST: &str = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
+    const SECOND: &str = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8";
+
+    fn row(id: &str, digest: &str) -> serde_json::Value {
+        serde_json::json!({
+            "id": id,
+            "name": format!("{digest}.yaml"),
+            "appProperties": {"event_id": format!("sha256u:{digest}")},
+            "createdTime": "2026-11-01T12:00:00Z",
+        })
+    }
+
+    fn listed(page: DriveEventListResponse) -> anyhow::Result<Vec<String>> {
+        Ok(
+            DriveEventStore::listed_events_from_rows(page.files.into_rows())?
+                .into_iter()
+                .map(|listed| listed.event_id.to_string())
+                .collect(),
+        )
+    }
+
     #[wasm_bindgen_test]
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
@@ -779,66 +763,35 @@ mod tests {
             reason = "framework boundary: wasm-bindgen-test callback"
         )
     )]
-    fn listed_event_id_requires_matching_app_property() {
-        let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
-        let mut file = DriveEventFile {
-            id: FileIdentity::Unreported,
-            name: FileName::Reported(format!("{digest}.yaml")),
-            app_properties: EventAttestation::Declared(DriveEventProperties {
-                event_id: format!("sha256u:{digest}"),
-            }),
-            created_time: CreatedTime::Unreported,
-        };
-        assert_eq!(
-            DriveEventStore::drive_listed_event_id(&file),
-            ListedEvent::Event(format!("sha256u:{digest}"))
-        );
-        file.app_properties = EventAttestation::Unattested;
-        assert_eq!(
-            DriveEventStore::drive_listed_event_id(&file),
-            ListedEvent::Unrelated
-        );
-        file.app_properties = EventAttestation::Declared(DriveEventProperties {
-            event_id: "wrong".to_owned(),
+    fn a_listing_admits_only_complete_rows_whose_name_and_property_agree() -> anyhow::Result<()> {
+        let name = format!("{FIRST}.yaml");
+        let unattested = serde_json::json!({
+            "id": "plain", "name": name, "appProperties": null, "createdTime": "2026-11-01T12:00:00Z",
         });
-        assert_eq!(
-            DriveEventStore::drive_listed_event_id(&file),
-            ListedEvent::Unrelated
-        );
-        file.name = FileName::Reported("notes.yaml".to_owned());
-        assert_eq!(
-            DriveEventStore::drive_listed_event_id(&file),
-            ListedEvent::Unrelated
-        );
-    }
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test callback"
-        )
-    )]
-    fn list_response_projection_accepts_only_matching_event_rows() -> anyhow::Result<()> {
-        let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
-        let event_id = format!("sha256u:{digest}");
-        let body: DriveEventListResponse = serde_json::from_value(serde_json::json!({
+        let wrong = serde_json::json!({
+            "id": "wrong", "name": name, "appProperties": {"event_id": "wrong"},
+            "createdTime": "2026-11-01T12:00:00Z",
+        });
+        let no_time = serde_json::json!({
+            "id": "timeless", "name": name, "appProperties": {"event_id": format!("sha256u:{FIRST}")},
+        });
+        let page: DriveEventListResponse = serde_json::from_value(serde_json::json!({
             "files": [
-                {"name": format!("{digest}.yaml"), "appProperties": {"event_id": event_id}},
-                {"name": format!("{digest}.yaml")},
-                {"name": "notes.yaml", "appProperties": {"event_id": "sha256u:notes"}},
-                {"name": format!("{digest}.yaml"), "appProperties": {"event_id": "wrong"}}
-            ]
+                row("file-a", FIRST),
+                unattested,
+                wrong,
+                no_time,
+                {"id": "notes", "name": "notes.yaml", "createdTime": "2026-11-01T12:00:00Z"},
+                {"name": 3},
+                null,
+            ],
+            "nextPageToken": "next",
         }))?;
         assert_eq!(
-            DriveEventStore::list_event_ids_from_response(&body),
-            vec![event_id]
+            page.next_page_token,
+            PageCompletion::Continue("next".to_owned())
         );
-        assert_eq!(
-            DriveEventStore::list_event_ids_from_response(&DriveEventListResponse::default()),
-            Vec::<String>::new()
-        );
+        assert_eq!(listed(page)?, [format!("sha256u:{FIRST}")]);
         Ok(())
     }
 
@@ -850,53 +803,10 @@ mod tests {
             reason = "framework boundary: wasm-bindgen-test callback"
         )
     )]
-    fn one_listing_names_every_file_each_event_downloads_from() -> anyhow::Result<()> {
-        let first = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
-        let second = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8";
-        let first_id = format!("sha256u:{first}");
-        let second_id = format!("sha256u:{second}");
-        let body: DriveEventListResponse = serde_json::from_value(serde_json::json!({
-            "files": [
-                {"id": "file-a", "name": format!("{first}.yaml"), "appProperties": {"event_id": first_id}},
-                {"id": "file-b", "name": format!("{second}.yaml"), "appProperties": {"event_id": second_id}},
-                {"id": "file-a-copy", "name": format!("{first}.yaml"), "appProperties": {"event_id": first_id}},
-                {"name": format!("{second}.yaml"), "appProperties": {"event_id": second_id}},
-                {"id": "notes", "name": "notes.yaml"}
-            ]
-        }))?;
-
-        let files =
-            DriveEventStore::files_by_event(DriveEventStore::listed_events_from_response(&body));
-
-        // A duplicate file of one event downloads with it; a row Drive gave
-        // no id has nothing to download; unrelated files are not events.
-        assert_eq!(
-            files.into_iter().collect::<Vec<_>>(),
-            vec![
-                (second_id, vec!["file-b".to_owned()]),
-                (
-                    first_id,
-                    vec!["file-a".to_owned(), "file-a-copy".to_owned()]
-                ),
-            ]
-        );
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test callback"
-        )
-    )]
-    fn list_response_projection_preserves_page_token_only_when_string() -> anyhow::Result<()> {
-        let body: DriveEventListResponse = serde_json::from_str(r#"{"nextPageToken":"page-2"}"#)?;
-        assert_eq!(
-            DriveEventStore::list_page_token(&body),
-            PageCompletion::Continue("page-2".to_owned())
-        );
+    fn a_last_page_may_omit_its_files_and_its_token() -> anyhow::Result<()> {
+        let page: DriveEventListResponse = serde_json::from_str("{}")?;
+        assert_eq!(page.next_page_token, PageCompletion::Complete);
+        assert!(listed(page)?.is_empty());
         assert!(serde_json::from_str::<DriveEventListResponse>(r#"{"nextPageToken":2}"#).is_err());
         Ok(())
     }
@@ -909,56 +819,29 @@ mod tests {
             reason = "framework boundary: wasm-bindgen-test callback"
         )
     )]
-    fn digest_filter_rejects_wrong_length_and_non_base64url_bytes() -> anyhow::Result<()> {
-        let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
-        assert!(DriveEventStore::is_sha256_base64url_digest(digest));
+    fn one_listing_names_every_file_each_event_downloads_from() -> anyhow::Result<()> {
+        let page: DriveEventListResponse = serde_json::from_value(serde_json::json!({
+            "files": [row("file-a", FIRST), row("file-b", SECOND), row("file-a-copy", FIRST)],
+        }))?;
+        let files = DriveEventStore::files_by_event(DriveEventStore::listed_events_from_rows(
+            page.files.into_rows(),
+        )?);
+        let by_event: Vec<(String, Vec<String>)> = files
+            .into_iter()
+            .map(|(event_id, ids)| (event_id.to_string(), ids))
+            .collect();
+        assert_eq!(
+            by_event,
+            vec![
+                (format!("sha256u:{SECOND}"), vec!["file-b".to_owned()]),
+                (
+                    format!("sha256u:{FIRST}"),
+                    vec!["file-a".to_owned(), "file-a-copy".to_owned()]
+                ),
+            ]
+        );
+        assert!(DriveEventStore::is_sha256_base64url_digest(FIRST));
         assert!(!DriveEventStore::is_sha256_base64url_digest("short"));
-        assert!(!DriveEventStore::is_sha256_base64url_digest(&format!(
-            "{}!",
-            digest
-                .get(..42)
-                .ok_or_else(|| anyhow::anyhow!("digest prefix fixture must be present"))?
-        )));
-        assert_eq!(
-            DriveEventStore::drive_listed_event_id(&DriveEventFile {
-                name: FileName::Reported(format!("{digest}.json")),
-                app_properties: EventAttestation::Declared(DriveEventProperties {
-                    event_id: "ignored".to_owned()
-                }),
-                ..DriveEventFile::default()
-            }),
-            ListedEvent::Unrelated
-        );
-        Ok(())
-    }
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test callback"
-        )
-    )]
-    fn malformed_listing_rows_preserve_valid_event_siblings() -> anyhow::Result<()> {
-        let digest = "q".repeat(SHA256_BASE64URL_LEN);
-        let event_id = format!("sha256u:{digest}");
-        let json = format!(
-            r#"{{"files":[{{"id":"valid","name":"{digest}.yaml","appProperties":{{"event_id":"{event_id}"}}}},{{"name":"{digest}.yaml","appProperties":{{}}}},{{"name":"{digest}.yaml","appProperties":{{"event_id":4}}}},{{"name":"{digest}.yaml","appProperties":null}},{{"name":3}},{{"appProperties":[]}},null,{{"name":"unrelated.yaml"}}],"nextPageToken":"next"}}"#
-        );
-        let response: DriveEventListResponse = serde_json::from_str(&json)?;
-        assert_eq!(
-            DriveEventStore::list_event_ids_from_response(&response),
-            vec![event_id.clone()]
-        );
-        assert_eq!(
-            DriveEventStore::list_page_token(&response),
-            PageCompletion::Continue("next".to_owned())
-        );
-        let properties = DriveEventProperties { event_id };
-        assert_eq!(
-            serde_json::to_string(&properties)?,
-            format!(r#"{{"event_id":"sha256u:{digest}"}}"#)
-        );
         Ok(())
     }
 }

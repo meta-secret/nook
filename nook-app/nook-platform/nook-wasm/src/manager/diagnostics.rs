@@ -2,11 +2,11 @@
 
 use super::{NookVaultManager, VaultNameState};
 use crate::NookDatabase;
+use crate::TypedOutput;
 use nook_core::LocalEventBytes;
 use nook_core::VaultProjection;
 use nook_core::VaultRecoveryOptions;
 use nook_core::VaultStoreIdentity;
-use tsify::Tsify;
 
 use crate::types::NookVaultAccessReport;
 use nook_core::VaultEvent;
@@ -53,8 +53,7 @@ impl NookVaultManager {
         let result = Ok::<_, wasm_bindgen::JsError>(VaultRecoverySummary::from_options(
             store_id, vault_name, options,
         ))?;
-        Tsify::into_ts(&result)
-            .map_err(|_| JsError::new("Typed WASM value could not be converted."))
+        Ok(result.encode()?)
     }
 
     #[wasm_bindgen]

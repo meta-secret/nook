@@ -1,12 +1,8 @@
 import { err, ok, type Result } from 'neverthrow'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
-  GITHUB_PROVIDER_TYPE,
   activeVaultScope,
-  providerPersistenceDefaults,
   scopedProviderVault,
-  storedGithubPat,
-  storedGithubRepository,
   type StorageProvider,
   unselectedVaultScope,
 } from '$lib/auth/providers'
@@ -20,16 +16,17 @@ import { VaultAccessStatus } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultConnectionActions } from '$lib/vault/connection'
 import { VaultSessionUnlockOutcome } from '$lib/vault/session'
-import {
-  OAuthRemoteReferenceSyncKind,
-  ProviderSaveOutcome,
-} from '$lib/vault/providers.svelte'
+import { ProviderSaveOutcome } from '$lib/vault/providers.svelte'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import {
   OAuthTokenFreshnessKind,
   RosterHydrationKind,
 } from '$lib/vault/action-contexts'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
+import {
+  ProviderFixtureCredentials,
+  ProviderRowFixture,
+} from '../provider-fixtures'
 import {
   VaultStorageFailure,
   VaultStorageFailureKind,
@@ -45,17 +42,10 @@ type ConnectionScenario = {
 const ownedScenarios: ConnectionScenario[] = []
 
 function githubProvider(): StorageProvider {
-  return {
-    ...providerPersistenceDefaults(),
+  return ProviderRowFixture.github({
     id: 'joiner-provider',
-    type: GITHUB_PROVIDER_TYPE,
-    label: 'Joiner GitHub',
-    githubPat: storedGithubPat('github-token'),
-    githubRepo: storedGithubRepository('owner/vault'),
     storeId: scopedProviderVault('joiner-store'),
-    syncCheckpoint: { state: 'neverSynced' },
-    createdAt: '2026-09-12T00:00:00Z',
-  }
+  })
 }
 
 function connectionScenario(
@@ -102,9 +92,6 @@ function connectionScenario(
       pageOffset: 0,
       query: '',
     }),
-  )
-  state.syncOAuthRemoteRefFromManager = vi.fn(() =>
-    ok({ kind: OAuthRemoteReferenceSyncKind.NotApplicable }),
   )
   state.ensureProviderSaved = vi.fn<VaultState['ensureProviderSaved']>(
     async () => ok(ProviderSaveOutcome.Saved),
@@ -199,17 +186,19 @@ describe('vault connection', () => {
         failureHandling: ProviderSyncFailureHandling.Capture,
       })
       expect(scenario.assessVaultConnectStatus).toHaveBeenCalledTimes(2)
-      expect(scenario.assessVaultConnectStatus).toHaveBeenNthCalledWith(1)
-      expect(scenario.assessVaultConnectStatus).toHaveBeenNthCalledWith(2, {
-        mode: 'github',
-        pat: 'github-token',
-        repo: 'owner/vault',
+      expect(scenario.assessVaultConnectStatus).toHaveBeenNthCalledWith(1, {
+        mode: 'local',
       })
-      expect(scenario.manager.connect).toHaveBeenCalledWith(
-        'github',
-        'github-token',
-        'owner/vault',
+      const connection = {
+        mode: 'github',
+        token: ProviderFixtureCredentials.GITHUB_TOKEN,
+        repo: 'nook',
+      }
+      expect(scenario.assessVaultConnectStatus).toHaveBeenNthCalledWith(
+        2,
+        connection,
       )
+      expect(scenario.manager.connect).toHaveBeenCalledWith(connection)
       expect(scenario.state.markVaultUnlocked).toHaveBeenCalledOnce()
       expect(scenario.state.isAuthenticated).toBe(true)
       expect(scenario.state.syncFromStorage).toHaveBeenCalledWith(

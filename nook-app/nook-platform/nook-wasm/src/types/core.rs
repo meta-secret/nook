@@ -1,7 +1,8 @@
 use super::wasm_bindgen;
+use crate::TypedOutput;
 use nook_core::{
-    ManagerStoreScopeRef, ProviderJoinerIdentity, ProviderOauthPreset, ProviderSyncRevision,
-    ProviderSyncRevisionRef, SentinelConfiguration, TotpDigits, VaultArchitecture, VaultType,
+    ManagerStoreScopeRef, ProviderJoinerIdentity, ProviderSyncRevision, ProviderSyncRevisionRef,
+    SentinelConfiguration, SharedReplication, TotpDigits, VaultArchitecture, VaultType,
 };
 use wasm_bindgen::JsError;
 
@@ -247,13 +248,6 @@ pub struct NookProviderReplicationCapability(nook_core::ProviderReplicationCapab
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NookProviderOAuthPresetState {
-    NotApplicable,
-    Preset,
-}
-
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NookProviderJoinerIdentityState {
     NotRequired,
     Required,
@@ -265,54 +259,53 @@ impl NookProviderReplicationCapability {
         Self(value)
     }
 
-    #[wasm_bindgen(getter, js_name = providerType)]
-    pub fn provider_type(&self) -> String {
-        self.0.provider_type.clone()
+    /// The provider kind the capability belongs to.
+    #[wasm_bindgen(getter)]
+    pub fn kind(&self) -> Result<tsify::Ts<nook_core::ProviderKind>, wasm_bindgen::JsError> {
+        Ok(self.0.kind.encode()?)
     }
 
-    #[wasm_bindgen(getter, js_name = oauthPresetState)]
-    pub fn oauth_preset_state(&self) -> NookProviderOAuthPresetState {
-        match self.0.oauth_preset {
-            ProviderOauthPreset::NotApplicable => NookProviderOAuthPresetState::NotApplicable,
-            ProviderOauthPreset::Preset(_) => NookProviderOAuthPresetState::Preset,
-        }
+    /// The translation key of the label a provider picker shows for this
+    /// capability; Rust chooses it.
+    #[wasm_bindgen(getter, js_name = labelKey)]
+    #[must_use]
+    pub fn label_key(&self) -> String {
+        self.0.label_translation_key().to_owned()
     }
 
-    #[wasm_bindgen(getter, js_name = oauthPreset)]
-    pub fn oauth_preset(&self) -> Result<String, wasm_bindgen::JsError> {
-        match self.0.oauth_preset {
-            ProviderOauthPreset::NotApplicable => {
-                Err(JsError::new("OAuth preset is not applicable"))
-            }
-            ProviderOauthPreset::Preset(preset) => Ok(preset.as_str().to_owned()),
-        }
+    /// Whether the provider replicates vaults of `replication`.
+    #[wasm_bindgen]
+    #[must_use]
+    pub fn supports(
+        &self,
+        replication: nook_core::ReplicationType,
+    ) -> nook_core::ReplicationSupport {
+        self.0.supports(replication)
     }
 
-    #[wasm_bindgen(getter, js_name = supportsPersonal)]
-    pub fn supports_personal(&self) -> bool {
-        self.0.supports_personal
-    }
-
-    #[wasm_bindgen(getter, js_name = supportsShared)]
-    pub fn supports_shared(&self) -> bool {
-        self.0.supports_shared
-    }
-
+    /// Whom a shared invite names. A provider without shared replication
+    /// names no one.
     #[wasm_bindgen(getter, js_name = sharedJoinerIdentityState)]
     pub fn shared_joiner_identity_state(&self) -> NookProviderJoinerIdentityState {
-        match self.0.shared_joiner_identity {
-            ProviderJoinerIdentity::NotRequired => NookProviderJoinerIdentityState::NotRequired,
-            ProviderJoinerIdentity::Required(_) => NookProviderJoinerIdentityState::Required,
+        match self.0.shared {
+            SharedReplication::Supported(ProviderJoinerIdentity::Required(_)) => {
+                NookProviderJoinerIdentityState::Required
+            }
+            SharedReplication::Supported(ProviderJoinerIdentity::NotRequired)
+            | SharedReplication::Unsupported => NookProviderJoinerIdentityState::NotRequired,
         }
     }
 
     #[wasm_bindgen(getter, js_name = sharedJoinerIdentity)]
     pub fn shared_joiner_identity(&self) -> Result<String, wasm_bindgen::JsError> {
-        match self.0.shared_joiner_identity {
-            ProviderJoinerIdentity::NotRequired => {
+        match self.0.shared {
+            SharedReplication::Supported(ProviderJoinerIdentity::Required(kind)) => {
+                Ok(kind.as_str().to_owned())
+            }
+            SharedReplication::Supported(ProviderJoinerIdentity::NotRequired)
+            | SharedReplication::Unsupported => {
                 Err(JsError::new("shared joiner identity is not required"))
             }
-            ProviderJoinerIdentity::Required(kind) => Ok(kind.as_str().to_owned()),
         }
     }
 }
@@ -384,7 +377,9 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
-    use nook_core::{DeviceMode, OauthFilePreset, ProviderJoinerIdentity, ReplicationType};
+    use nook_core::{
+        DeviceMode, OAuthFilePreset, ProviderKind, ReplicationSupport, ReplicationType,
+    };
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -421,35 +416,32 @@ mod browser_tests {
         assert_eq!(sentinel.sentinel_threshold().unwrap(), 2);
         assert_eq!(sentinel.sentinel_required_participants().unwrap(), 3);
         assert_eq!(sentinel.sentinel_ready_participants().unwrap(), 1);
+    }
 
-        let not_applicable = NookProviderReplicationCapability::from_core(
-            nook_core::ProviderReplicationCapability {
-                provider_type: "local".into(),
-                oauth_preset: nook_core::ProviderOauthPreset::NotApplicable,
-                supports_personal: true,
-                supports_shared: false,
-                shared_joiner_identity: ProviderJoinerIdentity::NotRequired,
-            },
+    #[wasm_bindgen_test]
+    fn the_capability_wrapper_names_its_kind_support_and_joiner() -> Result<(), JsError> {
+        let local = NookProviderReplicationCapability::from_core(
+            ProviderKind::Local.replication_capability(),
         );
-        assert_eq!(not_applicable.provider_type(), "local");
-        assert!(not_applicable.oauth_preset().is_err());
-        assert!(not_applicable.shared_joiner_identity().is_err());
-
-        let configured = NookProviderReplicationCapability::from_core(
-            nook_core::ProviderReplicationCapability {
-                provider_type: "oauth_file".into(),
-                oauth_preset: nook_core::ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
-                supports_personal: true,
-                supports_shared: true,
-                shared_joiner_identity: ProviderJoinerIdentity::Required(
-                    nook_core::SharedJoinerIdentityKind::Email,
-                ),
-            },
+        assert_eq!(local.kind()?.to_rust()?, ProviderKind::Local);
+        assert_eq!(
+            local.supports(ReplicationType::Shared),
+            ReplicationSupport::Unsupported
         );
-        assert_eq!(configured.oauth_preset().unwrap(), "google-drive");
-        assert_eq!(configured.shared_joiner_identity().unwrap(), "email");
-        assert!(configured.supports_personal());
-        assert!(configured.supports_shared());
+        assert!(local.shared_joiner_identity().is_err());
+        let drive = NookProviderReplicationCapability::from_core(
+            ProviderKind::OauthFile(OAuthFilePreset::GoogleDrive).replication_capability(),
+        );
+        assert_eq!(
+            drive.supports(ReplicationType::Personal),
+            ReplicationSupport::Supported
+        );
+        assert_eq!(
+            drive.shared_joiner_identity_state(),
+            NookProviderJoinerIdentityState::Required
+        );
+        assert_eq!(drive.shared_joiner_identity()?, "email");
+        Ok(())
     }
 }
 

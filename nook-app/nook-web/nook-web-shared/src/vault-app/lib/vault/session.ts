@@ -82,7 +82,6 @@ export class VaultSessionActions {
     state.sentinelGenesisPhase = SentinelGenesisPhase.Inactive;
     state.sentinelGenesisRequest = "";
     state.clearSentinelGenesisStore();
-    state.sharedJoinerIdentity = "";
   }
 
   markVaultUnlocked() {
@@ -168,7 +167,6 @@ export class VaultSessionActions {
     state.joinEnrollmentPrompt = JoinEnrollmentState.None;
     state.enrollSecretsKey = "";
     state.enrollMembersKey = "";
-    state.sharedJoinerIdentity = "";
     state.workspaceSection = WorkspaceSection.Vault;
     state.enrollmentCode = "";
     state.errorMsg = "";

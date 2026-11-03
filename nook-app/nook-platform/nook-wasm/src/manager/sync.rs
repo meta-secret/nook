@@ -7,9 +7,10 @@
 use super::NookVaultManager;
 use crate::NookDatabase;
 use crate::SyncResultSessionRequest;
+use crate::TypedInput;
 
-use crate::{NookError, NookVaultSyncResult};
-use nook_core::{StorageMode, VaultAccessStatus};
+use crate::{NookError, NookStorageConnection, NookVaultSyncResult};
+use nook_core::{StorageConnection, StorageMode, VaultAccessStatus};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -17,29 +18,29 @@ use wasm_bindgen::prelude::wasm_bindgen;
 impl NookVaultManager {
     pub async fn sync_vault_from_storage(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<NookStorageConnection>,
     ) -> Result<NookVaultSyncResult, JsError> {
+        let connection = connection.decode()?;
+        let storage_mode = connection.mode();
         tracing::debug!(
             scope = "wasm-sync",
             storage = %storage_mode,
             "sync_vault_from_storage started"
         );
-        let initial_storage_mode = self.storage.mode;
+        let initial_storage_mode = self.storage.mode();
         // `prepare_storage` clears `password_entries`/`unlock` on a mode/ref
         // switch (it assumes a *different* vault). A same-vault sync only
         // toggles the local-cache/remote tag, so preserve the backup-password
         // envelope; otherwise the subsequent `persist_projection_cache` rewrites
         // the local YAML without it and drops the password unlock envelope.
-        self.prepare_storage_preserving_vault_metadata(&storage_mode, &github_pat, &github_repo)
+        self.prepare_storage_preserving_vault_metadata(&connection)
             .await?;
 
         if self.event_log.enabled || NookDatabase::is_event_log_mode().await? {
             self.event_log.enabled = true;
             let sync_result = self.sync_event_log_from_storage().await;
             return self
-                .finish_event_log_sync(sync_result, initial_storage_mode, &storage_mode)
+                .finish_event_log_sync(sync_result, initial_storage_mode, storage_mode)
                 .await;
         }
 
@@ -80,7 +81,7 @@ impl NookVaultManager {
         &mut self,
         sync_result: Result<bool, NookError>,
         initial_storage_mode: StorageMode,
-        storage_mode: &str,
+        storage_mode: StorageMode,
     ) -> Result<NookVaultSyncResult, JsError> {
         let sync_result = match sync_result {
             Ok(changed) => {
@@ -91,10 +92,13 @@ impl NookVaultManager {
         };
         let restore_result = match initial_storage_mode {
             StorageMode::Local => self
-                .prepare_storage_preserving_vault_metadata("local", "", "")
+                .prepare_storage_preserving_vault_metadata(&StorageConnection::Local)
                 .await
                 .map_err(|error| JsError::new(&error.to_string())),
-            StorageMode::Github | StorageMode::GoogleDrive | StorageMode::ICloud => Ok(()),
+            StorageMode::Github
+            | StorageMode::GoogleDrive
+            | StorageMode::ICloud
+            | StorageMode::S3 => Ok(()),
         };
         match (sync_result, restore_result) {
             (Err(sync_error), _) => Err(sync_error),
@@ -106,7 +110,7 @@ impl NookVaultManager {
     async fn build_event_log_sync_result(
         &mut self,
         changed: bool,
-        storage_mode: &str,
+        storage_mode: StorageMode,
     ) -> Result<NookVaultSyncResult, JsError> {
         if self.vault.crypto.is_unlocked() {
             if changed {
@@ -135,21 +139,23 @@ impl NookVaultManager {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::manager::PreparedProvider;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    async fn sync_rejects_an_unknown_storage_mode_before_touching_session() {
+    async fn sync_rejects_an_unknown_storage_mode_before_touching_session() -> Result<(), JsError> {
+        use serde::Serialize;
         let mut manager = NookVaultManager::new();
         manager.vault.store_id = "store_sync_fixture".to_owned();
-        assert!(
-            manager
-                .sync_vault_from_storage("unknown".to_owned(), String::new(), String::new())
-                .await
-                .is_err()
+        let unknown = tsify::Ts::new_unchecked(
+            serde_json::json!({ "mode": "unknown" })
+                .serialize(&serde_wasm_bindgen::Serializer::json_compatible())?,
         );
+        assert!(manager.sync_vault_from_storage(&unknown).await.is_err());
         assert_eq!(manager.vault.store_id, "store_sync_fixture");
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -163,7 +169,7 @@ mod browser_tests {
         manager.vault.last_synced_content = "stale local projection".to_owned();
 
         let result = manager
-            .sync_vault_from_storage("local".to_owned(), String::new(), String::new())
+            .sync_vault_from_storage(&tsify::Tsify::into_ts(&StorageConnection::Local)?)
             .await?;
         assert!(result.changed());
         assert_eq!(result.access_status()?, VaultAccessStatus::NewVault);
@@ -179,7 +185,7 @@ mod browser_tests {
         NookDatabase::clear_event_log_mode().await?;
 
         let result = manager
-            .sync_vault_from_storage("local".to_owned(), String::new(), String::new())
+            .sync_vault_from_storage(&tsify::Tsify::into_ts(&StorageConnection::Local)?)
             .await?;
         assert!(!result.changed());
         assert!(result.access_status().is_err());
@@ -197,7 +203,7 @@ mod browser_tests {
         manager.vault.members_key = "ab".repeat(32);
 
         let result = manager
-            .sync_vault_from_storage("local".to_owned(), String::new(), String::new())
+            .sync_vault_from_storage(&tsify::Tsify::into_ts(&StorageConnection::Local)?)
             .await?;
         assert!(!result.changed());
         assert!(result.access_status().is_err());
@@ -215,11 +221,11 @@ mod browser_tests {
         manager.event_log.enabled = true;
 
         let result = manager
-            .sync_vault_from_storage("local".to_owned(), String::new(), String::new())
+            .sync_vault_from_storage(&tsify::Tsify::into_ts(&StorageConnection::Local)?)
             .await?;
         assert!(!result.changed());
         assert!(result.access_status().is_err());
-        assert_eq!(manager.storage.mode, StorageMode::Local);
+        assert_eq!(manager.storage.mode(), StorageMode::Local);
 
         NookDatabase::clear_event_log_mode().await?;
         manager.delete_local_browser_data().await?;
@@ -227,9 +233,11 @@ mod browser_tests {
     }
 
     #[wasm_bindgen_test]
-    async fn event_log_sync_propagates_github_403_and_restores_local_storage() {
+    async fn event_log_sync_propagates_github_403_and_restores_local_storage() -> anyhow::Result<()>
+    {
         let mut manager = NookVaultManager::new();
-        manager.storage.mode = StorageMode::Github;
+        manager.storage.provider =
+            PreparedProvider::github_fixture("TEST-ONLY-token", "owner/repo")?;
         let forbidden = crate::GitHubStorageClient::github_api_failure(
             reqwest::StatusCode::FORBIDDEN,
             "GitHub event tree listing failed with status 403 Forbidden".to_owned(),
@@ -240,10 +248,11 @@ mod browser_tests {
         ));
 
         let result = manager
-            .finish_event_log_sync(Err(forbidden), StorageMode::Local, "github")
+            .finish_event_log_sync(Err(forbidden), StorageMode::Local, StorageMode::Github)
             .await;
 
         assert!(result.is_err());
-        assert_eq!(manager.storage.mode, StorageMode::Local);
+        assert_eq!(manager.storage.mode(), StorageMode::Local);
+        Ok(())
     }
 }

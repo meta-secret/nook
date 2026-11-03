@@ -432,6 +432,7 @@ impl NookDatabase {
 pub(crate) struct KeyringDbRebindLocalIdentity<'a> {
     pub(crate) local_identity_id: &'a nook_core::IdentityId,
     pub(crate) replicated_identity_id: &'a nook_core::IdentityId,
+    pub(crate) label: nook_core::AdoptedIdentityLabel<'a>,
 }
 
 impl NookDatabase {
@@ -443,6 +444,7 @@ impl NookDatabase {
         let KeyringDbRebindLocalIdentity {
             local_identity_id,
             replicated_identity_id,
+            label,
         } = request;
         let rexie = NookDatabase::open_nook_database().await?;
         let transaction = rexie
@@ -463,6 +465,7 @@ impl NookDatabase {
         let request = nook_core::ReplicatedIdentityAdoption {
             local_identity_id,
             replicated_identity_id,
+            label,
         };
         let directory = directory
             .adopt_replicated_identity(&request)

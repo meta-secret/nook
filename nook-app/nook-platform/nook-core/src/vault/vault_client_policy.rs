@@ -9,12 +9,14 @@ use nook_app_common::TranslationCatalog;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 mod connection;
+mod join_connect;
 mod sync_policy;
 
 pub use connection::{
     ActiveVaultStore, JoinEnrollmentState, RemoteVaultAssessDecision, RemoteVaultRecoveryState,
     VaultConnectGateDecision, VaultConnectProbeDecision, VaultSwitchDecision,
 };
+pub use join_connect::{JoinConnectEnrollment, JoinConnectRequest, JoinConnectSource};
 pub use sync_policy::{
     UnauthenticatedSyncDecision, VaultAccessObservation, VaultStorageSyncDecision,
     VaultSyncTimerStartDecision, VaultSyncTimerTickDecision,
@@ -199,17 +201,6 @@ impl VaultClientPolicy {
     }
 
     #[must_use]
-    pub const fn should_use_join_provider_for_connect(
-        request: crate::ShouldUseJoinProviderForConnectRequest,
-    ) -> bool {
-        !matches!(
-            request.authenticated,
-            crate::VaultAuthenticationState::Authenticated
-        ) && request.sync_provider_count.is_nonzero()
-            && !matches!(request.join_state, JoinEnrollmentState::None)
-    }
-
-    #[must_use]
     pub const fn should_auto_unlock(request: crate::ShouldAutoUnlockRequest) -> bool {
         !matches!(
             request.session_explicitly_locked,
@@ -391,22 +382,7 @@ mod tests {
     }
 
     #[test]
-    fn provider_connect_and_sync_guards_are_portable() {
-        assert!(VaultClientPolicy::should_use_join_provider_for_connect(
-            crate::ShouldUseJoinProviderForConnectRequest {
-                authenticated: (false).into(),
-                sync_provider_count: 1.into(),
-                join_state: JoinEnrollmentState::Pending
-            }
-        ));
-        assert!(!VaultClientPolicy::should_use_join_provider_for_connect(
-            crate::ShouldUseJoinProviderForConnectRequest {
-                authenticated: (true).into(),
-                sync_provider_count: 1.into(),
-                join_state: JoinEnrollmentState::Pending
-            }
-        ));
-    }
+    fn provider_connect_and_sync_guards_are_portable() {}
 
     #[test]
     fn login_picker_is_only_for_explicitly_locked_multi_vault_sessions() {

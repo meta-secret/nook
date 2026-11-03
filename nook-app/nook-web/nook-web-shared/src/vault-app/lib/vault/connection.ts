@@ -8,7 +8,7 @@ import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 import { VaultChangeOutcome } from "$lib/vault/vault-change-outcome";
 
 import { VaultRecoveryErrorKind } from "$app-wasm";
-import type { NookStorageConnectArgs } from "$app-wasm";
+import type { NookStorageConnection } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import { VaultAccessStatus } from "$lib/nook";
@@ -18,6 +18,8 @@ import {
   ProviderSyncFailureHandling,
   ProviderSyncFreshness,
   ProviderSyncVisibility,
+  provider_connected_toast_key,
+  provider_draft_kind,
   RemoteVaultRecoveryState,
   VaultConnectGateDecision,
   VaultConnectProbeDecision,
@@ -38,7 +40,7 @@ type StorageConnection =
   | { kind: StorageConnectionKind.Configured }
   | {
       kind: StorageConnectionKind.RemoteRecovery;
-      args: NookStorageConnectArgs;
+      args: NookStorageConnection;
     };
 
 const log = browserLogRuntime.createLogger("connect");
@@ -94,7 +96,7 @@ export class VaultConnectionActions {
       if (
         !state.isAuthenticated &&
         state.loginSetup.kind === LoginSetupKind.Active &&
-        state.loginSetup.providerType === "local-folder"
+        state.loginSetup.providerKind.type === "local-folder"
       ) {
         const saved = await state.ensureProviderSaved();
         if (saved.isErr()) {
@@ -104,7 +106,7 @@ export class VaultConnectionActions {
         const [provider = state.providers[state.providers.length - 1]] = [
           state.syncProviders[state.syncProviders.length - 1],
         ];
-        if (provider?.type === "local-folder") {
+        if (provider?.provider.type === "local-folder") {
           const syncLocalFolderProviderArgs: Parameters<
             ProviderSyncActions["syncLocalFolderProvider"]
           >[0] = { provider };
@@ -135,7 +137,12 @@ export class VaultConnectionActions {
         }
       }
 
-      const assessment = await state.assessVaultConnectStatus();
+      const assessArgs = state.connectStorageArgs();
+      if (assessArgs.isErr()) {
+        state.errorMsg = state.t(assessArgs.error.translationKey);
+        return;
+      }
+      const assessment = await state.assessVaultConnectStatus(assessArgs.value);
       if (assessment.isErr()) {
         state.errorMsg = state.t(assessment.error.translationKey);
         return;
@@ -229,8 +236,9 @@ export class VaultConnectionActions {
       > => {
         const connectArgs =
           storageConnection.kind === StorageConnectionKind.RemoteRecovery
-            ? storageConnection.args
+            ? storageOk(storageConnection.args)
             : state.connectStorageArgs();
+        if (connectArgs.isErr()) return storageErr(connectArgs.error);
         const admitted = state.admitManager();
         if (admitted.isErr()) return storageErr(admitted.error);
         const recovery = state.remoteVaultRecoveryState;
@@ -238,17 +246,8 @@ export class VaultConnectionActions {
         const operation = (async () => {
           try {
             if (recovery === RemoteVaultRecoveryState.ConnectFresh)
-              await admitted.value.connect_fresh(
-                connectArgs.mode,
-                connectArgs.pat,
-                connectArgs.repo,
-              );
-            else
-              await admitted.value.connect(
-                connectArgs.mode,
-                connectArgs.pat,
-                connectArgs.repo,
-              );
+              await admitted.value.connect_fresh(connectArgs.value);
+            else await admitted.value.connect(connectArgs.value);
             return storageOk(VaultChangeOutcome.Completed);
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
@@ -290,11 +289,6 @@ export class VaultConnectionActions {
       // Load sync providers before unlocking the UI. Otherwise a fast local
       // edit (especially delete, which used to fire-and-forget fan-out) can run
       // while `syncProviders` is still empty and never push the event remotely.
-      const remoteConfiguration = state.syncOAuthRemoteRefFromManager();
-      if (remoteConfiguration.isErr()) {
-        state.errorMsg = state.t(remoteConfiguration.error.translationKey);
-        return;
-      }
       const savedProvider2 = await state.ensureProviderSaved();
       if (savedProvider2.isErr()) {
         state.errorMsg = state.t(savedProvider2.error.translationKey);
@@ -329,15 +323,13 @@ export class VaultConnectionActions {
         return;
       }
       log.info("vault connected");
-      if (state.storageMode === "local") {
-        state.showSuccess(state.t(I18N_KEYS.ToastsLocalLoaded));
-      } else if (state.storageMode === "local-folder") {
-        state.showSuccess(state.t(I18N_KEYS.ToastsLocalFolderConnected));
-      } else if (state.storageMode === "oauth-file") {
-        state.showSuccess(state.t(I18N_KEYS.ToastsGoogleDriveConnected));
-      } else {
-        state.showSuccess(state.t(I18N_KEYS.ToastsGithubConnected));
-      }
+      state.showSuccess(
+        state.t(
+          provider_connected_toast_key(
+            provider_draft_kind(state.providerDraft),
+          ),
+        ),
+      );
     } catch (e) {
       state.isAuthenticated = false;
       const message = e instanceof Error ? e.message : String(e);

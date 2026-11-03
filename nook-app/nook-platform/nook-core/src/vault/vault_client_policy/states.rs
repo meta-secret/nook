@@ -35,7 +35,8 @@ impl From<bool> for VaultSecretCreationPermission {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, tsify::Tsify)]
+#[serde(rename_all = "camelCase")]
 pub enum VaultAuthenticationState {
     Unauthenticated,
     Authenticated,

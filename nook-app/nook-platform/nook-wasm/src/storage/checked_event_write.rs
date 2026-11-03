@@ -85,17 +85,23 @@ impl<'a> CheckedEventWrite<'a> {
     }
 
     #[must_use]
-    pub(super) fn event_id(&self) -> &EventId {
+    pub(crate) fn event_id(&self) -> &EventId {
         self.event_id
     }
 
     #[must_use]
-    pub(super) fn bytes(&self) -> &[u8] {
+    pub(crate) fn bytes(&self) -> &[u8] {
         self.bytes
     }
 
+    /// The log the event was checked for.
     #[must_use]
-    pub(super) fn matches(&self, bytes: &[u8]) -> bool {
+    pub(crate) fn location(&self) -> &EventLogLocation {
+        self.location
+    }
+
+    #[must_use]
+    pub(crate) fn matches(&self, bytes: &[u8]) -> bool {
         self.bytes == bytes
             || ParsedLogEvent::parse(bytes, self.location).is_ok_and(|event| event == self.event)
     }
@@ -104,12 +110,8 @@ impl<'a> CheckedEventWrite<'a> {
 #[cfg(test)]
 pub(super) mod tests {
     use super::*;
-    use crate::storage::{
-        drive_events::DriveEventStore, github_events::GitHubEventStore, icloud::ICloudEventStore,
-    };
     use nook_core::{
-        DriveEventParent, Ed25519Signature, GenesisImportPayload, ICloudShareRole,
-        ICloudSharedTarget, IsoTimestamp, SigningIdentity, StoreId, ValidationError,
+        Ed25519Signature, GenesisImportPayload, IsoTimestamp, SigningIdentity, StoreId,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -140,6 +142,20 @@ pub(super) mod tests {
                 bytes: VaultEvent::serialize_event_storage_yaml(&event)?.into(),
                 event,
             })
+        }
+
+        /// The fixture as a checked write into one log.
+        #[cfg(feature = "browser-wasm-tests")]
+        pub(crate) fn checked<'a>(
+            &'a self,
+            location: &'a EventLogLocation,
+        ) -> anyhow::Result<CheckedEventWrite<'a>> {
+            Ok(CheckedEventWrite::parse(CheckedEventWriteRequest {
+                bytes: &self.bytes,
+                event_id: &self.event_id,
+                location,
+                provider: "Test",
+            })?)
         }
     }
 
@@ -172,6 +188,39 @@ pub(super) mod tests {
         assert!(
             !checked.matches(VaultEvent::serialize_event_storage_yaml(&fixture.event)?.as_ref())
         );
+        Ok(())
+    }
+
+    /// Every store write takes a checked event, so a malformed one is refused
+    /// with its provider's label before any store, and any request, is
+    /// reached.
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
+    )]
+    fn a_malformed_event_is_refused_with_its_provider_label() -> anyhow::Result<()> {
+        let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
+        let location = EventLogLocation::Vault(StoreId::parse("store_abcdefghijk")?);
+        for provider in ["GitHub", "Drive", "CloudKit", "S3"] {
+            for bytes in [&[0xff][..], b"invalid event"] {
+                match CheckedEventWrite::parse(CheckedEventWriteRequest {
+                    bytes,
+                    event_id: &event_id,
+                    location: &location,
+                    provider,
+                }) {
+                    Err(NookError::Serialization(message)) => {
+                        assert!(message.starts_with(&format!("{provider} event parse:")));
+                    }
+                    Err(_) => anyhow::bail!("unexpected admission error"),
+                    Ok(_) => anyhow::bail!("a malformed event was admitted"),
+                }
+            }
+        }
         Ok(())
     }
 
@@ -213,93 +262,6 @@ pub(super) mod tests {
                 Err(_) => anyhow::bail!("unexpected checked-write error"),
                 Ok(_) => anyhow::bail!("invalid event admitted"),
             }
-        }
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-        )
-    )]
-    async fn provider_admission_preserves_validation_order_before_network() -> anyhow::Result<()> {
-        let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
-        let github = GitHubEventStore {
-            pat: "",
-            repo: "",
-            placed: &nook_core::PlacedNamespace::vault(
-                nook_core::IdentityId::parse("idn_abcdefghijk")?,
-                nook_core::StoreId::parse("store_abcdefghijk")?,
-            ),
-        };
-        let share =
-            ICloudSharedTarget::new(ICloudShareRole::Owner, "zone", "owner", "root", "guid")?;
-        let drive = DriveEventStore {
-            token: "",
-            parent: &DriveEventParent::shared_folder_id("vault-folder"),
-            location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
-                "store_abcdefghijk",
-            )?),
-        };
-        let cloud = ICloudEventStore {
-            web_auth_token: "fixture-token",
-            target: &share,
-            placed: &nook_core::PlacedNamespace::vault(
-                nook_core::IdentityId::parse("idn_abcdefghijk")?,
-                nook_core::StoreId::parse("store_abcdefghijk")?,
-            ),
-        };
-        for (result, prefix) in [
-            (
-                github.put_github_event_if_absent(&event_id, &[0xff]).await,
-                "GitHub event parse:",
-            ),
-            (
-                drive
-                    .put_drive_event_if_absent(&event_id, &[0xff])
-                    .await
-                    .map(|_| ()),
-                "Drive event parse:",
-            ),
-            (
-                cloud.put_icloud_event_if_absent(&event_id, &[0xff]).await,
-                "Event YAML must be UTF-8:",
-            ),
-            (
-                cloud
-                    .put_icloud_event_if_absent(&event_id, b"invalid event")
-                    .await,
-                "CloudKit event parse:",
-            ),
-        ] {
-            match result {
-                Err(NookError::Serialization(message)) => {
-                    assert!(message.starts_with(prefix));
-                }
-                Err(_) => anyhow::bail!("unexpected provider admission error"),
-                Ok(()) => anyhow::bail!("invalid event reached publication"),
-            }
-        }
-        let no_token = ICloudEventStore {
-            web_auth_token: " ",
-            target: &share,
-            placed: &nook_core::PlacedNamespace::vault(
-                nook_core::IdentityId::parse("idn_abcdefghijk")?,
-                nook_core::StoreId::parse("store_abcdefghijk")?,
-            ),
-        };
-        match no_token
-            .put_icloud_event_if_absent(&event_id, &[0xff])
-            .await
-        {
-            Err(NookError::Database(message)) => {
-                assert_eq!(message, ValidationError::OauthAccessTokenEmpty.to_string());
-            }
-            Err(_) => anyhow::bail!("token validation did not precede byte validation"),
-            Ok(()) => anyhow::bail!("missing token admitted"),
         }
         Ok(())
     }

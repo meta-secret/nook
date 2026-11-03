@@ -2,7 +2,9 @@ import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest'
 import { ok } from 'neverthrow'
 import initNookWasm, {
   DeviceProtectionStatus,
+  NookDriveRootOrigin,
   NookVaultManager,
+  s3_provider_draft,
   type NookIdentityJoinCompletion,
   type NookIdentityJoinRequested,
   type NookProviderSource,
@@ -15,13 +17,20 @@ import {
   FirstRunIdentityAction,
   type FirstRunIdentityRun,
 } from '$lib/vault/first-run'
+import { S3ConnectionFixture } from '../s3-connection-fixture'
 import { FirstRunJoinKind } from '$lib/vault/identity-join-wait'
 import { IdentityActionOutcome } from '$lib/vault/identity-control.svelte'
-import { GoogleVaultFolderOrigin, VaultOAuthActions } from '$lib/vault/oauth'
+import { VaultOAuthActions } from '$lib/vault/oauth'
+import {
+  DraftS3ConnectionKind,
+  S3DraftReads,
+} from '$lib/vault/provider-draft-reads'
+import { ProviderSetupKinds } from '$lib/vault/provider-setup-kinds'
 import { ProviderSaveOutcome } from '$lib/vault/providers.svelte'
 import {
   FirstRunPlace,
   FirstRunStage,
+  FirstRunSyncSource,
   WorkspaceSection,
 } from '$lib/vault/state/ui.svelte'
 import { LoginSetupKind } from '$lib/vault/state/provider.svelte'
@@ -36,8 +45,15 @@ afterEach(() => vi.restoreAllMocks())
 
 const IDENTITY = 'idn_familyident'
 const SOURCE: NookProviderSource = {
-  kind: 'googleDrive',
-  accessToken: 'drive-token',
+  kind: 'remote',
+  source: { kind: 'googleDrive', accessToken: 'drive-token' },
+}
+
+/** The S3 location the form staged once it listed. */
+function stageS3Location(vault: VaultState): void {
+  vault.stageProviderDraft(
+    s3_provider_draft(S3ConnectionFixture.configuration()),
+  )
 }
 
 /** An identity in the Drive folder this browser's key is not a member of. */
@@ -307,6 +323,94 @@ describe('first-run setup settles the identity before any vault', () => {
   })
 })
 
+describe('first-run setup on S3 storage', () => {
+  test('S3 takes the place of Google Drive, and Google Drive can take it back', () => {
+    const setup = new Setup().at(FirstRunStage.Sync)
+    const actions = new FirstRunActions(setup.vault)
+    actions.beginGoogleDrive()
+
+    actions.beginS3()
+    stageS3Location(setup.vault)
+
+    expect(actions.syncSource()).toBe(FirstRunSyncSource.S3)
+    expect(setup.vault.loginSetup).toEqual({
+      kind: LoginSetupKind.Active,
+      providerKind: ProviderSetupKinds.S3,
+    })
+    expect(setup.vault.providerDraft.type).toBe('s3')
+
+    actions.beginGoogleDrive()
+
+    expect(actions.syncSource()).toBe(FirstRunSyncSource.GoogleDrive)
+    // The S3 connection, its secret included, goes with the S3 setup.
+    expect(S3DraftReads.connection(setup.vault.providerDraft).kind).toBe(
+      DraftS3ConnectionKind.NotReady,
+    )
+    expect(JSON.stringify(setup.vault.providerDraft)).not.toContain(
+      S3ConnectionFixture.SECRET,
+    )
+  })
+
+  test('a new identity on S3 is made here first, then S3 connects with the same location', async () => {
+    const setup = new Setup().at(FirstRunStage.Name)
+    setup.vault.firstRunPlace = FirstRunPlace.SyncProvider
+    setup.names()
+    const actions = new FirstRunActions(setup.vault)
+    actions.beginS3()
+    stageS3Location(setup.vault)
+    const stagedAtCreation: LoginSetupKind[] = []
+    vi.spyOn(setup.vault, 'createLocalVaultWithDeviceKeys').mockImplementation(
+      () => {
+        stagedAtCreation.push(setup.vault.loginSetup.kind)
+        setup.vault.isAuthenticated = true
+        return Promise.resolve()
+      },
+    )
+
+    await actions.createNamed('Family')
+
+    // Nothing was staged while the vault was made on this browser.
+    expect(stagedAtCreation).toEqual([LoginSetupKind.Inactive])
+    expect(setup.vault.firstRun).toBe(FirstRunStage.Connect)
+    expect(actions.syncSource()).toBe(FirstRunSyncSource.S3)
+    expect(setup.vault.providerDraft).toEqual(
+      s3_provider_draft(S3ConnectionFixture.configuration()),
+    )
+  })
+
+  test('an S3 keyring is saved and synced with no Drive folder to bind', async () => {
+    const vault = VaultStateTestFixture.create()
+    const actions = new FirstRunActions(vault)
+    actions.beginS3()
+    stageS3Location(vault)
+    const order: string[] = []
+    const folder = vi.spyOn(
+      VaultOAuthActions.prototype,
+      'connectGoogleVaultFolder',
+    )
+    vi.spyOn(vault, 'ensureProviderSaved').mockImplementation(() => {
+      order.push('save')
+      return Promise.resolve(ok(ProviderSaveOutcome.Saved))
+    })
+    vi.spyOn(vault.identityControl, 'syncWithMounts').mockImplementation(() => {
+      order.push('sync')
+      return Promise.resolve(ok(IdentityActionOutcome.Completed))
+    })
+    vi.spyOn(vault.identityControl, 'grantedVaultElsewhere').mockReturnValue(
+      false,
+    )
+    vi.spyOn(vault, 'openSection').mockImplementation(() => {})
+    vault.firstRun = FirstRunStage.Connect
+
+    const connected = await actions.connectProvider()
+
+    expect(connected).toBe(true)
+    expect(order).toEqual(['save', 'sync'])
+    expect(folder).not.toHaveBeenCalled()
+    expect(vault.firstRun).toBe(FirstRunStage.Off)
+  })
+})
+
 describe('a keyring brought here keeps its provider and opens its vault', () => {
   test('Drive is saved and synced, the granted vault opens, and setup ends on its card', async () => {
     const vault = VaultStateTestFixture.create()
@@ -317,7 +421,7 @@ describe('a keyring brought here keeps its provider and opens its vault', () => 
     ).mockImplementation(() => {
       order.push('folder')
       return Promise.resolve(
-        ok({ name: 'Nook', origin: GoogleVaultFolderOrigin.Existing }),
+        ok({ name: 'Nook', origin: NookDriveRootOrigin.Existing }),
       )
     })
     vi.spyOn(vault, 'ensureProviderSaved').mockImplementation(() => {

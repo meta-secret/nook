@@ -1,5 +1,6 @@
-use super::{NookError, NookProviderSyncRevision, wasm_bindgen};
-use nook_core::VaultSyncConflict;
+use super::{NookError, NookProviderSyncRevision, NookStorageConnection, wasm_bindgen};
+use crate::{TypedInput, TypedOutput};
+use nook_core::{StorageConnection, VaultSyncConflict};
 use std::collections::BTreeMap;
 use wasm_bindgen::JsError;
 
@@ -14,9 +15,7 @@ pub struct NookPendingSyncConflict {
     provider_label: String,
     local_yaml: String,
     remote_yaml: String,
-    mode: String,
-    pat: String,
-    repo: String,
+    connection: StorageConnection,
     remote_revision: NookProviderSyncRevision,
     conflict: nook_core::VaultSyncConflict,
 }
@@ -99,18 +98,16 @@ impl NookPendingSyncConflict {
         local_version: u32,
         remote_version: u32,
     ) -> Self {
-        Self::content(
-            TEST_SYNC_PROVIDER_ID.to_owned(),
-            provider_label,
-            String::new(),
-            "remote-vault".to_owned(),
-            local_version,
-            remote_version,
-            String::new(),
-            String::new(),
-            String::new(),
-            &NookProviderSyncRevision::untracked(),
-        )
+        Self {
+            remote_yaml: "remote-vault".to_owned(),
+            ..Self::for_testing(
+                provider_label,
+                VaultSyncConflict::Content(nook_core::ContentSyncConflict {
+                    local_version: u64::from(local_version).into(),
+                    remote_version: u64::from(remote_version).into(),
+                }),
+            )
+        }
     }
 
     /// E2E/dev seam for rendering a Rust-owned store-id conflict without storage I/O.
@@ -120,17 +117,12 @@ impl NookPendingSyncConflict {
         local_store_id: String,
         remote_store_id: String,
     ) -> Self {
-        Self::store_id(
-            TEST_SYNC_PROVIDER_ID.to_owned(),
+        Self::for_testing(
             provider_label,
-            String::new(),
-            String::new(),
-            String::new(),
-            String::new(),
-            String::new(),
-            &NookProviderSyncRevision::untracked(),
-            local_store_id,
-            remote_store_id,
+            VaultSyncConflict::StoreId(nook_core::StoreIdSyncConflict {
+                local_store_id,
+                remote_store_id,
+            }),
         )
     }
 
@@ -150,59 +142,21 @@ impl NookPendingSyncConflict {
         remote_yaml: String,
         local_version: u32,
         remote_version: u32,
-        mode: String,
-        pat: String,
-        repo: String,
+        connection: &tsify::Ts<NookStorageConnection>,
         remote_revision: &NookProviderSyncRevision,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, JsError> {
+        Ok(Self {
             provider_id,
             provider_label,
             local_yaml,
             remote_yaml,
-            mode,
-            pat,
-            repo,
+            connection: connection.decode()?,
             remote_revision: remote_revision.clone(),
             conflict: VaultSyncConflict::Content(nook_core::ContentSyncConflict {
                 local_version: u64::from(local_version).into(),
                 remote_version: u64::from(remote_version).into(),
             }),
-        }
-    }
-
-    #[wasm_bindgen]
-    #[allow(clippy::too_many_arguments)]
-    pub fn content_from_vaults(
-        provider_id: String,
-        provider_label: String,
-        local_yaml: String,
-        remote_yaml: String,
-        mode: String,
-        pat: String,
-        repo: String,
-        remote_revision: &NookProviderSyncRevision,
-    ) -> Self {
-        let local_version = nook_core::VaultFormatDocument::new(&local_yaml)
-            .version()
-            .unwrap_or_default();
-        let remote_version = nook_core::VaultFormatDocument::new(&remote_yaml)
-            .version()
-            .unwrap_or_default();
-        Self {
-            provider_id,
-            provider_label,
-            local_yaml,
-            remote_yaml,
-            mode,
-            pat,
-            repo,
-            remote_revision: remote_revision.clone(),
-            conflict: VaultSyncConflict::Content(nook_core::ContentSyncConflict {
-                local_version,
-                remote_version,
-            }),
-        }
+        })
     }
 
     #[wasm_bindgen]
@@ -212,27 +166,23 @@ impl NookPendingSyncConflict {
         provider_label: String,
         local_yaml: String,
         remote_yaml: String,
-        mode: String,
-        pat: String,
-        repo: String,
+        connection: &tsify::Ts<NookStorageConnection>,
         remote_revision: &NookProviderSyncRevision,
         local_store_id: String,
         remote_store_id: String,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, JsError> {
+        Ok(Self {
             provider_id,
             provider_label,
             local_yaml,
             remote_yaml,
-            mode,
-            pat,
-            repo,
+            connection: connection.decode()?,
             remote_revision: remote_revision.clone(),
             conflict: VaultSyncConflict::StoreId(nook_core::StoreIdSyncConflict {
                 local_store_id,
                 remote_store_id,
             }),
-        }
+        })
     }
 
     /// Store-id conflict discovered while a provider is still being configured.
@@ -241,26 +191,21 @@ impl NookPendingSyncConflict {
     /// duplicate a value that controls whether provider setup resumes after the
     /// user chooses a recovery action.
     #[wasm_bindgen]
-    #[allow(clippy::too_many_arguments)]
     pub fn pending_store_id(
         provider_label: String,
         local_yaml: String,
         remote_yaml: String,
-        mode: String,
-        pat: String,
-        repo: String,
+        connection: &tsify::Ts<NookStorageConnection>,
         remote_revision: &NookProviderSyncRevision,
         local_store_id: String,
         remote_store_id: String,
-    ) -> Self {
+    ) -> Result<Self, JsError> {
         Self::store_id(
             PENDING_SYNC_PROVIDER_ID.to_owned(),
             provider_label,
             local_yaml,
             remote_yaml,
-            mode,
-            pat,
-            repo,
+            connection,
             remote_revision,
             local_store_id,
             remote_store_id,
@@ -294,18 +239,8 @@ impl NookPendingSyncConflict {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn mode(&self) -> String {
-        self.mode.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn pat(&self) -> String {
-        self.pat.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn repo(&self) -> String {
-        self.repo.clone()
+    pub fn connection(&self) -> Result<tsify::Ts<NookStorageConnection>, wasm_bindgen::JsError> {
+        Ok(self.connection.encode()?)
     }
 
     #[wasm_bindgen(getter, js_name = remoteRevision)]
@@ -373,13 +308,29 @@ impl NookPendingSyncConflict {
     }
 }
 
+impl NookPendingSyncConflict {
+    fn for_testing(provider_label: String, conflict: VaultSyncConflict) -> Self {
+        Self {
+            provider_id: TEST_SYNC_PROVIDER_ID.to_owned(),
+            provider_label,
+            local_yaml: String::new(),
+            remote_yaml: String::new(),
+            connection: StorageConnection::Local,
+            remote_revision: NookProviderSyncRevision::untracked(),
+            conflict,
+        }
+    }
+}
+
 #[cfg(test)]
 mod pending_sync_conflict_tests {
     use super::*;
+    use crate::test_fixtures::WasmFixture;
     use nook_core::{
         CurrentVaultReplaceability, IdentityVaultAppGrantKind, ProviderVaultDecision,
         ProviderVaultDecisionReason, ProviderVaultIdentityEligibility, VaultSyncConflictKind,
     };
+    use tsify::Tsify;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -388,13 +339,11 @@ mod pending_sync_conflict_tests {
             "GitHub".to_owned(),
             "local".to_owned(),
             String::new(),
-            "github".to_owned(),
-            "token".to_owned(),
-            "owner/repo".to_owned(),
+            &Tsify::into_ts(&WasmFixture::github_connection("token", "owner/repo")?)?,
             &NookProviderSyncRevision::untracked(),
             "store_local12345".to_owned(),
             "store_remote1234".to_owned(),
-        );
+        )?;
 
         assert!(conflict.is_pending_provider());
         assert_eq!(conflict.provider_label(), "GitHub");
@@ -637,17 +586,21 @@ mod projection_conflict_tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::test_fixtures::WasmFixture;
     use nook_core::{
         CurrentVaultReplaceability, IdentityVaultAppGrantKind, ProviderVaultDecisionReason,
         ProviderVaultIdentityEligibility, VaultSyncConflictKind,
     };
+    use tsify::Tsify;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    fn conflict_adapters_project_content_store_and_security_paths_in_wasm() {
+    fn conflict_adapters_project_content_store_and_security_paths_in_wasm() -> Result<(), JsError> {
         let revision = NookProviderSyncRevision::tracked("remote-7".into());
+        let github = WasmFixture::github_connection("pat", "owner/repo")?;
+        let local = Tsify::into_ts(&StorageConnection::Local)?;
         let content = NookPendingSyncConflict::content(
             "provider".into(),
             "Provider".into(),
@@ -655,19 +608,15 @@ mod browser_tests {
             "remote-yaml".into(),
             4,
             9,
-            "github".into(),
-            "pat".into(),
-            "owner/repo".into(),
+            &Tsify::into_ts(&github)?,
             &revision,
-        );
+        )?;
         assert_eq!(content.provider_id(), "provider");
         assert!(!content.is_pending_provider());
         assert_eq!(content.provider_label(), "Provider");
         assert_eq!(content.local_yaml(), "local-yaml");
         assert_eq!(content.remote_yaml(), "remote-yaml");
-        assert_eq!(content.mode(), "github");
-        assert_eq!(content.pat(), "pat");
-        assert_eq!(content.repo(), "owner/repo");
+        assert_eq!(content.connection()?.to_rust()?, github);
         assert_eq!(content.remote_revision().value().unwrap(), "remote-7");
         assert_eq!(content.kind(), VaultSyncConflictKind::Content);
         assert_eq!(content.content_local_version().unwrap(), 4);
@@ -680,13 +629,11 @@ mod browser_tests {
             "Provider".into(),
             String::new(),
             String::new(),
-            "local".into(),
-            String::new(),
-            String::new(),
+            &local,
             &NookProviderSyncRevision::untracked(),
             "local-store".into(),
             "remote-store".into(),
-        );
+        )?;
         assert_eq!(store.local_store_id().unwrap(), "local-store");
         assert_eq!(store.remote_store_id().unwrap(), "remote-store");
         assert!(store.content_local_version().is_err());
@@ -695,27 +642,14 @@ mod browser_tests {
                 "Pending".into(),
                 String::new(),
                 String::new(),
-                "local".into(),
-                String::new(),
-                String::new(),
+                &local,
                 &NookProviderSyncRevision::untracked(),
                 "a".into(),
                 "b".into(),
-            )
+            )?
             .is_pending_provider(),
             true
         );
-        let from_vaults = NookPendingSyncConflict::content_from_vaults(
-            "provider".into(),
-            "Provider".into(),
-            "not-yaml".into(),
-            "not-yaml".into(),
-            "local".into(),
-            String::new(),
-            String::new(),
-            &NookProviderSyncRevision::untracked(),
-        );
-        assert_eq!(from_vaults.content_local_version().unwrap(), 0);
 
         let projection = NookProviderVaultDecisionProjection::from_core(
             CurrentVaultReplaceability::Replaceable.project_provider_vault_decision(vec![
@@ -744,5 +678,6 @@ mod browser_tests {
         assert_eq!(security.events(), vec!["event"]);
         assert_eq!(security.reasons(), vec!["reason"]);
         let _ = ProviderVaultDecisionReason::ReadyToAdopt;
+        Ok(())
     }
 }

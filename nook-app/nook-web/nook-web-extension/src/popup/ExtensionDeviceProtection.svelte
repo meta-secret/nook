@@ -100,6 +100,17 @@ controls, messages and Rust/WASM calls live here once.
   let setupWorkflow = $state<DeviceProtectionSetupWorkflow>(initialWorkflow())
   let passkeyLabel = $state('')
   let deviceMode = $state<DeviceMode>(DeviceMode.Standard)
+  /** Both device modes, shown at once rather than behind a dropdown. */
+  const deviceModeChoices = [
+    {
+      mode: DeviceMode.Standard,
+      titleKey: I18N_KEYS.DeviceProtectionModeStandardTitle,
+    },
+    {
+      mode: DeviceMode.AntiHacker,
+      titleKey: I18N_KEYS.DeviceProtectionModeAntiHackerTitle,
+    },
+  ]
   let pin = $state('')
   let pinConfirm = $state('')
   let attempt = $state<DeviceProtectionAttempt>(DeviceProtectionAttempt.first())
@@ -524,22 +535,29 @@ controls, messages and Rust/WASM calls live here once.
   <details class="setup-options">
     <summary>{translatePlain(I18N_KEYS.ExtensionDeviceSetupOptions)}</summary>
     <div class="field-group">
-      <label for="device-protection-mode">
+      <span class="field-label">
         {translatePlain(I18N_KEYS.DeviceProtectionModeGroupLabel)}
-      </label>
-      <select
-        id="device-protection-mode"
-        bind:value={deviceMode}
-        disabled={pending}
+      </span>
+      <div
+        class="mode-choices"
+        role="radiogroup"
+        aria-label={translatePlain(I18N_KEYS.DeviceProtectionModeGroupLabel)}
         data-testid="device-mode-select"
       >
-        <option value={DeviceMode.Standard}>
-          {translatePlain(I18N_KEYS.DeviceProtectionModeStandardTitle)}
-        </option>
-        <option value={DeviceMode.AntiHacker}>
-          {translatePlain(I18N_KEYS.DeviceProtectionModeAntiHackerTitle)}
-        </option>
-      </select>
+        {#each deviceModeChoices as choice (choice.mode)}
+          <button
+            type="button"
+            role="radio"
+            class="mode-choice"
+            aria-checked={deviceMode === choice.mode}
+            disabled={pending}
+            data-testid="device-mode-{choice.mode}"
+            onclick={() => (deviceMode = choice.mode)}
+          >
+            {translatePlain(choice.titleKey)}
+          </button>
+        {/each}
+      </div>
       <p class="field-hint">
         {#if deviceMode === DeviceMode.Standard}
           {translatePlain(I18N_KEYS.DeviceProtectionModeStandardDescription)}

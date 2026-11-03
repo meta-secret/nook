@@ -6,10 +6,8 @@
 //! and any other vault's name stays sealed under its key.
 use super::wasm_bindgen;
 use crate::DriveStorageClient;
-use crate::storage::provider_vault_listing::{
-    BrowserHeldVaults, DriveVaultListing, LocalVaultClassification,
-};
-use futures_util::future::try_join;
+use crate::storage::provider_vault_listing::{DriveVaultListing, ProviderLocation};
+use crate::{TypedInput, TypedOutput};
 use nook_core::{
     DriveEventParent, DriveVaultFolderSelection, LocalVaultOccupancy, ProviderVaultListing,
 };
@@ -35,39 +33,26 @@ pub enum NookGoogleDriveVaultListing {
     access_token: &str,
     local_vault: &tsify::Ts<LocalVaultOccupancy>,
 ) -> Result<tsify::Ts<NookGoogleDriveVaultListing>, JsError> {
-    let local_vault = local_vault
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
-    let listing = match DriveStorageClient::new(access_token)
+    let local_vault = local_vault.decode()?;
+    let token = DriveStorageClient::access_token(access_token)?;
+    let listing = match DriveStorageClient::new(&token)
         .find_vault_folder()
         .await?
     {
         DriveVaultFolderSelection::Create => NookGoogleDriveVaultListing::Absent,
         DriveVaultFolderSelection::Existing(folder_id) => {
             let root = DriveEventParent::shared_folder_id(folder_id.as_str());
-            let drive = DriveVaultListing {
-                token: access_token,
-                root: &root,
-            };
-            let held = BrowserHeldVaults::load().await?;
-            // The vault folders and the identity logs are read side by side.
-            let (observations, identity_logs) = try_join(
-                drive.observations(),
-                drive.identity_logs(held.listing_key.as_ref()),
-            )
-            .await?;
-            let inspected = drive
-                .inspect_vaults(&held.unheld(&observations), held.app_id.as_ref())
-                .await?;
             NookGoogleDriveVaultListing::Found {
-                listing: LocalVaultClassification {
-                    local_vault: &local_vault,
+                listing: DriveVaultListing {
+                    token: &token,
+                    root,
                 }
-                .listing(observations, &held, &inspected, &identity_logs),
+                .listing(&local_vault)
+                .await?,
             }
         }
     };
-    Tsify::into_ts(&listing).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    Ok(listing.encode()?)
 }
 
 /// The fixed name of every provider account's Nook root.
@@ -99,6 +84,7 @@ mod tests {
         let found = serde_json::to_value(NookGoogleDriveVaultListing::Found {
             listing: ProviderVaultListing {
                 vaults: Vec::new(),
+                identities: Vec::new(),
                 replacement: nook_core::EmptyVaultReplacement::Unavailable,
             },
         })?;
@@ -106,7 +92,11 @@ mod tests {
             found,
             serde_json::json!({
                 "root": "found",
-                "listing": { "vaults": [], "replacement": { "state": "unavailable" } },
+                "listing": {
+                    "vaults": [],
+                    "identities": [],
+                    "replacement": { "state": "unavailable" },
+                },
             })
         );
         Ok(())

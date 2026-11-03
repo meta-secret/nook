@@ -21,6 +21,8 @@ import {
   parseExtensionSessionRequest,
   sessionMessageWireFixture,
 } from './session-message-dispatch-test-support'
+import { ProviderRowFixture } from './provider-row-fixture'
+import type { BrowserRuntimeMessageValue } from '../src/lib/browser-runtime-message'
 
 describe('ExtensionSessionMessageDispatcher control ingress', () => {
   test('routes grant authority through runtime ingress and the owned queue', async () => {
@@ -186,7 +188,7 @@ describe('ExtensionSessionMessageDispatcher control ingress', () => {
       type: ExtensionSessionMessageType.ImportVault,
       payload: {
         ...grant,
-        providers: [{ githubPat: 'secret' }],
+        providers: [{ provider: { type: 'github' } }],
         eventLogRecords: [],
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
@@ -236,21 +238,9 @@ describe('ExtensionSessionMessageDispatcher control ingress', () => {
     expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
   })
   test('validates a credential-safe provider identity without discarding metadata', async () => {
-    const provider = {
-      id: 'github',
-      type: 'github',
-      label: 'Personal GitHub',
-      githubPat: {
-        state: 'token',
-        value: '-----BEGIN AGE ENCRYPTED FILE-----\nfixture',
-      },
-      githubRepo: { state: 'defaultRepository' },
-      oauthFile: { state: 'notApplicable' },
-      localFolder: { state: 'notApplicable' },
-      storeId: { state: 'unscoped' },
-      syncCheckpoint: { state: 'neverSynced' },
-      createdAt: '2026-08-10T00:00:00Z',
-    }
+    const provider: BrowserRuntimeMessageValue = ProviderRowFixture.github(
+      ProviderRowFixture.SEALED,
+    )
     const message = {
       type: ExtensionSessionMessageType.ImportVault,
       payload: {
@@ -269,14 +259,10 @@ describe('ExtensionSessionMessageDispatcher control ingress', () => {
     if (parse.request.type !== ExtensionSessionMessageType.ImportVault) {
       throw new Error('expected a parsed vault import')
     }
-    const stagedProvider = parse.request.payload.providers[0]
-    if (!stagedProvider) throw new Error('expected a staged provider')
-    expect(stagedProvider.label).toBe('Personal GitHub')
-    expect(stagedProvider.githubPat).toEqual({
-      state: 'token',
-      value: '-----BEGIN AGE ENCRYPTED FILE-----\nfixture',
-    })
-    expect(provider).toHaveProperty('githubPat.state', 'missing')
+    expect(parse.request.payload.providers).toEqual([
+      ProviderRowFixture.github(ProviderRowFixture.SEALED),
+    ])
+    expect(provider).toEqual({})
   })
   test('stages sensitive fields and clears the caller-owned payload', async () => {
     const payload = {

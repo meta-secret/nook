@@ -3,9 +3,11 @@
 
 use super::NookVaultManager;
 use crate::NookError;
+use crate::TypedInput;
 use crate::{NookSecretPage, NookSecretRecord, NookSecretTypeFilter, NookTotpCode};
 use nook_core::{
-    SecretId, SecretValue, StorageMode, StoredRecordPayload, SymmetricKey, VaultOperation,
+    SecretId, SecretValue, StorageConnection, StorageMode, StoredRecordPayload, SymmetricKey,
+    VaultOperation,
 };
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -344,16 +346,15 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn merge_remote_joins_from_provider(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<crate::NookStorageConnection>,
     ) -> Result<Vec<crate::NookJoinRequest>, JsError> {
-        let restore_local = self.storage.mode == StorageMode::Local;
-        self.prepare_storage_preserving_vault_metadata(&storage_mode, &github_pat, &github_repo)
+        let connection = connection.decode()?;
+        let restore_local = self.storage.mode() == StorageMode::Local;
+        self.prepare_storage_preserving_vault_metadata(&connection)
             .await?;
         self.sync_events_from_current_provider().await?;
         if restore_local {
-            self.prepare_storage_preserving_vault_metadata("local", "", "")
+            self.prepare_storage_preserving_vault_metadata(&StorageConnection::Local)
                 .await?;
         }
         Ok(self.pending_joins()?)
@@ -362,18 +363,13 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn flush_event_outbox_for_provider(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<crate::NookStorageConnection>,
     ) -> Result<(), JsError> {
-        let restore_local = self.storage.mode == StorageMode::Local;
+        let connection = connection.decode()?;
+        let restore_local = self.storage.mode() == StorageMode::Local;
         let flush_result = async {
-            self.prepare_storage_preserving_vault_metadata(
-                &storage_mode,
-                &github_pat,
-                &github_repo,
-            )
-            .await?;
+            self.prepare_storage_preserving_vault_metadata(&connection)
+                .await?;
             self.flush_event_outbox().await
         }
         .await;
@@ -384,11 +380,10 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn sync_event_log_for_provider(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<crate::NookStorageConnection>,
     ) -> Result<(), JsError> {
-        self.prepare_storage_preserving_vault_metadata(&storage_mode, &github_pat, &github_repo)
+        let connection = connection.decode()?;
+        self.prepare_storage_preserving_vault_metadata(&connection)
             .await?;
         self.sync_events_from_current_provider().await?;
         self.flush_event_outbox().await?;
@@ -409,19 +404,13 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn sync_local_folder_provider_row_js(
         &mut self,
-        provider: &tsify::Ts<nook_core::StorageProviderData>,
+        provider: &tsify::Ts<nook_core::StorageProvider>,
     ) -> Result<String, JsError> {
-        let provider = provider
-            .to_rust()
-            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-        let nook_core::StoredLocalFolderConfiguration::Configured(config) = &provider.local_folder
-        else {
-            return Err(JsError::new("Local folder provider has no folder."));
+        let provider = provider.decode()?;
+        let nook_core::StoredProvider::LocalFolder(folder) = &provider.provider else {
+            return Err(JsError::new("The provider is not a local folder."));
         };
-        let nook_core::StoredLocalFolderHandle::HandleId(handle_id) = &config.handle_id else {
-            return Err(JsError::new("Local folder provider has no folder."));
-        };
-        self.sync_local_folder_provider(handle_id)
+        self.sync_local_folder_provider(folder.handle_id.as_str())
             .await
             .map_err(Into::into)
     }
@@ -497,7 +486,7 @@ impl NookVaultManager {
     ) -> Result<(), JsError> {
         let flush_result = flush_result.map_err(|error| JsError::new(&error.to_string()));
         let restore_result = if restore_local {
-            self.prepare_storage_preserving_vault_metadata("local", "", "")
+            self.prepare_storage_preserving_vault_metadata(&StorageConnection::Local)
                 .await
                 .map_err(|error| JsError::new(&error.to_string()))
         } else {
@@ -907,14 +896,17 @@ mod projection_tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod outbox_browser_tests {
     use super::*;
+    use crate::manager::PreparedProvider;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    async fn flush_event_outbox_propagates_github_403_and_restores_local_storage() {
+    async fn flush_event_outbox_propagates_github_403_and_restores_local_storage()
+    -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
-        manager.storage.mode = StorageMode::Github;
+        manager.storage.provider =
+            PreparedProvider::github_fixture("TEST-ONLY-token", "owner/repo")?;
         let forbidden = crate::GitHubStorageClient::github_api_failure(
             reqwest::StatusCode::FORBIDDEN,
             "GitHub event write failed with status 403 Forbidden".to_owned(),
@@ -929,6 +921,7 @@ mod outbox_browser_tests {
             .await;
 
         assert!(result.is_err());
-        assert_eq!(manager.storage.mode, StorageMode::Local);
+        assert_eq!(manager.storage.mode(), StorageMode::Local);
+        Ok(())
     }
 }

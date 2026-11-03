@@ -1,7 +1,6 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
-    Cloud,
     HardDrive,
     RefreshCw,
     ShieldCheck,
@@ -9,14 +8,11 @@
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import { NookVaultLastSyncState, type NookVaultLastSync } from '$app-wasm'
-  import type { StorageProviderType } from '$lib/auth/providers'
   import { SyncProviderLabelKind, type VaultState } from '$lib/vault.svelte'
   import { VaultStatusBarVariant } from './vault-status-bar-state'
 
   let {
     vault,
-    storageMode = 'local' as StorageProviderType,
-    githubRepo = '',
     lastSync,
     isSyncing = false,
     successMsg = '',
@@ -33,8 +29,6 @@
     onDismissError,
   }: {
     vault?: VaultState
-    storageMode?: StorageProviderType
-    githubRepo?: string
     lastSync: NookVaultLastSync
     isSyncing?: boolean
     successMsg?: string
@@ -114,19 +108,9 @@
           ? vault
             ? vault.t(I18N_KEYS.StatusBarLocalVault)
             : label || 'Nook'
-          : storageMode === 'github'
-            ? githubRepo.trim() || 'GitHub'
-            : storageMode === 'oauth-file'
-              ? vault
-                ? vault.t(I18N_KEYS.ProviderPickerGoogleDrive)
-                : 'Google Drive'
-              : storageMode === 'local-folder'
-                ? vault
-                  ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
-                  : 'Local backup'
-                : vault
-                  ? vault.t(I18N_KEYS.ProviderPickerThisDevice)
-                  : 'This device',
+          : vault
+            ? vault.t(I18N_KEYS.ProviderPickerThisDevice)
+            : 'This device',
       ]
     ) => v)(label),
   )
@@ -163,10 +147,7 @@
 
   const showRefresh = $derived(
     Boolean(
-      onRefresh &&
-      (isAuthenticatedVault ||
-        storageMode === 'github' ||
-        storageMode === 'local-folder'),
+      onRefresh && isAuthenticatedVault,
     ),
   )
 </script>
@@ -190,22 +171,6 @@
               class="size-3.5 shrink-0 text-primary/80"
               aria-hidden="true"
             />
-          {:else if storageMode === 'github'}
-            <Cloud
-              class="size-3.5 shrink-0 text-primary/80"
-              aria-hidden="true"
-            />
-          {:else if storageMode === 'oauth-file'}
-            <svg
-              class="size-3.5 shrink-0 text-primary/80"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                fill="currentColor"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-              />
-            </svg>
           {:else}
             <HardDrive
               class="size-3.5 shrink-0 text-primary/80"
@@ -257,13 +222,7 @@
             class="shrink-0 text-muted-foreground"
             data-testid="vault-last-sync"
           >
-            {storageMode === 'github'
-              ? vault
-                ? vault.t(I18N_KEYS.StatusBarSynced)
-                : 'Synced'
-              : vault
-                ? vault.t(I18N_KEYS.StatusBarSaved)
-                : 'Saved'}
+            {vault ? vault.t(I18N_KEYS.StatusBarSaved) : 'Saved'}
             {formatLastSync(lastSync)}
           </span>
         {/if}
@@ -282,13 +241,9 @@
               ? vault
                 ? vault.t(I18N_KEYS.StatusBarSyncAllAria)
                 : 'Synchronize vault'
-              : storageMode === 'github'
-                ? vault
-                  ? vault.t(I18N_KEYS.StatusBarSyncAriaGithub)
-                  : 'Sync vault with GitHub'
-                : vault
-                  ? vault.t(I18N_KEYS.StatusBarRefreshAriaLocal)
-                  : 'Refresh vault from browser storage'}
+              : vault
+                ? vault.t(I18N_KEYS.StatusBarRefreshAriaLocal)
+                : 'Refresh vault from browser storage'}
             onclick={() => void onRefresh?.()}
           >
             <RefreshCw class="size-3.5 {isSyncing ? 'animate-spin' : ''}" />
@@ -297,13 +252,9 @@
                 ? vault
                   ? vault.t(I18N_KEYS.StatusBarSyncAll)
                   : 'Sync'
-                : storageMode === 'github'
-                  ? vault
-                    ? vault.t(I18N_KEYS.StatusBarSync)
-                    : 'Sync'
-                  : vault
-                    ? vault.t(I18N_KEYS.StatusBarRefresh)
-                    : 'Refresh'}</span
+                : vault
+                  ? vault.t(I18N_KEYS.StatusBarRefresh)
+                  : 'Refresh'}</span
             >
           </Button>
           <div
@@ -314,13 +265,9 @@
               ? vault
                 ? vault.t(I18N_KEYS.StatusBarSyncAllTooltip)
                 : 'Synchronize vault'
-              : storageMode === 'github'
-                ? vault
-                  ? vault.t(I18N_KEYS.StatusBarSyncTooltipGithub)
-                  : 'Synchronize latest changes with your storage provider'
-                : vault
-                  ? vault.t(I18N_KEYS.StatusBarRefreshTooltipLocal)
-                  : 'Reload latest changes from browser storage'}
+              : vault
+                ? vault.t(I18N_KEYS.StatusBarRefreshTooltipLocal)
+                : 'Reload latest changes from browser storage'}
           </div>
         </div>
       {/if}

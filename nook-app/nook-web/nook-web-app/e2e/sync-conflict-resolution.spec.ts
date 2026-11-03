@@ -9,16 +9,10 @@ import {
   UI_TIMEOUT_MS,
   waitForLoadedSyncProviders,
   openIdentitiesPage,
+  e2eAccount,
+  storeIdOfVaultYaml,
 } from './helpers'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
-
-function parseStoreId(yaml: string): string {
-  const storeId = yaml.match(/^store_id:\s*(\S+)/m)?.[1]
-  if (!storeId) {
-    throw new Error('store_id missing from vault yaml')
-  }
-  return storeId
-}
 
 async function runFanOutSync(page: Page) {
   await page.evaluate(async () => {
@@ -140,7 +134,7 @@ test.describe('sync conflict resolution', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    const storeA = parseStoreId(await readLocalVaultYamlFromIdb(page))
+    const storeA = storeIdOfVaultYaml(await readLocalVaultYamlFromIdb(page))
 
     await seedOauthFileSyncProvidersWhileUnlocked(
       page,
@@ -150,7 +144,7 @@ test.describe('sync conflict resolution', () => {
           label: 'Shared File A',
           fileName,
           accessToken: 'ya29.e2e_file_sync_token',
-          accountEmail: 'shared-a@example.test',
+          account: e2eAccount('shared-a@example.test'),
         },
       ],
       stub,
@@ -191,7 +185,7 @@ test.describe('sync conflict resolution', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await disableVaultIdleLock(page)
-    const storeB = parseStoreId(await readLocalVaultYamlFromIdb(page))
+    const storeB = storeIdOfVaultYaml(await readLocalVaultYamlFromIdb(page))
     expect(storeB).not.toEqual(storeA)
 
     // The provider mounts the identity: the new vault gets its own folder

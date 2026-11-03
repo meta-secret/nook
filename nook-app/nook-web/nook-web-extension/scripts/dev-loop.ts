@@ -1,12 +1,14 @@
 // Host-native local loop for the extension and the localhost vault it pairs with.
 // Builds dev WASM, serves the unified web app at https://localhost:5173 through Vite,
-// builds the extension for that origin, opens Brave with it unpacked, then rebuilds and
-// reloads the extension whenever Rust or web sources change. Vite owns web-app reloads.
+// runs the local S3 server on http://127.0.0.1:8333, builds the extension for that
+// origin, opens Brave with it unpacked, then rebuilds and reloads the extension
+// whenever Rust or web sources change. Vite owns web-app reloads.
 import { watch } from 'node:fs'
 import { mkdir, readFile, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, relative, resolve, sep } from 'node:path'
 import type { Subprocess } from 'bun'
+import { extensionIdFromManifestKey } from './channel-identity'
 
 const extensionRoot = resolve(import.meta.dir, '..')
 const webGroupRoot = resolve(extensionRoot, '..')
@@ -109,15 +111,12 @@ const startVite = (): Subprocess =>
     },
   )
 
-// Chromium derives an unpacked extension's ID from the manifest key.
-const extensionIdFromManifestKey = (manifestKey: string): string => {
-  const digest = new Bun.CryptoHasher('sha256')
-    .update(Buffer.from(manifestKey, 'base64'))
-    .digest('hex')
-  return [...digest.slice(0, 32)]
-    .map((nibble) => String.fromCharCode(97 + Number.parseInt(nibble, 16)))
-    .join('')
-}
+// Like Vite, the local S3 server holds a fixed port; weed reports a conflict.
+const startLocalS3 = (): Subprocess =>
+  Bun.spawn(['bun', 'scripts/local-s3.ts'], {
+    stdout: 'inherit',
+    stderr: 'inherit',
+  })
 
 enum JsonFieldKind {
   Missing = 'missing',
@@ -475,18 +474,27 @@ const watchSources = (): void => {
 }
 
 const vite = startVite()
-const shutdown = (): never => {
+const localS3 = startLocalS3()
+// The local S3 server finishes its own shutdown before the loop exits, so its
+// ports are free for the next run.
+const stopServers = async (): Promise<void> => {
   vite.kill()
+  localS3.kill()
+  await localS3.exited
+}
+const shutdown = async (): Promise<never> => {
+  log('Stopping Vite and the local S3 server…')
+  await stopServers()
   log(
     'Stopped. The browser stays open; rerun `task extension:dev` to reattach.',
   )
   process.exit(0)
 }
-process.on('SIGINT', shutdown)
-process.on('SIGTERM', shutdown)
+process.on('SIGINT', () => void shutdown())
+process.on('SIGTERM', () => void shutdown())
 
 if (!((await buildWasm()) && (await buildExtension()))) {
-  vite.kill()
+  await stopServers()
   process.exit(1)
 }
 await launchBrowser()
@@ -499,7 +507,7 @@ if (process.stdin.isTTY) {
   process.stdin.setRawMode(true)
   process.stdin.on('data', (data: Buffer) => {
     const key = data.toString()
-    if (key === 'q' || key === '\u0003') shutdown()
+    if (key === 'q' || key === '\u0003') void shutdown()
     if (key === 'r') schedule({ rust: true })
     if (key === 'e') schedule({ extension: true })
   })

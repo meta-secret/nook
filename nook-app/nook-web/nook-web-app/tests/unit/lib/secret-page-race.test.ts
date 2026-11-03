@@ -64,7 +64,6 @@ describe('loadSecretPage', () => {
       .mockResolvedValue(emptyPage)
     const state = VaultStateTestFixture.createFrom(SecretPageTestState)
     state.openManager(manager)
-    state.storageMode = 'local'
     state.isAuthenticated = true
     state.secretPageSize = 25
 

@@ -337,6 +337,7 @@ describe('extension pairing approved message', () => {
               githubRepo: { state: 'defaultRepository' },
               oauthFile: { state: 'notApplicable' },
               localFolder: { state: 'notApplicable' },
+              s3: { state: 'notApplicable' },
               storeId: { state: 'unscoped' },
               syncCheckpoint: { state: 'neverSynced' },
               createdAt: '2026-07-07T00:00:00.000Z',

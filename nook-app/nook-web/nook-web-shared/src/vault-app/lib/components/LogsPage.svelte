@@ -6,6 +6,10 @@
   import type { VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
   import {
+    ChoiceChips,
+    type ChoiceChip,
+  } from '$lib/components/ui/choice-chips'
+  import {
     Card,
     CardContent,
     CardDescription,
@@ -26,6 +30,9 @@
   ]
   const PAGE_SIZE = 100
 
+  const levelChoices: readonly ChoiceChip[] = LEVELS.map(
+    (level): ChoiceChip => ({ value: level, label: level }),
+  )
   let minLevel = $state<LogLevel>(LogLevel.Trace)
   let captureLevel = $state<LogLevel>(LogLevel.Info)
   let entries = $state<LogEntry[]>([])
@@ -161,33 +168,29 @@
       </div>
 
       <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
-        <label class="flex items-center gap-1.5 text-muted-foreground">
-          Show
-          <select
-            class="rounded-md border border-border/60 bg-background px-2 py-1 text-foreground"
-            data-testid="logs-level-filter"
+        <div class="flex basis-full flex-wrap items-center gap-2">
+          <span class="w-14 text-muted-foreground">Show</span>
+          <ChoiceChips
+            label="Show"
+            choices={levelChoices}
             value={minLevel}
-            onchange={(event) => changeMinLevel(event.currentTarget.value)}
-          >
-            {#each LEVELS as level (level)}
-              <option value={level}>{level} and above</option>
-            {/each}
-          </select>
-        </label>
+            disabled={false}
+            testid="logs-level-filter"
+            onpick={changeMinLevel}
+          />
+        </div>
 
-        <label class="flex items-center gap-1.5 text-muted-foreground">
-          Capture
-          <select
-            class="rounded-md border border-border/60 bg-background px-2 py-1 text-foreground"
-            data-testid="logs-capture-level"
+        <div class="flex basis-full flex-wrap items-center gap-2">
+          <span class="w-14 text-muted-foreground">Capture</span>
+          <ChoiceChips
+            label="Capture"
+            choices={levelChoices}
             value={captureLevel}
-            onchange={(event) => changeCaptureLevel(event.currentTarget.value)}
-          >
-            {#each LEVELS as level (level)}
-              <option value={level}>{level}</option>
-            {/each}
-          </select>
-        </label>
+            disabled={false}
+            testid="logs-capture-level"
+            onpick={changeCaptureLevel}
+          />
+        </div>
 
         <Button
           type="button"

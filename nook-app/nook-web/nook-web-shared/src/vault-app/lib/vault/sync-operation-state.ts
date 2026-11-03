@@ -1,4 +1,4 @@
-import type { NookStorageConnectArgs } from "$app-wasm";
+import type { NookStorageConnection } from "$app-wasm";
 import type { StorageProvider } from "$lib/auth/providers";
 
 export enum EventOutboxTargetKind {
@@ -15,7 +15,7 @@ export type EventOutboxTarget =
     }
   | {
       kind: EventOutboxTargetKind.Remote;
-      args: NookStorageConnectArgs;
+      args: NookStorageConnection;
     };
 
 export enum EventOutboxRequestKind {
@@ -46,7 +46,7 @@ export type ConflictProviderSave =
 export class ProviderEventOutbox {
   constructor(private readonly provider: StorageProvider) {}
   request(): EventOutboxRequest {
-    return this.provider.type === "local-folder"
+    return this.provider.provider.type === "local-folder"
       ? { kind: EventOutboxRequestKind.LocalFolder, provider: this.provider }
       : { kind: EventOutboxRequestKind.Remote, provider: this.provider };
   }

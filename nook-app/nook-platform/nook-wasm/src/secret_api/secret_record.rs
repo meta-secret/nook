@@ -1,4 +1,5 @@
 use super::{NookError, wasm_bindgen};
+use crate::TypedOutput;
 use nook_core::{SecretValue, TotpDigits};
 use zeroize::Zeroizing;
 
@@ -332,8 +333,7 @@ impl NookSecretRecord {
         let view = Zeroizing::new(
             nook_core::PersonalDataView::from_value(&self.record.data).map_err(NookError::from)?,
         );
-        tsify::Ts::from_rust(&*view)
-            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+        Ok(view.encode()?)
     }
 
     #[wasm_bindgen(getter, js_name = backupCodes)]

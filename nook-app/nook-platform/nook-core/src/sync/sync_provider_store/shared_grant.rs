@@ -1,15 +1,15 @@
 //! Full provider selection avoids a second host lookup after Rust grants eligibility.
-use super::{AuthProvidersSnapshotData, SharedGrantProviderSelection, StorageProviderData};
-use crate::OAuthFilePreset;
+use crate::{
+    AuthProvidersSnapshot, OAuthFilePreset, SharedGrantProviderSelection, StorageProvider,
+};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 /// A shared target a saved provider credential may reach: any target of the
 /// preset, or one exact Drive folder or `CloudKit` share.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "storageTargetId", rename_all = "camelCase")]
 pub enum SharedStorageTargetSelection {
-    #[default]
     Create,
     Existing(String),
 }
@@ -17,15 +17,15 @@ pub enum SharedStorageTargetSelection {
 #[derive(Debug, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct SharedGrantProviderRequest {
-    pub snapshot: AuthProvidersSnapshotData,
+    pub snapshot: AuthProvidersSnapshot,
     pub preset: OAuthFilePreset,
     pub target: SharedStorageTargetSelection,
 }
-#[derive(Debug, Serialize, Deserialize, Tsify)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum SharedGrantProviderOutcome {
     AuthorizationRequired,
-    Existing { provider: Box<StorageProviderData> },
+    Existing { provider: Box<StorageProvider> },
 }
 impl SharedGrantProviderRequest {
     #[must_use]
@@ -44,7 +44,7 @@ mod tests {
     #[test]
     fn empty_catalog_requires_authorization_without_fake_selected_identifier() {
         let request = SharedGrantProviderRequest {
-            snapshot: AuthProvidersSnapshotData::default(),
+            snapshot: AuthProvidersSnapshot::default(),
             preset: OAuthFilePreset::GoogleDrive,
             target: SharedStorageTargetSelection::Create,
         };
@@ -58,21 +58,12 @@ mod tests {
 #[cfg(test)]
 mod selection_tests {
     use super::*;
-    use crate::{
-        OAuthFileConfigData, StorageProviderType, StoredOAuthAccessCredential,
-        StoredOAuthFileConfiguration,
-    };
+    use crate::StoredProvider;
     #[test]
     fn returns_the_exact_selected_row_with_credentials_and_scope() -> anyhow::Result<()> {
-        let mut row = StorageProviderData::github("selected", "Shared provider", "", "", "now");
-        row.provider_type = StorageProviderType::OauthFile;
-        row.oauth_file = StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
-            preset: OAuthFilePreset::GoogleDrive,
-            access_token: StoredOAuthAccessCredential::AccessToken("credential".into()),
-            ..Default::default()
-        });
+        let row = StorageProvider::fixture("selected", StoredProvider::google_drive_fixture()?);
         let outcome = SharedGrantProviderRequest {
-            snapshot: AuthProvidersSnapshotData {
+            snapshot: AuthProvidersSnapshot {
                 providers: vec![row.clone()],
                 ..Default::default()
             },

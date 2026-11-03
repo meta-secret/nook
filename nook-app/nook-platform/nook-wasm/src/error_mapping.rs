@@ -42,6 +42,7 @@ impl From<nook_core::EventError> for NookError {
 }
 
 impl From<nook_core::ValidationError> for NookError {
+    #[allow(clippy::too_many_lines)]
     fn from(err: nook_core::ValidationError) -> Self {
         use nook_core::ValidationError;
         match err {
@@ -65,6 +66,24 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::AuthorizedAccountOwner
             | ValidationError::GoogleDriveVaultFolderAmbiguous
             | ValidationError::JoinerAccountMismatch
+            | ValidationError::S3EndpointRequired
+            | ValidationError::S3EndpointInvalid
+            | ValidationError::S3EndpointInsecure
+            | ValidationError::S3RegionRequired
+            | ValidationError::S3RegionInvalid
+            | ValidationError::S3BucketRequired
+            | ValidationError::S3BucketInvalid
+            | ValidationError::S3KeyPrefixInvalid
+            | ValidationError::S3AccessKeyIdRequired
+            | ValidationError::S3AccessKeyIdDuplicate
+            | ValidationError::S3AccessKeyNotSaved
+            | ValidationError::S3AccessKeyIdInvalid
+            | ValidationError::S3SecretAccessKeyRequired
+            | ValidationError::S3StorageTargetInvalid
+            | ValidationError::ProviderSecretRequired
+            | ValidationError::ProviderCredentialSealed
+            | ValidationError::EnrollmentCredentialMismatch
+            | ValidationError::LocalFolderHandleInvalid
             | ValidationError::UnknownStorageMode { .. }
             | ValidationError::UnknownDeviceMode { .. }
             | ValidationError::UnknownVaultType { .. }

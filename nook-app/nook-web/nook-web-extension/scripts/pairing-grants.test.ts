@@ -10,7 +10,6 @@ import {
 import {
   ExtensionKeyringApprovalAdmission,
   ExtensionPairingApprovedMessageAdmissionFailure,
-  ExtensionStorageProviderPayloadAdmission,
   RuntimeMessageDecodeFailureKind,
 } from '../../nook-web-shared/src/extension/runtime-messages'
 import type { ExtensionEventLogRecord } from '../../nook-web-shared/src/extension/lifecycle-runtime-messages'
@@ -315,38 +314,6 @@ describe('joined keyring storage', () => {
 })
 
 describe('extension pairing grant transport', () => {
-  test('admits only provider identities from richer transport payloads', () => {
-    const complete = {
-      id: 'github',
-      type: 'github',
-      label: 'Personal GitHub',
-      githubPat: { state: 'missing' },
-      githubRepo: { state: 'defaultRepository' },
-      oauthFile: { state: 'notApplicable' },
-      localFolder: { state: 'notApplicable' },
-      storeId: { state: 'unscoped' },
-      syncCheckpoint: { state: 'neverSynced' },
-      createdAt: '2026-08-10T00:00:00Z',
-    }
-
-    expect(
-      new ExtensionStorageProviderPayloadAdmission(complete).parse().isOk(),
-    ).toBe(true)
-    const missingIdentity = Object.fromEntries(
-      Object.entries(complete).filter(([key]) => key !== 'id'),
-    )
-    expect(
-      new ExtensionStorageProviderPayloadAdmission(missingIdentity)
-        .parse()
-        .isErr(),
-    ).toBe(true)
-    expect(
-      new ExtensionStorageProviderPayloadAdmission({ ...complete, type: 'ftp' })
-        .parse()
-        .isErr(),
-    ).toBe(true)
-  })
-
   test('reports companion runtime startup failure before grant admission', async () => {
     const ingress = new ExtensionPairingIngress(
       Promise.reject(new Error('runtime unavailable')),

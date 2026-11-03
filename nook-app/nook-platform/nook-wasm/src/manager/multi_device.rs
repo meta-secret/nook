@@ -10,6 +10,7 @@ use super::verified_access::VerifiedVaultAccessFlow;
 use crate::BrowserTimestamp;
 use crate::LoadedVaultUnlockRequest;
 use crate::NookError;
+use crate::TypedInput;
 use crate::conversion::LoadedVault;
 use crate::{NookJoinRequest, NookVaultMember};
 use nook_core::{
@@ -56,13 +57,11 @@ impl NookVaultManager {
     /// Device B requests access without decrypting the vault (writes join record only).
     pub async fn request_vault_access(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<crate::NookStorageConnection>,
         _requested_at: String,
     ) -> Result<(), JsError> {
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
-            .await?;
+        let connection = connection.decode()?;
+        self.prepare_storage(&connection).await?;
         let identity = self.ensure_device_identity()?;
         let mut vault_missing = false;
         let content = self.fetch_vault_content(&mut vault_missing).await?;
@@ -100,7 +99,7 @@ impl NookVaultManager {
             label: MemberLabel::from_trusted(String::new()),
         }])
         .await?;
-        if self.storage.mode != StorageMode::Local {
+        if self.storage.mode() != StorageMode::Local {
             self.flush_event_outbox().await?;
         }
         Ok(())
@@ -109,14 +108,12 @@ impl NookVaultManager {
     /// Device B enrolls with out-of-band `secrets_key` and `members_key`, then unlocks the vault.
     pub async fn enroll_and_connect(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<crate::NookStorageConnection>,
         secrets_key: String,
         members_key: String,
     ) -> Result<(), JsError> {
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
-            .await?;
+        let connection = connection.decode()?;
+        self.prepare_storage(&connection).await?;
         let identity = self.ensure_device_identity()?;
         let mut vault_missing = false;
         let content = self.fetch_vault_content(&mut vault_missing).await?;
@@ -615,6 +612,7 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::TypedOutput;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -902,27 +900,17 @@ mod browser_tests {
         let identity = nook_core::DeviceIdentity::generate()?;
         manager.device.id = identity.device_id().to_string();
         manager.device.identity_private_key = identity.secret_string().into_inner();
+        let local = nook_core::StorageConnection::Local.encode()?;
 
         assert!(
             manager
-                .request_vault_access(
-                    "local".to_owned(),
-                    String::new(),
-                    String::new(),
-                    "2026-09-07T00:00:00Z".to_owned(),
-                )
+                .request_vault_access(&local, "2026-09-07T00:00:00Z".to_owned())
                 .await
                 .is_err()
         );
         assert!(
             manager
-                .enroll_and_connect(
-                    "local".to_owned(),
-                    String::new(),
-                    String::new(),
-                    String::new(),
-                    String::new(),
-                )
+                .enroll_and_connect(&local, String::new(), String::new())
                 .await
                 .is_err()
         );

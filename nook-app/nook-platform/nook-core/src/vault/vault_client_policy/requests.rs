@@ -24,13 +24,6 @@ pub struct EditBlockMessageRequest<'a> {
 }
 
 #[derive(Clone, Copy)]
-pub struct ShouldUseJoinProviderForConnectRequest {
-    pub authenticated: crate::VaultAuthenticationState,
-    pub sync_provider_count: crate::VaultSyncProviderCount,
-    pub join_state: crate::JoinEnrollmentState,
-}
-
-#[derive(Clone, Copy)]
 pub struct ShouldAutoUnlockRequest {
     pub session_explicitly_locked: crate::VaultSessionLockIntent,
     pub local_vault_present: crate::LocalVaultPresence,

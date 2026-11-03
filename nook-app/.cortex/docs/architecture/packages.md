@@ -64,6 +64,7 @@ Team owner: development core.
 - **`src/crypto/`:** Vault encryption and key-epoch re-encryption. Canonical event signing lives in `nook-event-log`.
 - **`src/secrets/`:** Secret payload types/views, mnemonic helpers, password generation, and plaintext session mutation helpers.
 - **`src/sync/`:** Storage-provider validation/configuration, credential sealing, provider snapshot decoding, vault reconciliation, and portable sync workflow states.
+- **`src/sync/s3_protocol/`:** The S3 provider protocol without I/O: object keys, SigV4 signing, request building, listing parsing, and answer classification.
 - **`src/vault/`:** In-memory database, vault formats, import/connect, event-session application services, session-cache workflows, typed access states, and portable idle/sync runtime policy. Signed history delegates to `nook-event-log`.
 - **Application services:**
   - `vault_connect`: provider-agnostic connect decisions.
@@ -71,7 +72,7 @@ Team owner: development core.
   - `auth/enrollment`: identity enrollment.
   - `nook-event-log::builder` / `vault_event_session`: mutation and event orchestration.
   - `vault_sync_session` / `vault_sync_store`: sync reconciliation.
-- **Host boundary:** `LocalEventStore` and `MemoryVaultStore` are portable in-memory service inputs. Browser event storage, projection cache, clocks, secure randomness ceremonies, and provider transports remain adapters in `nook-wasm`.
+- **Host boundary:** `LocalEventStore` and `MemoryVaultStore` are portable in-memory service inputs. Browser event storage, projection cache, clocks, secure randomness ceremonies, and provider transports remain adapters in `nook-wasm`. S3 is split at this boundary: `nook-core` owns the protocol, and `nook-wasm` only sends its requests.
 - **Root exports:** `nook-core` keeps established `nook_core::...` type and function paths available and re-exports the event-log domain alongside core-owned application services.
 
 ---
@@ -93,7 +94,7 @@ These crates and their generated consumer bindings are routed through
 ### Bridge: `nook-wasm`
 
 - **`NookVaultManager`:** Manages WASM session state including typed `Database`, vault metadata, `secrets_key`, `members_key`, `VaultCrypto`, device identity, and GitHub SHA.
-- **Storage I/O:** Manages IndexedDB (`rexie`) and GitHub REST API (`reqwest`) network and database calls.
+- **Storage I/O:** Manages IndexedDB (`rexie`) and GitHub REST API (`reqwest`) network and database calls. It also executes the S3 requests that `nook-core` builds.
 - **Device protection:** Persists and migrates wrapped identities, builds WebAuthn PRF option payloads via `1Password/passkey-rs` `passkey-types`, and exposes typed setup/unlock values to the web layer.
 - **Exported methods:** Exposes `connect`, `add_secret`, `approve_join_request`, `enroll_and_connect`, and search query APIs.
 - **No domain logic in WASM:** Validation, crypto, format conversions, and session decisions delegate directly to `nook-core`.

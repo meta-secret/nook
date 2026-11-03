@@ -4,20 +4,15 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
-use crate::{
-    StoredGoogleDriveFolder, StoredLocalFolderDirectory, StoredLocalFolderHandle,
-    StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthRemoteFileId,
-    StoredOAuthRemoteFileName,
-};
 use std::fmt;
 
 use crate::errors::{ValidationError, ValidationResult};
+use nook_app_common::i18n_keys;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 mod provider_configuration;
 pub use provider_configuration::*;
-use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Backend that persists the encrypted vault file.
 ///
@@ -33,15 +28,10 @@ pub enum StorageMode {
     GoogleDrive,
     /// Shared `CloudKit` record zone (authenticated with `CloudKit` web auth token).
     ICloud,
+    /// S3-compatible bucket (each request signed with this device's own key).
+    S3,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ConnectionCredentialValidation {
-    Local,
-    Github(GithubPat),
-    GoogleDrive,
-    ICloud,
-}
 impl StorageMode {
     /// Canonical short tag used at every cross-language boundary (wasm-bindgen
     /// arguments, `IndexedDB` JSON, GitHub PR descriptions, log lines).
@@ -52,51 +42,7 @@ impl StorageMode {
             Self::Github => "github",
             Self::GoogleDrive => "google-drive",
             Self::ICloud => "icloud",
-        }
-    }
-
-    /// Parse a tag string (typically arriving from the JS layer) into the
-    /// enum. Unknown values are rejected at the boundary so no caller has
-    /// to defend against typos downstream.
-    pub fn parse(value: &str) -> Result<Self, ValidationError> {
-        match value {
-            "local" => Ok(Self::Local),
-            "github" => Ok(Self::Github),
-            "google-drive" => Ok(Self::GoogleDrive),
-            "icloud" => Ok(Self::ICloud),
-            other => Err(ValidationError::UnknownStorageMode {
-                mode: other.to_owned(),
-            }),
-        }
-    }
-
-    #[must_use]
-    pub fn cache_ref(self, remote_ref: &str, path: &str) -> String {
-        match self {
-            Self::Local => "local".to_owned(),
-            Self::Github => format!("github:{remote_ref}:{path}"),
-            Self::GoogleDrive => format!("drive:{remote_ref}"),
-            Self::ICloud => format!("icloud:{remote_ref}"),
-        }
-    }
-
-    pub fn validate_connect(
-        self,
-        credential: &str,
-    ) -> Result<ConnectionCredentialValidation, ValidationError> {
-        match self {
-            Self::Github => Ok(ConnectionCredentialValidation::Github(GithubPat::parse(
-                credential,
-            )?)),
-            Self::GoogleDrive => {
-                OauthAccessToken::parse(credential)?;
-                Ok(ConnectionCredentialValidation::GoogleDrive)
-            }
-            Self::ICloud => {
-                OauthAccessToken::parse(credential)?;
-                Ok(ConnectionCredentialValidation::ICloud)
-            }
-            Self::Local => Ok(ConnectionCredentialValidation::Local),
+            Self::S3 => "s3",
         }
     }
 }
@@ -107,84 +53,113 @@ impl fmt::Display for StorageMode {
     }
 }
 
-/// String tags retained for places where a `&'static str` is more
-/// convenient than the enum (test fixtures, JSON keys). New code should
-/// prefer `StorageMode::Local.as_str()` / `StorageMode::Github.as_str()`.
-pub const STORAGE_MODE_LOCAL: &str = StorageMode::Local.as_str();
-pub const STORAGE_MODE_GITHUB: &str = StorageMode::Github.as_str();
 pub const DEFAULT_GITHUB_REPO_NAME: &str = "nook";
-pub const DEFAULT_DRIVE_BACKUP_NAME: &str = "nook-events";
 
-/// Separator between optional known Drive file id and vault file name in the
-/// wasm connect `github_repo` argument for `google-drive` mode.
-pub const DRIVE_STORAGE_REF_SEP: char = '\t';
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "kebab-case")]
-pub enum StorageProviderType {
-    #[default]
+/// Which provider a row, a draft, or the picker's choice is. It is derived
+/// from a row or a draft and never stored beside one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
+#[serde(
+    tag = "type",
+    content = "preset",
+    rename_all = "kebab-case",
+    deny_unknown_fields
+)]
+pub enum ProviderKind {
     Local,
     LocalFolder,
     Github,
-    OauthFile,
+    OauthFile(OAuthFilePreset),
+    /// S3-compatible storage: endpoint, region, bucket, key prefix, and this
+    /// device's own access key.
+    S3,
 }
 
-impl StorageProviderType {
+impl ProviderKind {
     #[must_use]
-    pub const fn as_str(self) -> &'static str {
+    pub const fn storage_mode(self) -> StorageMode {
+        match self {
+            Self::Local | Self::LocalFolder => StorageMode::Local,
+            Self::Github => StorageMode::Github,
+            Self::OauthFile(OAuthFilePreset::GoogleDrive) => StorageMode::GoogleDrive,
+            Self::OauthFile(OAuthFilePreset::ICloud) => StorageMode::ICloud,
+            Self::S3 => StorageMode::S3,
+        }
+    }
+
+    /// The name logs and the replication error use.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Local => "local",
             Self::LocalFolder => "local-folder",
             Self::Github => "github",
-            Self::OauthFile => "oauth-file",
+            Self::OauthFile(preset) => preset.as_str(),
+            Self::S3 => "s3",
         }
     }
 
-    pub fn parse(value: &str) -> Result<Self, ValidationError> {
-        match value {
-            "local" => Ok(Self::Local),
-            "local-folder" => Ok(Self::LocalFolder),
-            "github" => Ok(Self::Github),
-            "oauth-file" => Ok(Self::OauthFile),
-            other => Err(ValidationError::UnknownStorageMode {
-                mode: other.to_owned(),
-            }),
-        }
-    }
-
+    /// The toast a successful connect shows. Both OAuth presets keep the
+    /// Google Drive wording they show today.
     #[must_use]
-    pub const fn readiness(
-        self,
-        oauth_file_configured: bool,
-        local_folder_configured: bool,
-    ) -> ExistingVaultProviderReadiness {
-        if matches!(self, Self::OauthFile) && !oauth_file_configured {
-            ExistingVaultProviderReadiness::MissingOauthFile
-        } else if matches!(self, Self::LocalFolder) && !local_folder_configured {
-            ExistingVaultProviderReadiness::MissingLocalFolder
-        } else {
-            ExistingVaultProviderReadiness::Ready
+    pub const fn connected_toast_key(self) -> &'static str {
+        match self {
+            Self::Local => i18n_keys::TOASTS_LOCAL_LOADED,
+            Self::LocalFolder => i18n_keys::TOASTS_LOCAL_FOLDER_CONNECTED,
+            Self::Github => i18n_keys::TOASTS_GITHUB_CONNECTED,
+            Self::OauthFile(_) => i18n_keys::TOASTS_GOOGLE_DRIVE_CONNECTED,
+            Self::S3 => i18n_keys::TOASTS_S3_CONNECTED,
+        }
+    }
+
+    /// The name a setup heading gives this provider; this browser's own
+    /// store takes the host's words for it.
+    #[must_use]
+    pub const fn setup_name_key(self, this_browser: &str) -> &str {
+        match self {
+            Self::Local => this_browser,
+            Self::LocalFolder => i18n_keys::PROVIDER_PICKER_LOCAL_FOLDER,
+            Self::Github => i18n_keys::AUTH_STORAGE_GITHUB,
+            Self::OauthFile(OAuthFilePreset::GoogleDrive) => {
+                i18n_keys::PROVIDER_PICKER_GOOGLE_DRIVE
+            }
+            Self::OauthFile(OAuthFilePreset::ICloud) => i18n_keys::PROVIDER_PICKER_ICLOUD,
+            Self::S3 => i18n_keys::PROVIDER_PICKER_S3,
         }
     }
 }
 
+/// The provider a setup heading names and the host's words for keeping the
+/// vault in this browser only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProviderSetupNameRequest {
+    pub kind: ProviderKind,
+    pub this_browser_key: String,
+}
+
+impl ProviderSetupNameRequest {
+    #[must_use]
+    pub fn translation_key(&self) -> &str {
+        self.kind.setup_name_key(&self.this_browser_key)
+    }
+}
+
+/// Whether a draft can enter the existing-vault import. Only a local folder
+/// is gathered by a browser step the import cannot run without; every other
+/// draft is validated when its connection is projected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExistingVaultProviderReadiness {
     Ready,
-    MissingOauthFile,
     MissingLocalFolder,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
 pub enum OAuthFilePreset {
-    #[default]
     GoogleDrive,
     #[serde(rename = "icloud")]
     ICloud,
 }
-
-pub type OauthFilePreset = OAuthFilePreset;
 
 /// Which `CloudKit` database exposes a shared record hierarchy to this account.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
@@ -259,6 +234,36 @@ impl ICloudSharedTarget {
     }
 }
 
+/// The storage id of one `CloudKit` share, `icloud-share-v1:{target}`, as a row,
+/// a draft, and a connection hold it. It reads back only when it names a
+/// complete [`ICloudSharedTarget`].
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
+#[serde(try_from = "String")]
+#[tsify(type = "string")]
+pub struct ICloudShareTargetId(String);
+
+impl ICloudShareTargetId {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        let Self(id) = self;
+        id
+    }
+
+    /// The share and zone the id names.
+    pub fn target(&self) -> ValidationResult<ICloudSharedTarget> {
+        ICloudSharedTarget::from_storage_id(self.as_str())
+    }
+}
+
+/// Kept trimmed, as the share was created or accepted.
+impl TryFrom<String> for ICloudShareTargetId {
+    type Error = ValidationError;
+    fn try_from(id: String) -> ValidationResult<Self> {
+        ICloudSharedTarget::from_storage_id(&id)?;
+        Ok(Self(id.trim().to_owned()))
+    }
+}
+
 impl OAuthFilePreset {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -267,60 +272,6 @@ impl OAuthFilePreset {
             Self::ICloud => "icloud",
         }
     }
-
-    pub fn parse(value: &str) -> Result<Self, ValidationError> {
-        match value {
-            "" | "google-drive" => Ok(Self::GoogleDrive),
-            "icloud" => Ok(Self::ICloud),
-            other => Err(ValidationError::UnknownStorageMode {
-                mode: other.to_owned(),
-            }),
-        }
-    }
-}
-
-/// Configured GitHub sync target identity.
-///
-/// Missing credentials are not a GitHub target; represent that as
-/// [`SyncProviderTarget::Empty`] instead of optional fields here.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GithubSyncTarget {
-    pub repo: String,
-    pub pat: String,
-}
-
-/// OAuth-file (Google Drive / iCloud) sync target identity inputs.
-///
-/// Independent field states retain every observed target component.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OauthFileSyncTarget {
-    pub preset: OauthFilePreset,
-    pub file_id: StoredOAuthRemoteFileId,
-    pub folder_id: StoredGoogleDriveFolder,
-    pub file_name: StoredOAuthRemoteFileName,
-    pub account_email: StoredOAuthAccountIdentity,
-    pub access_token: StoredOAuthAccessCredential,
-}
-
-/// Browser File System Access sync target identity.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct LocalFolderSyncTarget {
-    pub directory_name: StoredLocalFolderDirectory,
-    pub handle_id: StoredLocalFolderHandle,
-}
-
-/// Storage/sync provider identity, one variant per provider kind.
-///
-/// `Empty` models the absence of a usable provider target. It has no stable
-/// identity and is used when a persisted/browser row has not captured the fields
-/// required to become a configured provider variant.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SyncProviderTarget {
-    Empty,
-    Local,
-    LocalFolder(LocalFolderSyncTarget),
-    Github(GithubSyncTarget),
-    OauthFile(OauthFileSyncTarget),
 }
 
 #[cfg(test)]
@@ -330,161 +281,116 @@ mod tests {
     use super::*;
 
     #[test]
-    fn existing_vault_provider_readiness_requires_provider_configuration() {
-        assert_eq!(
-            StorageProviderType::OauthFile.readiness(false, false),
-            ExistingVaultProviderReadiness::MissingOauthFile
-        );
-        assert_eq!(
-            StorageProviderType::LocalFolder.readiness(false, false),
-            ExistingVaultProviderReadiness::MissingLocalFolder
-        );
-        assert_eq!(
-            StorageProviderType::Github.readiness(false, false),
-            ExistingVaultProviderReadiness::Ready
-        );
-        assert_eq!(
-            StorageProviderType::OauthFile.readiness(true, false),
-            ExistingVaultProviderReadiness::Ready
-        );
-        assert_eq!(
-            StorageProviderType::LocalFolder.readiness(false, true),
-            ExistingVaultProviderReadiness::Ready
-        );
-    }
-
-    #[test]
-    fn validate_connect_github_requires_pat() -> anyhow::Result<()> {
-        assert!(
-            StorageMode::parse(STORAGE_MODE_GITHUB)?
-                .validate_connect("  ")
-                .is_err()
-        );
-        assert_eq!(
-            StorageMode::parse(STORAGE_MODE_GITHUB)?.validate_connect(" ghp_test ")?,
-            ConnectionCredentialValidation::Github(GithubPat::parse("ghp_test")?)
-        );
+    fn a_kind_is_tagged_by_its_type_and_names_its_mode_toast_and_heading() -> anyhow::Result<()> {
+        let drive = ProviderKind::OauthFile(OAuthFilePreset::GoogleDrive);
+        let icloud = ProviderKind::OauthFile(OAuthFilePreset::ICloud);
+        for (kind, wire, mode, label, toast, heading) in [
+            (
+                ProviderKind::Local,
+                serde_json::json!({ "type": "local" }),
+                StorageMode::Local,
+                "local",
+                i18n_keys::TOASTS_LOCAL_LOADED,
+                i18n_keys::AUTH_STORAGE_THIS_DEVICE,
+            ),
+            (
+                ProviderKind::LocalFolder,
+                serde_json::json!({ "type": "local-folder" }),
+                StorageMode::Local,
+                "local-folder",
+                i18n_keys::TOASTS_LOCAL_FOLDER_CONNECTED,
+                i18n_keys::PROVIDER_PICKER_LOCAL_FOLDER,
+            ),
+            (
+                ProviderKind::Github,
+                serde_json::json!({ "type": "github" }),
+                StorageMode::Github,
+                "github",
+                i18n_keys::TOASTS_GITHUB_CONNECTED,
+                i18n_keys::AUTH_STORAGE_GITHUB,
+            ),
+            (
+                drive,
+                serde_json::json!({ "type": "oauth-file", "preset": "google-drive" }),
+                StorageMode::GoogleDrive,
+                "google-drive",
+                i18n_keys::TOASTS_GOOGLE_DRIVE_CONNECTED,
+                i18n_keys::PROVIDER_PICKER_GOOGLE_DRIVE,
+            ),
+            (
+                icloud,
+                serde_json::json!({ "type": "oauth-file", "preset": "icloud" }),
+                StorageMode::ICloud,
+                "icloud",
+                i18n_keys::TOASTS_GOOGLE_DRIVE_CONNECTED,
+                i18n_keys::PROVIDER_PICKER_ICLOUD,
+            ),
+            (
+                ProviderKind::S3,
+                serde_json::json!({ "type": "s3" }),
+                StorageMode::S3,
+                "s3",
+                i18n_keys::TOASTS_S3_CONNECTED,
+                i18n_keys::PROVIDER_PICKER_S3,
+            ),
+        ] {
+            assert_eq!(serde_json::to_value(kind)?, wire);
+            assert_eq!(serde_json::from_value::<ProviderKind>(wire)?, kind);
+            assert_eq!(kind.storage_mode(), mode);
+            assert_eq!(kind.label(), label);
+            assert_eq!(kind.connected_toast_key(), toast);
+            let heading_request = ProviderSetupNameRequest {
+                kind,
+                this_browser_key: i18n_keys::AUTH_STORAGE_THIS_DEVICE.to_owned(),
+            };
+            assert_eq!(heading_request.translation_key(), heading);
+        }
+        for damaged in [
+            serde_json::json!({ "type": "oauth-file" }),
+            serde_json::json!({ "type": "github", "preset": "google-drive" }),
+            serde_json::json!({ "type": "oauth-file", "preset": "dropbox" }),
+            serde_json::json!("github"),
+        ] {
+            assert!(
+                serde_json::from_value::<ProviderKind>(damaged.clone()).is_err(),
+                "{damaged}"
+            );
+        }
         Ok(())
     }
 
     #[test]
-    fn validate_connect_local_ok() -> anyhow::Result<()> {
+    fn an_icloud_share_id_reads_back_only_when_it_names_a_share() -> anyhow::Result<()> {
+        let storage_id = ICloudSharedTarget::new(
+            ICloudShareRole::Owner,
+            "nook-zone",
+            "owner-record",
+            "root-record",
+            "short-guid",
+        )?
+        .to_storage_id()?;
+        let id = ICloudShareTargetId::try_from(format!(" {storage_id} "))?;
+        assert_eq!(id.as_str(), storage_id);
+        assert_eq!(id.target()?.zone_name, "nook-zone");
         assert_eq!(
-            StorageMode::parse(STORAGE_MODE_LOCAL)?.validate_connect("")?,
-            ConnectionCredentialValidation::Local
+            serde_json::from_value::<ICloudShareTargetId>(serde_json::json!(storage_id))?,
+            id
         );
+        for damaged in ["", "nook-events", "icloud-share-v1:{}"] {
+            assert!(ICloudShareTargetId::try_from(damaged.to_owned()).is_err());
+        }
+        assert!(ICloudShareTargetId::DECL.ends_with("export type ICloudShareTargetId = string;"));
         Ok(())
     }
 
     #[test]
-    fn validate_storage_mode_rejects_unknown() -> anyhow::Result<()> {
-        assert!(StorageMode::parse("s3").is_err());
-        Ok(())
-    }
-
-    #[test]
-    fn storage_mode_roundtrips_through_string_tag() -> anyhow::Result<()> {
+    fn storage_mode_has_its_string_tag() -> anyhow::Result<()> {
         assert_eq!(StorageMode::Local.as_str(), "local");
         assert_eq!(StorageMode::Github.as_str(), "github");
         assert_eq!(StorageMode::GoogleDrive.as_str(), "google-drive");
         assert_eq!(StorageMode::ICloud.as_str(), "icloud");
-        assert_eq!(StorageMode::parse("local")?, StorageMode::Local);
-        assert_eq!(StorageMode::parse("github")?, StorageMode::Github);
-        assert_eq!(
-            StorageMode::parse("google-drive")?,
-            StorageMode::GoogleDrive
-        );
-        assert_eq!(StorageMode::parse("icloud")?, StorageMode::ICloud);
-        assert!(StorageMode::parse("s3").is_err());
+        assert_eq!(StorageMode::S3.as_str(), "s3");
         assert_eq!(format!("{}", StorageMode::Local), "local");
-        Ok(())
-    }
-
-    #[test]
-    fn storage_mode_consts_match_enum() -> anyhow::Result<()> {
-        assert_eq!(STORAGE_MODE_LOCAL, StorageMode::Local.as_str());
-        assert_eq!(STORAGE_MODE_GITHUB, StorageMode::Github.as_str());
-        Ok(())
-    }
-
-    #[test]
-    fn validate_connect_icloud_requires_access_token() -> anyhow::Result<()> {
-        assert!(
-            StorageMode::parse("icloud")?
-                .validate_connect("  ")
-                .is_err()
-        );
-        assert_eq!(
-            StorageMode::parse("icloud")?.validate_connect(" ck-web-token ")?,
-            ConnectionCredentialValidation::ICloud
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn validate_connect_google_drive_requires_access_token() -> anyhow::Result<()> {
-        assert!(
-            StorageMode::parse("google-drive")?
-                .validate_connect("  ")
-                .is_err()
-        );
-        assert_eq!(
-            StorageMode::parse("google-drive")?.validate_connect(" ya29.test ")?,
-            ConnectionCredentialValidation::GoogleDrive
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn validate_drive_backup_name_defaults_and_rejects_invalid() -> anyhow::Result<()> {
-        assert_eq!(
-            DriveBackupName::parse("  ")?.as_str(),
-            DEFAULT_DRIVE_BACKUP_NAME
-        );
-        assert_eq!(
-            DriveBackupName::parse("work-vault.yaml")?.as_str(),
-            "work-vault.yaml"
-        );
-        assert!(DriveBackupName::parse(".").is_err());
-        assert!(DriveBackupName::parse("bad name").is_err());
-        Ok(())
-    }
-
-    #[test]
-    fn parse_drive_storage_ref_splits_file_id_and_name() -> anyhow::Result<()> {
-        assert_eq!(
-            DriveBackupName::parse_storage_ref("abc123\twork-vault.yaml")?,
-            (
-                "abc123".to_owned(),
-                DriveBackupName::parse("work-vault.yaml")?
-            )
-        );
-        assert_eq!(
-            DriveBackupName::parse_storage_ref("nook-events")?,
-            (String::new(), DriveBackupName::parse("nook-events")?)
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn format_drive_storage_ref_omits_empty_file_id() -> anyhow::Result<()> {
-        assert_eq!(
-            DriveBackupName::format_storage_ref("", &DriveBackupName::parse("nook-events")?),
-            "nook-events"
-        );
-        assert_eq!(
-            DriveBackupName::format_storage_ref("abc", &DriveBackupName::parse("work.yaml")?),
-            "abc\twork.yaml"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn format_drive_storage_ref_raw_does_not_validate_file_name() -> anyhow::Result<()> {
-        assert_eq!(
-            DriveBackupName::format_storage_ref_raw(" abc ", " work vault.yaml "),
-            "abc\twork vault.yaml"
-        );
         Ok(())
     }
 
@@ -496,49 +402,18 @@ mod tests {
     }
 
     #[test]
-    fn sync_provider_cache_ref_is_stable() -> anyhow::Result<()> {
-        assert_eq!(StorageMode::Local.cache_ref("", ""), "local");
+    fn drive_connections_require_the_shared_folder() -> anyhow::Result<()> {
         assert_eq!(
-            StorageMode::Github.cache_ref("user/repo", "nook-log/v1/events"),
-            "github:user/repo:nook-log/v1/events"
-        );
-        assert_eq!(
-            StorageMode::GoogleDrive.cache_ref("file-id", ""),
-            "drive:file-id"
-        );
-        let first_target = DriveEventParent::shared_folder_id("folder-a").encode_storage_id();
-        let second_target = DriveEventParent::shared_folder_id("folder-b").encode_storage_id();
-        assert_ne!(
-            StorageMode::GoogleDrive.cache_ref(&first_target, "vault.yaml"),
-            StorageMode::GoogleDrive.cache_ref(&second_target, "vault.yaml")
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn drive_target_refs_require_the_shared_folder() -> anyhow::Result<()> {
-        assert_eq!(
-            DriveEventParent::parse_storage_id(" shared: my-drive-folder ")?,
+            DriveEventParent::parse_folder_id(" my-drive-folder ")?,
             DriveEventParent::shared_folder_id("my-drive-folder")
         );
-        // Every Drive provider is shared: no ref falls back to a hidden folder.
-        for unnamed in [
-            "",
-            "file-id",
-            "shared:",
-            "private-folder-v2:child-folder-id",
-        ] {
-            assert!(DriveEventParent::parse_storage_id(unnamed).is_err());
+        // Every Drive provider is shared: no connection falls back to a hidden folder.
+        for unnamed in ["", " \t "] {
+            assert_eq!(
+                DriveEventParent::parse_folder_id(unnamed),
+                Err(ValidationError::SharedStorageTargetRequired)
+            );
         }
-        Ok(())
-    }
-
-    #[test]
-    fn drive_event_parents_encode_their_target_prefix() -> anyhow::Result<()> {
-        assert_eq!(
-            DriveEventParent::shared_folder_id(" folder-xyz ").encode_storage_id(),
-            "shared:folder-xyz"
-        );
         Ok(())
     }
 
@@ -562,19 +437,28 @@ mod tests {
     }
 
     #[test]
-    fn normalize_google_drive_folder_ref_accepts_id_and_folder_url() -> anyhow::Result<()> {
+    fn a_drive_folder_id_is_an_id_and_never_a_folder_url() -> anyhow::Result<()> {
         assert_eq!(
             GoogleDriveFolderId::parse(" folder_ABC-123 ")?.as_str(),
             "folder_ABC-123"
         );
         assert_eq!(
-            GoogleDriveFolderId::parse(
-                "https://drive.google.com/drive/u/1/folders/folder_ABC-123?resourcekey=key"
-            )?
-            .as_str(),
-            "folder_ABC-123"
+            GoogleDriveFolderId::parse(" "),
+            Err(ValidationError::SharedStorageTargetRequired)
         );
-        assert!(GoogleDriveFolderId::parse("https://example.com/not-a-folder").is_err());
+        for pasted in [
+            "https://drive.google.com/drive/u/1/folders/folder_ABC-123?resourcekey=key",
+            "https://drive.google.com/drive/folders/folder_ABC-123",
+            "folders/folder_ABC-123",
+            "folder ABC",
+            &"a".repeat(257),
+        ] {
+            assert_eq!(
+                GoogleDriveFolderId::parse(pasted),
+                Err(ValidationError::SharedStorageTargetInvalid),
+                "{pasted}"
+            );
+        }
         Ok(())
     }
 }

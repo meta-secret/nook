@@ -561,8 +561,7 @@ label {
   font-weight: 600;
 }
 
-input,
-select {
+input {
   width: 100%;
   min-height: 44px;
   border: 1px solid var(--input);
@@ -579,10 +578,41 @@ input::placeholder {
 }
 
 input:focus-visible,
-select:focus-visible,
 button:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
+}
+
+.field-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.mode-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.mode-choice {
+  min-height: 40px;
+  border-color: var(--border);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+
+.mode-choice:hover:not(:disabled) {
+  border-color: var(--muted-foreground);
+  background: transparent;
+  color: var(--foreground);
+}
+
+.mode-choice[aria-checked='true'],
+.mode-choice[aria-checked='true']:hover:not(:disabled) {
+  border-color: var(--foreground);
+  background: var(--accent);
+  color: var(--foreground);
 }
 
 .field-hint {

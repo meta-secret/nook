@@ -356,7 +356,7 @@ describe('module expert audit', () => {
       INTERNAL_API_EXPERT_CONSUMER_SCOPE_PATHS,
     );
     expect(discoveredConsumerPaths).toContain(
-      'nook-app/nook-web/nook-web-shared/src/vault-app/lib/auth/provider-types.ts',
+      'nook-app/nook-web/nook-web-shared/src/vault-app/lib/auth/providers.ts',
     );
     expect(discoveredConsumerPaths).toContain(
       'nook-app/nook-web/nook-web-shared/src/extension/extension-connect-scope.ts',
@@ -376,7 +376,7 @@ describe('module expert audit', () => {
     }
     expect(
       discoveredConsumerPaths.filter((path) => path.endsWith('.svelte')),
-    ).toHaveLength(60);
+    ).toHaveLength(65);
     expect(discoveredConsumerPaths).toContain(
       'nook-app/nook-web/nook-web-shared/src/vault-app/App.svelte',
     );

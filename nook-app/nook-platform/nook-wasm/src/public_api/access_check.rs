@@ -1,20 +1,23 @@
 //! Check which vaults a passkey or a backup password opens, read-only.
 //!
-//! A source is this browser, a Google Drive account's Nook root, or a local
-//! folder the user picked. Its identity logs and vault logs are read, the
-//! checked key or password is tried against them in memory, and the result
-//! says which vaults it opens by name. Nothing is stored, imported, or
+//! A source is this browser, a Google Drive account's Nook root, a local
+//! folder the user picked, or an S3 location. Its identity logs and vault logs
+//! are read, the checked key or password is tried against them in memory, and
+//! the result says which vaults it opens by name. Nothing is stored, imported, or
 //! written, and the passkey's re-derived app key is dropped afterwards.
 use super::wasm_bindgen;
-use crate::storage::local_folder::LocalFolderHandles;
-use crate::storage::provider_vault_listing::DriveVaultListing;
+use crate::storage::local_folder::{LocalFolderHandles, LocalFolderLocation};
+use crate::storage::opened_location::OpenedLocation;
+use crate::storage::provider_vault_listing::{DriveVaultListing, SourceContents};
+use crate::storage::s3::{S3Storage, S3VaultListing};
 use crate::{BrowserPasskeyClient, DriveStorageClient, NookDatabase, NookError};
+use crate::{TypedInput, TypedOutput};
 use nook_core::{
-    BackupPasswordAccessCheck, CheckedVaultEvents, CredentialCheckReport, DeviceIdentity, EventId,
-    EventLogNamespaceKind, EventStorageBytes, LocalEventWrite, PasskeyAccessCheck,
-    PasskeyAccessProfile, PasskeyMemberSigner, PasskeyRecoveryInput, PasskeyRecoveryRequest,
-    ProviderIdentityLogEvents, SigningSeedHex, StoreId, WebAuthnCredentialId, WebAuthnPrfOutput,
-    WebAuthnUserHandle, WrappedDeviceIdentity,
+    BackupPasswordAccessCheck, CheckedVaultEvents, CredentialCheckReport, DeviceIdentity,
+    LocalFolderHandleId, PasskeyAccessCheck, PasskeyAccessProfile, PasskeyMemberSigner,
+    PasskeyRecoveryInput, PasskeyRecoveryRequest, ProviderIdentityLogEvents, ProviderSecretText,
+    SigningSeedHex, StoreId, WebAuthnCredentialId, WebAuthnPrfOutput, WebAuthnUserHandle,
+    WrappedDeviceIdentity,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -23,22 +26,31 @@ use zeroize::Zeroize;
 
 /// Where a check reads identity logs and vaults from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(tag = "kind", content = "source", rename_all = "camelCase")]
 pub enum NookAccessCheckSource {
     /// The identities and vaults stored on this browser.
     ThisBrowser,
-    /// A signed-in Google account's Nook root.
-    #[serde(rename_all = "camelCase")]
-    GoogleDrive { access_token: String },
-    /// A local folder the user picked, by its stored handle.
-    #[serde(rename_all = "camelCase")]
-    LocalFolder { handle_id: String },
+    /// One provider location the page names.
+    Remote(NookRemoteSource),
 }
 
-/// A source's identity logs and vaults, read without any key.
-pub(crate) struct SourceContents {
-    pub(crate) identity_logs: Vec<ProviderIdentityLogEvents>,
-    pub(crate) vaults: Vec<CheckedVaultEvents>,
+/// A provider location the page names, read with the credential it carries.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum NookRemoteSource {
+    /// A signed-in Google account's Nook root.
+    GoogleDrive { access_token: ProviderSecretText },
+    /// A local folder the user picked, by its stored handle.
+    LocalFolder { handle_id: LocalFolderHandleId },
+    /// An S3 location with this device's key: a validated setup draft, or a
+    /// saved row's S3 block.
+    S3 {
+        configuration: nook_core::S3Connection,
+    },
 }
 
 impl SourceContents {
@@ -55,7 +67,7 @@ impl SourceContents {
             vaults: self.vaults,
         }
         .report()?;
-        Tsify::into_ts(&report).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        Ok(report.encode()?)
     }
 
     /// Check what a typed backup password opens here.
@@ -68,7 +80,7 @@ impl SourceContents {
             vaults: self.vaults,
         }
         .report()?;
-        Tsify::into_ts(&report).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+        Ok(report.encode()?)
     }
 }
 
@@ -76,23 +88,37 @@ impl NookAccessCheckSource {
     pub(crate) async fn contents(&self) -> Result<SourceContents, NookError> {
         match self {
             Self::ThisBrowser => Self::browser_contents().await,
-            Self::GoogleDrive { access_token } => {
-                let root = DriveStorageClient::new(access_token)
-                    .existing_nook_root()
-                    .await?;
-                let drive = DriveVaultListing {
-                    token: access_token,
-                    root: &root,
-                };
-                Ok(SourceContents {
-                    identity_logs: drive.identity_log_events().await?,
-                    vaults: drive.all_vault_events().await?,
-                })
-            }
-            Self::LocalFolder { handle_id } => Self::folder_contents(handle_id).await,
+            Self::Remote(source) => source.open().await?.contents().await,
         }
     }
+}
 
+impl NookRemoteSource {
+    /// Open the location with the credential it carries: a Drive account's
+    /// existing Nook root, the picked folder, or the S3 location.
+    pub(crate) async fn open(&self) -> Result<OpenedLocation<'_>, NookError> {
+        Ok(match self {
+            Self::GoogleDrive { access_token } => OpenedLocation::GoogleDrive(DriveVaultListing {
+                token: access_token,
+                root: DriveStorageClient::new(access_token)
+                    .existing_nook_root()
+                    .await?,
+            }),
+            Self::LocalFolder { handle_id } => OpenedLocation::LocalFolder(LocalFolderLocation {
+                folder: LocalFolderHandles::current()
+                    .open_folder(handle_id.as_str())
+                    .await?,
+            }),
+            Self::S3 { configuration } => OpenedLocation::S3(S3VaultListing {
+                storage: S3Storage {
+                    connection: configuration,
+                },
+            }),
+        })
+    }
+}
+
+impl NookAccessCheckSource {
     async fn browser_contents() -> Result<SourceContents, NookError> {
         let directory = NookDatabase::load_identity_directory().await?;
         let mut identity_logs = Vec::new();
@@ -122,47 +148,6 @@ impl NookAccessCheckSource {
                 events: NookDatabase::load_local_event_writes(store_id.as_str()).await?,
                 filed_under: owner.identity_id.clone(),
                 store_id,
-            });
-        }
-        Ok(SourceContents {
-            identity_logs,
-            vaults,
-        })
-    }
-
-    async fn folder_contents(handle_id: &str) -> Result<SourceContents, NookError> {
-        let folder = LocalFolderHandles::current().open_folder(handle_id).await?;
-        let mut identity_logs = Vec::new();
-        for placed in folder
-            .list_namespaces(EventLogNamespaceKind::Identity)
-            .await?
-        {
-            identity_logs.push(ProviderIdentityLogEvents {
-                identity_id: placed.identity().clone(),
-                events: folder
-                    .read_events(&placed)
-                    .await?
-                    .into_iter()
-                    .map(|file| EventStorageBytes::from(file.content.into_bytes()))
-                    .collect(),
-            });
-        }
-        let mut vaults = Vec::new();
-        for placed in folder.list_namespaces(EventLogNamespaceKind::Vault).await? {
-            let nook_core::EventLogLocation::Vault(store_id) = placed.location().clone() else {
-                continue;
-            };
-            let mut events = Vec::new();
-            for file in folder.read_events(&placed).await? {
-                events.push(LocalEventWrite {
-                    event_id: EventId::parse(&file.event_id)?,
-                    bytes: file.content.into_bytes().into(),
-                });
-            }
-            vaults.push(CheckedVaultEvents {
-                store_id,
-                filed_under: placed.identity().clone(),
-                events,
             });
         }
         Ok(SourceContents {
@@ -227,9 +212,7 @@ impl CheckedPasskey<'_> {
     source: &tsify::Ts<NookAccessCheckSource>,
     rp_id: &str,
 ) -> Result<tsify::Ts<CredentialCheckReport>, JsError> {
-    let source = source
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let source = source.decode()?;
     source.contents().await?.check_passkey(rp_id).await
 }
 
@@ -239,9 +222,7 @@ impl CheckedPasskey<'_> {
     source: &tsify::Ts<NookAccessCheckSource>,
     password: String,
 ) -> Result<tsify::Ts<CredentialCheckReport>, JsError> {
-    let source = source
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let source = source.decode()?;
     let password = zeroize::Zeroizing::new(password);
     source.contents().await?.check_backup_password(&password)
 }
@@ -294,15 +275,14 @@ mod browser_tests {
         // vault, so a backup password has nothing to open in either.
         for source in [
             NookAccessCheckSource::ThisBrowser,
-            NookAccessCheckSource::LocalFolder {
-                handle_id: folder.clone(),
-            },
+            NookAccessCheckSource::Remote(NookRemoteSource::LocalFolder {
+                handle_id: LocalFolderHandleId::try_from(folder.clone())?,
+            }),
         ] {
-            let source = Tsify::into_ts(&source).map_err(|error| anyhow::anyhow!("{error:?}"))?;
+            let source = source.encode()?;
             let report =
                 js(check_backup_password_access(&source, "not a backup".to_owned()).await)?
-                    .to_rust()
-                    .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+                    .decode()?;
             assert!(report.identities.is_empty());
         }
         js(manager.delete_local_browser_data().await)?;

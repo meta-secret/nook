@@ -2,6 +2,7 @@
 //! that carries the invite key and every owned vault's DEK; its holder signs
 //! itself into the identity with them. No member approves the join.
 
+use crate::TypedInput;
 use js_sys::Date;
 use nook_core::{
     CheckedEnrollmentEnvelope, CheckedEnrollmentIssuance, EnrollmentInvite, EnrollmentInviteVault,
@@ -9,7 +10,7 @@ use nook_core::{
     IdentityControlState, IdentityEventInsertStatus, IdentityEventSigning, IdentityId,
     IdentityInviteId, IdentityInviteIssue, IdentityInviteJoin, IdentityMemberKeys,
     IdentityVaultEventId, InviteSigningSeed, IsoTimestamp, OpenedVaultDek,
-    ReplicatedIdentityStanding, StorageMode, VaultKeys,
+    ReplicatedIdentityStanding, StorageConnection, StorageMode, VaultKeys,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -211,20 +212,15 @@ impl NookVaultManager {
         &mut self,
         code: String,
         passphrase: String,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<crate::NookStorageConnection>,
     ) -> Result<(), JsError> {
+        let connection = connection.decode()?;
         let normalized = EnrollmentLinkInput { input: &code }.normalize();
         let payload = CheckedEnrollmentEnvelope::parse(&normalized)?.decrypt(&passphrase)?;
-        let restore_local = self.storage.mode == StorageMode::Local;
+        let restore_local = self.storage.mode() == StorageMode::Local;
         let result = async {
-            self.prepare_storage_preserving_vault_metadata(
-                &storage_mode,
-                &github_pat,
-                &github_repo,
-            )
-            .await?;
+            self.prepare_storage_preserving_vault_metadata(&connection)
+                .await?;
             self.join_by_invite_at_current_provider(InviteJoinAtProvider {
                 invite: &payload.invite,
             })
@@ -232,7 +228,7 @@ impl NookVaultManager {
         }
         .await;
         if restore_local {
-            self.prepare_storage_preserving_vault_metadata("local", "", "")
+            self.prepare_storage_preserving_vault_metadata(&StorageConnection::Local)
                 .await?;
         }
         result.map_err(Into::into)

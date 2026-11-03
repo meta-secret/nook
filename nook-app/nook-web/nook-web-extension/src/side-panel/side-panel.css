@@ -457,13 +457,38 @@ html:has(.side-panel-body) {
   text-transform: uppercase;
 }
 
+/* The panel's lead line: an icon tile and the site's host, or what the tab
+ * is when Nook has no site in it. */
 .side-panel-site-heading {
   display: grid;
-  gap: 4px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
   margin: 0;
-  padding: 16px var(--side-panel-gutter) 12px;
+  padding: 16px var(--side-panel-gutter);
   font: inherit;
   text-align: left;
+}
+
+.side-panel-site-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+  background: var(--secondary);
+  color: var(--foreground);
+}
+
+.side-panel-site-heading[data-tone='state'] .side-panel-site-tile {
+  color: var(--muted-foreground);
+}
+
+.side-panel-site-heading-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
 }
 
 /* The fill destination: never truncated, it wraps. */
@@ -476,9 +501,17 @@ html:has(.side-panel-body) {
   overflow-wrap: anywhere;
 }
 
-.side-panel-site-host.is-absent {
-  color: var(--muted-foreground);
+.side-panel-site-heading[data-tone='state'] .side-panel-site-host {
+  font-size: 14px;
   font-weight: 500;
+  letter-spacing: 0;
+}
+
+.side-panel-site-hint {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
 }
 
 .side-panel-logins {
@@ -503,27 +536,86 @@ html:has(.side-panel-body) {
   border-bottom: 0;
 }
 
-/* "Identity · vault" header above that vault's rows, in Rust's order; a
-   section of another identity carries its tag at the end. */
+/* The vault caption above that vault's rows, in Rust's order: quiet, so the
+   rows lead; a section of another keyring carries its tag at the end. */
 .side-panel-site-group {
   display: flex;
   align-items: center;
   gap: 8px;
   margin: 0;
-  padding: 12px var(--side-panel-gutter) 6px;
+  padding: 14px var(--side-panel-gutter) 6px;
   border-top: 1px solid var(--border);
   color: var(--muted-foreground);
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 1.4;
-  letter-spacing: 0.14em;
+}
+
+/* A page Nook does not fill lists what is connected, quietly. */
+.side-panel-connected {
+  display: grid;
+  padding: 14px 0 6px;
+  border-top: 1px solid var(--border);
+}
+
+.side-panel-connected-caption {
+  padding: 0 var(--side-panel-gutter) 6px;
+}
+
+.side-panel-connected-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.side-panel-connected-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 6px var(--side-panel-gutter);
+}
+
+.side-panel-vault-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius);
+  background: var(--secondary);
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
-/* A page Nook does not fill lists the connected identities as headers. */
-.side-panel-site-group.is-connected {
-  padding-bottom: 12px;
+.side-panel-connected-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.side-panel-connected-name {
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-panel-connected-keyring {
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .side-panel-site-group-name {
@@ -549,18 +641,9 @@ html:has(.side-panel-body) {
   width: 28px;
   height: 28px;
   margin-top: 2px;
-  border: 1px solid var(--border);
   border-radius: var(--radius);
+  background: var(--secondary);
   color: var(--foreground);
-}
-
-.side-panel-login-type {
-  overflow: hidden;
-  color: var(--muted-foreground);
-  font-size: 11px;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .side-panel-login-copy {
@@ -664,26 +747,30 @@ html:has(.side-panel-body) {
  * the connect card itself once opened. */
 .side-panel-connections {
   display: grid;
+  justify-items: start;
   gap: 10px;
-  padding: 16px var(--side-panel-gutter);
+  padding: 8px var(--side-panel-gutter) 16px;
 }
 
-.side-panel-connections > .side-panel-action-row {
-  margin: 0 calc(-1 * var(--side-panel-gutter)) -16px;
+/* A secondary action: plain text with its icon, quieter than every row. */
+.side-panel .side-panel-quiet-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: -8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
 }
 
-.side-panel .side-panel-action-row > button {
-  justify-content: flex-start;
-  padding-inline: var(--side-panel-gutter);
-}
-
-.side-panel-connections:has(> .side-panel-action-row:only-child) {
-  padding-top: 0;
-}
-
-.side-panel-connections:has(> .side-panel-action-row:only-child)
-  > .side-panel-action-row {
-  border-top: 0;
+.side-panel .side-panel-quiet-action:hover {
+  background: var(--secondary);
+  color: var(--foreground);
 }
 
 .side-panel-tag {

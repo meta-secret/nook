@@ -11,6 +11,7 @@ import {
 import {
   createDriveVaultFolders,
   DRIVE_FOLDER_MIME_TYPE,
+  DRIVE_STUB_CREATED_TIME,
 } from './drive-folder-stub'
 import {
   E2E_GOOGLE_ACCOUNT_EMAIL,
@@ -179,6 +180,7 @@ export function createLocalE2eFileSyncVaultStub(
       name: string
       md5Checksum: string
       appProperties: { event_id: string }
+      createdTime: string
     }> = []
     for (const key of eventDigests(dir)) {
       if (digest && key !== digest) continue
@@ -188,6 +190,7 @@ export function createLocalE2eFileSyncVaultStub(
         md5Checksum: `e2e-file-event-md5-${key}`,
         // Match Drive list filtering: digest filenames without appProperties are ignored.
         appProperties: { event_id: `sha256u:${key}` },
+        createdTime: DRIVE_STUB_CREATED_TIME,
       })
     }
     return entries
@@ -359,6 +362,7 @@ export function createLocalE2eFileSyncVaultStub(
                 id,
                 name: folderName,
                 mimeType,
+                createdTime: DRIVE_STUB_CREATED_TIME,
               }))
             await route.fulfill({
               status: 200,

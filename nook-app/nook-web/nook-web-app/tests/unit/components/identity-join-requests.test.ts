@@ -51,6 +51,7 @@ function identityWith(requests: IdentityJoinRequestView[]): VaultState {
         onCurrentDevice: true,
       },
     ],
+    devices: [],
     deviceCount: 1,
     joinRequests: requests,
     vaults: [],

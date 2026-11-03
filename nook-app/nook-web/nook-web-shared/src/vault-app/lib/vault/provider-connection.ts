@@ -4,6 +4,7 @@ import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
 import { VaultOperationStale } from "$lib/runtime/vault-operation-stale";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 import {
+  ProviderDraftIncompleteFailure,
   VaultStorageFailure as StorageOperationFailure,
   VaultStorageFailureKind as StorageOperationFailureKind,
 } from "$lib/runtime/storage-failure";
@@ -11,19 +12,16 @@ import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
-  LOCAL_FOLDER_PROVIDER_TYPE,
-  LocalFolderPresentation,
-  LocalFolderHandleKind,
-  type LocalFolderHandle,
-} from "$lib/auth/providers";
-import {
+  draft_storage_args,
   NookLocalFolderHealthState,
   ProviderSyncFailureHandling,
   ProviderSyncVisibility,
+  type LocalFolderDraft,
+  type NookRemoteVaultDiscovery,
 } from "$app-wasm";
 import {
-  LocalFolderDraftKind,
   LoginSetupKind,
+  RemoteVaultChoices,
   StagedRemoteStorageKind,
 } from "$lib/vault/state/provider.svelte";
 import {
@@ -36,19 +34,40 @@ import { PaintOpportunity } from "$lib/runtime/paint-opportunity";
 
 const log = browserLogRuntime.createLogger("vault-provider-connection");
 
+export enum StagedVaultDiscoveryKind {
+  Found = "found",
+  /** The provider holds several vaults; the choices wait on the state. */
+  Several = "several",
+  NotFound = "not-found",
+}
+
+/** What the provider being set up holds, as staged discovery found it. */
+export type StagedVaultDiscovery =
+  | { readonly kind: StagedVaultDiscoveryKind.Found; readonly storeId: string }
+  | { readonly kind: StagedVaultDiscoveryKind.Several }
+  | { readonly kind: StagedVaultDiscoveryKind.NotFound };
+
+class StagedVaultDiscoveries {
+  static readonly NOT_FOUND: StagedVaultDiscovery = {
+    kind: StagedVaultDiscoveryKind.NotFound,
+  };
+  static readonly SEVERAL: StagedVaultDiscovery = {
+    kind: StagedVaultDiscoveryKind.Several,
+  };
+}
+
+type DiscoveryResult = Result<StagedVaultDiscovery, StorageOperationFailure>;
+
 /** Owns browser orchestration for one provider connection context. */
 export class ProviderConnectionActions {
   constructor(private readonly state: ProviderActionsContext) {}
 
   async connectStagedProvider(): Promise<void> {
     const state = this.state;
-    if (state.loginSetup.kind === LoginSetupKind.Active) {
-      state.storageMode = state.loginSetup.providerType;
-    }
     if (
       state.isAuthenticated &&
       (state.loginSetup.kind !== LoginSetupKind.Active ||
-        state.loginSetup.providerType !== "local")
+        state.loginSetup.providerKind.type !== "local")
     ) {
       await state.connectAndSyncStagedProvider();
       return;
@@ -66,94 +85,43 @@ export class ProviderConnectionActions {
     } catch (nativeFailure) {
       return storageErr(new NativeVaultStorageFailure(nativeFailure));
     }
-    state.remoteVaultChoices = [];
+    state.remoteVaultChoices = RemoteVaultChoices.NONE;
     return storageOk(true);
   }
 
-  async discoverStagedVaultStoreId(): Promise<
-    Result<string, StorageOperationFailure>
-  > {
+  async discoverStagedVault(): Promise<DiscoveryResult> {
     const state = this.state;
     if (!state.hasManager || state.loginSetup.kind !== LoginSetupKind.Active)
-      return storageOk("");
+      return storageOk(StagedVaultDiscoveries.NOT_FOUND);
     if (state.isVerifying)
       return storageErr(
         new StorageOperationFailure(
           StorageOperationFailureKind.OperationFailed,
         ),
       );
-    const setupType = state.loginSetup.providerType;
     state.isVerifying = true;
     try {
-      const discovery = (async () => {
-        if (setupType === "local-folder") {
-          const handle: LocalFolderHandle =
-            state.localFolderDraft.kind === LocalFolderDraftKind.Configured
-              ? new LocalFolderPresentation(
-                  state.localFolderDraft.config,
-                ).localFolderHandle()
-              : { kind: LocalFolderHandleKind.Unselected };
-          if (handle.kind !== LocalFolderHandleKind.Selected)
-            return storageOk("");
-          return state.enqueueStorage(async () => {
-            const admitted = state.admitManager();
-            if (admitted.isErr()) return storageErr(admitted.error);
-            try {
-              const discovered =
-                await admitted.value.discover_backup_folder_vault(
-                  handle.handleId,
-                );
-              state.remoteVaultChoices =
-                discovered.state === "several" ? discovered.vaults : [];
-              return storageOk(
-                discovered.state === "found" ? discovered.storeId : "",
-              );
-            } catch (nativeFailure) {
-              return storageErr(new NativeVaultStorageFailure(nativeFailure));
-            }
-          });
-        }
-        const staged = state.stagedRemoteStorageArgs();
-        const args =
-          staged.kind === StagedRemoteStorageKind.Available
-            ? staged.args
-            : state.wasmStorageArgs();
-        return state.enqueueStorage(async () => {
-          const admitted = state.admitManager();
-          if (admitted.isErr()) return storageErr(admitted.error);
-          try {
-            const discovered = await admitted.value.discover_remote_vault(
-              args.mode,
-              args.pat,
-              args.repo,
-            );
-            state.remoteVaultChoices =
-              discovered.state === "several" ? discovered.vaults : [];
-            return storageOk(
-              discovered.state === "found" ? discovered.storeId : "",
-            );
-          } catch (nativeFailure) {
-            return storageErr(new NativeVaultStorageFailure(nativeFailure));
-          }
-        });
-      })();
+      const discovery = this.discover();
       const discoveryDeadline: ConstructorParameters<
         typeof VaultDiscoveryTimeout
       >[0] = {
         timeoutMs: 30_000,
       };
       const discoveryCompletion: DiscoveryCompletion<
-        string,
+        StagedVaultDiscovery,
         StorageOperationFailure
       > = {
         operation: discovery,
         releaseLateValue: () => {},
       };
-      const storeId = await new VaultDiscoveryTimeout(
+      const discovered = await new VaultDiscoveryTimeout(
         discoveryDeadline,
       ).waitFor(discoveryCompletion);
-      if (storeId.isErr()) return storageErr(storeId.error);
-      if (storeId.value && state.hasManager) {
+      if (discovered.isErr()) return storageErr(discovered.error);
+      if (
+        discovered.value.kind === StagedVaultDiscoveryKind.Found &&
+        state.hasManager
+      ) {
         const summary = await state.enqueueStorage(async () => {
           const admitted = state.admitManager();
           if (admitted.isErr()) return storageErr(admitted.error);
@@ -170,9 +138,96 @@ export class ProviderConnectionActions {
         }
         state.recordExistingVaultRecovery(summary.value);
       }
-      return storeId;
+      return discovered;
     } finally {
       state.isVerifying = false;
+    }
+  }
+
+  /** A local-folder setup reads its chosen folder; every other setup reads
+   * its draft's connection, and a draft with a gap fails with it. */
+  private discover(): Promise<DiscoveryResult> {
+    const draft = this.state.providerDraft;
+    switch (draft.type) {
+      case "local-folder":
+        return this.discoverFolder(draft);
+      case "local":
+      case "github":
+      case "oauth-file":
+      case "s3":
+        return this.discoverRemote();
+    }
+  }
+
+  private async discoverFolder(
+    folder: LocalFolderDraft,
+  ): Promise<DiscoveryResult> {
+    const state = this.state;
+    switch (folder.state) {
+      case "awaitingFolder":
+        return storageOk(StagedVaultDiscoveries.NOT_FOUND);
+      case "selected":
+        return state.enqueueStorage(async () => {
+          const admitted = state.admitManager();
+          if (admitted.isErr()) return storageErr(admitted.error);
+          try {
+            return storageOk(
+              this.adoptDiscovery(
+                await admitted.value.discover_backup_folder_vault(
+                  folder.handleId,
+                ),
+              ),
+            );
+          } catch (nativeFailure) {
+            return storageErr(new NativeVaultStorageFailure(nativeFailure));
+          }
+        });
+    }
+  }
+
+  private async discoverRemote(): Promise<DiscoveryResult> {
+    const state = this.state;
+    const connection = draft_storage_args(state.providerDraft);
+    switch (connection.state) {
+      case "incomplete":
+        return storageErr(new ProviderDraftIncompleteFailure(connection.gap));
+      case "ready":
+        return state.enqueueStorage(async () => {
+          const admitted = state.admitManager();
+          if (admitted.isErr()) return storageErr(admitted.error);
+          try {
+            return storageOk(
+              this.adoptDiscovery(
+                await admitted.value.discover_remote_vault(
+                  connection.connection,
+                ),
+              ),
+            );
+          } catch (nativeFailure) {
+            return storageErr(new NativeVaultStorageFailure(nativeFailure));
+          }
+        });
+    }
+  }
+
+  /** Several vaults wait on the state for the user's choice. */
+  private adoptDiscovery(
+    discovered: NookRemoteVaultDiscovery,
+  ): StagedVaultDiscovery {
+    const state = this.state;
+    switch (discovered.state) {
+      case "found":
+        state.remoteVaultChoices = RemoteVaultChoices.NONE;
+        return {
+          kind: StagedVaultDiscoveryKind.Found,
+          storeId: discovered.storeId,
+        };
+      case "several":
+        state.remoteVaultChoices = new RemoteVaultChoices(discovered);
+        return StagedVaultDiscoveries.SEVERAL;
+      case "empty":
+        state.remoteVaultChoices = RemoteVaultChoices.NONE;
+        return StagedVaultDiscoveries.NOT_FOUND;
     }
   }
 
@@ -219,11 +274,11 @@ export class ProviderConnectionActions {
       const [provider = state.providers[state.providers.length - 1]] = [
         state.syncProviders[state.syncProviders.length - 1],
       ];
-      if (!provider || provider.type === "local") {
+      if (!provider || provider.provider.type === "local") {
         state.errorMsg = state.t(I18N_KEYS.ErrorsCloudSyncProviderRequired);
         return;
       }
-      if (provider.type !== LOCAL_FOLDER_PROVIDER_TYPE) {
+      if (provider.provider.type !== "local-folder") {
         await this.enterPhase(ProviderConnectionPhase.Uploading);
         const request = new ProviderEventOutbox(provider).request();
         const flushed = await state.flushRemoteEventOutboxNow(request);

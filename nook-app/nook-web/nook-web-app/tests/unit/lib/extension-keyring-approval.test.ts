@@ -93,6 +93,7 @@ function keyringSnapshot(
         onCurrentDevice: true,
       },
     ],
+    devices: [],
     deviceCount: 1,
     joinRequests: [],
     vaults: storeIds.map((storeId) => ({

@@ -45,7 +45,8 @@
     "password-envelope-sync.spec.ts",
     "fresh-vault-passwords.spec.ts",
     "provider-switch-passwords.spec.ts",
-    "remote-vault-recovery-sync.spec.ts"
+    "remote-vault-recovery-sync.spec.ts",
+    "s3-sync-provider.spec.ts"
   ],
   "manual": [
     "live/google-drive-shared-grant.smoke.spec.ts",

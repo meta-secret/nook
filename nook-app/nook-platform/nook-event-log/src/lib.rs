@@ -69,7 +69,7 @@ pub use identity_control::{
     IdentityMemberKeys, IdentityMountTarget, IdentityNaming, IdentityProviderMount,
     IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
     IdentityVaultRegistration, MemberDevice, MemberSealedName, MemberVaultDek, OpenedVaultDek,
-    ProviderMountId,
+    ProviderMountId, S3MountTarget,
 };
 pub use location::{
     EventLogLocation, EventLogNamespaceKind, IDENTITY_LOG_DIR, PROVIDER_ROOT_DIR, PlacedNamespace,
