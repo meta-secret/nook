@@ -32,6 +32,9 @@ tasks:
         sh: jq -r '.packageManager | sub("^bun@"; "")' "{{.EXTENSION_ROOT}}/package.json"
     cmds:
       - test -n "{{.SCENARIO}}" || (echo "SCENARIO is required (e.g. s3-paired-pin)" >&2; exit 1)
+      # The vault and the extension both load this WASM, translations included;
+      # it rebuilds only when its Rust or locale sources changed.
+      - WASM_BUILD_MODE=dev task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" _wasm:build
       - >-
         PATH="$HOME/.nook/bun/{{.DEV_BUN_VERSION}}/bin:$PATH"
         NOOK_SIMPLE_VAULT_URL=https://localhost:5173/
