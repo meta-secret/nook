@@ -167,12 +167,6 @@ for the iCloud sign-in only when the join reaches it.
           {vault.t(I18N_KEYS.JoinSubmit)}
         {/if}
       </Button>
-      <p
-        class="text-center font-mono text-[11px] tracking-[0.04em] text-muted-foreground"
-        data-testid="join-requirement"
-      >
-        {vault.t(I18N_KEYS.JoinRequirement)}
-      </p>
     </form>
   {/if}
 </section>

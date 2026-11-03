@@ -1403,7 +1403,6 @@ export const I18N_KEYS = {
   JoinNodeMember: 'join.node_member',
   JoinNodeProvider: 'join.node_provider',
   JoinPassphraseLabel: 'join.passphrase_label',
-  JoinRequirement: 'join.requirement',
   JoinSubmit: 'join.submit',
   JoinSubmitting: 'join.submitting',
   JoinSubtitle: 'join.subtitle',

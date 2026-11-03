@@ -2555,7 +2555,6 @@
     "passphrase_label": "One-time passphrase",
     "submit": "Join",
     "submitting": "Joining…",
-    "requirement": "Needs a cloud sync provider, such as GitHub or Google Drive.",
     "keys_title": "Keys for this device",
     "keys_required": "Add a key for at least one provider to join.",
     "keys_optional": "Optional: a key here saves that provider too."

@@ -1674,7 +1674,6 @@ pub const JOIN_NODE_JOINER: &str = "join.node_joiner";
 pub const JOIN_NODE_MEMBER: &str = "join.node_member";
 pub const JOIN_NODE_PROVIDER: &str = "join.node_provider";
 pub const JOIN_PASSPHRASE_LABEL: &str = "join.passphrase_label";
-pub const JOIN_REQUIREMENT: &str = "join.requirement";
 pub const JOIN_SUBMIT: &str = "join.submit";
 pub const JOIN_SUBMITTING: &str = "join.submitting";
 pub const JOIN_SUBTITLE: &str = "join.subtitle";
