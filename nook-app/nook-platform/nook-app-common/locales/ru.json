@@ -2593,6 +2593,7 @@
     "action_add_sync": "Добавить провайдер синхронизации",
     "action_add_cloud": "Добавить облачный провайдер",
     "action_add_device": "Добавить устройство",
+    "action_add_another_sync": "Добавить ещё провайдер",
     "done": "Готово"
   },
   "identity_overview": {

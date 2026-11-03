@@ -2,7 +2,9 @@
 What keeps the identity from being lost, beside its card: what is at risk
 now, then both protections in order. A finished one stays ticked, so the
 list shows why the identity is safe; an open one carries the step that
-finishes it; a blocked one waits for the copy it joins through. nook-core
+finishes it; a blocked one waits for the copy it joins through. Until a
+second device joins, a kept copy also offers another provider, quietly,
+beside the open device step. nook-core
 decides every row.
 -->
 <script lang="ts">
@@ -166,6 +168,18 @@ decides every row.
             onclick={() => onAction(step.action)}
           >
             {actionLabel(step.action)}
+          </Button>
+        {:else if done && step.action !== NookIdentityNextStep.Done}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            class="justify-self-start sm:justify-self-end"
+            data-testid="identity-protection-add-another"
+            disabled={busy}
+            onclick={() => onAction(step.action)}
+          >
+            {vault.t(I18N_KEYS.IdentityProtectionActionAddAnotherSync)}
           </Button>
         {/if}
       </li>

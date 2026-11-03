@@ -2593,6 +2593,7 @@
     "action_add_sync": "Add a sync provider",
     "action_add_cloud": "Add a cloud sync provider",
     "action_add_device": "Add a device",
+    "action_add_another_sync": "Add another provider",
     "done": "Done"
   },
   "identity_overview": {

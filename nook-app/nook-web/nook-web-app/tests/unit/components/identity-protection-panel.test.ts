@@ -69,5 +69,27 @@ describe('identity protection checklist', () => {
     expect(
       view.getByTestId('identity-protection-action').textContent,
     ).toContain(view.vault.t(I18N_KEYS.IdentityProtectionActionAddCloud))
+    expect(
+      view.queryAllByTestId('identity-protection-add-another'),
+    ).toHaveLength(0)
+  })
+
+  test('a kept copy offers another provider quietly until a second device joins', async () => {
+    const view = renderPanel(assess_identity_health(1, 1, 1, 3))
+
+    const another = view.getByTestId('identity-protection-add-another')
+    expect(another.textContent).toContain(
+      view.vault.t(I18N_KEYS.IdentityProtectionActionAddAnotherSync),
+    )
+    await fireEvent.click(another)
+    expect(view.onAction).toHaveBeenCalledWith(
+      NookIdentityNextStep.AddSyncProvider,
+    )
+
+    view.unmount()
+    const protectedView = renderPanel(assess_identity_health(1, 1, 2, 3))
+    expect(
+      protectedView.queryAllByTestId('identity-protection-add-another'),
+    ).toHaveLength(0)
   })
 })

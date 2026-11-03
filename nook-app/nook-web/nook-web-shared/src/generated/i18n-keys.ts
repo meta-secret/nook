@@ -1380,6 +1380,7 @@ export const I18N_KEYS = {
   IdentityOverviewVaultsCaption: 'identity_overview.vaults_caption',
   IdentityOverviewVaultsEmpty: 'identity_overview.vaults_empty',
   IdentityOverviewViewAll: 'identity_overview.view_all',
+  IdentityProtectionActionAddAnotherSync: 'identity_protection.action_add_another_sync',
   IdentityProtectionActionAddCloud: 'identity_protection.action_add_cloud',
   IdentityProtectionActionAddDevice: 'identity_protection.action_add_device',
   IdentityProtectionActionAddSync: 'identity_protection.action_add_sync',

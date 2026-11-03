@@ -1650,6 +1650,8 @@ pub const IDENTITY_OVERVIEW_THIS_BROWSER: &str = "identity_overview.this_browser
 pub const IDENTITY_OVERVIEW_VAULTS_CAPTION: &str = "identity_overview.vaults_caption";
 pub const IDENTITY_OVERVIEW_VAULTS_EMPTY: &str = "identity_overview.vaults_empty";
 pub const IDENTITY_OVERVIEW_VIEW_ALL: &str = "identity_overview.view_all";
+pub const IDENTITY_PROTECTION_ACTION_ADD_ANOTHER_SYNC: &str =
+    "identity_protection.action_add_another_sync";
 pub const IDENTITY_PROTECTION_ACTION_ADD_CLOUD: &str = "identity_protection.action_add_cloud";
 pub const IDENTITY_PROTECTION_ACTION_ADD_DEVICE: &str = "identity_protection.action_add_device";
 pub const IDENTITY_PROTECTION_ACTION_ADD_SYNC: &str = "identity_protection.action_add_sync";
