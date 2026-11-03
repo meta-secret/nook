@@ -111,9 +111,12 @@ export class LockedIdentitySwitch {
     await new IdentitySwitch(this.vault).to(identityId);
   }
 
-  /** Read the unlocked identity's providers; a key still locked reads none. */
+  /** Read the unlocked identity's providers, then its log, whose devices
+   * the protection checklist counts before any vault opens; a key still
+   * locked reads none. */
   async loadProvidersOnceUnlocked(): Promise<void> {
     if (!this.vault.deviceProtectionReady) return;
     await new IdentitySwitch(this.vault).loadProviders();
+    await this.vault.identityControl.loadSnapshot();
   }
 }
