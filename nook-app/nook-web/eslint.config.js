@@ -89,6 +89,23 @@ export default [
       },
     },
   },
+  // A native <select> opens the operating system's menu, which ignores the
+  // Nook visual system. Product UI shows its choices (chips, tiles, a list)
+  // or uses the styled ui/select popover. Mock third-party pages keep theirs.
+  {
+    files: ["**/*.svelte"],
+    ignores: ["nook-web-extension/e2e/mock-auth/**", "nook-web-research/**"],
+    rules: {
+      "svelte/no-restricted-html-elements": [
+        "error",
+        {
+          elements: ["select"],
+          message:
+            "Native <select> dropdowns are not used in Nook UI: show the choices with ChoiceChips or tiles, or use the ui/select popover.",
+        },
+      ],
+    },
+  },
   {
     files: typedApiSourceFiles,
     plugins: {

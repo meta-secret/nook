@@ -1252,7 +1252,6 @@ export const I18N_KEYS = {
   HelpDiagramSetUnion: 'help.diagram.set_union',
   HelpDiagramSync: 'help.diagram.sync',
   HelpInThisGuide: 'help.in_this_guide',
-  HelpJumpToSection: 'help.jump_to_section',
   HelpSectionsConflictsBullet1: 'help.sections.conflicts.bullet1',
   HelpSectionsConflictsBullet2: 'help.sections.conflicts.bullet2',
   HelpSectionsConflictsBullet3: 'help.sections.conflicts.bullet3',

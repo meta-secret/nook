@@ -48,6 +48,27 @@ Svelte-native mechanisms. Impeccable remains opt-in by explicit user request.
 
 **Preferred:** extend the adjacent shared primitive and reuse app.css tokens.
 
+### Choices without native dropdowns
+
+Never use a native `<select>` in Nook UI. It opens the operating system's menu,
+which ignores the Nook visual system and hides the choices behind a click.
+ESLint enforces this with `svelte/no-restricted-html-elements` in
+`nook-app/nook-web/eslint.config.js`; only mock third-party pages are exempt.
+
+- Show a short list of choices at once. Use the shared `ChoiceChips` component
+  in `components/ui/choice-chips/`, or tiles when each choice needs an icon or
+  a detail line.
+- Use the styled `ui/select` popover only when the list is too long to show.
+- Navigation is not a choice. Show it as links, such as the Help page's
+  section row.
+- Apply this to every new control, without waiting to be asked.
+
+**Prohibited:** add a `<select>` for an S3 service, a log level, or a key,
+including one restyled with `appearance-none`.
+
+**Preferred:** render the services as `ChoiceChips`, with the picked one
+outlined and arrow keys moving the pick.
+
 ### Product behavior
 
 Preserve nook-auth2 -> nook-core -> nook-wasm -> nook-web ownership.

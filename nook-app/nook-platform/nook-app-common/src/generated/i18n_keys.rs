@@ -1518,7 +1518,6 @@ pub const HELP_DIAGRAM_PROVIDER_EVENTS: &str = "help.diagram.provider_events";
 pub const HELP_DIAGRAM_SET_UNION: &str = "help.diagram.set_union";
 pub const HELP_DIAGRAM_SYNC: &str = "help.diagram.sync";
 pub const HELP_IN_THIS_GUIDE: &str = "help.in_this_guide";
-pub const HELP_JUMP_TO_SECTION: &str = "help.jump_to_section";
 pub const HELP_SECTIONS_CONFLICTS_BULLET1: &str = "help.sections.conflicts.bullet1";
 pub const HELP_SECTIONS_CONFLICTS_BULLET2: &str = "help.sections.conflicts.bullet2";
 pub const HELP_SECTIONS_CONFLICTS_BULLET3: &str = "help.sections.conflicts.bullet3";

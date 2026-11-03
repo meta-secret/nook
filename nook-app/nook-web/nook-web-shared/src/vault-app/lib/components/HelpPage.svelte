@@ -1,6 +1,6 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { BookOpen, ChevronDown } from '@lucide/svelte'
+  import { BookOpen } from '@lucide/svelte'
   import BackButton from '$lib/components/workspace/BackButton.svelte'
   import { HELP_SECTIONS } from '$lib/content/help'
   import HelpMermaidDiagram from '$lib/components/HelpMermaidDiagram.svelte'
@@ -31,15 +31,6 @@
       block: 'start',
     }
     document.getElementById(`help-${id}`)?.scrollIntoView(scrollIntoViewArgs)
-  }
-
-  function handleSectionJump(event: Event) {
-    const select = event.currentTarget
-    if (!(select instanceof HTMLSelectElement)) return
-    const id = select.value
-    if (!id) return
-    scrollToSection(id)
-    select.value = ''
   }
 </script>
 
@@ -72,33 +63,27 @@
 
     <CardContent class="space-y-2 px-4 pb-3 pt-2 sm:px-5">
       <div class="space-y-0.5">
-        <label
-          for="help-section-select"
+        <p
           class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
         >
           {vault.t(I18N_KEYS.HelpInThisGuide)}
-        </label>
-        <div class="relative">
-          <select
-            id="help-section-select"
-            class="w-full appearance-none rounded-md border border-border bg-background py-1.5 pl-3 pr-10 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            data-testid="help-navigation"
-            onchange={handleSectionJump}
-          >
-            <option value="" selected disabled>
-              {vault.t(I18N_KEYS.HelpJumpToSection)}
-            </option>
-            {#each HELP_SECTIONS as section (section.id)}
-              <option value={section.id}>
-                {vault.t(section.titleKey)}
-              </option>
-            {/each}
-          </select>
-          <ChevronDown
-            class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-        </div>
+        </p>
+        <nav
+          class="flex flex-wrap gap-1.5"
+          aria-label={vault.t(I18N_KEYS.HelpInThisGuide)}
+          data-testid="help-navigation"
+        >
+          {#each HELP_SECTIONS as section (section.id)}
+            <button
+              type="button"
+              class="inline-flex h-8 items-center border border-border px-2.5 text-xs text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
+              data-testid="help-navigation-{section.id}"
+              onclick={() => scrollToSection(section.id)}
+            >
+              {vault.t(section.titleKey)}
+            </button>
+          {/each}
+        </nav>
       </div>
 
       <div class="space-y-2">

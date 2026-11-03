@@ -136,9 +136,7 @@ describe('S3 connection form', () => {
 
     expect(view.queryAllByTestId('s3-create-key-link')).toHaveLength(0)
 
-    await fireEvent.change(view.getByTestId('s3-service-select'), {
-      target: { value: 'wasabi' },
-    })
+    await fireEvent.click(view.getByTestId('s3-service-wasabi'))
 
     const link = view.getByTestId('s3-create-key-link')
     expect(link.getAttribute('href')).toBe(
@@ -159,10 +157,8 @@ describe('S3 connection form', () => {
       target: { value: 'https://0123abcd.r2.cloudflarestorage.com' },
     })
 
-    const select = view.getByTestId('s3-service-select')
-    expect(select instanceof HTMLSelectElement && select.value).toBe(
-      'cloudflare-r2',
-    )
+    const r2 = view.getByTestId('s3-service-cloudflare-r2')
+    expect(r2.getAttribute('aria-checked')).toBe('true')
     expect(view.getByTestId('s3-create-key-link').getAttribute('href')).toBe(
       'https://dash.cloudflare.com/?to=/:account/r2/overview',
     )
@@ -171,8 +167,6 @@ describe('S3 connection form', () => {
     await fireEvent.input(view.getByTestId('s3-endpoint-input'), {
       target: { value: 'http://127.0.0.1:8333' },
     })
-    expect(select instanceof HTMLSelectElement && select.value).toBe(
-      'cloudflare-r2',
-    )
+    expect(r2.getAttribute('aria-checked')).toBe('true')
   })
 })

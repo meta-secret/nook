@@ -7,6 +7,7 @@ typed values live in this component until it unmounts. Inputs have no name,
 so a native submission could never carry them into a URL.
 -->
 <script lang="ts">
+  import { ChoiceChips, type ChoiceChip } from '$lib/components/ui/choice-chips'
   import { onMount, tick, type Component, type Snippet } from 'svelte'
   import {
     ExternalLink,
@@ -79,6 +80,19 @@ so a native submission could never carry them into a URL.
   const guides = s3_service_guides()
   /** Any other S3-compatible server: the Service field's last choice. */
   const otherService: S3EndpointService = { kind: 'other' }
+  /** Every service as a chip, the self-hosted case last. */
+  const serviceChoices: readonly ChoiceChip[] = [
+    ...guides.map(
+      (guide): ChoiceChip => ({
+        value: guide.service,
+        label: vault.t(guide.nameKey),
+      }),
+    ),
+    {
+      value: otherService.kind,
+      label: vault.t(I18N_KEYS.ProviderSetupS3ServiceOther),
+    },
+  ]
   /** The chosen service: picked in the Service field, or recognised from
    * the endpoint as it is typed. */
   let service = $state.raw<S3EndpointService>(otherService)
@@ -258,24 +272,17 @@ so a native submission could never carry them into a URL.
         </button>
       {/each}
       <div class="min-w-0 space-y-1.5 sm:col-span-2">
-        <label class="nk-field-label block" for={`${idPrefix}-s3-service`}>
+        <span class="nk-field-label block">
           {vault.t(I18N_KEYS.ProviderSetupS3ServiceLabel)}
-        </label>
-        <select
-          id={`${idPrefix}-s3-service`}
-          disabled={busy}
-          data-testid="s3-service-select"
-          class="flex h-11 w-full rounded-none border border-input bg-background px-3 text-sm sm:h-10 focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring disabled:opacity-60"
+        </span>
+        <ChoiceChips
+          label={vault.t(I18N_KEYS.ProviderSetupS3ServiceLabel)}
+          choices={serviceChoices}
           value={shown.value}
-          onchange={(event) => pickService(event.currentTarget.value)}
-        >
-          {#each guides as guide (guide.service)}
-            <option value={guide.service}>{vault.t(guide.nameKey)}</option>
-          {/each}
-          <option value={otherService.kind}>
-            {vault.t(I18N_KEYS.ProviderSetupS3ServiceOther)}
-          </option>
-        </select>
+          disabled={busy}
+          testid="s3-service"
+          onpick={pickService}
+        />
       </div>
 
       <div class="min-w-0 space-y-1.5 sm:col-span-2">

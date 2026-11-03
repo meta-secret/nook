@@ -222,7 +222,6 @@ describe('locale', () => {
       I18N_KEYS.HelpTitle,
       I18N_KEYS.HelpSubtitle,
       I18N_KEYS.HelpInThisGuide,
-      I18N_KEYS.HelpJumpToSection,
       I18N_KEYS.HelpDiagramDevice,
       I18N_KEYS.HelpDiagramLocalProjection,
       I18N_KEYS.HelpDiagramEventStore,

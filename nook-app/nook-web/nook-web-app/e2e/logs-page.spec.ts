@@ -159,7 +159,7 @@ test.describe('application logging', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
-    await page.getByTestId('logs-capture-level').selectOption('debug')
+    await page.getByTestId('logs-capture-level-debug').click()
     await expect
       .poll(async () =>
         page.evaluate(() =>

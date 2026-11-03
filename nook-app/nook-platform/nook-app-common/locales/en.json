@@ -824,7 +824,6 @@
     "subtitle": "One encrypted vault on this device — sync providers keep copies in sync.",
     "close": "Close Help",
     "in_this_guide": "In this guide",
-    "jump_to_section": "Jump to section…",
     "diagram": {
       "label": "Architecture diagram",
       "device": "This browser (working copy)",

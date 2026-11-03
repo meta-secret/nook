@@ -105,7 +105,7 @@ generic language rules. Nook adds these project constraints:
 - [Nook source-size enforcement](shared/dynamic-skills/source-file-size.md): preserve the 1,000-line source limit, keep unit tests colocated while retaining integration tests, and use domain or architectural decomposition for oversized files.
 - [Dependency audit integration](shared/dynamic-skills/prefer-popular-libraries.md).
 - [Automation languages](shared/dynamic-skills/typescript-rust-automation-only.md) is a P1 hard rule: do not author, retain, or invoke Python; use Bun and TypeScript for scripts, Rust for compiled behavior, and Taskfiles for orchestration.
-- [Nook UI and localization](teams/web-dev/dynamic-skills/ui-design-skills.md).
+- [Nook UI and localization](teams/web-dev/dynamic-skills/ui-design-skills.md): never use a native `<select>` dropdown; show the choices instead.
 - [Nook unused-code tooling](teams/web-dev/dynamic-skills/web-unused-code.md).
 - [Nook secret lifecycle](teams/security/dynamic-skills/secret-lifecycle.md).
 

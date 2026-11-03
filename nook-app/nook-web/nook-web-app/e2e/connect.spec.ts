@@ -246,7 +246,7 @@ test.describe('vault connect flow', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await expect(page.getByTestId('help-section-join')).toBeVisible()
-    await page.getByTestId('help-navigation').selectOption('sync')
+    await page.getByTestId('help-navigation-sync').click()
     await expect(page.getByTestId('help-section-sync')).toBeVisible()
     const diagram = page.getByTestId('help-diagram-local-first')
     await expect(diagram).toBeVisible()
