@@ -727,7 +727,7 @@ test.describe('vault architecture modes', () => {
     await openOnboardDevicePanel(page)
     await expect(
       page.getByTestId(`onboard-provider-${SHARED_PROVIDER.id}`),
-    ).toHaveAttribute('aria-checked', 'true', {
+    ).toBeChecked({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await expect(

@@ -2,25 +2,38 @@ import { expect, test, type Page } from './fixtures'
 import {
   addS3FromProtection,
   addSecret,
+  answerPasskeyPromptBeforeJoin,
+  clearBrowserVault,
   connectS3InFirstRun,
   createFirstRunKey,
   createIsolatedContext,
   createKeyringOnS3,
   disableVaultIdleLock,
+  E2E_IDENTITY_PASSPHRASE,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  expectIdentityMembers,
   joinIdentityThroughCode,
   keepIdentityWithoutVault,
+  localizeAppLinkForE2e,
   ManagePage,
   openIdentityPanel,
   openManagePage,
+  openOnboardDevicePanel,
+  openVaultAfterIdentityJoin,
   openVaultPage,
+  redeemIdentityEnrollmentCode,
   revealSecretValue,
+  submitOnboardEnrollmentCode,
   triggerVaultSyncRefresh,
   uniqueS3KeyPrefix,
   uniqueSecretKey,
+  UI_TIMEOUT_MS,
   waitForSecretOnDevice,
 } from './helpers'
-import { LocalS3Identity } from '../../nook-web-extension/scripts/local-s3'
+import {
+  LocalS3Identity,
+  localS3Credentials,
+} from '../../nook-web-extension/scripts/local-s3'
 import enLocale from '../../../nook-platform/nook-app-common/locales/en.json' with { type: 'json' }
 
 const KEYRING_NAME = 'S3 keyring'
@@ -57,6 +70,31 @@ async function keepSecretOnS3(
   return secret
 }
 
+/** Issue an invite whose S3 provider gives the new device `keyChoice`, the
+ * value of an option of the invite's key select. */
+async function issueS3Invite(page: Page, keyChoice: string): Promise<string> {
+  await openOnboardDevicePanel(page)
+  const clear = page.getByTestId('onboard-clear-code-btn')
+  if (await clear.isVisible()) await clear.click()
+  const keySelect = page.locator('[data-testid^="onboard-key-"]')
+  await expect(keySelect).toHaveCount(1, { timeout: UI_TIMEOUT_MS })
+  await keySelect.selectOption(keyChoice)
+  await submitOnboardEnrollmentCode(page, E2E_IDENTITY_PASSPHRASE)
+  const link = (await page.getByTestId('onboard-link').textContent()) || ''
+  expect(link).toContain('#enroll=')
+  return localizeAppLinkForE2e(page, link.trim())
+}
+
+/** A fresh app opens the invite link on its own clean store. */
+async function openInviteOnFreshApp(joiner: Page, link: string): Promise<void> {
+  await joiner.goto('/app/')
+  await clearBrowserVault(joiner)
+  await joiner.goto(link)
+  await expect(joiner.getByTestId('join-this-device')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+}
+
 // Every test keeps its objects under its own key prefix in the shared local
 // bucket, so the tests run in parallel and never see each other's keyrings.
 test.describe('S3-compatible storage as the sync provider', () => {
@@ -88,6 +126,87 @@ test.describe('S3-compatible storage as the sync provider', () => {
       expect(await revealSecretValue(joiner, secret.key)).toBe(secret.value)
     } finally {
       await joinerContext.close()
+    }
+  })
+
+  test('an invite can leave the S3 key to the new device or carry a saved spare key', async ({
+    page,
+    browser,
+  }) => {
+    test.setTimeout(300_000)
+    const secret = await keepSecretOnS3(page, uniqueS3KeyPrefix('keys'))
+    const deviceB = localS3Credentials(LocalS3Identity.DeviceB)
+
+    // Add key on the invite page opens the Sync page with that provider's
+    // Add key form; the spare is saved beside the key in use.
+    await openOnboardDevicePanel(page)
+    await page.locator('[data-testid^="onboard-add-key-"]').click()
+    const form = page.getByTestId('s3-add-key-form')
+    await expect(form).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await form
+      .getByTestId('s3-add-key-access-key-id-input')
+      .fill(deviceB.accessKeyId)
+    await form
+      .getByTestId('s3-add-key-secret-access-key-input')
+      .fill(deviceB.secretAccessKey)
+    await form.getByTestId('s3-add-key-save').click()
+    await expect(form).toHaveCount(0, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(
+      page.getByTestId(`s3-remove-key-${deviceB.accessKeyId}`),
+    ).toBeVisible()
+
+    // An invite with no key: the new device enters its own before joining.
+    const keylessLink = await issueS3Invite(page, 'joiner')
+    const keylessContext = await createIsolatedContext(browser)
+    try {
+      const joiner = await keylessContext.newPage()
+      await openInviteOnFreshApp(joiner, keylessLink)
+      await joiner
+        .getByTestId('enrollment-password-input')
+        .fill(E2E_IDENTITY_PASSPHRASE)
+      await joiner.getByTestId('submit-enrollment-code-btn').click()
+      const keys = joiner.getByTestId('join-provider-keys')
+      await answerPasskeyPromptBeforeJoin(joiner, keys)
+      await expect(keys).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+      // The location is named; no key from the invite is on screen.
+      await expect(keys.getByTestId('join-provider-key-label')).toContainText(
+        'nook-dev',
+      )
+      await expect(keys).not.toContainText(deviceB.secretAccessKey)
+      await keys
+        .getByTestId('join-s3-access-key-id-input')
+        .fill(deviceB.accessKeyId)
+      await keys
+        .getByTestId('join-s3-secret-access-key-input')
+        .fill(deviceB.secretAccessKey)
+      await redeemIdentityEnrollmentCode(joiner, E2E_IDENTITY_PASSPHRASE)
+      await openVaultAfterIdentityJoin(joiner)
+      await waitForSecretOnDevice(joiner, secret.key)
+      expect(await revealSecretValue(joiner, secret.key)).toBe(secret.value)
+    } finally {
+      await keylessContext.close()
+    }
+    await expectIdentityMembers(page, 2)
+
+    // An invite carrying the saved spare key joins with no key typed, and
+    // the new device signs with that key.
+    const spareLink = await issueS3Invite(page, `saved:${deviceB.accessKeyId}`)
+    const spareContext = await createIsolatedContext(browser)
+    try {
+      const joiner = await spareContext.newPage()
+      await openInviteOnFreshApp(joiner, spareLink)
+      await redeemIdentityEnrollmentCode(joiner, E2E_IDENTITY_PASSPHRASE)
+      await expect(joiner.getByTestId('join-provider-keys')).toHaveCount(0)
+      await openVaultAfterIdentityJoin(joiner)
+      await waitForSecretOnDevice(joiner, secret.key)
+      expect(await revealSecretValue(joiner, secret.key)).toBe(secret.value)
+      await openManagePage(joiner, ManagePage.Sync)
+      await expect(joiner.getByTestId('s3-key-row').first()).toContainText(
+        deviceB.accessKeyId,
+        { timeout: UI_TIMEOUT_MS },
+      )
+    } finally {
+      await spareContext.close()
     }
   })
 

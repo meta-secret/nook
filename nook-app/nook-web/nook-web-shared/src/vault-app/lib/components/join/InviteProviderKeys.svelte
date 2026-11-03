@@ -19,7 +19,7 @@ join goes on.
 
   let {
     vault,
-    entries = $bindable(),
+    entries = $bindable([]),
     disabled,
   }: {
     vault: VaultState

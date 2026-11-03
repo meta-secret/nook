@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
 import { assertVaultReady, dismissSyncConflictIfVisible } from './settings-auth'
 import {
@@ -16,16 +16,25 @@ export type OnboardEnrollmentOptions = {
 
 /**
  * Google Drive and iCloud invites name one account from the provider's own
- * sharing list; other providers show no list. Pick the account before the
- * invite is issued.
+ * sharing list; other providers show no list. Pick the account of each
+ * shared provider in the invite before the invite is issued.
  */
 export async function pickOnboardInviteAccount(
   page: Page,
   options?: OnboardEnrollmentOptions,
 ) {
-  const panel = page
+  const panels = page
     .getByTestId('onboard-device-panel')
     .getByTestId('authorized-accounts')
+  for (const panel of await panels.all()) {
+    await pickAccountIn(panel, options)
+  }
+}
+
+async function pickAccountIn(
+  panel: Locator,
+  options?: OnboardEnrollmentOptions,
+) {
   if (!(await panel.isVisible())) return
   const list = panel.getByTestId('authorized-accounts-list')
   const failure = panel

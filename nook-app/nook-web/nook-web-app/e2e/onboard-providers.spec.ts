@@ -141,8 +141,11 @@ test.describe('identity onboarding provider picker', () => {
     await expect(providerList).not.toContainText(workToken)
     await expect(page.getByTestId('onboard-provider-local')).toHaveCount(0)
 
-    await work.click()
-    await expect(work).toHaveAttribute('aria-checked', 'true')
-    await expect(personal).toHaveAttribute('aria-checked', 'false')
+    // Every provider is in the invite until it is left out.
+    await expect(work).toBeChecked()
+    await expect(personal).toBeChecked()
+    await personal.click()
+    await expect(personal).not.toBeChecked()
+    await expect(work).toBeChecked()
   })
 })
