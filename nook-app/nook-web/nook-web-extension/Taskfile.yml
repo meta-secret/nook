@@ -24,16 +24,24 @@ tasks:
       Drive a dev scenario (SCENARIO=<name> from scenarios/) in a new Brave
       profile against the running dev servers, then reopen that profile as an
       ordinary Brave window for a person to continue.
+    deps:
+      - extension:dev:bun
+    vars:
+      # The dev loop's pinned Bun, as extension:dev uses it.
+      DEV_BUN_VERSION:
+        sh: jq -r '.packageManager | sub("^bun@"; "")' "{{.EXTENSION_ROOT}}/package.json"
     cmds:
       - test -n "{{.SCENARIO}}" || (echo "SCENARIO is required (e.g. s3-paired-pin)" >&2; exit 1)
       - >-
+        PATH="$HOME/.nook/bun/{{.DEV_BUN_VERSION}}/bin:$PATH"
         NOOK_SIMPLE_VAULT_URL=https://localhost:5173/
         NOOK_EXTENSION_CHANNEL=local
         task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" _extension:build
       - |
         profile="$HOME/Library/Application Support/Nook/browser-profiles/scenario-{{.SCENARIO}}-$(date +%Y%m%d-%H%M%S)"
         cd "{{.EXTENSION_ROOT}}"
-        NOOK_SCENARIO_PROFILE="$profile" NOOK_SIMPLE_VAULT_URL=https://localhost:5173/ \
+        PATH="$HOME/.nook/bun/{{.DEV_BUN_VERSION}}/bin:$PATH" \
+          NOOK_SCENARIO_PROFILE="$profile" NOOK_SIMPLE_VAULT_URL=https://localhost:5173/ \
           bun x playwright test --config scenarios/playwright.config.ts "scenarios/{{.SCENARIO}}.scenario.ts"
         open -na "Brave Browser" --args --user-data-dir="$profile" \
           --load-extension="{{.EXTENSION_ROOT}}/dist" --no-first-run --no-default-browser-check \
