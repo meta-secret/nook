@@ -3,6 +3,7 @@ import type { Browser, BrowserContext, Page } from '@playwright/test'
 import { Effect } from 'effect'
 import { ManualPasskeyScenario } from './identity-spec-helpers'
 import {
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
   answerPasskeyPromptBeforeJoin,
   authorizeDeviceProtection,
   connectLocalVault,
@@ -141,8 +142,10 @@ class VaultAppsInventoryScenario {
       case KeyringSetup.WithoutVault:
         return Effect.promise(async () => {
           const consent = page.getByTestId('extension-connect-consent')
+          // The connect route starts the app again first; under a full
+          // parallel run that start alone can take longer than a UI wait.
           await expect(page.getByTestId('extension-request-panel')).toBeVisible(
-            { timeout: UI_TIMEOUT_MS },
+            { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
           )
           await page.getByTestId('extension-request-unlock').click()
           await answerPasskeyPromptBeforeJoin(page, consent)
