@@ -217,6 +217,23 @@ is saved sealed like every provider row.
       data-testid="s3-add-key-form"
       onsubmit={addKey}
     >
+      {#each keyConsoles as guide (guide.service)}
+        <div class="grid gap-1" data-testid="s3-add-key-console">
+          <a
+            href={guide.keyConsoleUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-1.5 text-sm text-foreground underline underline-offset-4 hover:text-foreground/80"
+            data-testid="s3-add-key-console-link"
+          >
+            {createKeyText(guide)}
+            <ExternalLink class="size-3.5" aria-hidden="true" />
+          </a>
+          <p class="text-xs text-muted-foreground">
+            {vault.t(I18N_KEYS.ProviderSetupS3CreateKeyHint)}
+          </p>
+        </div>
+      {/each}
       <div class="grid gap-1.5">
         <label class="nk-field-label block" for={`${idPrefix}-access-key-id`}>
           {vault.t(I18N_KEYS.ProviderSetupS3AccessKeyIdLabel)}
@@ -259,23 +276,6 @@ is saved sealed like every provider row.
           's3-add-key-secret-access-key-error',
         )}
       </div>
-      {#each keyConsoles as guide (guide.service)}
-        <div class="grid gap-1" data-testid="s3-add-key-console">
-          <a
-            href={guide.keyConsoleUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center gap-1.5 text-sm text-foreground underline underline-offset-4 hover:text-foreground/80"
-            data-testid="s3-add-key-console-link"
-          >
-            {createKeyText(guide)}
-            <ExternalLink class="size-3.5" aria-hidden="true" />
-          </a>
-          <p class="text-xs text-muted-foreground">
-            {vault.t(I18N_KEYS.ProviderSetupS3CreateKeyHint)}
-          </p>
-        </div>
-      {/each}
       <div class="flex flex-wrap items-center gap-3">
         <Button
           type="submit"
