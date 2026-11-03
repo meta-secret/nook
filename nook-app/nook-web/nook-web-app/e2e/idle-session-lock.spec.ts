@@ -27,7 +27,12 @@ test.describe('idle session auto-lock', () => {
     await disableLoginAutoUnlock(page)
     await page.reload()
     // Finish setup with real time, then pause before the tested unlock starts
-    // its idle timer. A future instant avoids racing the clock's current time.
+    // its idle timer: the app starts on real time too, so its vault row is
+    // shown before the clock pauses. A future instant avoids racing the
+    // clock's current time.
+    await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await page.clock.pauseAt(new Date(clockStart.getTime() + 60 * 60 * 1000))
   })
 
