@@ -80,13 +80,13 @@ pub use auth::identity::{
     IdentityVaultDekReconciliation, IdentityVaultKeyOpening, IdentityVaultKeys, MemberDekEnvelope,
 };
 pub use auth::identity_directory::{
-    AppKeyIdentityMembership, DirectoryLegacyVaultImport, DirectoryMemberSigningUpdate,
-    DirectoryOwnedVaultOpening, FreshIdentityNaming, IdentityConnectionKey,
-    IdentityConnectionKeyRequest, IdentityCreation, IdentityDirectory, IdentityDirectoryRejection,
-    IdentityDirectoryResolution, IdentityDirectoryVaultKeys, IdentityInvitationBinding,
-    IdentityInvitationBindingRequest, IdentitySelection, LocalIdentityKeyRetirement,
-    LocalIdentityLog, RecoveryRetirement, ReplicatedIdentityAddition, ReplicatedIdentityAdoption,
-    ReplicatedIdentityMembership, ReplicatedVaultGrant,
+    AdoptedIdentityLabel, AppKeyIdentityMembership, DirectoryLegacyVaultImport,
+    DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, FreshIdentityNaming,
+    IdentityConnectionKey, IdentityConnectionKeyRequest, IdentityCreation, IdentityDirectory,
+    IdentityDirectoryRejection, IdentityDirectoryResolution, IdentityDirectoryVaultKeys,
+    IdentityInvitationBinding, IdentityInvitationBindingRequest, IdentitySelection,
+    LocalIdentityKeyRetirement, LocalIdentityLog, RecoveryRetirement, ReplicatedIdentityAddition,
+    ReplicatedIdentityAdoption, ReplicatedIdentityMembership, ReplicatedVaultGrant,
 };
 
 pub use auth::local_identity_keyring::{

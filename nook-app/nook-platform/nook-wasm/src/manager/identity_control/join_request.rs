@@ -124,6 +124,7 @@ impl NookVaultManager {
                     NookDatabase::rebind_local_identity(KeyringDbRebindLocalIdentity {
                         local_identity_id: &local_identity_id,
                         replicated_identity_id: identity_id,
+                        label: nook_core::AdoptedIdentityLabel::Kept,
                     })
                     .await?;
                 }

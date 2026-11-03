@@ -672,6 +672,7 @@ export class PasswordEnrollmentActions {
             try {
               await admittedManager.value.bind_local_identity_to_invitation(
                 identityId,
+                identityLabel,
               );
               await admittedManager.value.join_identity_with_invite(
                 code,

@@ -281,7 +281,7 @@ pub use auth::vault_meta_actions::{
 };
 pub use multi_device::SimpleIdentityGenesisOperationsInput;
 pub use nook_auth2::{
-    AppId, AppKey, AppKeyIdentityMembership, DirectoryLegacyVaultImport,
+    AdoptedIdentityLabel, AppId, AppKey, AppKeyIdentityMembership, DirectoryLegacyVaultImport,
     DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, FreshIdentityNaming,
     IdentityConnectionKey, IdentityConnectionKeyRequest, IdentityCreation, IdentityDirectory,
     IdentityDirectoryRejection, IdentityDirectoryResolution, IdentityDirectoryVaultKeys,

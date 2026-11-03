@@ -40,6 +40,18 @@ pub struct ReplicatedIdentityMembership<'a> {
 pub struct ReplicatedIdentityAdoption<'a> {
     pub local_identity_id: &'a IdentityId,
     pub replicated_identity_id: &'a IdentityId,
+    pub label: AdoptedIdentityLabel<'a>,
+}
+
+/// What the adopted identity is called on this installation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AdoptedIdentityLabel<'a> {
+    /// The local identity keeps its name: a join request's approver seals the
+    /// identity's name to the joining app.
+    Kept,
+    /// The name an invite carried replaces the one the local identity got
+    /// before it joined.
+    Invited(&'a str),
 }
 
 /// A replicated identity whose log lists this installation's app key, added
@@ -269,6 +281,16 @@ impl IdentityDirectory {
                 })?;
             record.identity_id = request.replicated_identity_id.clone();
             record.control_epoch = record.control_epoch.next();
+            match request.label {
+                AdoptedIdentityLabel::Kept => {}
+                AdoptedIdentityLabel::Invited(label) => {
+                    let label = label.trim();
+                    if label.is_empty() {
+                        return Err(MultiDeviceError::IdentityLabelEmpty);
+                    }
+                    label.clone_into(&mut record.label);
+                }
+            }
             if candidate.selection == IdentitySelection::Selected(request.local_identity_id.clone())
             {
                 candidate.selection =
@@ -522,17 +544,56 @@ mod tests {
             .adopt_replicated_identity(&ReplicatedIdentityAdoption {
                 local_identity_id: &local,
                 replicated_identity_id: &replicated,
+                label: AdoptedIdentityLabel::Kept,
             })?;
         assert_eq!(adopted.selected()?.identity_id, replicated);
+        assert_eq!(adopted.selected()?.label, "Phone");
         assert!(adopted.selected()?.has_app_id(app.app_id()));
 
         let duplicate = adopted.adopt_replicated_identity(&ReplicatedIdentityAdoption {
             local_identity_id: &replicated,
             replicated_identity_id: &replicated,
+            label: AdoptedIdentityLabel::Kept,
         });
         assert!(matches!(
             duplicate.map_err(IdentityDirectoryRejection::into_cause),
             Err(MultiDeviceError::ReplicatedIdentityAlreadyLocal { .. })
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn an_invited_adoption_takes_the_name_the_invite_carried() -> anyhow::Result<()> {
+        let app = AppKey::generate()?;
+        let created = IdentityDirectory::empty().create_identity(IdentityCreation {
+            label: "Personal",
+            app_key: &app,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        let local = created.identity_id;
+        let replicated = IdentityId::generate()?;
+        let adopted =
+            created
+                .directory
+                .clone()
+                .adopt_replicated_identity(&ReplicatedIdentityAdoption {
+                    local_identity_id: &local,
+                    replicated_identity_id: &replicated,
+                    label: AdoptedIdentityLabel::Invited(" S3 keyring "),
+                })?;
+        assert_eq!(adopted.selected()?.identity_id, replicated);
+        assert_eq!(adopted.selected()?.label, "S3 keyring");
+
+        let unnamed = created
+            .directory
+            .adopt_replicated_identity(&ReplicatedIdentityAdoption {
+                local_identity_id: &local,
+                replicated_identity_id: &replicated,
+                label: AdoptedIdentityLabel::Invited("  "),
+            });
+        assert!(matches!(
+            unnamed.map_err(IdentityDirectoryRejection::into_cause),
+            Err(MultiDeviceError::IdentityLabelEmpty)
         ));
         Ok(())
     }

@@ -3,12 +3,12 @@ import { LocalS3Identity } from '../scripts/local-s3'
 import {
   connectS3InFirstRun,
   createKeyringOnS3,
-  expectIdentityMembers,
   openVaultPage,
   uniqueS3KeyPrefix,
 } from '../../nook-web-app/e2e/helpers'
 import { firstPage } from './dev-browser'
 import {
+  expectBothDevicesCounted,
   issueInvite,
   joinWithInvite,
   pairExtension,
@@ -25,7 +25,7 @@ import {
 // carrying its S3 key; the second opens the invite, protects its own key
 // with a PIN, joins, opens the vault, and reopens and unlocks too. Every
 // step's console and app logs are audited on both devices; any error fails
-// the scenario. Both windows stay open, the keyring listing two devices.
+// the scenario. Both windows stay open, the keyring's checklist done.
 test('two devices on one S3 keyring, the second joined from an invite', async () => {
   await runScenario(async (devices) => {
     const first = await devices.open('first-device')
@@ -65,11 +65,14 @@ test('two devices on one S3 keyring, the second joined from an invite', async ()
     await devices.step('second device: joined from the invite', () =>
       joinWithInvite(joiner, invite),
     )
-    await devices.step('first device: lists two devices', () =>
-      expectIdentityMembers(vault, 2),
-    )
     await devices.step('second device: reload and unlock', () =>
       reloadAndUnlockWithPin(joiner),
+    )
+    await devices.step('first device: keyring counts both devices', () =>
+      expectBothDevicesCounted(vault, 'S3 keyring'),
+    )
+    await devices.step('second device: keyring counts both devices', () =>
+      expectBothDevicesCounted(joiner, 'S3 keyring'),
     )
   })
 })

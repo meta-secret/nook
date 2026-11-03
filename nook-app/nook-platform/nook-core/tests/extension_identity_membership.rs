@@ -9,17 +9,17 @@
 //! without a sync provider.
 
 use nook_core::{
-    AppKey, EventId, IdentityConnectionKey, IdentityConnectionKeyRequest, IdentityControlLog,
-    IdentityControlOperation, IdentityControlSnapshot, IdentityControlSnapshotRequest,
-    IdentityControlStanding, IdentityControlState, IdentityCreation, IdentityDirectory,
-    IdentityEvent, IdentityEventInsertStatus, IdentityEventSigning, IdentityGenesisRequest,
-    IdentityHealth, IdentityHealthAssessment, IdentityHealthStage, IdentityId,
-    IdentityInvitationBinding, IdentityJoinCompletion, IdentityJoinCompletionPlan,
-    IdentityMemberAdd, IdentityMemberKeys, IdentityNextStep, IdentityVaultKeyOpening,
-    IdentityVaultPairingRequest, IdentityVaultRegistration, IsoTimestamp, LocalIdentityLog,
-    MemberLabel, MemberLabelState, MultiDeviceError, OpenedVaultDek, ReplicatedIdentityAdoption,
-    ReplicatedIdentityMembership, ReplicatedIdentityStanding, ReplicatedMembershipRequest,
-    SigningIdentity, StoreId, VaultError, VaultKeys,
+    AdoptedIdentityLabel, AppKey, EventId, IdentityConnectionKey, IdentityConnectionKeyRequest,
+    IdentityControlLog, IdentityControlOperation, IdentityControlSnapshot,
+    IdentityControlSnapshotRequest, IdentityControlStanding, IdentityControlState,
+    IdentityCreation, IdentityDirectory, IdentityEvent, IdentityEventInsertStatus,
+    IdentityEventSigning, IdentityGenesisRequest, IdentityHealth, IdentityHealthAssessment,
+    IdentityHealthStage, IdentityId, IdentityInvitationBinding, IdentityJoinCompletion,
+    IdentityJoinCompletionPlan, IdentityMemberAdd, IdentityMemberKeys, IdentityNextStep,
+    IdentityVaultKeyOpening, IdentityVaultPairingRequest, IdentityVaultRegistration, IsoTimestamp,
+    LocalIdentityLog, MemberLabel, MemberLabelState, MultiDeviceError, OpenedVaultDek,
+    ReplicatedIdentityAdoption, ReplicatedIdentityMembership, ReplicatedIdentityStanding,
+    ReplicatedMembershipRequest, SigningIdentity, StoreId, VaultError, VaultKeys,
 };
 
 fn at() -> IsoTimestamp {
@@ -252,6 +252,7 @@ impl Extension {
                     .adopt_replicated_identity(&ReplicatedIdentityAdoption {
                         local_identity_id: &local_identity_id,
                         replicated_identity_id: &identity.identity_id,
+                        label: AdoptedIdentityLabel::Kept,
                     })?;
         }
         self.sync(member, identity)

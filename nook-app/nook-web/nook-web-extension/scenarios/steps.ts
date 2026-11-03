@@ -8,11 +8,10 @@ import {
   reuseNookTabForConnect,
 } from '../e2e/helpers/extension-smoke-runtime'
 import {
-  openOnboardDevicePanel,
+  openAddDevice,
+  openIdentitiesPage,
   openVaultAfterIdentityJoin,
   startFirstRun,
-  submitOnboardEnrollmentCode,
-  waitForVaultOperationsIdle,
 } from '../../nook-web-app/e2e/helpers'
 import {
   flushNookLogPersistQueue,
@@ -269,8 +268,15 @@ const SCENARIO_INVITE_PASSPHRASE = 'scenario invite passphrase'
 /** Issue a one-time invite from the keyring open in `page`, with this
  * device's key for each provider, and return its link. */
 export async function issueInvite(page: Page): Promise<string> {
-  await openOnboardDevicePanel(page)
-  await submitOnboardEnrollmentCode(page, SCENARIO_INVITE_PASSPHRASE)
+  // As a person does it: the app keeps syncing on its own timers, which the
+  // e2e invite helpers pause.
+  await openAddDevice(page)
+  await expect(page.getByTestId('onboard-device-panel')).toBeVisible()
+  await page
+    .getByTestId('onboard-passphrase-input')
+    .fill(SCENARIO_INVITE_PASSPHRASE)
+  await page.getByTestId('onboard-device-submit').click()
+  await expect(page.getByTestId('onboarding-link-url')).toBeVisible()
   const link = await page.getByTestId('onboard-link').textContent()
   if (typeof link !== 'string' || !link.includes('#enroll=')) {
     throw new Error('The invite page showed no invite link.')
@@ -301,8 +307,8 @@ export async function joinWithInvite(page: Page, link: string): Promise<void> {
 }
 
 /** Reload the vault and unlock its keyring with the scenario PIN, as a
- * person does after reopening the browser, open its vault, and let its
- * first sync run. */
+ * person does after reopening the browser, and open its vault. Scenarios
+ * never pause the app's sync timers, as e2e helpers do. */
 export async function reloadAndUnlockWithPin(page: Page): Promise<void> {
   await page.goto('/app/')
   const pin = page.getByTestId('card-pin-input')
@@ -321,5 +327,19 @@ export async function reloadAndUnlockWithPin(page: Page): Promise<void> {
     .first()
   await open.click()
   await expect(page.getByTestId('vault-panel')).toBeVisible()
-  await waitForVaultOperationsIdle(page)
+}
+
+/** The keyring on this device knows both devices without being asked to
+ * sync: the keyrings page shows it by name with its protection checklist
+ * complete, so the checklist is gone. */
+export async function expectBothDevicesCounted(
+  page: Page,
+  keyringName: string,
+): Promise<void> {
+  await openIdentitiesPage(page)
+  const card = page.getByRole('article', { name: keyringName })
+  await expect(card).toBeVisible()
+  await expect(card.getByTestId('identity-protection-toggle')).toHaveCount(0, {
+    timeout: 90_000,
+  })
 }
