@@ -1,6 +1,9 @@
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import { ProviderSyncOutcome } from "$lib/vault/provider-sync.svelte";
-import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
+import {
+  NativeVaultStorageFailure,
+  VaultStorageFailure,
+} from "$lib/runtime/storage-failure";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 import {
   VaultStorageFailure as StorageOperationFailure,
@@ -155,6 +158,11 @@ export class VaultSyncActions {
         );
         return;
       }
+      // The banner names no cause; the log keeps the failure kind, its
+      // message key and the cause Rust classified, never the provider message.
+      log.warn(
+        `automatic sync failed: ${synchronized.error.kind} (${synchronized.error.translationKey}${synchronized.error instanceof VaultStorageFailure ? `, ${synchronized.error.cause}` : ""})`,
+      );
       const message = state.t(synchronized.error.translationKey);
       state.errorMsg = message;
       if (
