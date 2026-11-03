@@ -23,14 +23,12 @@ export function uniqueS3KeyPrefix(flow: string): string {
   return `e2e/${flow}-${randomUUID()}`
 }
 
-/** On first run's sync step, pick S3 and connect the local server with the
- * location's prefix and fixture key, as a person fills the form. */
-export async function connectS3InFirstRun(
+/** Fill the S3 connection form with the local server, the location's prefix
+ * and its fixture key, as a person types them. */
+async function fillS3Connection(
   page: Page,
   location: E2eS3Location,
 ): Promise<void> {
-  await page.getByTestId('first-run-s3-option').click()
-  await expect(page.getByTestId('first-run-s3-setup')).toBeVisible()
   const key = localS3Credentials(location.identity)
   const fields: ReadonlyArray<readonly [string, string]> = [
     ['s3-endpoint-input', LOCAL_S3_ENDPOINT],
@@ -43,7 +41,35 @@ export async function connectS3InFirstRun(
   for (const [testId, value] of fields) {
     await page.getByTestId(testId).fill(value)
   }
+}
+
+/** On first run's sync step, pick S3 and connect the local server with the
+ * location's prefix and fixture key. */
+export async function connectS3InFirstRun(
+  page: Page,
+  location: E2eS3Location,
+): Promise<void> {
+  await page.getByTestId('first-run-s3-option').click()
+  await expect(page.getByTestId('first-run-s3-setup')).toBeVisible()
+  await fillS3Connection(page, location)
   await page.getByTestId('first-run-s3-connect').click()
+}
+
+/** On an unlocked identity that keeps its vaults on this browser only, add
+ * S3 from its card's protection checklist: the copy step opens the provider
+ * picker, and S3 connects the local server with the location's key. */
+export async function addS3FromProtection(
+  page: Page,
+  location: E2eS3Location,
+): Promise<void> {
+  const protection = page.getByTestId('identity-protection-toggle')
+  await expect(protection).toContainText('0 of 2 done')
+  await protection.click()
+  await page.getByTestId('identity-protection-action').click()
+  await page.getByTestId('provider-option-s3').click()
+  await expect(page.getByTestId('s3-setup')).toBeVisible()
+  await fillS3Connection(page, location)
+  await page.getByTestId('connect-provider-btn').click()
 }
 
 /** On a connected S3 location that holds no keyring yet, create one under

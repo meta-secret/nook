@@ -1,5 +1,6 @@
 import { expect, test, type Page } from './fixtures'
 import {
+  addS3FromProtection,
   addSecret,
   connectS3InFirstRun,
   createFirstRunKey,
@@ -8,7 +9,9 @@ import {
   disableVaultIdleLock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   joinIdentityThroughCode,
+  keepIdentityWithoutVault,
   ManagePage,
+  openIdentityPanel,
   openManagePage,
   openVaultPage,
   revealSecretValue,
@@ -173,5 +176,44 @@ test.describe('S3-compatible storage as the sync provider', () => {
     // Nothing is staged: the form stays, and no location lists.
     await expect(page.getByTestId('first-run-s3-setup')).toBeVisible()
     await expect(page.getByTestId('first-run-s3-location')).toHaveCount(0)
+  })
+
+  test('S3 added later from the protection checklist stays listed after a reload and unlock', async ({
+    page,
+  }) => {
+    // A keyring kept on this browser only, with no vault, then S3 from its
+    // card's "Protect this keyring" checklist.
+    const card = await keepIdentityWithoutVault(page, KEYRING_NAME)
+    await addS3FromProtection(page, {
+      keyPrefix: uniqueS3KeyPrefix('protect'),
+      identity: LocalS3Identity.DeviceA,
+    })
+    const protection = card.getByTestId('identity-protection-toggle')
+    await expect(protection).toContainText('1 of 2 done', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await openIdentityPanel(page)
+    const s3Row = page
+      .getByTestId('identity-overview')
+      .getByTestId('identity-panel-provider-s3')
+    await expect(s3Row).toBeVisible()
+
+    // A reload locks the keyring (e2e skips its automatic passkey unlock, as a
+    // person's browser asks first); unlocking it from its card reads its
+    // providers again, so S3 is still there.
+    await page.evaluate(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
+    await page.reload()
+    await expect(card).toHaveAttribute('data-status', 'locked', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await card.getByTestId('identity-unlock').click()
+    await expect(card).toHaveAttribute('data-status', 'unlocked', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(protection).toContainText('1 of 2 done')
+    await openIdentityPanel(page)
+    await expect(s3Row).toBeVisible()
   })
 })
