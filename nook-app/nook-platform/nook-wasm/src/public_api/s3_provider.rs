@@ -138,6 +138,7 @@ mod tests {
                     "keyPrefix": { "state": "prefix", "value": "e2e" },
                     "accessKeyId": "device-a",
                     "secretAccessKey": WasmFixture::S3_SECRET,
+                    "spareKeys": [],
                 },
                 },
             })
