@@ -12,10 +12,10 @@ import {
   openIdentitiesPage,
   openManagePage,
   openVaultPage,
+  pressIfReady,
   readLocalVaultYamlFromIdb,
   revealSecretValue,
   storeIdOfVaultYaml,
-  switchToVaultFromIdentities,
   triggerVaultSyncRefresh,
   uniqueS3KeyPrefix,
   uniqueSecretKey,
@@ -54,8 +54,10 @@ async function openStoreId(page: Page): Promise<string> {
 async function addRecoveryPassphrase(page: Page): Promise<string> {
   await openManagePage(page, ManagePage.Keys)
   await page.getByTestId('recovery-passphrase-add').click()
-  await page.getByTestId('recovery-passphrase-label').fill(PASSPHRASE_LABEL)
-  await page.getByTestId('recovery-passphrase-strength-standard').click()
+  await page
+    .getByTestId('recovery-passphrase-label-input')
+    .fill(PASSPHRASE_LABEL)
+  await page.getByTestId('recovery-passphrase-strength-choice-standard').click()
   await page.getByTestId('recovery-passphrase-generate').click()
   const words = page.getByTestId('recovery-passphrase-word')
   await expect(words).toHaveCount(4, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
@@ -126,13 +128,41 @@ async function listKeyringOnNewDevice(
   return listed
 }
 
-/** Open one of the keyring's vaults from the hub and read its secret. */
+/** Open one of the keyring's vaults from its row on the hub: one this
+ * browser holds unlocks and opens from its panel; one only granted to it
+ * opens from the panel's away action, through the keyring's provider. */
+async function openKeyringVault(device: Page, storeId: string): Promise<void> {
+  await openIdentitiesPage(device)
+  const row = device.locator(
+    `[data-testid="identity-vault-row"][data-store-id="${storeId}"]`,
+  )
+  await expect(row).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click()
+  const controls = [
+    device.getByTestId('vault-panel-open-away'),
+    device.getByTestId('vault-panel-unlock'),
+    device.getByTestId('vault-panel-open'),
+  ]
+  await expect
+    .poll(
+      async () => {
+        if ((await openStoreId(device)) === storeId) return 'open'
+        for (const control of controls) {
+          if (await pressIfReady(control)) break
+        }
+        return 'waiting'
+      },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe('open')
+}
+
+/** Open one of the keyring's vaults and read its secret. */
 async function readSecretOfVault(
   device: Page,
   kept: KeptVault,
 ): Promise<string> {
-  await openIdentitiesPage(device)
-  await switchToVaultFromIdentities(device, kept.storeId)
+  await openKeyringVault(device, kept.storeId)
   await disableVaultIdleLock(device)
   await openVaultPage(device)
   await waitForSecretOnDevice(device, kept.key)

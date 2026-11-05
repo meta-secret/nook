@@ -12,6 +12,7 @@ passphrases follow as keys of their own, kept on paper.
   import {
     Asterisk,
     Fingerprint,
+    KeyRound,
     MonitorSmartphone,
     Pencil,
     RefreshCw,
@@ -26,6 +27,12 @@ passphrases follow as keys of their own, kept on paper.
   import { IdentityDirectoryReader } from "$lib/components/devices-access/identity-directory-view";
   import { IDENTITY_DIRECTORY_RETRY_DELAYS_MS } from "$lib/components/identities/identity-directory-loader.svelte";
   import { KeysLoadKind, type KeysLoad } from "./identity-keys-load";
+  import {
+    KeysCoverageKind,
+    keysCoverage,
+    keysCoverageMessage,
+    type KeysCoverageRequest,
+  } from "./identity-keys-coverage";
   import RecoveryPassphrases from "$lib/components/recovery-passphrase/RecoveryPassphrases.svelte";
   import {
     IdentityKeyInventory,
@@ -104,6 +111,13 @@ passphrases follow as keys of their own, kept on paper.
   const keys = $derived(
     rows.filter((row) => row.kind === IdentityKeyInventoryRowKind.Protector),
   );
+  const coverage = $derived.by(() => {
+    const request: KeysCoverageRequest = {
+      keyCount: keys.length,
+      snapshot: vault.identityControl.snapshot,
+    };
+    return keysCoverage(request);
+  });
   const otherApps = $derived(
     ((v) => (v ? v.apps : []))(
       rows.find((row) => row.kind === IdentityKeyInventoryRowKind.Apps),
@@ -262,19 +276,25 @@ passphrases follow as keys of their own, kept on paper.
           <p
             class="flex items-start gap-2 text-xs text-pretty text-muted-foreground"
           >
-            {#if keys.length <= 1}
+            {#if coverage === KeysCoverageKind.Single}
               <TriangleAlert
                 class="mt-0.5 size-3.5 shrink-0 text-warning"
                 aria-hidden="true"
               />
-              {withIdentity(I18N_KEYS.IdentityKeysSingleWarning)}
+            {:else if coverage === KeysCoverageKind.SingleRecoverable}
+              <KeyRound
+                class="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
             {:else}
               <ShieldCheck
                 class="mt-0.5 size-3.5 shrink-0 text-success"
                 aria-hidden="true"
               />
-              {withIdentity(I18N_KEYS.IdentityKeysCovered)}
             {/if}
+            <span data-testid="identity-keys-coverage" data-coverage={coverage}
+              >{withIdentity(keysCoverageMessage(coverage))}</span
+            >
           </p>
         </div>
       </div>

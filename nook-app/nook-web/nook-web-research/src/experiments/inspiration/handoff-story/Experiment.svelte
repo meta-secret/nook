@@ -133,7 +133,7 @@ are reading via IntersectionObserver and lets you jump between them.
       trusted:
         verified.length === 0
           ? 'Trusted to stay closed. A vault admits a key only after that key has been verified against it.'
-          : 'Trusted to open for this device key, because it already has. Backup passwords stay wrapped in this browser.',
+          : 'Trusted to open for this device key, because it already has. Recovery passphrase words never sync.',
       withheld:
         access.vaults.length === verified.length
           ? 'Never trusted to count as reachable on a browser that has not opened it.'

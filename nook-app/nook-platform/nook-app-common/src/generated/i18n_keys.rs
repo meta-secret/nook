@@ -1583,6 +1583,7 @@ pub const IDENTITY_KEYS_KEPT_IN: &str = "identity_keys.kept_in";
 pub const IDENTITY_KEYS_LAST_USED: &str = "identity_keys.last_used";
 pub const IDENTITY_KEYS_OTHER_BODY: &str = "identity_keys.other_body";
 pub const IDENTITY_KEYS_OTHER_TITLE: &str = "identity_keys.other_title";
+pub const IDENTITY_KEYS_SINGLE_RECOVERABLE: &str = "identity_keys.single_recoverable";
 pub const IDENTITY_KEYS_SINGLE_WARNING: &str = "identity_keys.single_warning";
 pub const IDENTITY_KEYS_UNLOCKS: &str = "identity_keys.unlocks";
 pub const IDENTITY_MENU_ACTIONS: &str = "identity_menu.actions";

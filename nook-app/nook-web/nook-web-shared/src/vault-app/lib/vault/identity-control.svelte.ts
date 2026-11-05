@@ -400,7 +400,9 @@ export class IdentityControlModel {
   /**
    * Check the words typed back. Only when Rust accepts them is the
    * passphrase recorded; it then reaches every mount, where a new device
-   * finds it. A slip is returned for the form to show.
+   * finds it. Accepted words are saved even when that copy fails: the list
+   * shows the passphrase, and the failed copy is reported on its own so
+   * the next sync can carry it. A slip is returned for the form to show.
    */
   async confirmRecoveryPassphrase(
     words: string,
@@ -411,9 +413,11 @@ export class IdentityControlModel {
     if (checked.isErr()) return checked;
     switch (checked.value.state) {
       case "accepted": {
-        const synced = await this.syncWithMounts();
-        if (synced.isErr()) return err(synced.error);
         log.info("recovery passphrase added");
+        const synced = await this.syncWithMounts();
+        if (synced.isOk()) return checked;
+        await this.loadSnapshot();
+        this.report(synced.error);
         return checked;
       }
       case "empty":

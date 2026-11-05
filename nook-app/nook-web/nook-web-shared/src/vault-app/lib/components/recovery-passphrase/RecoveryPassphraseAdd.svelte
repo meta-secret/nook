@@ -137,7 +137,7 @@ saved in the keyring. Cancel, or leaving the page, drops the pending one.
           maxlength="80"
           autocomplete="off"
           placeholder={vault.t(I18N_KEYS.RecoveryPassphraseLabelPlaceholder)}
-          data-testid="recovery-passphrase-label"
+          data-testid="recovery-passphrase-label-input"
           disabled={working}
           bind:value={label}
         />
@@ -150,7 +150,7 @@ saved in the keyring. Cancel, or leaving the page, drops the pending one.
           class="grid grid-cols-2 gap-2"
           role="radiogroup"
           aria-labelledby="recovery-passphrase-strength-label"
-          data-testid="recovery-passphrase-strength"
+          data-testid="recovery-passphrase-strength-choice"
         >
           {#each RECOVERY_STRENGTHS as choice (choice)}
             {@const picked = choice === strength}
@@ -159,7 +159,7 @@ saved in the keyring. Cancel, or leaving the page, drops the pending one.
               role="radio"
               aria-checked={picked}
               class="nk-frame-nick nk-frame-interactive nk-choice-tile flex min-h-14 items-center gap-2.5 px-3 py-2.5 text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
-              data-testid="recovery-passphrase-strength-{choice}"
+              data-testid="recovery-passphrase-strength-choice-{choice}"
               disabled={working}
               onclick={() => (strength = choice)}
             >

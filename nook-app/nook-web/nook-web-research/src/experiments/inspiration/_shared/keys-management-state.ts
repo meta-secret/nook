@@ -179,7 +179,8 @@ const unlockedScenario: AccessScenario = {
     browser: 'Chrome 141',
     platform: 'macOS 15',
     preparedAt: AccessScenarioView.known('12 Mar 2026, 09:14'),
-    boundary: 'Backup passwords stay wrapped in this browser and never sync.',
+    boundary:
+      'Recovery passphrase words never sync; only the keyring key sealed under them does.',
   },
   vaults: [
     {
@@ -216,7 +217,8 @@ const sharedScenario: AccessScenario = {
     browser: 'Firefox 139',
     platform: 'Ubuntu 26.04',
     preparedAt: AccessScenarioView.known('4 Jan 2026, 18:03'),
-    boundary: 'Backup passwords stay wrapped in this browser and never sync.',
+    boundary:
+      'Recovery passphrase words never sync; only the keyring key sealed under them does.',
   },
   vaults: [
     {

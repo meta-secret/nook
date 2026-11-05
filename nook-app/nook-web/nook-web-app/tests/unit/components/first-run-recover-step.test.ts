@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte'
 import type { ComponentProps } from 'svelte'
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest'
-import { ok } from 'neverthrow'
+import { err, ok } from 'neverthrow'
 import initNookWasm, {
   DeviceProtectionStatus,
   NookVaultManager,
@@ -15,6 +15,7 @@ import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { IdentityDirectoryLoader } from '$lib/components/identities/identity-directory-loader.svelte'
 import { FirstRunActions } from '$lib/vault/first-run'
 import { IdentityActionOutcome } from '$lib/vault/identity-control.svelte'
+import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
 import {
   FirstRunJoinKind,
   type IdentityJoinIntent,
@@ -286,5 +287,28 @@ describe('first-run recovery from Google Drive', () => {
       kind: FirstRunJoinKind.Recovering,
       join: { source: drive, identityId: IDENTITY, label: JOIN.label },
     })
+  })
+})
+
+describe('a recovery that joined but could not load the keyring', () => {
+  test('keeps the load failure shown and announces no recovery', async () => {
+    const fixture = new RecoverFixture()
+    const failure = new NativeVaultStorageFailure('provider unreachable')
+    vi.spyOn(
+      fixture.vault.identityControl,
+      'followInviteJoin',
+    ).mockResolvedValue(err(failure))
+    fixture.connected.mockImplementation(() => {
+      // Connecting clears the page's error before it runs.
+      fixture.vault.errorMsg = ''
+      return Promise.resolve(true)
+    })
+    await fixture.render()
+
+    await fixture.recover('amber canyon harbor meadow')
+
+    await vi.waitFor(() => expect(fixture.connected).toHaveBeenCalledOnce())
+    expect(fixture.vault.errorMsg).toBe(fixture.vault.t(failure.translationKey))
+    expect(fixture.vault.successMsg).toBe('')
   })
 })
