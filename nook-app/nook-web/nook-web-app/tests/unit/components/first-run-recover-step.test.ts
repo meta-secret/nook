@@ -134,6 +134,7 @@ describe('first-run recovery with a passphrase', () => {
       standing: { kind: 'unchecked' },
       decisions: [],
       setup: { kind: 'requestToJoin' },
+      recovery: 'offered',
       vaults: [],
     }
 
