@@ -447,9 +447,8 @@ impl PreparedRemoteUnion<'_> {
 mod browser {
     use super::*;
     use nook_core::{
-        EpochMetadataState, EpochPasswordState, GenesisImportPayload, IsoTimestamp,
-        PasswordEntryId, Sha256Hex, SigningIdentity, StoreId, VaultEventBody,
-        VaultEventSchemaVersion, VaultOperation,
+        DeviceId, EpochMetadataState, GenesisImportPayload, IsoTimestamp, Sha256Hex,
+        SigningIdentity, StoreId, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
     };
     use std::slice;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -513,8 +512,8 @@ mod browser {
                     parents: vec![genesis.event.id()?],
                     created_at: created_at.clone(),
                     key_epoch: genesis.event.id()?,
-                    operations: vec![VaultOperation::PasswordRemoved {
-                        entry_id: PasswordEntryId::from_trusted("pwdentry001".to_owned()),
+                    operations: vec![VaultOperation::DeviceRevoked {
+                        device_id: DeviceId::parse("0123456789abcdef")?,
                     }],
                 },
                 signing.signing_key(),

@@ -215,9 +215,9 @@ mod tests {
     };
     use nook_core::AppendEventInput;
     use nook_core::{
-        ActiveVaultScope, AuthProvidersSnapshot, DeviceIdentity, EpochMetadataState,
-        EpochPasswordState, IsoTimestamp, MemberLabel, Sha256Hex, SigningIdentity, StoreId,
-        VaultApplication, VaultKeys, VaultOperation,
+        ActiveVaultScope, AuthProvidersSnapshot, DeviceIdentity, EpochMetadataState, IsoTimestamp,
+        MemberLabel, Sha256Hex, SigningIdentity, StoreId, VaultApplication, VaultKeys,
+        VaultOperation,
     };
 
     pub(super) struct ActivationFixture {

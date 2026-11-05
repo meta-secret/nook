@@ -448,8 +448,6 @@ impl NookVaultManager {
         if architecture.vault_type != VaultType::Sentinel {
             return Err(MultiDeviceError::InvalidSentinelThreshold.into());
         }
-        self.vault.unlock = metadata.unlock;
-        self.vault.password_entries = metadata.password_entries;
         self.vault.store_id = metadata.store_id;
         self.vault.vault_name = VaultNameState::Named(metadata.vault_name);
         self.vault.vault_version = metadata.version.into();
@@ -483,7 +481,6 @@ mod tests {
     use nook_core::VaultStoreIdentityRef;
     #[cfg(test)]
     #[cfg(test)]
-    use nook_core::VaultUnlock;
     #[cfg(test)]
     #[cfg(test)]
     use nook_core::VaultVersionWrite;
@@ -539,7 +536,13 @@ mod tests {
                 ready_participants: 2.into(),
             },
         );
-        let yaml = VaultRecordSet::serialize_yaml_with_name_architecture(&records, VaultStoreIdentityRef::Assigned("store_AAAAAAAAAAA"), VaultNameRef::Unnamed, VaultVersionWrite::Initial, &architecture)?;
+        let yaml = VaultRecordSet::serialize_yaml_with_name_architecture(
+            &records,
+            VaultStoreIdentityRef::Assigned("store_AAAAAAAAAAA"),
+            VaultNameRef::Unnamed,
+            VaultVersionWrite::Initial,
+            &architecture,
+        )?;
         let invalid = yaml.as_str().replacen("\"version\":1", "\"version\":3", 1);
         assert_ne!(invalid, yaml.as_str());
 
@@ -696,10 +699,14 @@ mod tests {
                 ready_participants: 2.into(),
             },
         );
-        Ok(
-            VaultRecordSet::serialize_yaml_with_name_architecture(&records, VaultStoreIdentityRef::Assigned(store_id), VaultNameRef::Unnamed, VaultVersionWrite::Initial, &architecture)?
-            .into_inner(),
-        )
+        Ok(VaultRecordSet::serialize_yaml_with_name_architecture(
+            &records,
+            VaultStoreIdentityRef::Assigned(store_id),
+            VaultNameRef::Unnamed,
+            VaultVersionWrite::Initial,
+            &architecture,
+        )?
+        .into_inner())
     }
 
     #[wasm_bindgen_test]
@@ -722,7 +729,13 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn prepare_sentinel_ceremony_session_rejects_non_sentinel_architecture() -> anyhow::Result<()> {
-        let yaml = VaultRecordSet::serialize_yaml_with_name_architecture(&[], VaultStoreIdentityRef::Assigned("store_simple_arch"), VaultNameRef::Unnamed, VaultVersionWrite::Initial, &VaultArchitecture::simple_personal(DeviceMode::Standard))?
+        let yaml = VaultRecordSet::serialize_yaml_with_name_architecture(
+            &[],
+            VaultStoreIdentityRef::Assigned("store_simple_arch"),
+            VaultNameRef::Unnamed,
+            VaultVersionWrite::Initial,
+            &VaultArchitecture::simple_personal(DeviceMode::Standard),
+        )?
         .into_inner();
         let mut manager = NookVaultManager::new();
 

@@ -10,7 +10,7 @@ use nook_core::StoredSigningSeed;
 use nook_core::{
     EventError, IsoTimestamp, StoreId, VaultError, VaultMetaGraphProjection,
     VaultMetaOperationApplier, VaultMetaOperationRequest, VaultNameRef, VaultProjection,
-    VaultSessionProjection, VaultStoreIdentityRef, VaultUnlock, VaultVersionWrite,
+    VaultSessionProjection, VaultStoreIdentityRef, VaultVersionWrite,
 };
 mod extension_import;
 mod import_as_local;
@@ -371,8 +371,6 @@ impl NookVaultManager {
         self.adopt_projected_vault_name(projection.vault_name.clone())?;
         let live = projection.live_secrets(graph);
         let user_records: Vec<nook_core::StoredSecretRecord> = live.into_values().collect();
-        self.vault.password_entries = projection.password_entries;
-        self.vault.unlock = VaultUnlock::Keys;
         VaultUserRecordBatch::new(user_records).replace(&mut self.vault.meta);
         self.vault.mark_search_catalog_dirty();
         VaultMetaGraphProjection::new(graph).materialize(&mut self.vault.meta)?;
@@ -451,8 +449,7 @@ impl NookVaultManager {
     /// Hydrate locked-session projection fields from the event graph.
     ///
     /// Import-as-new-vault runs while locked, so `apply_event_projection_to_session`
-    /// cannot decrypt secrets. Auth rows and backup-password envelopes still must
-    /// land in the cached YAML so login assess/unlock see the real vault.
+    /// cannot decrypt secrets. Auth rows still must land in the cached YAML so login assess/unlock see the real vault.
     pub(in crate::manager) async fn hydrate_locked_projection_from_events(
         &mut self,
     ) -> Result<(), NookError> {
@@ -461,8 +458,6 @@ impl NookVaultManager {
         }
         let store = NookDatabase::load_local_event_store(&self.vault.store_id).await?;
         let graph = store.load_graph(&self.vault.store_id)?;
-        let projection = VaultProjection::from_graph(&graph, &self.vault.store_id)?;
-        self.vault.password_entries = projection.password_entries;
         VaultMetaGraphProjection::new(&graph).materialize(&mut self.vault.meta)?;
         self.ensure_sentinel_architecture_from_shares()?;
         Ok(())
@@ -470,10 +465,16 @@ impl NookVaultManager {
 
     pub(in crate::manager) async fn persist_projection_cache(&mut self) -> Result<(), NookError> {
         let records = self.vault.meta.to_stored_records();
-        let yaml = nook_core::VaultRecordSet::serialize_yaml_with_name_architecture(&records, VaultStoreIdentityRef::Assigned(self.vault.store_id.as_str()), match &self.vault.vault_name {
+        let yaml = nook_core::VaultRecordSet::serialize_yaml_with_name_architecture(
+            &records,
+            VaultStoreIdentityRef::Assigned(self.vault.store_id.as_str()),
+            match &self.vault.vault_name {
                 VaultNameState::Unnamed => VaultNameRef::Unnamed,
                 VaultNameState::Named(name) => VaultNameRef::Named(name),
-            }, VaultVersionWrite::Initial, &self.vault.architecture)?;
+            },
+            VaultVersionWrite::Initial,
+            &self.vault.architecture,
+        )?;
         NookDatabase::save_to_indexed_db(yaml.as_str()).await?;
         self.vault.last_synced_content = yaml.into_inner();
         self.label_local_vault_with_projected_name().await?;

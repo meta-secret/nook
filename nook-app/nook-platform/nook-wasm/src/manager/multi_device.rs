@@ -71,7 +71,7 @@ impl NookVaultManager {
                 return Err(NookError::Database("No vault found to join.".to_owned()).into());
             }
         } else {
-            self.capture_vault_unlock(&content)?;
+            self.capture_vault_metadata(&content)?;
             self.sync_events_from_current_provider().await?;
             if self.vault.store_id.is_empty() || !self.event_log_has_events().await? {
                 return Err(NookError::Database("Vault event log is required.".to_owned()).into());
@@ -121,7 +121,7 @@ impl NookVaultManager {
             return Err(NookError::Database("No vault found to join.".to_owned()).into());
         }
         // Fresh enrolment — adopt the remote unlock mode.
-        self.capture_vault_unlock(&content)?;
+        self.capture_vault_metadata(&content)?;
 
         if self.vault.architecture.vault_type == VaultType::Sentinel {
             return Err(MultiDeviceError::SentinelCeremonyRequired.into());

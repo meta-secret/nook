@@ -32,7 +32,7 @@ use js_sys::Error as JsNativeError;
 use nook_core::{AssessConnectAccessRequest, VaultMetaState};
 use nook_core::{
     ConnectAccessStatus, EventGraphAuthorizationProjection, EventId, IdentityVaultDekEpoch,
-    IdentityVaultEventId, StorageConnection, StorageMode, StoreId, VaultAccessStatus, VaultUnlock,
+    IdentityVaultEventId, StorageConnection, StorageMode, StoreId, VaultAccessStatus,
 };
 use std::mem;
 use wasm_bindgen::JsError;
@@ -296,7 +296,6 @@ mod tests {
         assert!(manager.vault.meta.secrets.is_empty());
         assert!(!manager.vault.store_id.is_empty());
         assert!(manager.event_log.enabled);
-        assert_eq!(manager.vault.unlock, VaultUnlock::Keys);
 
         let mut resumed = NookVaultManager::new();
         resumed.device.id = identity.device_id().as_str().to_owned();
@@ -405,14 +404,12 @@ impl NookVaultManager {
             .await?;
 
         if content.trim().is_empty() {
-            self.vault.password_entries.clear();
-            self.vault.unlock = VaultUnlock::Keys;
             self.vault.last_synced_content.clear();
             return Ok(VaultAccessStatus::NewVault);
         }
 
-        // First boot for this session — adopt the remote unlock mode.
-        self.capture_vault_unlock(&content)?;
+        // First boot for this session — adopt the remote vault metadata.
+        self.capture_vault_metadata(&content)?;
         self.vault.last_synced_content = content.clone();
         // Prefer event-log membership when the local vault has events. A locked
         // import can leave a thin projection cache that would otherwise look like
@@ -523,7 +520,7 @@ impl NookVaultManager {
         // First boot for this session — adopt the remote unlock mode so
         // the mode-aware branches below see the right variant.
         if !content.trim().is_empty() {
-            self.capture_vault_unlock(&content)?;
+            self.capture_vault_metadata(&content)?;
         }
 
         let event_log_only_remote = self
@@ -615,7 +612,7 @@ impl NookVaultManager {
                 }) => {
                     self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
                     self.vault.meta = meta;
-                    self.capture_vault_unlock(&cache)?;
+                    self.capture_vault_metadata(&cache)?;
                     self.sync_events_from_current_provider().await?;
                     self.apply_event_projection_to_session().await?;
                     Ok(())

@@ -234,51 +234,6 @@ impl NookVaultMember {
     }
 }
 
-#[wasm_bindgen]
-#[derive(Clone)]
-pub struct NookPasswordEntrySummary {
-    id: String,
-    label: String,
-    created_at: String,
-}
-
-#[wasm_bindgen]
-impl NookPasswordEntrySummary {
-    pub(crate) fn from_core(entry: &nook_core::PasswordUnlockEntry) -> Self {
-        Self {
-            id: entry.id.clone(),
-            label: entry.label.clone(),
-            created_at: entry.created_at.clone(),
-        }
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn id(&self) -> String {
-        self.id.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn label(&self) -> String {
-        self.label.clone()
-    }
-
-    #[wasm_bindgen(getter, js_name = createdAt)]
-    pub fn created_at(&self) -> String {
-        self.created_at.clone()
-    }
-}
-
-impl NookPasswordEntrySummary {
-    pub(crate) fn password_entries_to_vec(
-        entries: &[nook_core::PasswordUnlockEntry],
-    ) -> Vec<NookPasswordEntrySummary> {
-        entries
-            .iter()
-            .map(NookPasswordEntrySummary::from_core)
-            .collect()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -321,14 +276,5 @@ mod tests {
         assert_eq!(member.public_key(), "public-key");
         assert_eq!(member.enrolled_at(), "2026-01-02");
         assert_eq!(member.label(), "Alice");
-
-        let entry = NookPasswordEntrySummary {
-            id: "entry-1".into(),
-            label: "Recovery".into(),
-            created_at: "2026-01-03".into(),
-        };
-        assert_eq!(entry.id(), "entry-1");
-        assert_eq!(entry.label(), "Recovery");
-        assert_eq!(entry.created_at(), "2026-01-03");
     }
 }

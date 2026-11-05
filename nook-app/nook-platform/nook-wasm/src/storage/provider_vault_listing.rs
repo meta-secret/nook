@@ -6,7 +6,8 @@
 //! Google Drive reports when each namespace folder and event file was
 //! created; the other transports report only how many event files a
 //! namespace holds. Only the events of a vault no identity here holds are
-//! read, to see whether a backup password opens it; nothing is decrypted.
+//! read, to see whether this device asked for or was granted access; nothing
+//! is decrypted.
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
@@ -213,8 +214,8 @@ pub(crate) trait ProviderLocation {
             .await
     }
 
-    /// What these vaults' events tell without their keys: a backup password,
-    /// and whether this app asked for or was granted access.
+    /// What these vaults' events tell without their keys: whether this app
+    /// asked for or was granted access.
     async fn inspect_vaults(
         &self,
         inspection: VaultInspection<'_>,
@@ -479,7 +480,6 @@ impl DriveVaultListing<'_> {
 /// The unheld vaults sorted by what their events tell.
 #[derive(Default)]
 pub(crate) struct InspectedVaults {
-    pub(crate) password: Vec<StoreId>,
     pub(crate) granted: Vec<StoreId>,
     pub(crate) requested: Vec<StoreId>,
 }
@@ -504,9 +504,6 @@ impl InspectedVaults {
             events,
         }
         .inspect(this_browser)?;
-        if inspection.backup_password {
-            self.password.push(store_id.clone());
-        }
         match inspection.standing {
             ProviderVaultStanding::Granted => self.granted.push(store_id),
             ProviderVaultStanding::Requested => self.requested.push(store_id),
@@ -585,8 +582,8 @@ impl BrowserHeldVaults {
         })
     }
 
-    /// The listed vaults no identity here holds: only a backup password or a
-    /// member's grant opens them.
+    /// The listed vaults no identity here holds: only a member's grant opens
+    /// them.
     pub(crate) fn unheld(&self, observations: &[ProviderVaultObservation]) -> Vec<StoreId> {
         observations
             .iter()
@@ -616,7 +613,6 @@ impl BrowserHeldVaults {
                 identity_vaults: &self.identity_vaults,
                 browser_vaults: &self.other_identity_vaults,
                 granted_vaults: &inspected.granted,
-                password_vaults: &inspected.password,
                 requested_vaults: &inspected.requested,
                 session: self.identity.session(),
             },

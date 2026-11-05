@@ -16,7 +16,6 @@ use crate::storage::{device_access, identity_record};
 use crate::{
     IdentityDbEnsureLocalIdentityForAppKey, IdentityDbGenerateVaultDekForIdentity,
     IdentityDbSaveNewProtectedLocalIdentity, IdentityDbSaveProtectedLocalIdentity,
-    IdentityDbValidateVaultIdentityEnrollment,
 };
 use crate::{NookDatabase, NookError};
 use nook_core::LocalIdentityKeyRetirement;
@@ -327,13 +326,10 @@ mod tests {
         )
         .await?;
         assert_ne!(replacement.identity_id, pending.identity_id);
-        NookDatabase::validate_vault_identity_enrollment(
-            IdentityDbValidateVaultIdentityEnrollment {
-                app_key: &replacement_key,
-                store_id: &store_id,
-            },
-        )
-        .await?;
+        NookDatabase::load_identity_directory()
+            .await?
+            .validate_vault_enrollment(&replacement_key, &store_id)
+            .map_err(|error| NookError::Database(error.to_string()))?;
         assert!(matches!(
             PendingSimpleGenesis::load_for_store(store_id.as_str()).await?,
             SimpleGenesisProgress::NotPending

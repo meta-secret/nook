@@ -302,7 +302,6 @@ mod tests {
             assert!(manager.stored_records_snapshot().is_empty());
             assert!(manager.vault.store_id.is_empty());
             assert!(manager.vault.last_synced_content.is_empty());
-            assert!(manager.vault.password_entries.is_empty());
             assert!(!manager.vault.search_catalog.is_ready());
             assert!(manager.vault.search_catalog_store_id.is_empty());
             assert_eq!(manager.vault.search_catalog_pending_bucket_mask, 0);
