@@ -260,16 +260,21 @@ pub use nook_auth2::{
 pub use auth::identity_control::{
     IdentityNameStatus, IdentityVaultEpochAction, IdentityVaultEpochStatus,
     ReplicatedIdentityStanding, ReplicatedMembershipProjection, ReplicatedMembershipRequest,
-    VaultDeletionPlan, VaultDeletionRequest, VaultRevocationDue,
+    VaultDeletionPlan, VaultDeletionRequest, VaultHolderRotation, VaultRevocationDue,
+    VaultRevokedHolders,
 };
 pub use auth::identity_control_snapshot::{
     IdentityControlSnapshot, IdentityControlSnapshotRequest, IdentityControlStanding,
-    IdentityDeviceView, IdentityJoinRequestView, IdentityMemberView, IdentityMountProvider,
-    IdentityMountView, IdentityVaultView,
+    IdentityDeviceView, IdentityJoinRequestView, IdentityMemberApprovalView, IdentityMemberView,
+    IdentityMountProvider, IdentityMountView, IdentityRecoveryPassphraseView, IdentityVaultView,
 };
 pub use auth::identity_join::{
     IdentityJoinAnswer, IdentityJoinCompletion, IdentityJoinCompletionPlan, IdentityJoinKey,
     IdentityJoinProgress, IdentityMemberAdd,
+};
+pub use auth::recovery_passphrase::{
+    PendingRecoveryPassphrase, RecoveryPassphraseRecording, RecoveryPassphraseStart,
+    RecoveryPassphraseUse,
 };
 pub use auth::identity_vault_pairing::{IdentityVaultPairingPlan, IdentityVaultPairingRequest};
 pub use auth::identity_words::IdentityWords;
@@ -325,8 +330,9 @@ pub use nook_event_log::{
     IdentityControlRejection, IdentityControlState, IdentityControlVault, IdentityEvent,
     IdentityEventBody, IdentityEventInsertStatus, IdentityEventSchemaVersion, IdentityEventSigning,
     IdentityGenesisRequest, IdentityInvite, IdentityInviteIssue, IdentityInviteJoin,
-    IdentityJoinRequest, IdentityMemberAddition, IdentityMemberKeys, IdentityMountTarget,
-    IdentityNaming, IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultDekLookup,
+    IdentityJoinRequest, IdentityMemberAddition, IdentityMemberApprover, IdentityMemberKeys,
+    IdentityMemberKind, IdentityMountTarget, IdentityNaming, IdentityRecoveryAddition,
+    IdentityRecoveryApproval, IdentityRecoveryMember, IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultDekLookup,
     IdentityVaultEpochDeks, IdentityVaultRegistration, MemberDevice, MemberSealedName,
     MemberVaultDek, OpenedVaultDek, PROVIDER_ROOT_DIR, PlacedNamespace, ProviderMountId,
     S3MountTarget, VaultAuthorizedRoster, VaultPlacement, VaultRosterMember,

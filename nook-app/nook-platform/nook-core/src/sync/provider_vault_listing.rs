@@ -843,6 +843,7 @@ mod tests {
             devices: ProviderLogCount::from(2),
             newest_device: at("2026-10-27T17:28:00Z")?,
             vaults: ProviderLogCount::from(1),
+            recovery_passphrases: ProviderLogCount::from(0),
             this_browser: false,
             join: ProviderIdentityJoin::NotAsked,
         };
@@ -928,6 +929,7 @@ mod tests {
                             at: ProviderInstant(7),
                         },
                         vaults: ProviderLogCount::from(3),
+                        recovery_passphrases: ProviderLogCount::from(0),
                         this_browser: false,
                         join: ProviderIdentityJoin::NotAsked,
                     },
@@ -960,6 +962,7 @@ mod tests {
                             "devices": 2,
                             "newestDevice": { "state": "reported", "at": 7 },
                             "vaults": 3,
+                            "recoveryPassphrases": 0,
                             "thisBrowser": false,
                             "join": "notAsked",
                         },

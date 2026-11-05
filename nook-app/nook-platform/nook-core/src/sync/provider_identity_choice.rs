@@ -418,6 +418,7 @@ mod tests {
                 devices: crate::ProviderLogCount::from(2),
                 newest_device: ProviderVaultTime::Unreported,
                 vaults: crate::ProviderLogCount::from(1),
+                recovery_passphrases: crate::ProviderLogCount::from(0),
                 this_browser: false,
                 join,
             }

@@ -10,7 +10,7 @@ mod vault_sync;
 pub use database::{DatabaseError, DatabaseResult};
 pub use nook_auth2::{
     AgeCryptoError, DeviceKeyProtectionError, EnrollmentError, MultiDeviceError, MultiDeviceResult,
-    PasswordError, PasswordResult, SecretPayloadError, SecretPayloadResult, ValidationError,
+    PasswordError, PasswordResult, RecoveryPassphraseError, SecretPayloadError, SecretPayloadResult, ValidationError,
     ValidationResult, VaultCryptoError,
 };
 pub use nook_event_log::{EventError, EventResult};
@@ -96,6 +96,9 @@ pub enum VaultError {
 
     #[error(transparent)]
     Age(#[from] AgeCryptoError),
+
+    #[error(transparent)]
+    RecoveryPassphrase(#[from] RecoveryPassphraseError),
 }
 
 #[cfg(test)]

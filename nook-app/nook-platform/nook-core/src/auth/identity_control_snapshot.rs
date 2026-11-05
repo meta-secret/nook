@@ -7,10 +7,10 @@
 
 use std::iter;
 
-use nook_auth2::{AppId, IdentityId};
+use nook_auth2::{AppId, IdentityId, RecoveryStrength};
 use nook_event_log::{
-    IdentityControlMember, IdentityControlState, IdentityMountTarget, IdentityProviderMount,
-    IdentityVaultDekLookup, MemberDevice,
+    IdentityControlMember, IdentityControlState, IdentityMemberApprover, IdentityMountTarget,
+    IdentityProviderMount, IdentityVaultDekLookup, MemberDevice,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -40,6 +40,69 @@ pub struct IdentityMemberView {
     /// It runs on this installation's device: this app, or one sharing its
     /// device, as the browser extension in the web app's browser.
     pub on_current_device: bool,
+    /// Who let this app in.
+    pub approved_by: IdentityMemberApprovalView,
+}
+
+/// Who let an app into the identity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum IdentityMemberApprovalView {
+    /// It founded the identity.
+    Founder,
+    /// It joined with a one-time invite.
+    Invite,
+    /// Another app of the identity approved or added it.
+    #[serde(rename_all = "camelCase")]
+    App { app_id: String },
+    /// A recovery passphrase approved it on a new device; the label stays
+    /// known after the passphrase is removed.
+    #[serde(rename_all = "camelCase")]
+    RecoveryPassphrase { app_id: String, label: String },
+}
+
+impl From<&IdentityMemberApprover> for IdentityMemberApprovalView {
+    fn from(approver: &IdentityMemberApprover) -> Self {
+        match approver {
+            IdentityMemberApprover::Founder => Self::Founder,
+            IdentityMemberApprover::Invite => Self::Invite,
+            IdentityMemberApprover::App { app_id } => Self::App {
+                app_id: app_id.as_str().to_owned(),
+            },
+            IdentityMemberApprover::RecoveryPassphrase { app_id, label } => {
+                Self::RecoveryPassphrase {
+                    app_id: app_id.as_str().to_owned(),
+                    label: label.as_str().to_owned(),
+                }
+            }
+        }
+    }
+}
+
+/// One recovery passphrase on the keyring: its label and how many words it
+/// has. Its words and keys never leave Rust.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct IdentityRecoveryPassphraseView {
+    /// The recovery member's id, which removing it names.
+    pub id: String,
+    pub label: String,
+    pub strength: RecoveryStrength,
+}
+
+impl IdentityRecoveryPassphraseView {
+    /// Every recovery passphrase on the keyring.
+    #[must_use]
+    pub fn list(state: &IdentityControlState) -> Vec<Self> {
+        state
+            .recovery_members()
+            .map(|(member, recovery)| Self {
+                id: member.keys.app_id.as_str().to_owned(),
+                label: member.keys.label.as_str().to_owned(),
+                strength: recovery.strength,
+            })
+            .collect()
+    }
 }
 
 /// One device the identity's apps run on, with every app on it. Each app
@@ -119,6 +182,9 @@ pub struct IdentityControlSnapshot {
     pub join_requests: Vec<IdentityJoinRequestView>,
     pub vaults: Vec<IdentityVaultView>,
     pub mounts: Vec<IdentityMountView>,
+    /// The recovery passphrases on the keyring. They are members on no
+    /// device, so `members` and `devices` leave them out.
+    pub recovery_passphrases: Vec<IdentityRecoveryPassphraseView>,
 }
 
 /// Named values required to project a snapshot for one installation.
@@ -175,6 +241,7 @@ impl IdentityControlSnapshot {
             join_requests: Vec::new(),
             vaults: Vec::new(),
             mounts: Vec::new(),
+            recovery_passphrases: Vec::new(),
         }
     }
 
@@ -198,13 +265,17 @@ impl IdentityControlSnapshot {
             is_current_installation: &member.keys.app_id == *current_app_id,
             on_current_device: &member.keys.app_id == *current_app_id
                 || state.share_a_device(&member.keys.app_id, current_app_id),
+            approved_by: IdentityMemberApprovalView::from(&member.approved_by),
         };
         let devices = state
             .device_members()
             .map(|device| {
-                let beside = state.members.iter().filter(|member| {
-                    matches!(&member.device, MemberDevice::SameAs { app_id } if app_id == &device.keys.app_id)
-                });
+                let beside = state
+                    .app_members()
+                    .filter(|(_, beside)| {
+                        matches!(beside, MemberDevice::SameAs { app_id } if app_id == &device.keys.app_id)
+                    })
+                    .map(|(member, _)| member);
                 let apps = iter::once(device)
                     .chain(beside)
                     .map(view)
@@ -219,7 +290,10 @@ impl IdentityControlSnapshot {
             identity_id: state.identity_id.as_str().to_owned(),
             identity_label: (*identity_label).to_owned(),
             standing,
-            members: state.members.iter().map(view).collect(),
+            members: state
+                .app_members()
+                .map(|(member, _)| view(member))
+                .collect(),
             device_count: devices.len(),
             devices,
             // Only a member answers join requests.
@@ -259,6 +333,7 @@ impl IdentityControlSnapshot {
                 .iter()
                 .map(|mount| IdentityMountView::from_mount(mount, providers))
                 .collect(),
+            recovery_passphrases: IdentityRecoveryPassphraseView::list(state),
         }
     }
 }

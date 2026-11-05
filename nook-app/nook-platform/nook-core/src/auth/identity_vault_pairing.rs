@@ -94,6 +94,7 @@ mod tests {
             join_requests: Vec::new(),
             vaults,
             mounts: Vec::new(),
+            recovery_passphrases: Vec::new(),
         }
     }
 

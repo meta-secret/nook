@@ -51,6 +51,8 @@ impl RecoveryStrength {
 /// Why typed words, a confirmation, or an unsealing were refused.
 #[derive(Debug, thiserror::Error)]
 pub enum RecoveryPassphraseError {
+    #[error("A recovery passphrase needs a label.")]
+    LabelRequired,
     #[error("No recovery words were typed.")]
     Empty,
     /// Words the list does not hold; nothing was decrypted.
