@@ -243,6 +243,17 @@ impl NookVaultManager {
         self.recovery_passphrase = CeremonyState::Inactive;
     }
 
+    /// Start a fresh session for the vault this browser selected, so every
+    /// later sync reads that vault and never has to discover or choose one.
+    /// A malformed id is refused before the current session is touched.
+    #[wasm_bindgen]
+    pub fn begin_vault_session(&mut self, store_id: &str) -> Result<(), JsError> {
+        let store_id = nook_core::StoreId::parse(store_id)?;
+        self.reset_vault_session();
+        self.vault.store_id = store_id.as_str().to_owned();
+        Ok(())
+    }
+
     /// Zeroize the active session and clear every Nook-owned browser database.
     /// Remote sync replicas and platform authenticator credentials are not touched.
     #[wasm_bindgen]

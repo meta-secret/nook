@@ -317,7 +317,9 @@ export class VaultLoginActions {
             const manager = state.admitManager();
             if (manager.isErr()) return storageErr(manager.error);
             try {
-              manager.value.reset_vault_session();
+              // The session reads the selected vault from here on, so a
+              // sync never has to discover or choose one.
+              manager.value.begin_vault_session(storeId);
               return storageOk(storeId);
             } catch (failure) {
               return storageErr(new NativeVaultStorageFailure(failure));

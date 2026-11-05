@@ -441,6 +441,33 @@ mod tests {
         Ok(())
     }
 
+    /// Selecting a vault starts a session that reads that vault: the open
+    /// vault's keys and name are gone, and a sync no longer needs to choose
+    /// among the vaults a provider holds. A malformed id leaves the session.
+    #[wasm_bindgen_test]
+    fn a_selected_vault_owns_the_new_session() -> anyhow::Result<()> {
+        let keys = nook_core::VaultKeys::generate()?;
+        let open = nook_core::StoreId::generate()?;
+        let selected = nook_core::StoreId::generate()?;
+        let mut manager = NookVaultManager::new();
+        manager.vault.store_id = open.as_str().to_owned();
+        manager.vault.vault_name = VaultNameState::Named("Open vault".to_owned());
+        manager.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
+
+        assert!(manager.begin_vault_session("not a store").is_err());
+        assert_eq!(manager.vault.store_id, open.as_str());
+        assert!(manager.vault.crypto.is_unlocked());
+
+        manager
+            .begin_vault_session(selected.as_str())
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(manager.vault.store_id, selected.as_str());
+        assert!(!manager.vault.crypto.is_unlocked());
+        assert!(manager.vault.secrets_key.is_empty());
+        assert!(matches!(manager.vault.vault_name, VaultNameState::Unnamed));
+        Ok(())
+    }
+
     #[wasm_bindgen_test]
     fn locking_or_resetting_drops_a_recovery_passphrase_waiting_to_be_confirmed()
     -> Result<(), JsError> {
