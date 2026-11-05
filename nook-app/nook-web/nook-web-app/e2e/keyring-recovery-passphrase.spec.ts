@@ -145,10 +145,20 @@ async function openKeyringVault(device: Page, storeId: string): Promise<void> {
     device.getByTestId('vault-panel-unlock'),
     device.getByTestId('vault-panel-open'),
   ]
+  // Selecting a vault this browser holds switches to it locked, so the
+  // vault is open only once its unlocked panel or page shows.
+  const unlocked = device
+    .getByTestId('vault-panel-open')
+    .or(device.getByTestId('vault-panel'))
+    .first()
   await expect
     .poll(
       async () => {
-        if ((await openStoreId(device)) === storeId) return 'open'
+        if (
+          (await openStoreId(device)) === storeId &&
+          (await unlocked.isVisible())
+        )
+          return 'open'
         for (const control of controls) {
           if (await pressIfReady(control)) break
         }
