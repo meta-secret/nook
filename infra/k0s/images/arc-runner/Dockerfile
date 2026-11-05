@@ -17,7 +17,7 @@ RUN apt-get update \
   && npm run build --prefix /source/packages/hooklib \
   && npm run build --prefix /source/packages/k8s
 
-FROM ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda AS arc-runner
+FROM ghcr.io/actions/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232 AS arc-runner
 
 COPY --from=hooks --chown=runner:runner /source/packages/k8s/dist/index.js /home/runner/k8s-novolume/index.js
 

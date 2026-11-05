@@ -336,7 +336,7 @@ class ArcManifestContract {
       "fsGroup: 1000",
       "fsGroupChangePolicy: OnRootMismatch",
       "name: fs-init",
-      "ghcr.io/actions/actions-runner:2.336.0@sha256:",
+      "ghcr.io/actions/actions-runner:2.338.2@sha256:",
       "mountPath: /mnt/externals",
       "mountPath: /mnt/work",
       "mountPath: /mnt/github",

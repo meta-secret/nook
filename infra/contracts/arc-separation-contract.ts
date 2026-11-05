@@ -50,7 +50,7 @@ export class ArcSeparationContract {
           "fsGroup: 1000",
           "fsGroupChangePolicy: OnRootMismatch",
           "name: fs-init",
-          "ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda",
+          "ghcr.io/actions/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232",
           "chmod -R g+rwX /mnt/work/nook",
           "mountPath: /mnt/externals",
           "mountPath: /mnt/work",
