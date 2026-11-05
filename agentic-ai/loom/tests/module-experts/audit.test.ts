@@ -375,7 +375,7 @@ describe('module expert audit', () => {
     }
     expect(
       discoveredConsumerPaths.filter((path) => path.endsWith('.svelte')),
-    ).toHaveLength(65);
+    ).toHaveLength(66);
     expect(discoveredConsumerPaths).toContain(
       'nook-app/nook-web/nook-web-shared/src/vault-app/App.svelte',
     );
