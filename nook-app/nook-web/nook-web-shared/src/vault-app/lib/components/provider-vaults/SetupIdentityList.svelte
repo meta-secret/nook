@@ -2,17 +2,24 @@
 The identities a sync provider holds, as setup shows them: one card each,
 with the one action Rust decided from this browser's key. A member
 continues; anyone else asks to join; a join already asked can be checked
-again. The identity this browser already holds has no action: the step's
-own button saves it there. Picking runs at once: there is no plan to apply.
+again. A keyring with recovery passphrases also offers recovering with one,
+as a quieter link, where setup allows it. The identity this browser already
+holds has no action: the step's own button saves it there. Picking runs at
+once: there is no plan to apply.
 -->
 <script lang="ts">
-  import { ArrowRight, RefreshCw, Send } from '@lucide/svelte'
+  import { ArrowRight, KeyRound, RefreshCw, Send } from '@lucide/svelte'
   import type { ProviderIdentityChoice } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
   import IdentityCardHeader from '$lib/components/provider-vaults/IdentityCardHeader.svelte'
   import { IdentityCardTag } from '$lib/components/provider-vaults/identity-card-tag'
-  import { SetupIdentityOffer } from '$lib/components/provider-vaults/setup-identity-offer'
+  import {
+    SetupIdentityOffer,
+    SetupRecoveryKind,
+    recoverableWithPassphrase,
+    type SetupRecovery,
+  } from '$lib/components/provider-vaults/setup-identity-offer'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -23,6 +30,7 @@ own button saves it there. Picking runs at once: there is no plan to apply.
     onContinue,
     onAskToJoin,
     onCheck,
+    recovery,
   }: {
     vault: VaultState
     choices: readonly ProviderIdentityChoice[]
@@ -31,6 +39,9 @@ own button saves it there. Picking runs at once: there is no plan to apply.
     /** Another action on the page runs. */
     disabled?: boolean
     onContinue: (choice: ProviderIdentityChoice) => void | Promise<void>
+    /** Whether a keyring with recovery passphrases offers recovering with
+     * one beside joining. */
+    recovery: SetupRecovery
     onAskToJoin: (choice: ProviderIdentityChoice) => void | Promise<void>
     /** Read a join this browser already asked for again. */
     onCheck: (choice: ProviderIdentityChoice) => void | Promise<void>
@@ -111,6 +122,19 @@ own button saves it there. Picking runs at once: there is no plan to apply.
           {/if}
           {vault.t(I18N_KEYS.FirstRunJoinCheck)}
         </Button>
+      {/if}
+      {#if recovery.kind === SetupRecoveryKind.Offered && recoverableWithPassphrase(choice)}
+        {@const onRecover = recovery.onRecover}
+        <button
+          type="button"
+          class="flex items-center gap-1.5 text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground disabled:opacity-60"
+          data-testid="setup-identity-recover"
+          disabled={busy}
+          onclick={() => onRecover(choice)}
+        >
+          <KeyRound class="size-3.5" aria-hidden="true" />
+          {vault.t(I18N_KEYS.RecoveryPassphraseRecoverAction)}
+        </button>
       {/if}
     </section>
   {/each}

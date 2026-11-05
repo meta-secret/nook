@@ -1,18 +1,17 @@
 import { expect, test, type Page } from './fixtures'
 import {
   addS3FromProtection,
-  addSecret,
   answerPasskeyPromptBeforeJoin,
   clearBrowserVault,
   connectS3InFirstRun,
   createFirstRunKey,
   createIsolatedContext,
-  createKeyringOnS3,
   disableVaultIdleLock,
   E2E_IDENTITY_PASSPHRASE,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   expectIdentityMembers,
   joinIdentityThroughCode,
+  keepSecretOnS3,
   keepIdentityWithoutVault,
   localizeAppLinkForE2e,
   ManagePage,
@@ -24,12 +23,11 @@ import {
   redeemIdentityEnrollmentCode,
   revealSecretValue,
   submitOnboardEnrollmentCode,
-  triggerVaultSyncRefresh,
   uniqueS3KeyPrefix,
-  uniqueSecretKey,
   UI_TIMEOUT_MS,
   waitForSecretOnDevice,
 } from './helpers'
+import type { S3KeptKeyring } from './helpers'
 import {
   LocalS3Identity,
   localS3Credentials,
@@ -39,35 +37,9 @@ import enLocale from '../../../nook-platform/nook-app-common/locales/en.json' wi
 const KEYRING_NAME = 'S3 keyring'
 const SECRET_VALUE = 's3-sync-provider-secret-value'
 
-/** The secret a keyring's first vault keeps on S3. */
-type KeptSecret = {
-  readonly key: string
-  readonly value: string
-}
-
-/** A fresh app's first run on S3: its passkey, the location with device A's
- * key, a new keyring whose vault takes one secret, then Sync now, so the
- * vault's events are on S3 before another app reads them. */
-async function keepSecretOnS3(
-  page: Page,
-  keyPrefix: string,
-): Promise<KeptSecret> {
-  await page.goto('/app/')
-  await createFirstRunKey(page)
-  await connectS3InFirstRun(page, {
-    keyPrefix,
-    identity: LocalS3Identity.DeviceA,
-  })
-  await createKeyringOnS3(page, KEYRING_NAME)
-  await disableVaultIdleLock(page)
-  await openVaultPage(page)
-  const secret: KeptSecret = {
-    key: uniqueSecretKey('s3-secret'),
-    value: SECRET_VALUE,
-  }
-  await addSecret(page, secret.key, secret.value)
-  await triggerVaultSyncRefresh(page)
-  return secret
+/** The keyring this spec keeps on S3 under `keyPrefix`, with its secret. */
+function keptKeyring(keyPrefix: string): S3KeptKeyring {
+  return { keyPrefix, keyringName: KEYRING_NAME, secretValue: SECRET_VALUE }
 }
 
 /** Issue an invite whose S3 provider gives the new device `keyChoice`, the
@@ -101,7 +73,10 @@ test.describe('S3-compatible storage as the sync provider', () => {
   test('first run creates a keyring on S3, and its vault opens and keeps a secret', async ({
     page,
   }) => {
-    const secret = await keepSecretOnS3(page, uniqueS3KeyPrefix('create'))
+    const secret = await keepSecretOnS3(
+      page,
+      keptKeyring(uniqueS3KeyPrefix('create')),
+    )
 
     expect(await revealSecretValue(page, secret.key)).toBe(secret.value)
   })
@@ -111,7 +86,10 @@ test.describe('S3-compatible storage as the sync provider', () => {
     browser,
   }) => {
     test.setTimeout(180_000)
-    const secret = await keepSecretOnS3(page, uniqueS3KeyPrefix('invite'))
+    const secret = await keepSecretOnS3(
+      page,
+      keptKeyring(uniqueS3KeyPrefix('invite')),
+    )
     const joinerContext = await createIsolatedContext(browser)
     try {
       const joiner = await joinerContext.newPage()
@@ -134,7 +112,10 @@ test.describe('S3-compatible storage as the sync provider', () => {
     browser,
   }) => {
     test.setTimeout(300_000)
-    const secret = await keepSecretOnS3(page, uniqueS3KeyPrefix('keys'))
+    const secret = await keepSecretOnS3(
+      page,
+      keptKeyring(uniqueS3KeyPrefix('keys')),
+    )
     const deviceB = localS3Credentials(LocalS3Identity.DeviceB)
 
     // Add key on the invite page opens the Sync page with that provider's
@@ -216,7 +197,7 @@ test.describe('S3-compatible storage as the sync provider', () => {
   }) => {
     test.setTimeout(180_000)
     const keyPrefix = uniqueS3KeyPrefix('request')
-    const secret = await keepSecretOnS3(page, keyPrefix)
+    const secret = await keepSecretOnS3(page, keptKeyring(keyPrefix))
     const joinerContext = await createIsolatedContext(browser)
     try {
       const joiner = await joinerContext.newPage()

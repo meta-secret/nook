@@ -5,10 +5,14 @@ import {
   LOCAL_S3_ENDPOINT,
   LOCAL_S3_REGION,
   localS3Credentials,
-  type LocalS3Identity,
+  LocalS3Identity,
 } from '../../../nook-web-extension/scripts/local-s3'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS } from './environment'
-import { openVaultRow } from './vault-setup'
+import { triggerVaultSyncRefresh } from './github-sync'
+import { addSecret } from './secret-operations'
+import { disableVaultIdleLock, uniqueSecretKey } from './vault-runtime'
+import { createFirstRunKey, openVaultRow } from './vault-setup'
+import { openVaultPage } from './workspace-navigation'
 
 /** Where one test keeps its objects in the shared local S3 bucket, and the
  * fixture key it signs with. */
@@ -90,4 +94,43 @@ export async function createKeyringOnS3(
   await expect(openVaultRow(page)).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+}
+
+/** A keyring one app keeps on S3 under a test's own prefix, with the
+ * secret its first vault takes. */
+export type S3KeptKeyring = {
+  readonly keyPrefix: string
+  readonly keyringName: string
+  readonly secretValue: string
+}
+
+/** The secret a keyring's first vault keeps on S3. */
+export type S3KeptSecret = {
+  readonly key: string
+  readonly value: string
+}
+
+/** A fresh app's first run on S3: its passkey, the location with device A's
+ * key, a new keyring whose vault takes one secret, then Sync now, so the
+ * vault's events are on S3 before another app reads them. */
+export async function keepSecretOnS3(
+  page: Page,
+  kept: S3KeptKeyring,
+): Promise<S3KeptSecret> {
+  await page.goto('/app/')
+  await createFirstRunKey(page)
+  await connectS3InFirstRun(page, {
+    keyPrefix: kept.keyPrefix,
+    identity: LocalS3Identity.DeviceA,
+  })
+  await createKeyringOnS3(page, kept.keyringName)
+  await disableVaultIdleLock(page)
+  await openVaultPage(page)
+  const secret: S3KeptSecret = {
+    key: uniqueSecretKey('s3-secret'),
+    value: kept.secretValue,
+  }
+  await addSecret(page, secret.key, secret.value)
+  await triggerVaultSyncRefresh(page)
+  return secret
 }

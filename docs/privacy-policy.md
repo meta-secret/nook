@@ -64,9 +64,9 @@ If you connect GitHub, you provide a **personal access token** and repository na
 - GitHub's handling of your account is governed by [GitHub's Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement).
 - Nook sends **ciphertext only** to GitHub, not plaintext secrets.
 
-## 7. Multi-device and backup passwords
+## 7. Multi-device and recovery passphrases
 
-Nook supports optional **backup passwords** and **device enrollment** so other browsers can join your vault. Enrollment flows may use QR codes or links that carry **provider connection details and password-entry identifiers**—you should share these only with devices and people you trust.
+Nook supports **device enrollment** so other browsers can join your keyring, and optional **keyring recovery passphrases**: generated words that can add a new device to your keyring. Nook seals the keyring recovery key under those words with scrypt and syncs only that sealed copy; the words themselves never leave your device. Enrollment flows may use QR codes or links that carry **provider connection details**—you should share these, and your recovery words, only with devices and people you trust.
 
 ## 8. Security
 

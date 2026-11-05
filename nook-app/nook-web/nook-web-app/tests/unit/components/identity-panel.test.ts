@@ -10,7 +10,7 @@ import {
   IdentityControlViewKind,
   type IdentityControlView,
 } from '$lib/vault/identity-control.svelte'
-import type { IdentityControlSnapshot } from '$app-wasm'
+import type { IdentityControlSnapshot, IdentityMemberView } from '$app-wasm'
 import type { VaultState } from '$lib/vault.svelte'
 import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
@@ -117,12 +117,17 @@ describe('identity panel', () => {
 })
 
 describe('identity panel devices', () => {
-  function app(appId: string, label: string, current: boolean) {
+  function app(
+    appId: string,
+    label: string,
+    current: boolean,
+  ): IdentityMemberView {
     return {
       appId,
       label,
       isCurrentInstallation: current && label === 'Chrome on Mac',
       onCurrentDevice: current,
+      approvedBy: { kind: 'founder' },
     }
   }
 
@@ -146,6 +151,7 @@ describe('identity panel devices', () => {
         joinRequests: [],
         vaults: [],
         mounts: [],
+        recoveryPassphrases: [],
       }
       const ready: IdentityControlView = {
         kind: IdentityControlViewKind.Ready,

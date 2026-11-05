@@ -41,7 +41,8 @@
     "sync-vault.spec.ts",
     "multi-device-sync.spec.ts",
     "remote-vault-recovery-sync.spec.ts",
-    "s3-sync-provider.spec.ts"
+    "s3-sync-provider.spec.ts",
+    "keyring-recovery-passphrase.spec.ts"
   ],
   "manual": [
     "live/google-drive-shared-grant.smoke.spec.ts",

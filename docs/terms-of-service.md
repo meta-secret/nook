@@ -19,7 +19,7 @@ Nook is provided **"as is"** and **"as available"**, without warranty of any kin
 You are responsible for:
 
 - **Backing up** your vault and any sync provider replicas you rely on
-- **Protecting** your device, browser profile, backup passwords, and sync provider credentials
+- **Protecting** your device, browser profile, recovery passphrase words, and sync provider credentials
 - **Complying** with Google, GitHub, and any other third-party terms when you use those integrations
 - **Sharing enrollment links and QR codes** only with devices and people you trust
 

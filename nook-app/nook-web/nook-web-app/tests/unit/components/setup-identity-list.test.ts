@@ -7,6 +7,7 @@ import initNookWasm, {
   type ProviderIdentityChoice,
 } from '$app-wasm'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
+import { SetupRecoveryKind } from '$lib/components/provider-vaults/setup-identity-offer'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import SetupIdentityList from '../../../../nook-web-shared/src/vault-app/lib/components/provider-vaults/SetupIdentityList.svelte'
 
@@ -72,18 +73,49 @@ const ELSEWHERE: Listed = {
   setup: { kind: 'unavailable' },
 }
 
+/** A keyring this browser may join whose log lists two recovery passphrases. */
+const RECOVERABLE_ID = 'idn_recoverabl'
+function withRecoveryPassphrases(
+  listed: ProviderIdentityChoice,
+): ProviderIdentityChoice {
+  return {
+    ...listed,
+    identity: {
+      ...listed.identity,
+      log: {
+        state: 'read',
+        devices: 1,
+        newestDevice: { state: 'unreported' },
+        vaults: 2,
+        recoveryPassphrases: 2,
+        thisBrowser: false,
+        join: 'notAsked',
+      },
+    },
+  }
+}
+const RECOVERABLE = withRecoveryPassphrases(
+  choice({
+    id: RECOVERABLE_ID,
+    standing: { kind: 'unchecked' },
+    setup: { kind: 'requestToJoin' },
+  }),
+)
+
 class Listing {
   readonly vault = VaultStateTestFixture.create()
   readonly continued: string[] = []
   readonly asked: string[] = []
   readonly checked: string[] = []
+  readonly recovered: string[] = []
 
   render(working: string): void {
     const props: ComponentProps<typeof SetupIdentityList> = {
       vault: this.vault,
-      choices: [MEMBER, LOCKED, ASKED, ELSEWHERE, KEY_MEMBER, IN_USE].map(
-        choice,
-      ),
+      choices: [
+        ...[MEMBER, LOCKED, ASKED, ELSEWHERE, KEY_MEMBER, IN_USE].map(choice),
+        RECOVERABLE,
+      ],
       working,
       onContinue: (picked: ProviderIdentityChoice) => {
         this.continued.push(picked.identity.identityId)
@@ -93,6 +125,12 @@ class Listing {
       },
       onCheck: (picked: ProviderIdentityChoice) => {
         this.checked.push(picked.identity.identityId)
+      },
+      recovery: {
+        kind: SetupRecoveryKind.Offered,
+        onRecover: (picked: ProviderIdentityChoice) => {
+          this.recovered.push(picked.identity.identityId)
+        },
       },
     }
     render(SetupIdentityList, { props })
@@ -170,6 +208,30 @@ describe('setup lists each identity with the one action Rust decided', () => {
 
     for (const button of screen.getAllByRole('button')) {
       expect(button.hasAttribute('disabled')).toBe(true)
+    }
+  })
+})
+
+describe('setup offers recovering with a passphrase beside joining', () => {
+  test('only a keyring whose log lists recovery passphrases offers it', async () => {
+    const listing = new Listing()
+    listing.render('')
+
+    const recover: CardAction = {
+      id: RECOVERABLE_ID,
+      testId: 'setup-identity-recover',
+    }
+    expect(action(recover).textContent).toContain(
+      listing.vault.t(I18N_KEYS.RecoveryPassphraseRecoverAction),
+    )
+    await fireEvent.click(action(recover))
+
+    expect(listing.recovered).toEqual([RECOVERABLE_ID])
+    expect(listing.asked).toEqual([])
+    for (const id of [LOCKED.id, ASKED.id, MEMBER.id, ELSEWHERE.id]) {
+      expect(
+        card(id).querySelectorAll('[data-testid="setup-identity-recover"]'),
+      ).toHaveLength(0)
     }
   })
 })

@@ -31,6 +31,10 @@ its location lists, its keyrings show the same way.
   import SetupIdentityList from '$lib/components/provider-vaults/SetupIdentityList.svelte'
   import NewIdentityOption from '$lib/components/provider-vaults/NewIdentityOption.svelte'
   import OptionDivider from '$lib/components/provider-vaults/OptionDivider.svelte'
+  import {
+    SetupRecoveryKind,
+    type SetupRecovery,
+  } from '$lib/components/provider-vaults/setup-identity-offer'
   import S3ConnectionPanel from '$lib/components/S3ConnectionPanel.svelte'
   import {
     identityChoices,
@@ -51,6 +55,7 @@ its location lists, its keyrings show the same way.
     FirstRunIdentityAction,
     FirstRunInventoryKind,
     FirstRunS3LocationKind,
+    type FirstRunIdentity,
     type FirstRunIdentityRun,
     type FirstRunInventory,
     type FirstRunProviderSource,
@@ -177,6 +182,21 @@ its location lists, its keyrings show the same way.
       }
       if (vault.firstRun === FirstRunStage.Sync) await load(current.source)
     }
+  }
+
+  /** A keyring with recovery passphrases can be joined with one: setup
+   * moves to the recover step for it. */
+  const recovery: SetupRecovery = {
+    kind: SetupRecoveryKind.Offered,
+    onRecover: (choice) => {
+      const current = actions.connection()
+      if (current.kind !== FirstRunConnectionKind.Connected) return
+      const identity: FirstRunIdentity = {
+        choice,
+        source: { kind: 'remote', source: current.source },
+      }
+      actions.recover(identity)
+    },
   }
 
   /** S3 is staged once its location lists; a refused key or a failed
@@ -376,6 +396,7 @@ its location lists, its keyrings show the same way.
           onContinue={act(FirstRunIdentityAction.Continue)}
           onAskToJoin={act(FirstRunIdentityAction.AskToJoin)}
           onCheck={act(FirstRunIdentityAction.CheckJoin)}
+          {recovery}
         />
         <OptionDivider {vault} />
       {:else}

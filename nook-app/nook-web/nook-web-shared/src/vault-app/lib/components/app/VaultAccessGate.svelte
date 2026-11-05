@@ -18,6 +18,8 @@
   import FirstRunNameStep from '$lib/components/login/FirstRunNameStep.svelte'
   import FirstRunVaultStep from '$lib/components/login/FirstRunVaultStep.svelte'
   import FirstRunJoinStep from '$lib/components/login/FirstRunJoinStep.svelte'
+  import FirstRunRecoverStep from '$lib/components/login/FirstRunRecoverStep.svelte'
+  import { FirstRunJoinKind } from '$lib/vault/identity-join-wait'
   import UnlockedIdentityPages from '$lib/components/identity-control/UnlockedIdentityPages.svelte'
   import { IdentityPages } from '$lib/vault/identity-pages'
   import { FirstRunStage, WorkspaceSection } from '$lib/vault/state/ui.svelte'
@@ -144,6 +146,8 @@
         <FirstRunNameStep {vault} />
       {:else if vault.firstRun === FirstRunStage.Vault}
         <FirstRunVaultStep {vault} />
+      {:else if vault.firstRunJoin.kind === FirstRunJoinKind.Recovering}
+        <FirstRunRecoverStep {vault} join={vault.firstRunJoin.join} />
       {:else}
         <FirstRunJoinStep {vault} />
       {/if}

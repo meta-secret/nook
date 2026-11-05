@@ -91,6 +91,7 @@ function keyringSnapshot(
         label: 'Web',
         isCurrentInstallation: true,
         onCurrentDevice: true,
+        approvedBy: { kind: 'founder' },
       },
     ],
     devices: [],
@@ -102,6 +103,7 @@ function keyringSnapshot(
       membersMissingDek: [],
     })),
     mounts: [],
+    recoveryPassphrases: [],
   }
 }
 

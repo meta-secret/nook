@@ -3,7 +3,8 @@ Keys of the unlocked identity: what can unlock it, read as one fact per key.
 Each app that opens the identity has its own key (a passkey or a PIN on that
 device); the page says how many there are, whether that is enough, and for
 each key which app it unlocks, where it is kept and when it was last used.
-Technical identifiers stay behind "Details".
+Technical identifiers stay behind "Details". The keyring's recovery
+passphrases follow as keys of their own, kept on paper.
 -->
 <script lang="ts">
   import { onMount } from "svelte";
@@ -25,6 +26,7 @@ Technical identifiers stay behind "Details".
   import { IdentityDirectoryReader } from "$lib/components/devices-access/identity-directory-view";
   import { IDENTITY_DIRECTORY_RETRY_DELAYS_MS } from "$lib/components/identities/identity-directory-loader.svelte";
   import { KeysLoadKind, type KeysLoad } from "./identity-keys-load";
+  import RecoveryPassphrases from "$lib/components/recovery-passphrase/RecoveryPassphrases.svelte";
   import {
     IdentityKeyInventory,
     IdentityKeyInventoryRowKind,
@@ -415,6 +417,8 @@ Technical identifiers stay behind "Details".
         </li>
       {/each}
     </ul>
+
+    <RecoveryPassphrases {vault} />
 
     {#if otherApps.length > 0}
       <section class="grid gap-2" data-testid="identity-keys-other">

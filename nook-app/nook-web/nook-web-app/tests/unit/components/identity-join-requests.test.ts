@@ -49,6 +49,7 @@ function identityWith(requests: IdentityJoinRequestView[]): VaultState {
         label: '',
         isCurrentInstallation: true,
         onCurrentDevice: true,
+        approvedBy: { kind: 'founder' },
       },
     ],
     devices: [],
@@ -56,6 +57,7 @@ function identityWith(requests: IdentityJoinRequestView[]): VaultState {
     joinRequests: requests,
     vaults: [],
     mounts: [],
+    recoveryPassphrases: [],
   }
   const ready: IdentityControlView = {
     kind: IdentityControlViewKind.Ready,

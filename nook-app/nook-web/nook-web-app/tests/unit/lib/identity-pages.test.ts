@@ -202,6 +202,7 @@ describe('IdentityPages', () => {
         },
       ],
       mounts: [],
+      recoveryPassphrases: [],
     }
     vi.spyOn(vault, 'ensureProviderSaved').mockResolvedValue(
       ok(ProviderSaveOutcome.Saved),

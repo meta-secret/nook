@@ -47,6 +47,10 @@ export enum IdentityPlanFailureKind {
   /** A device of the identity denied the request. */
   JoinDenied = "join-denied",
   FinishJoin = "finish-join",
+  /** The keyring's recovery passphrases could not be read. */
+  RecoveryRead = "recovery-read",
+  /** Joining with a recovery passphrase did not finish. */
+  Recover = "recover",
 }
 
 /** A decision that could not run; the plan stops there. */
@@ -89,6 +93,10 @@ export class IdentityPlanFailure {
         return I18N_KEYS.ProviderIdentitiesJoinDenied;
       case IdentityPlanFailureKind.FinishJoin:
         return I18N_KEYS.ProviderIdentitiesFinishJoinFailed;
+      case IdentityPlanFailureKind.RecoveryRead:
+        return I18N_KEYS.RecoveryPassphraseRecoverLoadFailed;
+      case IdentityPlanFailureKind.Recover:
+        return I18N_KEYS.RecoveryPassphraseRecoverFailed;
     }
   }
 }
@@ -100,13 +108,13 @@ export type IdentityPlanRun = {
 };
 
 /** One call through the session's manager, and what its failure means. */
-type ManagerCall<T> = {
+export type ManagerCall<T> = {
   readonly failure: IdentityPlanFailure;
   readonly run: (manager: NookVaultManager) => Promise<T>;
 };
 
 /** Runs identity calls through the session's manager. */
-class IdentityManagerCalls {
+export class IdentityManagerCalls {
   constructor(private readonly vault: VaultState) {}
 
   /** Run one call after any queued storage work, so it reads a settled

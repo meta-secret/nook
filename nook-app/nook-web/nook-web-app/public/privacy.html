@@ -317,12 +317,16 @@
           secrets.
         </p>
 
-        <h2>7. Multi-device and backup passwords</h2>
+        <h2>7. Multi-device and recovery passphrases</h2>
         <p>
-          Nook supports optional backup passwords and device enrollment so other
-          browsers can join your vault. Enrollment flows may use QR codes or
-          links that carry provider connection details and password-entry
-          identifiers. Share these only with devices and people you trust.
+          Nook supports device enrollment so other browsers can join your
+          keyring, and optional keyring recovery passphrases: generated words
+          that can add a new device to your keyring. Nook seals the keyring
+          recovery key under those words with scrypt and syncs only that sealed
+          copy; the words themselves never leave your device. Enrollment flows
+          may use QR codes or links that carry provider connection details.
+          Share these, and your recovery words, only with devices and people you
+          trust.
         </p>
 
         <h2>8. Security</h2>

@@ -337,4 +337,3 @@ Rust retains `resolve_dek()` / `resolve_dec()` as thin aliases for `resolve_secr
 - **7**
   - **Scope:** Device-to-device messaging channel
   - **Status:** Planned
-
