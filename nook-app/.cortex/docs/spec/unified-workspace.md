@@ -25,8 +25,6 @@ manager imports keep "identities" for their person and address items.
 - **Identity → Devices:** `/identity/devices`; aliases `/vault/devices` and
   `/onboard`.
 - **Identity → Keys:** `/identity/keys`; alias `/devices-access`.
-- **Identity → Backup passwords:** `/identity/passwords`; alias
-  `/vault/passwords`.
 - **Identity → Settings:** `/identity/settings`; alias `/settings`.
 
 - Earlier routes resolve to their current page and the URL is rewritten to the
@@ -52,19 +50,16 @@ manager imports keep "identities" for their person and address items.
   when the identity is locked). **Use identity** makes a not-active identity
   this browser's own and unlocks it with its passkey. **Manage** unlocks if
   needed and opens the identity's Overview.
-- A locked card offers **Use a backup password** when the selected vault has
-  one: one field inside the card opens that vault directly. There is no
-  separate unlock panel; a running Sentinel quorum ceremony is the only
+- A locked card has no separate unlock panel; a running Sentinel quorum ceremony is the only
   panel the hub shows for unlocking.
 - When this browser lost an identity's key, the vaults it still stores keep
-  opening from their rows (which starts key recovery) and from their backup
-  passwords. Local vaults no card lists, or every local vault when the
+  opening from their rows (which starts key recovery). Local vaults no card lists, or every local vault when the
   identity directory cannot be read, are listed on their own so they always
   open.
 - **New vault** on the current identity's card creates a vault for it.
   **New identity** starts the new-identity flow (below). Beside it, a
-  quieter **Check access** opens the check of which identity a passkey or
-  backup password opens; the header carries no such button.
+  quieter **Check access** opens the check of which identity a passkey
+  opens; the header carries no such button.
 - A browser extension asking to connect is answered beside the current
   identity's card, never on a page of its own. While locked, that panel
   unlocks the identity; once unlocked, the approval itself (the extension
@@ -93,14 +88,14 @@ text stays only for a requirement, a consequence, or a promise.
   subtitle: the Passkey step explains the passkey. Under an "or", the other paths are equal rows, each an
   icon, a short title, and an arrow: **Join with an invite link** opens
   the join screen, **Recover from a sync provider** opens recovery,
-  and **Check a passkey or backup password** opens Check access. One fact
+  and **Check a passkey** opens Check access. One fact
   line closes the screen.
 - **Recovery**: the provider's identities are listed as identity cards,
   each with one decision (recover it with its passkey, or ask to join) and
   one Apply button, as the
   [identity decisions](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md)
-  record describes. A link below checks which passkey or backup password
-  opens what, before anything is recovered.
+  record describes. A link below checks which passkey opens what, before
+  anything is recovered.
 - **Passkey** ("One passkey opens it all"): the diagram says what it is for,
   and one line makes the promise: no password, no Nook server. A new
   passkey, or one made for Nook before, makes this browser's key. Back
@@ -154,7 +149,7 @@ passphrase-protected code, so joining shows no sign-in.
 
 For a browser with no device left that has the identity: pick the sync
 provider that holds the vault, then unlock with a passkey synced to this
-device or the vault's backup password. If another device still has the
+device. If another device still has the
 identity, joining from it is the path instead.
 
 ### New identity
@@ -193,7 +188,7 @@ the defaults suit nearly everyone.
 
 - The rail runs down the left (a bottom bar on phones): the identity on top
   (it opens the hub), then **Overview**, then the identity's parts (**Vaults**,
-  **Sync**, **Devices**), then **Security** (**Keys**, **Backup passwords**),
+  **Sync**, **Devices**), then **Security** (**Keys**),
   then **Settings**. Sync shows a dot while the identity is kept only here;
   Devices shows the pending join count or a dot when a second device is the
   next step.
@@ -204,7 +199,7 @@ the defaults suit nearly everyone.
   order things flow: Vaults (what it holds) *copied to* Sync (where it is
   copied) *opens on* Devices (where it opens), each with a count, a short list
   and its main action; Add a device waits for a cloud provider. A quiet
-  security strip links Keys and Backup passwords.
+  security strip links Keys.
 - **Vaults** creates, renames, and switches the identity's vaults.
 - **Sync** mounts providers on the identity. The provider list shows each
   provider once; mounts recorded on the identity but not connected here are
@@ -218,8 +213,7 @@ the defaults suit nearly everyone.
   join requests, syncs the identity log, and creates invites (Add an app,
   with the same diagram as the join screen, this device filled in).
 - **Keys** says what unlocks the identity, one fact per key: how many keys
-  and whether that is enough (Add a device and Backup passwords when there
-  is only one), then each key with the app it unlocks, where it is kept and
+  and whether that is enough (Add a device when there is only one), then each key with the app it unlocks, where it is kept and
   when it was last used; identifiers sit behind Details. Rename stays for
   this browser's passkey.
 - Devices and Sync act on the identity. They need the identity's app key

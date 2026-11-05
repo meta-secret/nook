@@ -299,9 +299,8 @@ TypeScript owns browser integration:
   - Require users to re-enter the credential so the normal save path persists
     it sealed.
 - **Provider switch:** Changing the active saved provider calls
-  `reset_vault_session` in WASM and clears login password-entry preview state.
-  - Backup-password lists must reflect the remote vault for that provider, never
-    a previous provider's in-memory session.
+  `reset_vault_session` in WASM, so no previous provider's in-memory session
+  survives the switch.
 
 ### Google Drive Nook root
 
@@ -422,9 +421,6 @@ The step keeps one action button:
 - **Passkey check:** "Which passkey opens it?" runs `check_passkey_access`
   in memory and changes nothing; an identity it opens offers adding it.
 
-Backup passwords open single vaults, never identities, so this step has no
-backup-password form; Check access tries one.
-
 **Prohibited:** list a provider's vaults or offer an action on one vault.
 
 **Required:** list identities, each with one decision.
@@ -442,13 +438,11 @@ unlock screen link to it, and so does Manage → Sync providers.
   - A `NookProviderSource` also names an S3 location, which setup and recovery
     read. The page offers no S3 source of its own, because a connected S3
     provider is the connected sync provider.
-- **Checks:** one passkey or one backup password at a time
-  (`check_passkey_access`, `check_backup_password_access`, and the
-  manager's `check_passkey_access_from` and
-  `check_backup_password_access_from` for a `NookProviderSource`). Each
+- **Checks:** one passkey at a time (`check_passkey_access`, and the
+  manager's `check_passkey_access_from` for a `NookProviderSource`). Each
   adds a numbered column to a grid whose rows are the identities, each
-  listing the vaults it keeps. A passkey cell says whether it opens the
-  identity; a backup password cell can only say it opens some of its vaults.
+  listing the vaults it keeps. A cell says whether the passkey opens the
+  identity.
 - **One live action:** a source that still needs a sign-in or a folder keeps
   Check disabled until it is ready.
 
@@ -815,7 +809,7 @@ See [vault-session-and-lock.md](vault-session-and-lock.md). **Lock** is **not**
 identity, and sensitive Svelte state. The normal vault login gate remains
 visible; choosing device keys starts passkey authorization directly, while PIN
 input, passkey recovery, and failed/cancelled attempts use the device-protection
-gate. A backup password can unlock the local vault without opening it.
+gate.
 
 **Test ids:** `header-lock-vault-btn`, `login-create-device-vault-btn`,
 `login-connect-storage-btn`, `unlock-vault-btn`, `add-provider-btn`,
@@ -826,7 +820,7 @@ gate. A backup password can unlock the local vault without opening it.
 - **No**
   - **Primary UI:** **Get started** — create local vault (device keys) or connect cloud storage
 - **Yes**
-  - **Primary UI:** Unlock with device keys and/or backup password
+  - **Primary UI:** Unlock with device keys
 
 Legacy login wizard docs (connection × authorization accordion) are superseded
 by the unified login gate; see git history before Phase 8 if needed.
@@ -839,8 +833,7 @@ by the unified login gate; see git history before Phase 8 if needed.
 identity. Only after device-key authorization puts the identity in WASM memory
 does it load providers, apply `activeProvider` credentials to `storageMode` /
 `githubPat`, and call `ensureProviderSaved()` after successful
-connect/enroll/join. Backup-password unlock may hydrate the local vault session
-without those provider steps; sealed-provider sync remains paused.
+connect/enroll/join.
 
 WASM receives one typed `StorageConnection` per call for the active connect
 path. Rust produces it from the provider row or draft, and the web layer passes

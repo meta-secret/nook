@@ -1,7 +1,7 @@
 //! What a provider already holds, for the setup and import screens.
 //!
 //! The listing reads transport metadata, plus the events of vaults no identity
-//! here holds to see whether a backup password opens them. Nothing is
+//! here holds to see whether a member granted this device access. Nothing is
 //! decrypted: a vault is named only from this browser's own vault registry,
 //! and any other vault's name stays sealed under its key.
 use super::wasm_bindgen;

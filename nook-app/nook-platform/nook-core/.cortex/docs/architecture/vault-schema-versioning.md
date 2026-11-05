@@ -24,9 +24,6 @@ This vault-specific contract follows the repository-wide
 - **Event `schema_version`**
   - **Current value:** `3`
   - **Owned by:** `nook-event-log` `event.rs`
-- **Password envelope `version`**
-  - **Current value:** Envelope crypto version
-  - **Owned by:** `password_envelope.rs`
 
 Current builds write event schema `3` and read schemas `2` and `3`. Schema `3`
 adds checkpoint replacement fields, so schema-2 readers reject those events

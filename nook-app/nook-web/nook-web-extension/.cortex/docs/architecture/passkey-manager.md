@@ -156,5 +156,5 @@ runs. Automatic submit/sign-up remains out of scope.
 
 The extension prompt is visually Nook-owned but a website can imitate any
 in-page UI. It therefore never asks for recovery material, provider tokens, or
-vault passwords. Device authorization remains in the extension-owned side panel
+vault keys. Device authorization remains in the extension-owned side panel
 or authentication tab and in the offscreen session.

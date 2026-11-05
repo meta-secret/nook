@@ -48,8 +48,7 @@ deployment behavior. Encryption at rest does not remove those dependencies.
   - Uses a separate Ed25519 seed and public key.
   - It signs canonical event bodies and identifies authorized actors.
 - **Recovery material**
-  - Includes password envelopes, SLIP-0039 shares, Sentinel shares, and
-    enrollment grants.
+  - Includes SLIP-0039 shares, Sentinel shares, and enrollment grants.
   - Each recovery path has its own format and acceptance rules.
 - **Provider credentials**
   - Replication credentials are sealed locally.
@@ -151,9 +150,6 @@ for the full ownership model.
     metadata as additional authenticated data.
   - PIN fallback derives its wrapping key with PBKDF2-SHA256 and the persisted
     iteration count.
-- **Password unlock**
-  - Uses age scrypt password protection for a wrapping identity.
-  - That identity opens an age X25519 envelope containing the vault keys.
 - **Event authenticity**
   - Uses Ed25519 signatures over canonical event bodies.
   - Uses SHA-256-derived identifiers for content and actors.
@@ -188,7 +184,6 @@ generic recovery credential.
 
 - Passkey protection derives or unwraps an app encryption identity.
 - PIN fallback unwraps a locally stored app identity.
-- Password unlock opens a password-specific vault-key envelope.
 - SLIP-0039 recovers encoded protected material from a threshold of mnemonic
   shares.
 - Sentinel recovery reconstructs protected material from authorized encrypted

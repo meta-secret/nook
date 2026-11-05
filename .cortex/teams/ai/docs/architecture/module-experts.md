@@ -251,7 +251,6 @@ It identifies:
   - `nook-app/nook-platform/nook-auth2/.cortex/docs/spec/decentralized-auth.md`
   - `nook-app/.cortex/docs/spec/devices-and-access.md`
   - `nook-app/nook-platform/nook-core/.cortex/docs/spec/file-attachments.md`
-  - `nook-app/nook-platform/nook-auth2/.cortex/docs/spec/password-envelope.md`
   - `nook-app/.cortex/docs/spec/password-manager.md`
   - `nook-app/nook-platform/nook-core/.cortex/docs/spec/secure-notes.md`
   - `nook-app/nook-platform/nook-auth2/.cortex/docs/spec/slip39-recovery.md`

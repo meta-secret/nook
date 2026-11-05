@@ -1361,7 +1361,7 @@ The gate must:
 - keep the Pilot panel to that one action. Open vault lives in the extension
   side panel, except for the Open Nook replacement below. The close button is
   how the person takes over the page;
-- never request a vault password, recovery secret, or provider credential;
+- never request a vault key, recovery secret, or provider credential;
 - never silently fill or submit;
 - when more than one login matches the page origin, open an extension-owned
   searchable login picker inside the existing right-side Pilot panel, using the

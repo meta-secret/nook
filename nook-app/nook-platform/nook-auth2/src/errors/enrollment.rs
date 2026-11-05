@@ -6,13 +6,13 @@ pub type EnrollmentResult<T> = Result<T, EnrollmentError>;
 
 #[derive(Debug, Error)]
 pub enum EnrollmentError {
-    #[error("Vault password is required to encrypt the enrollment QR.")]
+    #[error("A passphrase is required to encrypt the enrollment code.")]
     EncryptPasswordRequired,
 
-    #[error("Enrollment payload requires a vault password entry id.")]
+    #[error("Enrollment payload requires an entry id.")]
     EntryIdRequired,
 
-    #[error("Enter the vault password for this onboarding QR.")]
+    #[error("Enter the one-time passphrase for this enrollment code.")]
     DecryptPasswordRequired,
 
     #[error("Invalid enrollment code.")]
@@ -51,7 +51,7 @@ pub enum EnrollmentError {
     #[error("Unsupported provider type: {provider_type}")]
     UnsupportedProviderType { provider_type: String },
 
-    #[error("Vault password does not decrypt this enrollment code.")]
+    #[error("This passphrase does not decrypt this enrollment code.")]
     WrongPassword,
 
     #[error("Failed to generate enrollment random bytes: {0}")]

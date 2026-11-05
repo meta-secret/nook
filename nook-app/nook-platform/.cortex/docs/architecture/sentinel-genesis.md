@@ -39,8 +39,7 @@ standalone `publicKeyAnnouncement` payloads are rejected for roster import.
 After genesis, the owner returns each participant's encrypted share directly;
 share delivery does not require or initialize a sync provider. The owner then
 uses the normal Sentinel quorum ceremony to unlock the empty vault. Provider
-replicas may be added from inside the unlocked vault. Simple-vault password
-enrollment is not reused.
+replicas may be added from inside the unlocked vault.
 
 When a local vault already exists, the passkey/device-protection gate runs
 **before** unlock. Product and persisted wire names use Sentinel consistently.

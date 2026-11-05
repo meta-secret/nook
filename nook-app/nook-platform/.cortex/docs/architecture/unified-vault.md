@@ -183,7 +183,7 @@ stateDiagram-v2
   CreateLocal --> Vault: session unlocked
   ConnectProvider --> Reconcile: remote exists
   ConnectProvider --> Vault: import / pull existing
-  Unlock --> Vault: device keys or backup password
+  Unlock --> Vault: device keys
   Vault --> Passkey: Lock (clear session + device identity)
   Passkey --> LoginGate
   LoginGate --> Unlock
@@ -196,7 +196,7 @@ stateDiagram-v2
    or first when unlocking an existing local vault. Then load the local cache.
    **Exception:** opening `#enroll=` on an empty browser is join/onboarding for
    an existing vault — skip create landing, require device protection, then show
-   Finish device onboarding (vault password).
+   Finish device onboarding with the invite code.
 2. **First visit / GetStarted:** after the public site selects Simple or
    Sentinel, the isolated app presents **Create a new vault** and **Open an
    existing vault** as sibling intents. Creation either creates a Simple vault
@@ -211,7 +211,7 @@ stateDiagram-v2
    ([vault-session-and-lock.md](vault-session-and-lock.md)).
 4. **After unlock**, sync providers in Settings replicate the **current** vault (`store_id`).
 
-Device-key multi-device flows (`auth:`, `joins:`, `members:`) continue alongside optional backup passwords.
+Device-key multi-device flows use the `auth:`, `joins:`, and `members:` sections.
 
 ---
 

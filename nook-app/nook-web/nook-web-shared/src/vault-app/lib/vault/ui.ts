@@ -62,13 +62,13 @@ export class VaultWorkspaceActions {
     if (!state.hasManager) return;
     void state.refreshDeviceState().then((refreshed) => {
       if (refreshed.isOk()) return;
-      // A backup-password session has no device key to sync with; the
-      // page still shows what this browser last read.
-      const passwordSession =
+      // A session whose device key is still locked cannot sync; the page
+      // still shows what this browser last read.
+      const deviceLocked =
         refreshed.error instanceof StorageOperationFailure &&
         refreshed.error.kind ===
           StorageOperationFailureKind.DeviceAuthorizationRequired;
-      if (!passwordSession)
+      if (!deviceLocked)
         state.errorMsg = state.t(refreshed.error.translationKey);
     });
   }

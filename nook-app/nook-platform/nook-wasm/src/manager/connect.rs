@@ -2,8 +2,7 @@
 //!
 //! - `assess_vault_connect` — pre-flight check the web layer runs before
 //!   asking the user to confirm an unlock attempt.
-//! - `connect` / `connect_fresh` / `connect_internal` — keys-mode unlock,
-//!   with a clear short-circuit when the vault is in password mode.
+//! - `connect` / `connect_fresh` / `connect_internal` — device-key unlock.
 //! - `initialize_empty` / `initialize_genesis_vault` — bootstrap a new
 //!   vault file with this device as the genesis member.
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]

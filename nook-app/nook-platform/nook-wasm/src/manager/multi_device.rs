@@ -1,9 +1,7 @@
-//! Keys-mode multi-device flows.
+//! Multi-device flows.
 //!
 //! Wraps the join / approve / enroll choreography that the `auth:` /
-//! `joins:` / `members:` sections of a keys-mode vault use. None of these
-//! methods are reachable when the vault is in password mode — the
-//! password-mode counterpart is `connect_with_password` (`manager::password`).
+//! `joins:` / `members:` sections of a vault use.
 
 use super::NookVaultManager;
 use super::verified_access::VerifiedVaultAccessFlow;

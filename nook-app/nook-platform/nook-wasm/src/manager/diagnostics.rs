@@ -26,7 +26,7 @@ impl NookVaultManager {
     /// Return only the safe, signed metadata needed to choose a vault recovery path.
     ///
     /// This intentionally works before device authorization and never returns
-    /// password envelopes, passkey credential ids, or encrypted secret payloads.
+    /// passkey credential ids or encrypted secret payloads.
     #[wasm_bindgen]
     pub async fn vault_recovery_options(
         &mut self,
