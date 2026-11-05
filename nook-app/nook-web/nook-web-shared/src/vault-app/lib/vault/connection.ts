@@ -114,6 +114,11 @@ export class VaultConnectionActions {
             state,
           ).syncLocalFolderProvider(syncLocalFolderProviderArgs);
           if (localSync.isErr()) {
+            // The banner names no cause; the log keeps the failure kind and
+            // its message key, never the provider message.
+            log.warn(
+              `local folder sync failed: ${localSync.error.kind} (${localSync.error.translationKey})`,
+            );
             state.errorMsg = state.t(localSync.error.translationKey);
             return;
           }
