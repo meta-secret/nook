@@ -11,13 +11,14 @@ use nook_core::{
     AuthProvidersSnapshot, EventId, IdentityControlState, IdentityNameStatus,
     IdentityVaultEpochAction, IdentityVaultEpochStatus, IdentityVaultKeyOpening,
     IdentityVaultRegistration, MultiDeviceError, OpenedVaultDek, ProviderRows, SecretTypeFilter,
-    StorageProvider, StoreId, SymmetricKey, VaultKeys, VaultMetaState, VaultRevocationDue,
-    VaultType, VaultUnlock,
+    StorageProvider, StoreId, SymmetricKey, VaultHolderRotation, VaultKeys, VaultMetaState,
+    VaultOperation, VaultRevocationDue, VaultRevokedHolders, VaultType, VaultUnlock,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 use crate::manager::NookExternalEventLogRecords;
 use crate::manager::NookVaultManager;
+use crate::manager::event_log::SecurityEpochRotationFailure;
 use crate::manager::verified_access::VerifiedVaultAccessFlow;
 use crate::{NookDatabase, NookError, NookSecretPage};
 
@@ -250,6 +251,28 @@ impl NookVaultManager {
                 .await?;
         }
         let key_epoch = EventId::parse(&self.ensure_key_epoch().await?)?;
+        // A revoked member on no vault roster, as a recovery passphrase is,
+        // can still hold this epoch's DEK: rotate it away before any write.
+        let key_epoch = match (VaultRevokedHolders {
+            state: &state,
+            store_id: &store_id,
+            key_epoch: &key_epoch,
+        })
+        .rotation()
+        {
+            VaultHolderRotation::NotDue => key_epoch,
+            VaultHolderRotation::Due { app_id } => {
+                self.rotate_security_epoch_classified(VaultOperation::DeviceRevoked {
+                    device_id: app_id,
+                })
+                .await
+                .map_err(|failure| match failure {
+                    SecurityEpochRotationFailure::BeforeCommit(error)
+                    | SecurityEpochRotationFailure::AfterCommit(error) => error,
+                })?;
+                EventId::parse(&self.ensure_key_epoch().await?)?
+            }
+        };
         let keys = self.open_vault_keys()?;
         let dek = OpenedVaultDek {
             store_id: &store_id,

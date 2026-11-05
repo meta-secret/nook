@@ -322,24 +322,21 @@ mod tests {
             let store_id = StoreId::generate()?;
             let keys = VaultKeys::generate()?;
             let key_epoch = epoch(store_id.as_str())?;
-            let register = self
-                .state()?
-                .vault_registration_operation(IdentityVaultRegistration {
-                    dek: OpenedVaultDek {
-                        store_id: &store_id,
-                        key_epoch: &key_epoch,
-                        keys: &keys,
-                    },
-                })?;
+            let register =
+                self.state()?
+                    .vault_registration_operation(IdentityVaultRegistration {
+                        dek: OpenedVaultDek {
+                            store_id: &store_id,
+                            key_epoch: &key_epoch,
+                            keys: &keys,
+                        },
+                    })?;
             self.vaults.push((store_id, keys));
             self.append(vec![register])
         }
 
         /// The laptop adds a passphrase once its words are typed back.
-        fn add_passphrase(
-            self,
-            label: &str,
-        ) -> anyhow::Result<(Self, PendingRecoveryPassphrase)> {
+        fn add_passphrase(self, label: &str) -> anyhow::Result<(Self, PendingRecoveryPassphrase)> {
             let pending = PendingRecoveryPassphrase::begin(&RecoveryPassphraseStart {
                 label,
                 strength: RecoveryStrength::Standard,
@@ -417,7 +414,9 @@ mod tests {
             Err(RecoveryPassphraseError::UnknownWords(_))
         ));
         assert!(matches!(
-            pending.confirm(&typed(&words.iter().skip(1).copied().collect::<Vec<_>>().join(" "))),
+            pending.confirm(&typed(
+                &words.iter().skip(1).copied().collect::<Vec<_>>().join(" ")
+            )),
             Err(RecoveryPassphraseError::WordCount { .. })
         ));
         pending.confirm(&typed(&words.join("-").to_uppercase()))?;
@@ -539,13 +538,17 @@ mod tests {
             .approval()
             .is_err()
         );
-        assert!(IdentityControlState::project(&provider_log)?.member(phone.app.app_id()).is_none());
+        assert!(
+            IdentityControlState::project(&provider_log)?
+                .member(phone.app.app_id())
+                .is_none()
+        );
         Ok(())
     }
 
     #[test]
-    fn removing_a_passphrase_rotates_every_vault_and_it_recovers_nothing_more()
-    -> anyhow::Result<()> {
+    fn removing_a_passphrase_rotates_every_vault_and_it_recovers_nothing_more() -> anyhow::Result<()>
+    {
         let (keyring, pending) = Keyring::founded()?.add_passphrase("Paper in the safe")?;
         let (keyring, _drawer) = keyring.add_passphrase("Desk drawer")?;
         let recovery = keyring.passphrase_id("Paper in the safe")?;

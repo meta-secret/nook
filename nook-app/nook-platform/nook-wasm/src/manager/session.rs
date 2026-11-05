@@ -386,6 +386,8 @@ pub struct NookVaultManager {
     pub(in crate::manager) sentinel_unlock: CeremonyState<nook_core::SentinelUnlockSession>,
     pub(in crate::manager) sync_outbox: SyncOutbox,
     pub(in crate::manager) event_log_sync_issue: EventLogSyncIssueState,
+    /// A recovery passphrase shown on this device and not yet confirmed.
+    pub(in crate::manager) recovery_passphrase: CeremonyState<nook_core::PendingRecoveryPassphrase>,
 }
 
 impl Drop for NookVaultManager {
@@ -399,6 +401,7 @@ impl Drop for NookVaultManager {
         self.sentinel_unlock = CeremonyState::Inactive;
         self.sync_outbox = SyncOutbox::Unbound;
         self.event_log_sync_issue = EventLogSyncIssueState::Clear;
+        self.recovery_passphrase = CeremonyState::Inactive;
     }
 }
 
@@ -419,6 +422,7 @@ impl NookVaultManager {
             sentinel_unlock: CeremonyState::Inactive,
             sync_outbox: SyncOutbox::Unbound,
             event_log_sync_issue: EventLogSyncIssueState::Clear,
+            recovery_passphrase: CeremonyState::Inactive,
         }
     }
 }

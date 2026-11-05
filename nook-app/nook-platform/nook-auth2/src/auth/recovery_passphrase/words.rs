@@ -91,6 +91,10 @@ pub enum RecoveryWordSample {
 impl RecoveryWordDraw {
     /// Sample a word from this draw by rejection.
     #[must_use]
+    #[expect(
+        clippy::match_bool,
+        reason = "the draw's place inside or past the list is matched through a native pattern"
+    )]
     pub fn sample(self) -> RecoveryWordSample {
         let Self(draw) = self;
         let masked = draw % DRAW_SPACE;
@@ -238,6 +242,10 @@ impl TypedRecoveryWords {
 
     /// The list words this input spells, checked word by word. Unknown words
     /// are reported together, each at its typed position.
+    #[expect(
+        clippy::match_bool,
+        reason = "whether any typed word is unknown is matched through a native pattern"
+    )]
     pub fn words(&self) -> Result<Vec<RecoveryWord>, RecoveryPassphraseError> {
         let chunks = self.chunks();
         if chunks.is_empty() {
@@ -264,6 +272,10 @@ impl TypedRecoveryWords {
     }
 
     /// The words, which must number exactly `expected`.
+    #[expect(
+        clippy::match_bool,
+        reason = "the typed count against the expected one is matched through a native pattern"
+    )]
     pub fn words_of_count(
         &self,
         expected: RecoveryWordCount,
@@ -325,6 +337,10 @@ impl Segmentation {
     /// Split a chunk into list words, depth first. The list is uniquely
     /// decodable, so a complete split is the only one. A position that cannot
     /// finish a split is remembered, so each is explored once.
+    #[expect(
+        clippy::match_bool,
+        reason = "a split position known to be a dead end is matched through a native pattern"
+    )]
     fn of(chunk: &str) -> Self {
         let WordLength(longest) = WordList::get().longest;
         let mut dead_ends = BTreeSet::new();

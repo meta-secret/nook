@@ -187,14 +187,15 @@ mod tests {
         recovery: &Recovery,
         vaults: &[OpenedVaultDek<'_>],
     ) -> anyhow::Result<IdentityEventInsertStatus> {
-        let operations = fixture
-            .state()?
-            .recovery_addition_operations(&IdentityRecoveryAddition {
-                member: &recovery.keys("Paper in the safe"),
-                sealed_secret: &recovery.secret.seal(&recovery.phrase)?,
-                strength: RecoveryStrength::Standard,
-                vaults,
-            })?;
+        let operations =
+            fixture
+                .state()?
+                .recovery_addition_operations(&IdentityRecoveryAddition {
+                    member: &recovery.keys("Paper in the safe"),
+                    sealed_secret: &recovery.secret.seal(&recovery.phrase)?,
+                    strength: RecoveryStrength::Standard,
+                    vaults,
+                })?;
         let founder = fixture.founder();
         Ok(fixture.append(&founder, operations)?.1)
     }
@@ -224,12 +225,14 @@ mod tests {
         let recovery = Recovery::new()?;
         // Every owned vault must be wrapped to it.
         assert!(matches!(
-            fixture.state()?.recovery_addition_operations(&IdentityRecoveryAddition {
-                member: &recovery.keys("Paper"),
-                sealed_secret: &recovery.secret.seal(&recovery.phrase)?,
-                strength: RecoveryStrength::Standard,
-                vaults: &[],
-            }),
+            fixture
+                .state()?
+                .recovery_addition_operations(&IdentityRecoveryAddition {
+                    member: &recovery.keys("Paper"),
+                    sealed_secret: &recovery.secret.seal(&recovery.phrase)?,
+                    strength: RecoveryStrength::Standard,
+                    vaults: &[],
+                }),
             Err(EventError::IdentityApprovalIncomplete { .. })
         ));
         assert_eq!(
@@ -273,14 +276,15 @@ mod tests {
         let paper = Recovery::new()?;
         let drawer = Recovery::new()?;
         add_recovery(&mut fixture, &paper, &[vault.opened()])?;
-        let operations = fixture
-            .state()?
-            .recovery_addition_operations(&IdentityRecoveryAddition {
-                member: &drawer.keys("Desk drawer"),
-                sealed_secret: &drawer.secret.seal(&drawer.phrase)?,
-                strength: RecoveryStrength::High,
-                vaults: &[vault.opened()],
-            })?;
+        let operations =
+            fixture
+                .state()?
+                .recovery_addition_operations(&IdentityRecoveryAddition {
+                    member: &drawer.keys("Desk drawer"),
+                    sealed_secret: &drawer.secret.seal(&drawer.phrase)?,
+                    strength: RecoveryStrength::High,
+                    vaults: &[vault.opened()],
+                })?;
         let founder = fixture.founder();
         fixture.append(&founder, operations)?;
         let state = fixture.state()?;
@@ -299,8 +303,7 @@ mod tests {
     }
 
     #[test]
-    fn a_recovery_passphrase_approves_a_new_app_key_that_opens_every_vault() -> anyhow::Result<()>
-    {
+    fn a_recovery_passphrase_approves_a_new_app_key_that_opens_every_vault() -> anyhow::Result<()> {
         let mut fixture = Fixture::new()?;
         let first = Vault::register(&mut fixture)?;
         let second = Vault::register(&mut fixture)?;
@@ -334,10 +337,7 @@ mod tests {
 
         let state = fixture.state()?;
         for vault in [&first, &second] {
-            assert_eq!(
-                opened_by(&state, &device.app, &vault.store_id)?,
-                vault.keys
-            );
+            assert_eq!(opened_by(&state, &device.app, &vault.store_id)?, vault.keys);
         }
         let member = state
             .member(device.app.app_id())
@@ -437,13 +437,18 @@ mod tests {
             }],
         )?;
         assert_eq!(status, IdentityEventInsertStatus::Applied);
-        assert!(fixture.state()?.recovery_member(recovery.app_id()).is_none());
+        assert!(
+            fixture
+                .state()?
+                .recovery_member(recovery.app_id())
+                .is_none()
+        );
         Ok(())
     }
 
     #[test]
-    fn a_removed_recovery_passphrase_holds_the_vault_epoch_until_it_rotates()
-    -> anyhow::Result<()> {
+    fn a_removed_recovery_passphrase_holds_the_vault_epoch_until_it_rotates() -> anyhow::Result<()>
+    {
         let mut fixture = Fixture::new()?;
         let vault = Vault::register(&mut fixture)?;
         let recovery = Recovery::new()?;

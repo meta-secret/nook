@@ -23,6 +23,8 @@ mod provider_identity_choice;
 pub use provider_identity_choice::*;
 mod mnemonic;
 pub use mnemonic::*;
+mod recovery_words;
+pub use recovery_words::*;
 mod provider_labels;
 pub use provider_labels::*;
 mod provider_state;

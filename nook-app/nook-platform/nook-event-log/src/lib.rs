@@ -67,8 +67,8 @@ pub use identity_control::{
     IdentityEventSigning, IdentityGenesisRequest, IdentityInvite, IdentityInviteIssue,
     IdentityInviteJoin, IdentityInviteProof, IdentityJoinRequest, IdentityMemberAddition,
     IdentityMemberApprover, IdentityMemberKeys, IdentityMemberKind, IdentityMountTarget,
-    IdentityRecoveryAddition, IdentityRecoveryApproval, IdentityRecoveryMember, IdentityNaming, IdentityProviderMount,
-    IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
+    IdentityNaming, IdentityProviderMount, IdentityRecoveryAddition, IdentityRecoveryApproval,
+    IdentityRecoveryMember, IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
     IdentityVaultRegistration, MemberDevice, MemberSealedName, MemberVaultDek, OpenedVaultDek,
     ProviderMountId, S3MountTarget,
 };

@@ -446,6 +446,7 @@ impl IdentityEvent {
         }
         self.validate_operation_structure()?;
         self.check_member_devices()?;
+        self.check_recovery_members()?;
         self.verify_actor_signature()?;
         self.id()
     }
@@ -466,6 +467,16 @@ impl IdentityEvent {
             return Err(EventError::IdentityControlInvalid(
                 "a member cannot share a device with itself".to_owned(),
             ));
+        }
+        Ok(())
+    }
+
+    /// A recovery passphrase is a member tuple like any other.
+    fn check_recovery_members(&self) -> EventResult<()> {
+        for operation in &self.body.operations {
+            if let IdentityControlOperation::RecoveryKeyAdded { member, .. } = operation {
+                member.signing_actor()?;
+            }
         }
         Ok(())
     }
@@ -516,9 +527,6 @@ impl IdentityEvent {
                     member.signing_actor()?;
                     Self::check_one_grant_per_vault(vault_deks)?;
                 }
-                IdentityControlOperation::RecoveryKeyAdded { member, .. } => {
-                    member.signing_actor()?;
-                }
                 IdentityControlOperation::MemberInvited { invite } => {
                     SigningIdentity::verifying_key_from_public_key_hex(
                         invite.signing_public_key.as_str(),
@@ -563,6 +571,7 @@ impl IdentityEvent {
                     }
                 }
                 IdentityControlOperation::IdentityCreated { .. }
+                | IdentityControlOperation::RecoveryKeyAdded { .. }
                 | IdentityControlOperation::MemberJoinDenied { .. }
                 | IdentityControlOperation::MemberRevoked { .. }
                 | IdentityControlOperation::MemberRenamed { .. }

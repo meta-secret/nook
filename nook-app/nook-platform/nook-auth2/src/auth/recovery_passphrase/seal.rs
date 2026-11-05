@@ -105,9 +105,11 @@ impl RecoverySecret {
         let mut recipient =
             scrypt::Recipient::new(SecretString::from(phrase.scrypt_passphrase().to_string()));
         recipient.set_work_factor(work_factor);
-        let seal_failed = |error: &dyn fmt::Display| RecoveryPassphraseError::Unreadable(error.to_string());
-        let encryptor = age::Encryptor::with_recipients(iter::once(&recipient as &dyn age::Recipient))
-            .map_err(|error| seal_failed(&error))?;
+        let seal_failed =
+            |error: &dyn fmt::Display| RecoveryPassphraseError::Unreadable(error.to_string());
+        let encryptor =
+            age::Encryptor::with_recipients(iter::once(&recipient as &dyn age::Recipient))
+                .map_err(|error| seal_failed(&error))?;
         let mut armored = Vec::new();
         let armor = ArmoredWriter::wrap_output(&mut armored, Format::AsciiArmor)
             .map_err(|error| seal_failed(&error))?;
@@ -138,15 +140,20 @@ impl RecoverySealedSecret {
 
     /// Open the seal with typed words. Words that do not open it fail
     /// closed with [`RecoveryPassphraseError::WrongWords`].
-    pub fn unseal(&self, phrase: &RecoveryPhrase) -> Result<RecoverySecret, RecoveryPassphraseError> {
+    pub fn unseal(
+        &self,
+        phrase: &RecoveryPhrase,
+    ) -> Result<RecoverySecret, RecoveryPassphraseError> {
         let Self(ciphertext) = self;
         let ScryptWorkFactor(work_factor) = ScryptWorkFactor::RECOVERY;
         let mut identity =
             scrypt::Identity::new(SecretString::from(phrase.scrypt_passphrase().to_string()));
         identity.set_max_work_factor(work_factor);
-        let unreadable = |error: &dyn fmt::Display| RecoveryPassphraseError::Unreadable(error.to_string());
-        let decryptor = age::Decryptor::new_buffered(ArmoredReader::new(ciphertext.as_str().as_bytes()))
-            .map_err(|error| unreadable(&error))?;
+        let unreadable =
+            |error: &dyn fmt::Display| RecoveryPassphraseError::Unreadable(error.to_string());
+        let decryptor =
+            age::Decryptor::new_buffered(ArmoredReader::new(ciphertext.as_str().as_bytes()))
+                .map_err(|error| unreadable(&error))?;
         let mut reader = decryptor
             .decrypt(iter::once(&identity as &dyn age::Identity))
             .map_err(|error| match error {

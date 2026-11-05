@@ -11,12 +11,12 @@ pub(crate) mod identity_genesis;
 pub mod local_identity_keyring;
 pub mod multi_device;
 pub mod password_envelope;
+pub mod recovery_passphrase;
 pub mod sentinel_genesis;
 mod sentinel_genesis_types;
 mod sentinel_signing;
 pub mod sentinel_unlock;
 mod slip39;
-pub mod recovery_passphrase;
 
 pub use domain_numbers::{
     DeviceKeyDerivationIterations, EnrollmentKeyDerivationIterations, IdentityControlEpoch,

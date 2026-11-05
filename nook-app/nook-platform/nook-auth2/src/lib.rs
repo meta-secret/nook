@@ -124,6 +124,12 @@ pub use auth::password_envelope::{
     PasswordEnvelopeRewrap, PasswordEnvelopeVersion, PasswordPolicy, PasswordUnlockEntry,
     VaultUnlock,
 };
+pub use auth::recovery_passphrase::{
+    RecoveryPassphraseError, RecoveryPhrase, RecoverySealedSecret, RecoverySecret,
+    RecoveryStrength, RecoveryWord, RecoveryWordCount, RecoveryWordDraw, RecoveryWordPosition,
+    RecoveryWordSample, RecoveryWordSuggestions, TypedRecoveryWord, TypedRecoveryWords,
+    UnknownRecoveryWord,
+};
 pub use auth::sentinel_genesis::{
     CheckedSentinelGenesisDelivery, CheckedSentinelGenesisResponse, ReadySentinelGenesis,
     SentinelGenesisDeliveryRecipient, SentinelGenesisIssued, SentinelGenesisLinkInput,
@@ -136,11 +142,6 @@ pub use auth::sentinel_unlock::{
     CheckedSentinelUnlockRequest, ContextBoundSentinelUnlock, SentinelUnlockPolicy,
     SentinelUnlockQuorum, SentinelUnlockReadiness, SentinelUnlockRejection, SentinelUnlockRequest,
     SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus, SentinelUnlockVersion,
-};
-pub use auth::recovery_passphrase::{
-    RecoveryPassphraseError, RecoveryPhrase, RecoverySealedSecret, RecoverySecret, RecoveryStrength,
-    RecoveryWord, RecoveryWordCount, RecoveryWordDraw, RecoveryWordPosition, RecoveryWordSample,
-    RecoveryWordSuggestions, TypedRecoveryWord, TypedRecoveryWords, UnknownRecoveryWord,
 };
 pub use crypto::vault_crypto::VaultCrypto;
 pub use errors::{

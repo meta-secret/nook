@@ -12,7 +12,7 @@ use nook_auth2::{
     RecoverySealedSecret, RecoveryStrength, StoreId,
 };
 
-use super::graph::IdentityControlLog;
+use super::graph::{EffectiveMember, IdentityControlLog};
 use super::wire::{
     IdentityControlOperation, IdentityMemberKeys, IdentityProviderMount, IdentityVaultDekGrant,
     MemberDevice, MemberSealedName, MemberVaultDek, ProviderMountId,
@@ -146,6 +146,40 @@ struct VaultAccumulator {
     registered_in: Option<EventId>,
     current_key_epoch: Option<EventId>,
     epochs: BTreeMap<EventId, BTreeMap<AppId, MemberVaultDek>>,
+}
+
+impl VaultAccumulator {
+    /// The registered vault with each epoch's envelopes split between the
+    /// active members and the revoked ones that held them. A vault granted
+    /// but never registered is not one.
+    fn project(
+        self,
+        store_id: StoreId,
+        active: &BTreeMap<AppId, EffectiveMember>,
+    ) -> Option<IdentityControlVault> {
+        let registered_in = self.registered_in?;
+        let current_key_epoch = self.current_key_epoch?;
+        let epochs = self
+            .epochs
+            .into_iter()
+            .map(|(key_epoch, recipients)| {
+                let (recipients, revoked): (Vec<_>, Vec<_>) = recipients
+                    .into_values()
+                    .partition(|dek| active.contains_key(&dek.app_id));
+                IdentityVaultEpochDeks {
+                    key_epoch,
+                    recipients,
+                    revoked_holders: revoked.into_iter().map(|dek| dek.app_id).collect(),
+                }
+            })
+            .collect();
+        Some(IdentityControlVault {
+            store_id,
+            registered_in,
+            current_key_epoch,
+            epochs,
+        })
+    }
 }
 
 /// Who admitted a member, as the fold sees it: the founder, an invite, or
@@ -333,6 +367,25 @@ impl ProjectionAccumulator {
                     admitted.keys.label = label.clone();
                 }
             }
+            IdentityControlOperation::VaultRegistered { .. }
+            | IdentityControlOperation::VaultDekGranted { .. }
+            | IdentityControlOperation::VaultRemoved { .. } => self.apply_vault(id, operation),
+            IdentityControlOperation::ProviderMounted { mount } => {
+                self.mounts.insert(mount.mount_id.clone(), mount.clone());
+            }
+            IdentityControlOperation::ProviderUnmounted { mount_id } => {
+                self.mounts.remove(mount_id);
+            }
+            IdentityControlOperation::IdentityNamed { recipients } => {
+                self.sealed_name.clone_from(recipients);
+            }
+        }
+        Ok(())
+    }
+
+    /// Apply a vault registration, rewrap, or removal.
+    fn apply_vault(&mut self, id: &EventId, operation: &IdentityControlOperation) {
+        match operation {
             IdentityControlOperation::VaultRegistered {
                 store_id,
                 key_epoch,
@@ -359,17 +412,19 @@ impl ProjectionAccumulator {
             IdentityControlOperation::VaultRemoved { store_id } => {
                 self.removed_vaults.insert(store_id.clone());
             }
-            IdentityControlOperation::ProviderMounted { mount } => {
-                self.mounts.insert(mount.mount_id.clone(), mount.clone());
-            }
-            IdentityControlOperation::ProviderUnmounted { mount_id } => {
-                self.mounts.remove(mount_id);
-            }
-            IdentityControlOperation::IdentityNamed { recipients } => {
-                self.sealed_name.clone_from(recipients);
-            }
+            IdentityControlOperation::IdentityCreated { .. }
+            | IdentityControlOperation::MemberJoinRequested { .. }
+            | IdentityControlOperation::MemberApproved { .. }
+            | IdentityControlOperation::MemberJoinDenied { .. }
+            | IdentityControlOperation::MemberInvited { .. }
+            | IdentityControlOperation::MemberJoinedByInvite { .. }
+            | IdentityControlOperation::RecoveryKeyAdded { .. }
+            | IdentityControlOperation::MemberRevoked { .. }
+            | IdentityControlOperation::MemberRenamed { .. }
+            | IdentityControlOperation::ProviderMounted { .. }
+            | IdentityControlOperation::ProviderUnmounted { .. }
+            | IdentityControlOperation::IdentityNamed { .. } => {}
         }
-        Ok(())
     }
 
     /// Who let a member in, by name: the approving member's app, and for a
@@ -497,33 +552,7 @@ impl IdentityControlState {
             .vaults
             .into_iter()
             .filter(|(store_id, _)| !removed_vaults.contains(store_id))
-            .filter_map(|(store_id, vault)| {
-                let registered_in = vault.registered_in?;
-                let current_key_epoch = vault.current_key_epoch?;
-                let epochs = vault
-                    .epochs
-                    .into_iter()
-                    .map(|(key_epoch, recipients)| {
-                        let (recipients, revoked_holders): (Vec<_>, Vec<_>) = recipients
-                            .into_values()
-                            .partition(|dek| active.contains_key(&dek.app_id));
-                        IdentityVaultEpochDeks {
-                            key_epoch,
-                            recipients,
-                            revoked_holders: revoked_holders
-                                .into_iter()
-                                .map(|dek| dek.app_id)
-                                .collect(),
-                        }
-                    })
-                    .collect();
-                Some(IdentityControlVault {
-                    store_id,
-                    registered_in,
-                    current_key_epoch,
-                    epochs,
-                })
-            })
+            .filter_map(|(store_id, vault)| vault.project(store_id, &active))
             .collect();
         Ok(Self {
             identity_id: log.identity_id().clone(),

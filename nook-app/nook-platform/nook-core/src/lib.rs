@@ -272,12 +272,12 @@ pub use auth::identity_join::{
     IdentityJoinAnswer, IdentityJoinCompletion, IdentityJoinCompletionPlan, IdentityJoinKey,
     IdentityJoinProgress, IdentityMemberAdd,
 };
+pub use auth::identity_vault_pairing::{IdentityVaultPairingPlan, IdentityVaultPairingRequest};
+pub use auth::identity_words::IdentityWords;
 pub use auth::recovery_passphrase::{
     PendingRecoveryPassphrase, RecoveryPassphraseRecording, RecoveryPassphraseStart,
     RecoveryPassphraseUse,
 };
-pub use auth::identity_vault_pairing::{IdentityVaultPairingPlan, IdentityVaultPairingRequest};
-pub use auth::identity_words::IdentityWords;
 pub use auth::vault_meta_actions::{
     DeviceAuthorization, EventGraphAuthorizationProjection, EventGraphDeviceAccess,
     EventGraphDeviceAccessRequest, SentinelMemberRecordProjection,
@@ -331,11 +331,12 @@ pub use nook_event_log::{
     IdentityEventBody, IdentityEventInsertStatus, IdentityEventSchemaVersion, IdentityEventSigning,
     IdentityGenesisRequest, IdentityInvite, IdentityInviteIssue, IdentityInviteJoin,
     IdentityJoinRequest, IdentityMemberAddition, IdentityMemberApprover, IdentityMemberKeys,
-    IdentityMemberKind, IdentityMountTarget, IdentityNaming, IdentityRecoveryAddition,
-    IdentityRecoveryApproval, IdentityRecoveryMember, IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultDekLookup,
-    IdentityVaultEpochDeks, IdentityVaultRegistration, MemberDevice, MemberSealedName,
-    MemberVaultDek, OpenedVaultDek, PROVIDER_ROOT_DIR, PlacedNamespace, ProviderMountId,
-    S3MountTarget, VaultAuthorizedRoster, VaultPlacement, VaultRosterMember,
+    IdentityMemberKind, IdentityMountTarget, IdentityNaming, IdentityProviderMount,
+    IdentityRecoveryAddition, IdentityRecoveryApproval, IdentityRecoveryMember,
+    IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
+    IdentityVaultRegistration, MemberDevice, MemberSealedName, MemberVaultDek, OpenedVaultDek,
+    PROVIDER_ROOT_DIR, PlacedNamespace, ProviderMountId, S3MountTarget, VaultAuthorizedRoster,
+    VaultPlacement, VaultRosterMember,
 };
 pub use password::{
     MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordCharacterSet, PasswordGeneration,
@@ -663,3 +664,8 @@ pub use vault_architecture::{
 };
 
 pub use nook_companion_core::ImportedExtensionEventLog;
+
+pub use nook_auth2::{
+    RecoveryPassphraseError, RecoveryStrength, RecoveryWordCount, RecoveryWordPosition,
+    RecoveryWordSuggestions, TypedRecoveryWords,
+};

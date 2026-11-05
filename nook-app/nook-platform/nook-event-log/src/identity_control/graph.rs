@@ -70,6 +70,13 @@ struct MembershipHistory {
     revocations: Vec<(EventId, AppId)>,
 }
 
+/// One operation a recovery passphrase signed, and the members before it.
+struct RecoveryAction<'a> {
+    recovery: &'a AppId,
+    operation: &'a IdentityControlOperation,
+    members: &'a BTreeMap<AppId, EffectiveMember>,
+}
+
 /// A member effective in one causal past: its signing keys and its role.
 /// An app admitted as a recovery passphrase keeps the recovery role.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -352,31 +359,74 @@ impl IdentityControlLog {
         let (acting_app, acting) = members
             .iter()
             .find(|(_, member)| member.actors.contains(actor))?;
-        let refused = event.body.operations.iter().find(|operation| {
-            match (acting.role, operation) {
-                (MemberRole::Recovery, IdentityControlOperation::MemberApproved {
-                    member,
-                    device: MemberDevice::Own,
-                    ..
-                }) => members.contains_key(&member.app_id),
-                (MemberRole::Recovery, IdentityControlOperation::MemberRevoked { app_id }) => {
-                    app_id != acting_app
-                }
-                (MemberRole::Recovery, _) => true,
-                (MemberRole::App, IdentityControlOperation::RecoveryKeyAdded { member, .. }) => {
-                    members.contains_key(&member.app_id)
-                }
-                (MemberRole::App, _) => false,
+        let mut operations = event.body.operations.iter();
+        match acting.role {
+            MemberRole::Recovery => operations
+                .find(|operation| {
+                    Self::refused_for_recovery(&RecoveryAction {
+                        recovery: acting_app,
+                        operation,
+                        members,
+                    })
+                })
+                .map(|_| {
+                    format!(
+                        "Recovery passphrase {acting_app} may only approve a new app key on its own device or remove itself"
+                    )
+                }),
+            MemberRole::App => operations
+                .find(|operation| match operation {
+                    IdentityControlOperation::RecoveryKeyAdded { member, .. } => {
+                        members.contains_key(&member.app_id)
+                    }
+                    IdentityControlOperation::IdentityCreated { .. }
+                    | IdentityControlOperation::MemberJoinRequested { .. }
+                    | IdentityControlOperation::MemberApproved { .. }
+                    | IdentityControlOperation::MemberJoinDenied { .. }
+                    | IdentityControlOperation::MemberInvited { .. }
+                    | IdentityControlOperation::MemberJoinedByInvite { .. }
+                    | IdentityControlOperation::MemberRevoked { .. }
+                    | IdentityControlOperation::MemberRenamed { .. }
+                    | IdentityControlOperation::VaultRegistered { .. }
+                    | IdentityControlOperation::VaultDekGranted { .. }
+                    | IdentityControlOperation::VaultRemoved { .. }
+                    | IdentityControlOperation::ProviderMounted { .. }
+                    | IdentityControlOperation::ProviderUnmounted { .. }
+                    | IdentityControlOperation::IdentityNamed { .. } => false,
+                })
+                .map(|_| "A recovery passphrase must be a new member of the identity".to_owned()),
+        }
+    }
+
+    /// Whether a recovery passphrase may not sign this operation: it may
+    /// approve an app key that is no member, on its own device, and revoke
+    /// itself; nothing else.
+    fn refused_for_recovery(action: &RecoveryAction<'_>) -> bool {
+        match action.operation {
+            IdentityControlOperation::MemberApproved {
+                member,
+                device: MemberDevice::Own,
+                ..
+            } => action.members.contains_key(&member.app_id),
+            IdentityControlOperation::MemberRevoked { app_id } => app_id != action.recovery,
+            IdentityControlOperation::MemberApproved {
+                device: MemberDevice::SameAs { .. },
+                ..
             }
-        });
-        refused.map(|_| match acting.role {
-            MemberRole::Recovery => format!(
-                "Recovery passphrase {acting_app} may only approve a new app key on its own device or remove itself"
-            ),
-            MemberRole::App => {
-                "A recovery passphrase must be a new member of the identity".to_owned()
-            }
-        })
+            | IdentityControlOperation::IdentityCreated { .. }
+            | IdentityControlOperation::MemberJoinRequested { .. }
+            | IdentityControlOperation::MemberJoinDenied { .. }
+            | IdentityControlOperation::MemberInvited { .. }
+            | IdentityControlOperation::MemberJoinedByInvite { .. }
+            | IdentityControlOperation::RecoveryKeyAdded { .. }
+            | IdentityControlOperation::MemberRenamed { .. }
+            | IdentityControlOperation::VaultRegistered { .. }
+            | IdentityControlOperation::VaultDekGranted { .. }
+            | IdentityControlOperation::VaultRemoved { .. }
+            | IdentityControlOperation::ProviderMounted { .. }
+            | IdentityControlOperation::ProviderUnmounted { .. }
+            | IdentityControlOperation::IdentityNamed { .. } => true,
+        }
     }
 
     /// The invite a member issued in `parents`' causal history.
@@ -443,6 +493,10 @@ impl IdentityControlLog {
         used_first.then(|| format!("Invite {invite_id} was already used"))
     }
 
+    #[expect(
+        clippy::match_bool,
+        reason = "membership in the causal past is matched through a native pattern"
+    )]
     fn unauthorized_reason(&self, id: &EventId) -> EventResult<Option<String>> {
         let Some(event) = self.events.get(id) else {
             return Ok(None);

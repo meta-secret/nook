@@ -132,6 +132,10 @@ impl RecoveryPhrase {
 
     /// Check words typed back against these. A typing slip is reported word
     /// by word; list words that are not these are refused as a whole.
+    #[expect(
+        clippy::match_bool,
+        reason = "word equality with the shown phrase is matched through a native pattern"
+    )]
     pub fn confirm(&self, typed: &TypedRecoveryWords) -> Result<(), RecoveryPassphraseError> {
         let retyped = Self::parse(typed, self.strength)?;
         match retyped.words == self.words {
@@ -169,7 +173,10 @@ mod tests {
                 .len(),
             5
         );
-        assert_eq!(serde_json::to_string(&RecoveryStrength::High).ok(), Some("\"high\"".to_owned()));
+        assert_eq!(
+            serde_json::to_string(&RecoveryStrength::High).ok(),
+            Some("\"high\"".to_owned())
+        );
         Ok(())
     }
 
@@ -187,10 +194,15 @@ mod tests {
             Err(RecoveryPassphraseError::NotTheShownWords)
         ));
         assert!(matches!(
-            phrase.confirm(&typed(&shown.iter().take(3).copied().collect::<Vec<_>>().join(" "))),
+            phrase.confirm(&typed(
+                &shown.iter().take(3).copied().collect::<Vec<_>>().join(" ")
+            )),
             Err(RecoveryPassphraseError::WordCount { .. })
         ));
-        let mut typo_words = shown.iter().map(|word| (*word).to_owned()).collect::<Vec<_>>();
+        let mut typo_words = shown
+            .iter()
+            .map(|word| (*word).to_owned())
+            .collect::<Vec<_>>();
         if let Some(first) = typo_words.first_mut() {
             first.push_str("qzq");
         }
