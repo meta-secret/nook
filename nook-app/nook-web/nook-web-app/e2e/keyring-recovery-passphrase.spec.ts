@@ -183,7 +183,9 @@ async function readSecretOfVault(
         error: vault?.errorMsg,
       })
     })
-    console.log(`[readSecretOfVault ${kept.storeId}] recovered device: ${state}`)
+    console.log(
+      `[readSecretOfVault ${kept.storeId}] recovered device: ${state}`,
+    )
     console.log(await device.locator('body').ariaSnapshot())
     await dumpNookLogs(device, 'readSecretOfVault')
     throw error
