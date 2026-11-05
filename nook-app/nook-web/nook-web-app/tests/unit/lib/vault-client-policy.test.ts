@@ -46,9 +46,7 @@ describe('portable vault client policy', () => {
   test('owns automatic unlock and join approval transitions', () => {
     const policy = new NookVaultClientPolicy()
     try {
-      expect(policy.should_auto_unlock(false, true, 0, false, false)).toBe(
-        true,
-      )
+      expect(policy.should_auto_unlock(false, true, 0, false, false)).toBe(true)
       expect(policy.should_auto_unlock(false, true, 1, false, false)).toBe(
         false,
       )
@@ -81,9 +79,9 @@ describe('portable vault client policy', () => {
       expect(
         policy.vault_connect_gate_decision(VaultAccessStatus.NeedsEnrollment),
       ).toBe(VaultConnectGateDecision.RequestEnrollment)
-      expect(
-        policy.vault_connect_gate_decision(VaultAccessStatus.Ready),
-      ).toBe(VaultConnectGateDecision.Connect)
+      expect(policy.vault_connect_gate_decision(VaultAccessStatus.Ready)).toBe(
+        VaultConnectGateDecision.Connect,
+      )
       const switchVault = policy.vault_switch_target(
         ' store-b ',
         true,

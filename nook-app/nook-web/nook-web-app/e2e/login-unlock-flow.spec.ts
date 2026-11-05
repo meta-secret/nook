@@ -68,7 +68,6 @@ test.describe('login unlock flow (local-first)', () => {
       timeout: UI_TIMEOUT_MS,
     })
   })
-
 })
 
 test.describe('login storage provider setup', () => {

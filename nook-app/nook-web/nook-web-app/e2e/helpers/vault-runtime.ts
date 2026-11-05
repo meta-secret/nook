@@ -364,30 +364,3 @@ export async function waitForVaultUnlocked(
     )
   }
 }
-
-export async function wipeDeviceIdentity(page: Page): Promise<void> {
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open('nook_db')
-        request.onerror = () =>
-          reject(((v) => (v ? v : new Error('idb open failed')))(request.error))
-        request.onsuccess = () => {
-          const db = request.result
-          const tx = db.transaction('vault', 'readwrite')
-          const store = tx.objectStore('vault')
-          store.delete('local_identity_keyring_v1')
-          store.delete('device_id')
-          store.delete('device_identity_wrapped')
-          store.delete('app_id')
-          store.delete('app_key_wrapped')
-          tx.oncomplete = () => {
-            db.close()
-            resolve()
-          }
-          tx.onerror = () =>
-            reject(((v) => (v ? v : new Error('idb delete failed')))(tx.error))
-        }
-      }),
-  )
-}

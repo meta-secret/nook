@@ -51,6 +51,8 @@ describe('a check the connected provider refused', () => {
 
     expect(checked.isErr()).toBe(true)
     if (checked.isOk()) return
-    expect(checked.error.translationKey).toBe(I18N_KEYS.AccessCheckPasskeyFailed)
+    expect(checked.error.translationKey).toBe(
+      I18N_KEYS.AccessCheckPasskeyFailed,
+    )
   })
 })

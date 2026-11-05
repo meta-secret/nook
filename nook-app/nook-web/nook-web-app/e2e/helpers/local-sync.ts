@@ -2,11 +2,7 @@ import { expect, type Page } from '@playwright/test'
 import { createLocalE2eGoogleDriveVaultStub } from '../drive-stub'
 import { createLocalE2eFileSyncVaultStub } from '../file-sync-stub'
 import { fetchGithubEventLog, GithubEventLogFetchKind } from '../github-api'
-import {
-  parseVaultEventLogSnapshot,
-  parseVaultYamlSnapshot,
-  type VaultYamlSnapshot,
-} from '../vault-yaml'
+import { parseVaultEventLogSnapshot } from '../vault-yaml'
 import {
   E2E_GITHUB_ONBOARD_PROVIDER,
   E2E_OAUTH_ONBOARD_PROVIDER,
@@ -15,7 +11,7 @@ import {
   type SeededDriveProviderInput,
 } from './auth-providers'
 import { keepVaultIdleLockDisabled } from './device-enrollment'
-import { ENROLLMENT_UNLOCK_TIMEOUT_MS, sleep } from './environment'
+import { ENROLLMENT_UNLOCK_TIMEOUT_MS } from './environment'
 import {
   flushRemoteEventsToSyncProviders,
   type GithubE2eTarget,
@@ -89,33 +85,6 @@ export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
       }
     })
   })
-}
-
-/** Poll local vault YAML until predicate passes (local-first canonical copy). */
-export async function waitForLocalVaultState(
-  page: Page,
-  predicate: (snapshot: VaultYamlSnapshot) => boolean,
-  options?: { timeoutMs?: number; intervalMs?: number },
-): Promise<VaultYamlSnapshot> {
-  const [timeoutMs = ENROLLMENT_UNLOCK_TIMEOUT_MS] = [options?.timeoutMs]
-  // IndexedDB read via page.evaluate — small round-trip, still much cheaper than network.
-  const [intervalMs = 150] = [options?.intervalMs]
-  const deadline = Date.now() + timeoutMs
-  let lastError = 'local vault missing'
-
-  while (Date.now() < deadline) {
-    const yaml = await readLocalVaultYamlFromIdb(page)
-    if (yaml.trim()) {
-      const snapshot = parseVaultYamlSnapshot(yaml)
-      if (predicate(snapshot)) {
-        return snapshot
-      }
-      lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length})`
-    }
-    await sleep(intervalMs)
-  }
-
-  throw new Error(`Timed out waiting for local vault YAML: ${lastError}`)
 }
 
 /** Install oauth-file REST responses with the file-backed provider by default. */

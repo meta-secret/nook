@@ -366,7 +366,6 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
   )
   const sentinelShareCount = ((v) => (v ? v : []))(vault.sentinel_shares).length
 
-
   return {
     raw: yaml,
     secretIds,

@@ -128,7 +128,6 @@ describe('Check access page', () => {
       }),
     )
   })
-
 })
 
 describe('Check access sources', () => {

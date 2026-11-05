@@ -15,7 +15,6 @@ import { I18N_KEYS } from "../../../generated/i18n-keys";
 
 /** A passkey check that could not finish; what it says to the user. */
 export class AccessCheckFailure {
-
   /** The same check's failure, with the message Rust picks for what
    * stopped it: a refused GitHub token or S3 key names what to fix, and any
    * other failure keeps the check's own message. */
