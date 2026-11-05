@@ -615,7 +615,7 @@ export class PasswordEnrollmentActions {
             return;
           }
           if (!unlockPassword) {
-            state.errorMsg = state.t(I18N_KEYS.ErrorsVaultPasswordRequired);
+            state.errorMsg = state.t(I18N_KEYS.ErrorsInvitePassphraseRequired);
             return;
           }
 
