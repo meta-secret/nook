@@ -239,7 +239,7 @@ class ArcManifestContract {
       "values: [primary]",
       "values: [secondary]",
       "values: [overflow]",
-      "ghcr.io/meta-secret/nook-arc-runner@sha256:64dc2f6c9e51f560165bacf3b21e87875be70271830924dae3fe0dae4407e10b",
+      "ghcr.io/meta-secret/nook-arc-runner@sha256:0c6d36f124cd33d313cfb7f8b4d602174f9680cb02e686f8743f5ff3b637dc50",
       "registry.dev.nokey.sh/library/docker:29.2.1-cli@sha256:",
     ]);
     if (admittedContract1.isErr()) return err(admittedContract1.error);
@@ -285,7 +285,7 @@ class ArcManifestContract {
       "value: arc-runners",
       "ACTIONS_RUNNER_CONTAINER_HOOK_TEMPLATE",
       "/etc/nook-arc-hook/content.yaml",
-      "ghcr.io/meta-secret/nook-arc-runner@sha256:64dc2f6c9e51f560165bacf3b21e87875be70271830924dae3fe0dae4407e10b",
+      "ghcr.io/meta-secret/nook-arc-runner@sha256:0c6d36f124cd33d313cfb7f8b4d602174f9680cb02e686f8743f5ff3b637dc50",
     ]);
     if (admittedContract5.isErr()) return err(admittedContract5.error);
     const admittedContract6 = containerRunners.forbidAll([
