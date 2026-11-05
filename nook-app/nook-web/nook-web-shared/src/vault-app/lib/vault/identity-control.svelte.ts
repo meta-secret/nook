@@ -576,8 +576,24 @@ export class IdentityControlModel {
     return this.syncWithMounts();
   }
 
-  /** Open a vault the identity granted this app, from an identity mount. */
+  /** Open a vault the identity granted this app, from an identity mount.
+   * The keyring is busy until the vault is open, so its rows and Open stay
+   * disabled: a second press would queue another open that lands after
+   * whatever the person did next, such as switching to another vault. */
   async openVault(
+    storeId: string,
+  ): Promise<
+    Result<IdentityActionOutcome, VaultStorageFailure | OAuthFailure>
+  > {
+    this.busy = true;
+    try {
+      return await this.openGrantedVault(storeId);
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private async openGrantedVault(
     storeId: string,
   ): Promise<
     Result<IdentityActionOutcome, VaultStorageFailure | OAuthFailure>

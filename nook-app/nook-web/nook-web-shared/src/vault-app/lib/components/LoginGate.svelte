@@ -833,7 +833,7 @@
     {vault}
     selectedStoreId={selectedCardStoreId}
     showCards={!showQrOnboarding}
-    busy={isVerifying || isInitializing}
+    busy={isVerifying || isInitializing || vault.identityControl.busy}
     canAddVault={!showCreateVault && !showQrOnboarding}
     onOpenVault={unlockVault}
     onNewVault={openNewVault}

@@ -522,7 +522,7 @@ band, the scrolling page and the status line.
     <IdentitiesHub
       {vault}
       canAddVault
-      busy={vault.isVerifying || vault.isInitializing}
+      busy={vault.isVerifying || vault.isInitializing || vault.identityControl.busy}
       onOpenVault={(storeId: string) => void openVaultFromCard(storeId)}
       onUnlockVault={(storeId: string) => void vault.switchToVault(storeId)}
       {...SUPPORTS_EXTENSION ? { vaultExtension } : {}}
