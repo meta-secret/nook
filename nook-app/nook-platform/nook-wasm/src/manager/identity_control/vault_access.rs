@@ -140,7 +140,9 @@ impl NookVaultManager {
     }
 
     /// Open a vault of the current identity from one of its mounts with the
-    /// DEK the identity granted this installation, then self-enroll.
+    /// DEK the identity granted this installation, then self-enroll. The
+    /// vault replaces any vault open in this session: its events are read
+    /// with its own keys, never the previous vault's.
     #[wasm_bindgen]
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
@@ -158,6 +160,7 @@ impl NookVaultManager {
         let connection = connection.decode()?;
         drop(self.status.tx.send("CONNECT_START".to_owned()));
         let store_id = StoreId::parse(&store_id)?;
+        self.reset_vault_session();
         self.prepare_storage(&connection).await?;
         let keys = self.enter_identity_vault(&store_id).await?;
         let (event_log_remote, records) = self.load_vault_records("", true).await?;
@@ -173,7 +176,8 @@ impl NookVaultManager {
     /// Open a vault of the current identity from the event records the web
     /// app handed over, with no provider: the browser extension opens each
     /// vault of the keyring it was added to this way, with the DEK the
-    /// keyring granted it, then self-enrolls.
+    /// keyring granted it, then self-enrolls. Like a mount's vault, it
+    /// replaces any vault open in this session.
     #[wasm_bindgen]
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
@@ -190,6 +194,7 @@ impl NookVaultManager {
     ) -> Result<NookSecretPage, JsError> {
         drop(self.status.tx.send("CONNECT_START".to_owned()));
         let store_id = StoreId::parse(&store_id)?;
+        self.reset_vault_session();
         self.prepare_storage(&nook_core::StorageConnection::Local)
             .await?;
         let keys = self.enter_identity_vault(&store_id).await?;
