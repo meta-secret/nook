@@ -9,6 +9,7 @@ import initNookWasm, {
   type NookProviderSource,
   type NookRecoveryWordsCheck,
   type ProviderIdentityChoice,
+  type ProviderVaultSummary,
 } from '$app-wasm'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { IdentityDirectoryLoader } from '$lib/components/identities/identity-directory-loader.svelte'
@@ -22,6 +23,12 @@ import { FirstRunStage } from '$lib/vault/state/ui.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import FirstRunRecoverStep from '../../../../nook-web-shared/src/vault-app/lib/components/login/FirstRunRecoverStep.svelte'
+import FirstRunSyncStep from '../../../../nook-web-shared/src/vault-app/lib/components/login/FirstRunSyncStep.svelte'
+import { VaultOAuthActions } from '$lib/vault/oauth'
+import {
+  ProviderDraftFixture,
+  ProviderFixtureCredentials,
+} from '../provider-fixtures'
 
 beforeAll(async () => {
   await initNookWasm()
@@ -210,5 +217,74 @@ describe('first-run recovery with a passphrase', () => {
     expect(fixture.vault.errorMsg).toContain(
       fixture.vault.t(I18N_KEYS.RecoveryPassphraseRecoverFailed),
     )
+  })
+})
+
+/** A keyring in the signed-in Google Drive's Nook folder that this
+ * browser's fresh key is not in, with one recovery passphrase. */
+function recoverableOnDrive(): ProviderVaultSummary {
+  return {
+    storeId: 'store_familyvault',
+    shortId: 'familyab',
+    name: { state: 'unknown' },
+    identity: {
+      identityId: IDENTITY,
+      shortId: 'familyid',
+      name: { state: 'unknown' },
+      words: ['ripple', 'canvas', 'orbit'],
+      log: {
+        state: 'read',
+        devices: 1,
+        newestDevice: { state: 'unreported' },
+        vaults: 2,
+        recoveryPassphrases: 1,
+        thisBrowser: false,
+        join: 'notAsked',
+      },
+    },
+    created: { state: 'reported', at: Date.UTC(2026, 9, 1) },
+    lastActivity: { state: 'reported', at: Date.UTC(2026, 9, 2) },
+    eventCount: 2,
+    access: { state: 'locked' },
+    actions: ['requestAccess'],
+  }
+}
+
+describe('first-run recovery from Google Drive', () => {
+  test('a Drive keyring with a recovery passphrase is recovered through Drive', async () => {
+    vi.spyOn(
+      VaultOAuthActions.prototype,
+      'listGoogleDriveVaults',
+    ).mockResolvedValue(
+      ok({
+        root: 'found',
+        listing: {
+          vaults: [recoverableOnDrive()],
+          identities: [],
+          replacement: { state: 'unavailable' },
+        },
+      }),
+    )
+    const vault = VaultStateTestFixture.create()
+    vault.firstRun = FirstRunStage.Sync
+    vault.stageProviderDraft(ProviderDraftFixture.googleDriveSignedIn())
+    const view = render(FirstRunSyncStep, { vault })
+
+    const card = await vi.waitFor(() => view.getByTestId('setup-identity'))
+    expect(card.dataset.setup).toBe('requestToJoin')
+    await fireEvent.click(view.getByTestId('setup-identity-recover'))
+
+    expect(vault.firstRun).toBe(FirstRunStage.Joining)
+    const drive: NookProviderSource = {
+      kind: 'remote',
+      source: {
+        kind: 'googleDrive',
+        accessToken: ProviderFixtureCredentials.DRIVE_TOKEN,
+      },
+    }
+    expect(vault.firstRunJoin).toEqual({
+      kind: FirstRunJoinKind.Recovering,
+      join: { source: drive, identityId: IDENTITY, label: JOIN.label },
+    })
   })
 })
