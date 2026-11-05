@@ -53,8 +53,12 @@ See
    passphrase; the new app key signs itself in and wraps them to itself.
    No member approves the join.
    The joined app key then self-enrolls into each Simple vault log.
-6. A vault backup password opens only its owning vault.
-   It does not replace identity or app-key unlock.
+6. A keyring recovery passphrase is the only passphrase backup. It is a
+   member of the identity on no device, whose keys are sealed under four or
+   five generated words. It holds every Simple vault's DEK and can add one new
+   app key on the device it is typed on. It never counts as a device, and
+   removing it rotates every Simple vault before its next write. Vaults have
+   no passphrases of their own.
 7. Sync providers are replication transports mounted on the identity.
    They never grant identity membership or vault decryption by themselves.
    A Google Drive or iCloud mount records only its shared target: the
@@ -180,7 +184,7 @@ It is never shown as stored on one physical laptop.
     log. Identity sync applies its members and DEK envelopes locally.
 - **Dashboard persistence:** Store non-secret metadata only.
   - Never persist private app keys, PRF output, PIN/passphrases, vault DEKs,
-    backup-password values, or plaintext vault contents.
+    recovery passphrase words, or plaintext vault contents.
   - Scope passkey metadata by app ID.
   - Delete a competing legacy access profile only when it matches the
     identity-scoped profile.
@@ -338,6 +342,12 @@ Current dashboard requirements:
     For Google Drive it signs in with the named account; for iCloud it accepts
     the share.
   - A member renames or revokes apps there; no join waits for approval.
+- Recovery passphrases are keys on the ring in **Keys management**.
+  - Adding one takes a label and a Standard or High choice, then shows the
+    generated words once and asks for them to be typed back.
+  - Each row shows its label and level and removes it.
+  - A device a passphrase approved shows which passphrase approved it.
+  - Login offers **Recover with passphrase** beside joining with an invite.
   - The selected-identity inventory lists connected apps; it does not create
     a local app key itself.
 - The primary surface omits access-evidence inspection and browser-reported
