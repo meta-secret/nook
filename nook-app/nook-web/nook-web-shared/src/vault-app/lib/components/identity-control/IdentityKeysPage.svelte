@@ -3,7 +3,8 @@ Keys of the unlocked identity: what can unlock it, read as one fact per key.
 Each app that opens the identity has its own key (a passkey or a PIN on that
 device); the page says how many there are, whether that is enough, and for
 each key which app it unlocks, where it is kept and when it was last used.
-Technical identifiers stay behind "Details".
+Technical identifiers stay behind "Details". The keyring's recovery
+passphrases follow as keys of their own, kept on paper.
 -->
 <script lang="ts">
   import { onMount } from "svelte";
@@ -11,6 +12,7 @@ Technical identifiers stay behind "Details".
   import {
     Asterisk,
     Fingerprint,
+    KeyRound,
     MonitorSmartphone,
     Pencil,
     RefreshCw,
@@ -25,6 +27,13 @@ Technical identifiers stay behind "Details".
   import { IdentityDirectoryReader } from "$lib/components/devices-access/identity-directory-view";
   import { IDENTITY_DIRECTORY_RETRY_DELAYS_MS } from "$lib/components/identities/identity-directory-loader.svelte";
   import { KeysLoadKind, type KeysLoad } from "./identity-keys-load";
+  import {
+    KeysCoverageKind,
+    keysCoverage,
+    keysCoverageMessage,
+    type KeysCoverageRequest,
+  } from "./identity-keys-coverage";
+  import RecoveryPassphrases from "$lib/components/recovery-passphrase/RecoveryPassphrases.svelte";
   import {
     IdentityKeyInventory,
     IdentityKeyInventoryRowKind,
@@ -102,6 +111,13 @@ Technical identifiers stay behind "Details".
   const keys = $derived(
     rows.filter((row) => row.kind === IdentityKeyInventoryRowKind.Protector),
   );
+  const coverage = $derived.by(() => {
+    const request: KeysCoverageRequest = {
+      keyCount: keys.length,
+      snapshot: vault.identityControl.snapshot,
+    };
+    return keysCoverage(request);
+  });
   const otherApps = $derived(
     ((v) => (v ? v.apps : []))(
       rows.find((row) => row.kind === IdentityKeyInventoryRowKind.Apps),
@@ -260,19 +276,25 @@ Technical identifiers stay behind "Details".
           <p
             class="flex items-start gap-2 text-xs text-pretty text-muted-foreground"
           >
-            {#if keys.length <= 1}
+            {#if coverage === KeysCoverageKind.Single}
               <TriangleAlert
                 class="mt-0.5 size-3.5 shrink-0 text-warning"
                 aria-hidden="true"
               />
-              {withIdentity(I18N_KEYS.IdentityKeysSingleWarning)}
+            {:else if coverage === KeysCoverageKind.SingleRecoverable}
+              <KeyRound
+                class="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
             {:else}
               <ShieldCheck
                 class="mt-0.5 size-3.5 shrink-0 text-success"
                 aria-hidden="true"
               />
-              {withIdentity(I18N_KEYS.IdentityKeysCovered)}
             {/if}
+            <span data-testid="identity-keys-coverage" data-coverage={coverage}
+              >{withIdentity(keysCoverageMessage(coverage))}</span
+            >
           </p>
         </div>
       </div>
@@ -415,6 +437,8 @@ Technical identifiers stay behind "Details".
         </li>
       {/each}
     </ul>
+
+    <RecoveryPassphrases {vault} />
 
     {#if otherApps.length > 0}
       <section class="grid gap-2" data-testid="identity-keys-other">

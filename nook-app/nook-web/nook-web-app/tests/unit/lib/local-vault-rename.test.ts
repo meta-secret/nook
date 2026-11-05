@@ -144,7 +144,6 @@ describe('selectVaultForUnlock', () => {
     state.dismissSuccess = vi.fn()
     const openActiveVault = vi.fn()
     state.openActiveVault = openActiveVault
-    state.refreshPasswordEntriesList = vi.fn(async () => ok({ entries: [] }))
     state.syncActiveVaultStoreIdToAuth = syncActiveVaultStoreIdToAuth
     state.reloadProvidersForActiveVault = reloadProvidersForActiveVault
 
@@ -162,5 +161,31 @@ describe('selectVaultForUnlock', () => {
     expect(syncActiveVaultStoreIdToAuth).not.toHaveBeenCalled()
     expect(reloadProvidersForActiveVault).not.toHaveBeenCalled()
     expect(unlockPresentationRefresh).not.toHaveBeenCalled()
+  })
+
+  test('starts the engine session on the selected vault', async () => {
+    const state = VaultStateTestFixture.create()
+    state.dismissSuccess = vi.fn()
+    state.openActiveVault = vi.fn()
+    const manager = new NookVaultManager()
+    const beginVaultSession = vi
+      .spyOn(manager, 'begin_vault_session')
+      .mockImplementation(() => {})
+    const resetVaultSession = vi.spyOn(manager, 'reset_vault_session')
+    state.openManager(manager)
+    state.admitManager = vi.fn(() => ok(manager))
+    VaultStateTestFixture.runStorageImmediately(state)
+
+    const selected = await Effect.runPromise(
+      Effect.result(
+        new VaultLoginActions(state).selectVaultForUnlock({
+          storeId: 'store-2',
+        }),
+      ),
+    )
+
+    expect(selected._tag).toBe('Success')
+    expect(beginVaultSession).toHaveBeenCalledExactlyOnceWith('store-2')
+    expect(resetVaultSession).not.toHaveBeenCalled()
   })
 })

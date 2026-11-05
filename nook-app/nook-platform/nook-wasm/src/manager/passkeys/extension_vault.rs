@@ -206,11 +206,11 @@ mod tests {
     use crate::manager::{SearchCatalogState, VaultCryptoState};
     use nook_core::{
         CanonicalEventBodyBytes, DeviceIdentity, DeviceMode, EncryptedSecretPayload,
-        EpochMetadataState, EpochPasswordState, EventGraph, EventGraphInsert, EventGraphRejection,
-        EventId, IsoTimestamp, MemberLabel, SecretFingerprint, SecretId, SecretSearchCatalog,
-        SecretType, Sha256Hex, SigningIdentity, StoreId, VaultApplication, VaultArchitecture,
-        VaultCrypto, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultKeys,
-        VaultOperation, VaultSessionProjection,
+        EpochMetadataState, EventGraph, EventGraphInsert, EventGraphRejection, EventId,
+        IsoTimestamp, MemberLabel, SecretFingerprint, SecretId, SecretSearchCatalog, SecretType,
+        Sha256Hex, SigningIdentity, StoreId, VaultApplication, VaultArchitecture, VaultCrypto,
+        VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultKeys, VaultOperation,
+        VaultSessionProjection,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -278,7 +278,6 @@ mod tests {
                     VaultOperation::VaultImported {
                         source_content_hash: Sha256Hex::from_bytes(b"fixture"),
                         secrets,
-                        password_entries: Vec::new(),
                     },
                     VaultOperation::JoinApproved {
                         device_id: fixture.identity.app_id().clone(),
@@ -351,7 +350,6 @@ mod tests {
                     secrets: Vec::new(),
                     members_checkpoint_hash: Sha256Hex::from_bytes(b"empty roster"),
                     rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
-                    password_entries: EpochPasswordState::Replace(Vec::new()),
                 }],
             })?;
             for event in [trigger, checkpoint] {

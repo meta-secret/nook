@@ -253,7 +253,7 @@ export class ProviderSyncActions {
       return err(
         new VaultStorageFailure(VaultStorageFailureKind.ManagerUnavailable),
       );
-    if (state.syncBlocked || state.isPasswordBusy || state.isSaving)
+    if (state.syncBlocked || state.isInviteBusy || state.isSaving)
       return ok(ProviderSyncOutcome.Skipped);
     const provider = state.providers.find((entry) => entry.id === providerId);
     if (!provider || provider.provider.type === "local")

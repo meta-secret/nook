@@ -113,7 +113,6 @@ export class VaultSyncRuntimeActions {
       shouldConnect = state.clientPolicy.should_auto_connect_after_approval(
         state.isAuthenticated,
         state.isVerifying,
-        state.loginPasswordPrompt,
         state.sessionExpiredByIdle,
         is_vault_session_locked(),
       );

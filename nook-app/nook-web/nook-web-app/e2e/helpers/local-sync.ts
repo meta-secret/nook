@@ -2,11 +2,7 @@ import { expect, type Page } from '@playwright/test'
 import { createLocalE2eGoogleDriveVaultStub } from '../drive-stub'
 import { createLocalE2eFileSyncVaultStub } from '../file-sync-stub'
 import { fetchGithubEventLog, GithubEventLogFetchKind } from '../github-api'
-import {
-  parseVaultEventLogSnapshot,
-  parseVaultYamlSnapshot,
-  type VaultYamlSnapshot,
-} from '../vault-yaml'
+import { parseVaultEventLogSnapshot } from '../vault-yaml'
 import {
   E2E_GITHUB_ONBOARD_PROVIDER,
   E2E_OAUTH_ONBOARD_PROVIDER,
@@ -15,7 +11,7 @@ import {
   type SeededDriveProviderInput,
 } from './auth-providers'
 import { keepVaultIdleLockDisabled } from './device-enrollment'
-import { ENROLLMENT_UNLOCK_TIMEOUT_MS, sleep } from './environment'
+import { ENROLLMENT_UNLOCK_TIMEOUT_MS } from './environment'
 import {
   flushRemoteEventsToSyncProviders,
   type GithubE2eTarget,
@@ -27,7 +23,6 @@ import {
   expectLoginGateAfterLoad,
   invokeInitializedVaultProviderReload,
   unlockVaultOnLogin,
-  waitForStableLocalVaultState,
 } from './settings-auth'
 import {
   disableVaultIdleLock,
@@ -90,33 +85,6 @@ export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
       }
     })
   })
-}
-
-/** Poll local vault YAML until predicate passes (local-first canonical copy). */
-export async function waitForLocalVaultState(
-  page: Page,
-  predicate: (snapshot: VaultYamlSnapshot) => boolean,
-  options?: { timeoutMs?: number; intervalMs?: number },
-): Promise<VaultYamlSnapshot> {
-  const [timeoutMs = ENROLLMENT_UNLOCK_TIMEOUT_MS] = [options?.timeoutMs]
-  // IndexedDB read via page.evaluate — small round-trip, still much cheaper than network.
-  const [intervalMs = 150] = [options?.intervalMs]
-  const deadline = Date.now() + timeoutMs
-  let lastError = 'local vault missing'
-
-  while (Date.now() < deadline) {
-    const yaml = await readLocalVaultYamlFromIdb(page)
-    if (yaml.trim()) {
-      const snapshot = parseVaultYamlSnapshot(yaml)
-      if (predicate(snapshot)) {
-        return snapshot
-      }
-      lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, passwords=${snapshot.hasPasswordEnvelope})`
-    }
-    await sleep(intervalMs)
-  }
-
-  throw new Error(`Timed out waiting for local vault YAML: ${lastError}`)
 }
 
 /** Install oauth-file REST responses with the file-backed provider by default. */
@@ -559,7 +527,7 @@ export async function reloadUnlockLocalVaultWithSync(
   }
 }
 
-/** Add GitHub sync provider stubs while vault stays unlocked (preserves password UI state). */
+/** Add GitHub sync provider stubs while vault stays unlocked. */
 export async function seedGithubSyncProvidersWhileUnlocked(
   page: Page,
   providers = [E2E_GITHUB_ONBOARD_PROVIDER],
@@ -607,8 +575,6 @@ export async function seedOauthFileSyncProvidersWhileUnlocked(
 export async function reloadUnlockWithSyncProvider(
   page: Page,
   opts?: {
-    password?: string
-    entryLabel?: string
     providers?: SeededDriveProviderInput[]
     sharedStub?: E2eOauthFileStub
   },
@@ -654,15 +620,7 @@ export async function reloadUnlockWithSyncProvider(
   await keepVaultIdleLockDisabled(page)
   await expectLoginGateAfterLoad(page)
   await ensureLoginLocalUnlockReady(page)
-  if (opts?.password) {
-    const unlockRequest: { password: string; entryLabel?: string } = {
-      password: opts.password,
-    }
-    if (opts.entryLabel) unlockRequest.entryLabel = opts.entryLabel
-    await unlockVaultOnLogin(page, unlockRequest)
-  } else {
-    await unlockVaultOnLogin(page)
-  }
+  await unlockVaultOnLogin(page)
   await expect(
     page.getByTestId('vault-panel').or(page.getByTestId('vault-admin-panel')),
   ).toBeVisible({
@@ -681,13 +639,6 @@ export async function reloadUnlockWithSyncProvider(
       })
       .toBeGreaterThan(0)
     sharedStub.setVaultYaml('')
-  }
-  if (opts?.password) {
-    await waitForStableLocalVaultState(
-      page,
-      (snapshot) => snapshot.hasPasswordEnvelope,
-      { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS, stableReads: 2 },
-    )
   }
 }
 

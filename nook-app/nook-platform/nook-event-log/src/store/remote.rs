@@ -272,7 +272,6 @@ mod tests {
                 payload: GenesisImportPayload {
                     source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
                     secrets: Vec::new(),
-                    password_entries: Vec::new(),
                 },
                 created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
                 signing_key: &key,

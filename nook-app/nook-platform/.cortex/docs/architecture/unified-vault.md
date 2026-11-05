@@ -97,8 +97,9 @@ Canonical layout and field list: [auth-providers.md](auth-providers.md) §2.
 
 Types are Rust/Tsify (`StorageProvider`, `OAuthFileConfig`, …), not a separate
 hand-authored TypeScript interface. Provider credentials are **sync
-convenience**, not vault encryption. The master password and vault keys stay in
-the vault file.
+convenience**, not vault encryption. Vault keys open only through the
+identity: each app key unwraps its own DEK envelope, and the keyring recovery
+passphrase adds a new app key when every device is lost.
 
 ---
 
@@ -183,7 +184,7 @@ stateDiagram-v2
   CreateLocal --> Vault: session unlocked
   ConnectProvider --> Reconcile: remote exists
   ConnectProvider --> Vault: import / pull existing
-  Unlock --> Vault: device keys or backup password
+  Unlock --> Vault: device keys
   Vault --> Passkey: Lock (clear session + device identity)
   Passkey --> LoginGate
   LoginGate --> Unlock
@@ -196,7 +197,7 @@ stateDiagram-v2
    or first when unlocking an existing local vault. Then load the local cache.
    **Exception:** opening `#enroll=` on an empty browser is join/onboarding for
    an existing vault — skip create landing, require device protection, then show
-   Finish device onboarding (vault password).
+   Finish device onboarding with the invite code.
 2. **First visit / GetStarted:** after the public site selects Simple or
    Sentinel, the isolated app presents **Create a new vault** and **Open an
    existing vault** as sibling intents. Creation either creates a Simple vault
@@ -211,13 +212,14 @@ stateDiagram-v2
    ([vault-session-and-lock.md](vault-session-and-lock.md)).
 4. **After unlock**, sync providers in Settings replicate the **current** vault (`store_id`).
 
-Device-key multi-device flows (`auth:`, `joins:`, `members:`) continue alongside optional backup passwords.
+Device-key multi-device flows use the `auth:`, `joins:`, and `members:` sections.
 
 ---
 
 ## 7. Security notes
 
-- Master password never leaves the browser; used only to unwrap vault keys in WASM.
+- App keys, DEKs, and recovery passphrase words never leave WASM; an app key
+  unwraps its vault DEK envelope there.
 - Sync provider tokens (GitHub PAT, OAuth) remain in `nook_auth` — compromise exposes encrypted blob access, not plaintext.
 - `store_id` mismatch between local and remote is a hard error — prevents accidental cross-vault overwrite.
 - Conflict resolution is explicit — Nook never silently merges diverged vaults.

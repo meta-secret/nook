@@ -285,10 +285,6 @@
     </section>
   {/if}
 
-  <p class="text-xs text-muted-foreground">
-    {vault.t(I18N_KEYS.AuthStorageProviderVaultBackupPassword)}
-  </p>
-
   <p
     class="text-sm text-muted-foreground"
     data-testid="provider-vault-preserve-both"

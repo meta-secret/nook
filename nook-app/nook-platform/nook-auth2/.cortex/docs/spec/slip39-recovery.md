@@ -10,7 +10,6 @@
   - Never carry them through Nook sync providers.
 - **Related context:**
   - [Decentralized auth](decentralized-auth.md)
-  - [Password envelope](password-envelope.md)
   - [Architecture section 2](../../../../../.cortex/docs/architecture/system.md)
   - [Issue #259](https://github.com/meta-secret/nook/issues/259)
 - **Sentinel separation:** Fixed 2-of-3 recovery is distinct from Sentinel

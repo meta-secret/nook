@@ -75,7 +75,7 @@ impl VaultClientPolicy {
             && (matches!(request.force, crate::VaultSyncIntent::Forced)
                 || (!matches!(request.verifying, crate::VaultVerificationState::Verifying)
                     && !matches!(request.saving, crate::VaultSaveActivity::Saving)
-                    && !matches!(request.password_busy, crate::VaultPasswordActivity::Busy)
+                    && !matches!(request.invite_busy, crate::VaultInviteActivity::Busy)
                     && !matches!(request.syncing, crate::VaultSyncActivity::Syncing)))
             && request.sync_provider_count.is_nonzero()
     }
@@ -120,10 +120,6 @@ impl VaultClientPolicy {
             crate::VaultAuthenticationState::Authenticated
         ) && !matches!(request.verifying, crate::VaultVerificationState::Verifying)
             && !matches!(
-                request.password_prompt_open,
-                crate::VaultPasswordPromptState::Open
-            )
-            && !matches!(
                 request.session_expired_by_idle,
                 crate::VaultIdleExpiration::Expired
             )
@@ -167,7 +163,7 @@ impl VaultClientPolicy {
         if matches!(request.verifying, crate::VaultVerificationState::Verifying)
             || matches!(request.saving, crate::VaultSaveActivity::Saving)
             || matches!(request.syncing, crate::VaultSyncActivity::Syncing)
-            || matches!(request.password_busy, crate::VaultPasswordActivity::Busy)
+            || matches!(request.invite_busy, crate::VaultInviteActivity::Busy)
         {
             VaultSyncTimerTickDecision::SkipBusy
         } else {
@@ -219,7 +215,7 @@ impl crate::VaultStorageSyncDecisionRequest {
         if !matches!(self.freshness, ProviderSyncFreshness::Forced)
             && (matches!(self.verifying, crate::VaultVerificationState::Verifying)
                 || matches!(self.saving, crate::VaultSaveActivity::Saving)
-                || matches!(self.password_busy, crate::VaultPasswordActivity::Busy)
+                || matches!(self.invite_busy, crate::VaultInviteActivity::Busy)
                 || matches!(self.syncing, crate::VaultSyncActivity::Syncing))
         {
             VaultStorageSyncDecision::Skip
@@ -293,7 +289,7 @@ mod tests {
                 force: (false).into(),
                 verifying: (false).into(),
                 saving: (false).into(),
-                password_busy: (false).into(),
+                invite_busy: (false).into(),
                 syncing: (false).into(),
                 sync_provider_count: 1.into()
             }
@@ -304,7 +300,7 @@ mod tests {
                 force: (false).into(),
                 verifying: (false).into(),
                 saving: (true).into(),
-                password_busy: (false).into(),
+                invite_busy: (false).into(),
                 syncing: (false).into(),
                 sync_provider_count: 1.into()
             }
@@ -315,7 +311,7 @@ mod tests {
                 force: (true).into(),
                 verifying: (false).into(),
                 saving: (true).into(),
-                password_busy: (true).into(),
+                invite_busy: (true).into(),
                 syncing: (true).into(),
                 sync_provider_count: 1.into()
             }
@@ -326,7 +322,7 @@ mod tests {
                 force: (true).into(),
                 verifying: (false).into(),
                 saving: (false).into(),
-                password_busy: (false).into(),
+                invite_busy: (false).into(),
                 syncing: (false).into(),
                 sync_provider_count: 1.into()
             }
@@ -434,7 +430,7 @@ mod tests {
                     verifying: (true).into(),
                     saving: (false).into(),
                     syncing: (false).into(),
-                    password_busy: (false).into(),
+                    invite_busy: (false).into(),
                     authenticated: (true).into(),
                     join_state: JoinEnrollmentState::None,
                     awaiting_join_approval: (false).into(),
@@ -449,7 +445,7 @@ mod tests {
                     verifying: (false).into(),
                     saving: (false).into(),
                     syncing: (false).into(),
-                    password_busy: (false).into(),
+                    invite_busy: (false).into(),
                     authenticated: (false).into(),
                     join_state: JoinEnrollmentState::None,
                     awaiting_join_approval: (false).into(),
@@ -464,7 +460,7 @@ mod tests {
                     verifying: (false).into(),
                     saving: (false).into(),
                     syncing: (false).into(),
-                    password_busy: (false).into(),
+                    invite_busy: (false).into(),
                     authenticated: (true).into(),
                     join_state: JoinEnrollmentState::None,
                     awaiting_join_approval: (false).into(),
@@ -479,7 +475,7 @@ mod tests {
                     verifying: (false).into(),
                     saving: (false).into(),
                     syncing: (false).into(),
-                    password_busy: (false).into(),
+                    invite_busy: (false).into(),
                     authenticated: (false).into(),
                     join_state: JoinEnrollmentState::Pending,
                     awaiting_join_approval: (true).into(),
@@ -499,7 +495,7 @@ mod tests {
                     freshness: ProviderSyncFreshness::Scheduled,
                     verifying: (false).into(),
                     saving: (true).into(),
-                    password_busy: (false).into(),
+                    invite_busy: (false).into(),
                     syncing: (false).into(),
                     authenticated: (true).into(),
                     sync_provider_count: 1.into(),
@@ -516,7 +512,7 @@ mod tests {
                     freshness: ProviderSyncFreshness::Forced,
                     verifying: (false).into(),
                     saving: (true).into(),
-                    password_busy: (true).into(),
+                    invite_busy: (true).into(),
                     syncing: (true).into(),
                     authenticated: (false).into(),
                     sync_provider_count: 1.into(),
@@ -533,7 +529,7 @@ mod tests {
                     freshness: ProviderSyncFreshness::Forced,
                     verifying: (false).into(),
                     saving: (false).into(),
-                    password_busy: (false).into(),
+                    invite_busy: (false).into(),
                     syncing: (false).into(),
                     authenticated: (true).into(),
                     sync_provider_count: 2.into(),
@@ -550,7 +546,7 @@ mod tests {
                     freshness: ProviderSyncFreshness::Forced,
                     verifying: (false).into(),
                     saving: (false).into(),
-                    password_busy: (false).into(),
+                    invite_busy: (false).into(),
                     syncing: (false).into(),
                     authenticated: (false).into(),
                     sync_provider_count: 0.into(),
@@ -567,7 +563,7 @@ mod tests {
                     freshness: ProviderSyncFreshness::Forced,
                     verifying: (false).into(),
                     saving: (false).into(),
-                    password_busy: (false).into(),
+                    invite_busy: (false).into(),
                     syncing: (false).into(),
                     authenticated: (true).into(),
                     sync_provider_count: 0.into(),

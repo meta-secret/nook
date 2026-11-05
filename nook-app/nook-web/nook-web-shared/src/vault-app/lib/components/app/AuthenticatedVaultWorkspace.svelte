@@ -1,8 +1,8 @@
 <!--
 Unified identity and vault workspace. Identities are the hub. A vault page
 holds only the vault: its items and imports, with a chip that opens the
-identity. Identity management (keys, vaults, devices, sync, backup
-passwords, settings) adds its rail. Every page is one framed sheet: a page
+identity. Identity management (keys, vaults, devices, sync, settings)
+adds its rail. Every page is one framed sheet: a page
 band, the scrolling page and the status line.
 -->
 <script lang="ts">
@@ -405,10 +405,6 @@ band, the scrolling page and the status line.
     isInitializing={vault.isInitializing}
     addProviderOpen={vault.addProviderOpen}
     loginSetup={vault.loginSetup}
-    passwordEntries={vault.passwordEntries}
-    isPasswordBusy={vault.isPasswordBusy}
-    passwordError={vault.passwordError}
-    canManageExistingPasswords={vault.deviceProtectionReady}
     onReconnect={onSettingsReconnect}
     onSyncProvider={async (
       id: Parameters<NonNullable<VaultAdminProps['onSyncProvider']>>[0],
@@ -435,15 +431,6 @@ band, the scrolling page and the status line.
       if (removed.isErr())
         vault.errorMsg = vault.t(removed.error.translationKey)
     }}
-    onAddPassword={(
-      passwordRequest: Parameters<VaultAdminProps['onAddPassword']>[0],
-    ) => vault.addVaultPassword(passwordRequest)}
-    onUpdatePassword={(
-      passwordRequest: Parameters<VaultAdminProps['onUpdatePassword']>[0],
-    ) => vault.updateVaultPasswordEntry(passwordRequest)}
-    onRemovePassword={(
-      id: Parameters<VaultAdminProps['onRemovePassword']>[0],
-    ) => vault.removeVaultPasswordEntry(id)}
     onImportBitwarden={(
       importRequest: Parameters<VaultAdminProps['onImportBitwarden']>[0],
     ) => vault.handleBitwardenImport(importRequest)}
@@ -535,7 +522,7 @@ band, the scrolling page and the status line.
     <IdentitiesHub
       {vault}
       canAddVault
-      busy={vault.isVerifying || vault.isInitializing}
+      busy={vault.isVerifying || vault.isInitializing || vault.identityControl.busy}
       onOpenVault={(storeId: string) => void openVaultFromCard(storeId)}
       onUnlockVault={(storeId: string) => void vault.switchToVault(storeId)}
       {...SUPPORTS_EXTENSION ? { vaultExtension } : {}}
@@ -575,11 +562,7 @@ band, the scrolling page and the status line.
   </div>
 {:else if scope === ManageSectionScope.Identity}
   <IdentityPageFrame
-    identityName={section === WorkspaceSection.Settings
-      ? ''
-      : section === WorkspaceSection.Passwords
-        ? `${identityName} / ${vaultLabel}`
-        : identityName}
+    identityName={section === WorkspaceSection.Settings ? '' : identityName}
     title={barTitle}
     testId={section}
     {backLabel}

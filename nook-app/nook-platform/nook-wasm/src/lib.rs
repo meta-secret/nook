@@ -165,10 +165,10 @@ pub use types::{
     NookLoginAccount, NookLoginFillCredential, NookManualProviderSync, NookManualProviderSyncState,
     NookOtpauthPreview, NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyDetails,
     NookPasskeyNameState, NookPasskeyRegistration, NookPasskeySetup, NookPasskeyUnlockOptions,
-    NookPasswordEntrySummary, NookPendingSyncConflict, NookProviderReplicationCapability,
-    NookReplacementCandidate, NookReplacementConflict, NookRuntimeConfig, NookSecretFormFields,
-    NookSecretHistory, NookSecretOriginDeviceState, NookSecretPage, NookSecretRevisionState,
-    NookSecurityConflict, NookSentinelGenesisDelivery, NookSentinelGenesisFinalizeResult,
+    NookPendingSyncConflict, NookProviderReplicationCapability, NookReplacementCandidate,
+    NookReplacementConflict, NookRuntimeConfig, NookSecretFormFields, NookSecretHistory,
+    NookSecretOriginDeviceState, NookSecretPage, NookSecretRevisionState, NookSecurityConflict,
+    NookSentinelGenesisDelivery, NookSentinelGenesisFinalizeResult,
     NookSentinelGenesisParticipantStatus, NookSentinelGenesisStatus,
     NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus, NookStorageConnection,
     NookStoreId, NookStoreIdPresence, NookStoreIdPresenceState, NookSyncConflictReview,
@@ -429,7 +429,7 @@ pub(crate) use storage::identity_record::{
     IdentityDbEnsureLocalIdentityForAppKey, IdentityDbEnsureLocalIdentityInDirectory,
     IdentityDbGenerateVaultDekForIdentity, IdentityDbLocalKeyringEntryForAppIdFromStore,
     IdentityDbSaveProtectedLocalIdentity, IdentityDbSetIdentityMemberSigningPublicKey,
-    IdentityDbValidateVaultIdentityEnrollment, IdentityDbWriteIdentityDirectory,
+    IdentityDbWriteIdentityDirectory,
 };
 
 pub(crate) use storage::identity_record::{

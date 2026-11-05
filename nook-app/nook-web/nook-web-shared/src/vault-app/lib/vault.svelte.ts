@@ -1,4 +1,3 @@
-import type { PasswordOperationResult } from "$lib/vault/password-unlock";
 import { err, ok, type Result } from "neverthrow";
 import { Effect } from "effect";
 import type { VaultStorageFailure } from "$lib/runtime/storage-failure";
@@ -17,7 +16,6 @@ import {
   type NookProviderSyncRevision,
   type NookSyncConflictReview,
   type NookSecretPage,
-  type PasswordEntryId,
   type StartSentinelGenesisArgs,
   type StoreId,
 } from "$app-wasm";
@@ -39,7 +37,8 @@ import * as sessionActions from "$lib/vault/session";
 import * as uiActions from "$lib/vault/ui";
 import * as multiDeviceActions from "$lib/vault/multi-device";
 import * as secretsActions from "$lib/vault/secrets";
-import * as passwordUnlockActions from "$lib/vault/password-unlock";
+import * as enrollmentActions from "$lib/vault/password-enrollment-flow";
+import type { EnrollmentCodeIssueRequest } from "$lib/vault/password-enrollment-issue";
 import * as sentinelUnlockActions from "$lib/vault/sentinel-unlock";
 import * as idleSessionActions from "$lib/vault/idle-session";
 import * as deviceProtectionActions from "$lib/vault/device-protection.svelte";
@@ -99,25 +98,9 @@ interface ConnectedSecretPage {
   readonly query: string;
 }
 
-interface VaultPasswordCreation {
-  readonly label: string;
-  readonly password: string;
-}
+type EnrollmentCodeIssue = EnrollmentCodeIssueRequest;
 
-interface VaultPasswordEntryUpdate {
-  readonly entryId: PasswordEntryId;
-  readonly password: string;
-}
-
-type EnrollmentCodeIssue = passwordUnlockActions.IdentityEnrollmentIssueRequest;
-
-interface VaultPasswordUnlock {
-  readonly entryId: PasswordEntryId;
-  readonly password: string;
-}
-
-type EnrollmentCodeConnectionInput =
-  passwordUnlockActions.EnrollmentCodeConnection;
+type EnrollmentCodeConnectionInput = enrollmentActions.EnrollmentCodeConnection;
 
 type AuthenticatorMigrationUriCollection = string[];
 
@@ -146,8 +129,6 @@ export class VaultState extends VaultRuntimeState {
   private readonly uiActions = new uiActions.VaultWorkspaceActions(this);
   private readonly multiDeviceActions =
     new multiDeviceActions.VaultDeviceActions(this);
-  private readonly passwordUnlockActions =
-    new passwordUnlockActions.VaultPasswordActions(this);
   private readonly sentinelUnlockActions =
     new sentinelUnlockActions.SentinelUnlockActions(this);
   /** Identity-level devices, onboarding, and sync-provider mounts. */
@@ -200,14 +181,13 @@ export class VaultState extends VaultRuntimeState {
     return this.clientPolicy.should_auto_unlock(
       is_vault_session_locked(),
       this.localVaultPresent,
-      this.passwordEntries.length,
       this.syncProviders.length,
       this.loginSetup.kind === LoginSetupKind.Active,
       this.addProviderOpen,
     );
   }
 
-  /** Prepare login gate for local vault unlock (password or device keys). */
+  /** Prepare login gate for local vault unlock with device keys. */
   async prepareLocalLogin(): Promise<void> {
     return this.localLoginActions.prepareLocalLogin();
   }
@@ -375,10 +355,6 @@ export class VaultState extends VaultRuntimeState {
     return new providersActions.VaultProviderActions(
       this,
     ).cancelProviderSetup();
-  }
-
-  async refreshPasswordEntriesList() {
-    return this.secretsActions.refreshPasswordEntriesList();
   }
 
   clearRemoteVaultRecovery() {
@@ -836,58 +812,21 @@ export class VaultState extends VaultRuntimeState {
     ).promoteSessionVaultToLocalIfNeeded();
   }
 
-  async addVaultPassword({
-    label,
-    password,
-  }: VaultPasswordCreation): Promise<PasswordOperationResult> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.passwordUnlockActions.addVaultPassword({ label, password });
-  }
-
-  async updateVaultPasswordEntry({
-    entryId,
-    password,
-  }: VaultPasswordEntryUpdate): Promise<PasswordOperationResult> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.passwordUnlockActions.updateVaultPasswordEntry({
-      entryId,
-      password,
-    });
-  }
-
-  async removeVaultPasswordEntry(
-    entryId: PasswordEntryId,
-  ): Promise<PasswordOperationResult> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.passwordUnlockActions.removeVaultPasswordEntry({ entryId });
-  }
-
   /**
    * Issue a one-time code that invites a new app into the current identity
    * through one of its mounts. The passphrase encrypts the code and is shared
    * separately; a member still approves the join.
    */
   async issueEnrollmentCode(issue: EnrollmentCodeIssue) {
-    return new passwordUnlockActions.IdentityEnrollmentIssue(
+    return new enrollmentActions.IdentityEnrollmentIssue(
       this,
     ).issueEnrollmentCode(issue);
   }
 
   clearEnrollmentCode() {
-    return new passwordUnlockActions.PasswordEnrollmentActions(
+    return new enrollmentActions.PasswordEnrollmentActions(
       this,
     ).clearEnrollmentCode();
-  }
-
-  /**
-   * Unlock the vault with a labelled password entry.
-   */
-  async unlockWithPassword({
-    entryId,
-    password,
-  }: VaultPasswordUnlock): Promise<void> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.passwordUnlockActions.unlockWithPassword({ entryId, password });
   }
 
   async refreshSentinelUnlockStatus() {
@@ -896,12 +835,12 @@ export class VaultState extends VaultRuntimeState {
 
   /**
    * Joining-side: parse an enrollment code, restore provider credentials, and
-   * self-enrol via `connect_with_password`. Skips approval entirely.
+   * join the invited identity with the code's invite key.
    */
   async connectWithEnrollmentCode(
     connection: EnrollmentCodeConnectionInput,
   ): Promise<void> {
-    return new passwordUnlockActions.PasswordEnrollmentActions(
+    return new enrollmentActions.PasswordEnrollmentActions(
       this,
     ).connectWithEnrollmentCode(connection);
   }

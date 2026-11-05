@@ -90,15 +90,15 @@ impl SimpleIdentityGenesisOperationsInput<'_> {
 
 #[cfg(test)]
 mod tests {
-    struct FixturePasswordRotation {
+    struct FixtureEpochRotation {
         graph: EventGraph,
         event_id: EventId,
         envelopes: AuthEnvelopes,
     }
 
     use crate::{
-        AppKey, EpochMetadataState, EpochPasswordState, IdentityRecord, PasswordEntryId, SecretId,
-        SecretType, StoredRecordPayload, StoredSecretRecord,
+        AppKey, DeviceId, EpochMetadataState, IdentityRecord, SecretId, SecretType,
+        StoredRecordPayload, StoredSecretRecord,
     };
 
     use std::{io, mem};
@@ -156,7 +156,6 @@ mod tests {
                     VaultOperation::VaultImported {
                         source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                         secrets: vec![],
-                        password_entries: vec![],
                     },
                     VaultOperation::JoinApproved {
                         device_id: owner.device_id().clone(),
@@ -187,13 +186,13 @@ mod tests {
             Ok((graph, root_id))
         }
 
-        fn append_password_rotation_checkpoint(
+        fn append_rotation_checkpoint(
             mut graph: EventGraph,
             signing: &SigningIdentity,
             store_id: &StoreId,
             parent: EventId,
             device: &DeviceIdentity,
-        ) -> anyhow::Result<FixturePasswordRotation> {
+        ) -> anyhow::Result<FixtureEpochRotation> {
             let replacement_keys = crate::VaultKeys::generate()?;
             let replacement_record =
                 device.auth_record(&replacement_keys.secrets_key, &replacement_keys.members_key)?;
@@ -202,16 +201,8 @@ mod tests {
                 signing,
                 store_id,
                 vec![parent],
-                vec![VaultOperation::PasswordRotated {
-                    entry_id: PasswordEntryId::parse("pwdentry001")?,
-                    envelope: crate::PasswordEnvelope {
-                        version: crate::PasswordEnvelopeVersion::CURRENT,
-                        kdf: "scrypt".to_owned(),
-                        work_factor: 10.into(),
-                        recipient: "recipient".to_owned(),
-                        wrapped_keys: "wrapped".to_owned(),
-                        ciphertext: "ciphertext".to_owned(),
-                    },
+                vec![VaultOperation::DeviceRevoked {
+                    device_id: DeviceId::parse("0123456789abcdef")?,
                 }],
                 "2026-08-15T00:01:30Z",
             )?;
@@ -245,7 +236,6 @@ mod tests {
                             "0".repeat(64),
                         ),
                         rotated_meta_records: EpochMetadataState::Replace(vec![replacement_record]),
-                        password_entries: EpochPasswordState::Replace(Vec::new()),
                     }],
                 },
                 signing.signing_key(),
@@ -264,7 +254,7 @@ mod tests {
                     Err(rejected.cause)
                 }
             }?;
-            Ok(FixturePasswordRotation {
+            Ok(FixtureEpochRotation {
                 graph,
                 event_id: checkpoint_id,
                 envelopes: replacement_auth,
@@ -362,7 +352,6 @@ mod tests {
                             "0".repeat(64),
                         ),
                         rotated_meta_records: EpochMetadataState::Replace(share_records),
-                        password_entries: EpochPasswordState::Replace(Vec::new()),
                     }],
                 },
                 owner_signing.signing_key(),
@@ -583,7 +572,6 @@ mod tests {
                 VaultOperation::VaultImported {
                     source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                     secrets: vec![],
-                    password_entries: vec![],
                 },
                 VaultOperation::JoinApproved {
                     device_id: extension.device_id().clone(),
@@ -738,7 +726,6 @@ mod tests {
             secrets: Vec::new(),
             members_checkpoint_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
             rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
-            password_entries: EpochPasswordState::LegacyRetain,
         };
         VaultMetaOperationApplier::new(&mut meta).apply(&VaultMetaOperationRequest {
             operation: &operation,
@@ -768,7 +755,6 @@ mod tests {
             secrets: Vec::new(),
             members_checkpoint_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
             rotated_meta_records: EpochMetadataState::Replace(vec![invalid]),
-            password_entries: EpochPasswordState::LegacyRetain,
         };
         match VaultMetaOperationApplier::new(&mut meta).apply(&VaultMetaOperationRequest {
             operation: &operation,
@@ -880,7 +866,7 @@ mod tests {
             }
         }?;
         let (checkpoint_id, replacement_auth) = {
-            let prepared = Fixtures::append_password_rotation_checkpoint(
+            let prepared = Fixtures::append_rotation_checkpoint(
                 graph,
                 &owner_signing,
                 &store_id,

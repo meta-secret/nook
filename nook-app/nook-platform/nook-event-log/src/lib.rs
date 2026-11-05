@@ -44,7 +44,7 @@ pub use canonical::{Ed25519Signature, EventId};
 pub use epoch::{
     ConcurrentEpochRotations, EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch,
 };
-pub use epoch_checkpoint_state::{EpochMetadataState, EpochPasswordState};
+pub use epoch_checkpoint_state::EpochMetadataState;
 pub use epoch_vault_name::EpochVaultName;
 pub use errors::{EventError, EventResult};
 pub use event::{
@@ -66,8 +66,9 @@ pub use identity_control::{
     IdentityEvent, IdentityEventBody, IdentityEventInsertStatus, IdentityEventSchemaVersion,
     IdentityEventSigning, IdentityGenesisRequest, IdentityInvite, IdentityInviteIssue,
     IdentityInviteJoin, IdentityInviteProof, IdentityJoinRequest, IdentityMemberAddition,
-    IdentityMemberKeys, IdentityMountTarget, IdentityNaming, IdentityProviderMount,
-    IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
+    IdentityMemberApprover, IdentityMemberKeys, IdentityMemberKind, IdentityMountTarget,
+    IdentityNaming, IdentityProviderMount, IdentityRecoveryAddition, IdentityRecoveryApproval,
+    IdentityRecoveryMember, IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
     IdentityVaultRegistration, MemberDevice, MemberSealedName, MemberVaultDek, OpenedVaultDek,
     ProviderMountId, S3MountTarget,
 };
@@ -100,8 +101,7 @@ pub use store::{
 )]
 pub use nook_auth2::{
     AgeArmoredCiphertext, AuthKeyId, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
-    IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId, PasswordEnvelope,
-    PasswordEnvelopeVersion, PasswordUnlockEntry, SecretId, SecretType, SentinelParticipantCount,
+    IsoTimestamp, MemberLabel, OpaqueCiphertext, SecretId, SecretType, SentinelParticipantCount,
     SentinelShareIndex, SentinelShareVersion, SentinelThreshold, Sha256Hex, SigningSeedHex,
     StoreId, StoredRecordPayload, StoredSecretRecord,
 };

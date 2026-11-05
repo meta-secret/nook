@@ -14,6 +14,9 @@ import {
   type NookStorageConnection,
   type NookVaultManager,
   type PasswordGenerationOptions,
+  type NookRecoveryWords,
+  type NookRecoveryWordsCheck,
+  type RecoveryStrength,
   type StorageProvider,
 } from "$app-wasm";
 import { unselectedVaultScope } from "$lib/auth/providers";
@@ -78,6 +81,18 @@ export type IdentityInviteIssue = {
 
 export type IdentityMemberRename = {
   readonly appId: string;
+  readonly label: string;
+};
+
+/** Named values required by `IdentityControlModel.beginRecoveryPassphrase`. */
+export type RecoveryPassphraseRequest = {
+  readonly label: string;
+  readonly strength: RecoveryStrength;
+};
+
+/** A recovery passphrase the keyring holds, as its list row names it. */
+export type RecoveryPassphraseRemoval = {
+  readonly id: string;
   readonly label: string;
 };
 
@@ -362,6 +377,84 @@ export class IdentityControlModel {
   }
 
   /**
+   * Generate the words of a new recovery passphrase, to show once. Adding
+   * one uses the keyring, so its log exists from here on, and the open
+   * vault is registered first, so the recovery key receives its DEK. Rust
+   * keeps the pending passphrase; nothing is written until it is confirmed.
+   */
+  async beginRecoveryPassphrase({
+    label,
+    strength,
+  }: RecoveryPassphraseRequest): Promise<
+    Result<NookRecoveryWords, VaultStorageFailure>
+  > {
+    const ensured = await this.refresh();
+    if (ensured.isErr()) return err(ensured.error);
+    const reconciled = await this.reconcileOpenVault();
+    if (reconciled.isErr()) return err(reconciled.error);
+    return this.withManager((manager) =>
+      manager.begin_recovery_passphrase(label, strength),
+    );
+  }
+
+  /**
+   * Check the words typed back. Only when Rust accepts them is the
+   * passphrase recorded; it then reaches every mount, where a new device
+   * finds it. Accepted words are saved even when that copy fails: the list
+   * shows the passphrase, and the failed copy is reported on its own so
+   * the next sync can carry it. A slip is returned for the form to show.
+   */
+  async confirmRecoveryPassphrase(
+    words: string,
+  ): Promise<Result<NookRecoveryWordsCheck, VaultStorageFailure>> {
+    const checked = await this.withManager((manager) =>
+      manager.confirm_recovery_passphrase(words),
+    );
+    if (checked.isErr()) return checked;
+    switch (checked.value.state) {
+      case "accepted": {
+        log.info("recovery passphrase added");
+        const synced = await this.syncWithMounts();
+        if (synced.isOk()) return checked;
+        await this.loadSnapshot();
+        this.report(synced.error);
+        return checked;
+      }
+      case "empty":
+      case "unknownWords":
+      case "wrongWordCount":
+      case "wrongWords":
+        return checked;
+    }
+  }
+
+  /** Drop the pending recovery passphrase and its words. */
+  cancelRecoveryPassphrase(): void {
+    const manager = this.vault.admitManager();
+    if (manager.isOk()) manager.value.cancel_recovery_passphrase();
+  }
+
+  /** Remove a recovery passphrase: its words stop adding devices, and every
+   * vault rotates before its next write. */
+  async removeRecoveryPassphrase({
+    id,
+    label,
+  }: RecoveryPassphraseRemoval): Promise<
+    Result<IdentityActionOutcome, VaultStorageFailure>
+  > {
+    const removed = await this.act((manager) =>
+      manager.remove_recovery_passphrase(id),
+    );
+    if (removed.isErr()) return removed;
+    const request: Parameters<typeof this.vault.t>[0] = {
+      key: I18N_KEYS.RecoveryPassphraseRemoved,
+      replacements: { label },
+    };
+    this.vault.showSuccess(this.vault.t(request));
+    return removed;
+  }
+
+  /**
    * Answer a device asking to join this identity. Rust approves it with
    * every vault's DEK, or denies it; the answer then reaches every mount,
    * where the asking device reads it.
@@ -483,8 +576,24 @@ export class IdentityControlModel {
     return this.syncWithMounts();
   }
 
-  /** Open a vault the identity granted this app, from an identity mount. */
+  /** Open a vault the identity granted this app, from an identity mount.
+   * The keyring is busy until the vault is open, so its rows and Open stay
+   * disabled: a second press would queue another open that lands after
+   * whatever the person did next, such as switching to another vault. */
   async openVault(
+    storeId: string,
+  ): Promise<
+    Result<IdentityActionOutcome, VaultStorageFailure | OAuthFailure>
+  > {
+    this.busy = true;
+    try {
+      return await this.openGrantedVault(storeId);
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private async openGrantedVault(
     storeId: string,
   ): Promise<
     Result<IdentityActionOutcome, VaultStorageFailure | OAuthFailure>
@@ -523,7 +632,6 @@ export class IdentityControlModel {
     const steps = [
       () => vault.refreshLocalVaultCatalog(),
       () => vault.syncActiveVaultStoreIdToAuth(),
-      () => vault.refreshPasswordEntriesList(),
       () => vault.hydrateMultiDeviceState(),
     ];
     for (const step of steps) {

@@ -17,7 +17,7 @@ A hairline schematic of the access chain as the subject: passkey, browser device
 1. The chain itself: what the person presents, the browser device key it unlocks, the vaults it opens.
 2. The selected link's own evidence: its identifier, what Nook verified, what the browser reported, what the user named.
 3. Which vaults this device key was verified to open, with last-known timestamps.
-4. When unlocked, current-vault device and backup-password summaries with links to existing management controls.
+4. When unlocked, current-vault device summaries with links to existing management controls.
 5. A persistent status readout — locked or unlocked, protection kind, verified vault count — and an opt-in note on how Nook knows each class of fact.
 
 ## Interaction and responsive behavior

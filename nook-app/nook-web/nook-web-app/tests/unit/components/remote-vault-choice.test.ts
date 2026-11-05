@@ -53,6 +53,7 @@ function strangerWhoseJoinIs(join: ProviderIdentityJoin): FilingIdentity {
       devices: 2,
       newestDevice: { state: 'unreported' },
       vaults: 1,
+      recoveryPassphrases: 0,
       thisBrowser: false,
       join,
     },
@@ -112,7 +113,7 @@ const strangerVault: ChoiceRequest = {
 describe('Recovery vault choice', () => {
   test('vaults are grouped by identity, and a found passkey opens its whole identity', async () => {
     const report: CredentialCheckReport = {
-      credential: { kind: 'passkey', fingerprint: 'passkey_a1b2c3d4e5f60708' },
+      credential: { fingerprint: 'passkey_a1b2c3d4e5f60708' },
       identities: [
         {
           identityId: family.identityId,
@@ -179,7 +180,7 @@ describe('Recovery vault choice', () => {
 
   test('a keyring recovered with its passkey opens its vault next', async () => {
     const report: CredentialCheckReport = {
-      credential: { kind: 'passkey', fingerprint: 'passkey_a1b2c3d4e5f60708' },
+      credential: { fingerprint: 'passkey_a1b2c3d4e5f60708' },
       identities: [
         {
           identityId: family.identityId,

@@ -1,0 +1,258 @@
+import type { Locator } from '@playwright/test'
+import { expect, test, type Page } from './fixtures'
+import {
+  addSecret,
+  connectS3InFirstRun,
+  createFirstRunKey,
+  createIsolatedContext,
+  disableVaultIdleLock,
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  keepSecretOnS3,
+  ManagePage,
+  openIdentitiesPage,
+  openManagePage,
+  openVaultPage,
+  pressIfReady,
+  readLocalVaultYamlFromIdb,
+  revealSecretValue,
+  storeIdOfVaultYaml,
+  triggerVaultSyncRefresh,
+  uniqueS3KeyPrefix,
+  uniqueSecretKey,
+  UI_TIMEOUT_MS,
+  waitForSecretOnDevice,
+} from './helpers'
+import type { S3KeptKeyring } from './helpers'
+import { LocalS3Identity } from '../../nook-web-extension/scripts/local-s3'
+
+const KEYRING_NAME = 'Recovered keyring'
+const PASSPHRASE_LABEL = 'Paper in the safe'
+const SECRET_VALUE = 'keyring-recovery-secret-value'
+const LATER_VAULT_NAME = 'Vault added later'
+const LATER_SECRET_VALUE = 'keyring-recovery-later-secret-value'
+
+/** The only device of a keyring on S3, before it is lost. */
+function keptKeyring(keyPrefix: string): S3KeptKeyring {
+  return { keyPrefix, keyringName: KEYRING_NAME, secretValue: SECRET_VALUE }
+}
+
+/** One Simple vault of the keyring and the secret it keeps. */
+type KeptVault = {
+  readonly storeId: string
+  readonly key: string
+  readonly value: string
+}
+
+/** The store id of the vault open on this browser. */
+async function openStoreId(page: Page): Promise<string> {
+  return storeIdOfVaultYaml(await readLocalVaultYamlFromIdb(page))
+}
+
+/** On the Keys page, add a recovery passphrase: name it, keep Standard,
+ * read the words shown once, and type them back. The words are returned
+ * as they were written down. */
+async function addRecoveryPassphrase(page: Page): Promise<string> {
+  await openManagePage(page, ManagePage.Keys)
+  await page.getByTestId('recovery-passphrase-add').click()
+  await page
+    .getByTestId('recovery-passphrase-label-input')
+    .fill(PASSPHRASE_LABEL)
+  await page.getByTestId('recovery-passphrase-strength-choice-standard').click()
+  await page.getByTestId('recovery-passphrase-generate').click()
+  const words = page.getByTestId('recovery-passphrase-word')
+  await expect(words).toHaveCount(4, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  const written = (await words.allTextContents()).map((word) => word.trim())
+  await page.getByTestId('recovery-passphrase-written').click()
+  await expect(words).toHaveCount(0)
+  await page
+    .getByTestId('recovery-passphrase-confirm-words')
+    .fill(written.join(' '))
+  await page.getByTestId('recovery-passphrase-confirm').click()
+  await expect(page.getByTestId('recovery-passphrase')).toContainText(
+    PASSPHRASE_LABEL,
+    { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+  )
+  return written.join(' ')
+}
+
+/** After the passphrase exists, the keyring gets a second Simple vault with
+ * its own secret. Opening the Devices page registers it with the keyring,
+ * which grants its key to every member, the recovery passphrase too; Sync
+ * now puts that grant on S3. */
+async function addVaultAfterPassphrase(
+  page: Page,
+  first: string,
+): Promise<KeptVault> {
+  await openIdentitiesPage(page)
+  await page.getByTestId('identity-new-vault').click()
+  await expect(page.getByTestId('login-new-vault-panel')).toBeVisible()
+  await page.getByTestId('login-vault-name-input').fill(LATER_VAULT_NAME)
+  await page.getByTestId('login-create-additional-vault-btn').click()
+  await expect
+    .poll(() => openStoreId(page), { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    .not.toBe(first)
+  const storeId = await openStoreId(page)
+  await disableVaultIdleLock(page)
+  await openVaultPage(page)
+  const later: KeptVault = {
+    storeId,
+    key: uniqueSecretKey('recovery-later'),
+    value: LATER_SECRET_VALUE,
+  }
+  await addSecret(page, later.key, later.value)
+  await triggerVaultSyncRefresh(page)
+  await openManagePage(page, ManagePage.Devices)
+  const syncNow = page.getByTestId('identity-sync-now-btn')
+  await expect(syncNow).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await syncNow.click()
+  await expect(syncNow).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  return later
+}
+
+/** A new device after every device is lost: its own passkey, then the same
+ * S3 location with another key, which lists the keyring it is not in. */
+async function listKeyringOnNewDevice(
+  device: Page,
+  keyPrefix: string,
+): Promise<Locator> {
+  await device.goto('/app/')
+  await createFirstRunKey(device)
+  await connectS3InFirstRun(device, {
+    keyPrefix,
+    identity: LocalS3Identity.DeviceB,
+  })
+  const listed = device.locator(
+    '[data-testid="setup-identity"][data-setup="requestToJoin"]',
+  )
+  await expect(listed).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  return listed
+}
+
+/** Open one of the keyring's vaults from its row on the hub: one this
+ * browser holds unlocks and opens from its panel; one only granted to it
+ * opens from the panel's away action, through the keyring's provider. */
+async function openKeyringVault(device: Page, storeId: string): Promise<void> {
+  await openIdentitiesPage(device)
+  const row = device.locator(
+    `[data-testid="identity-vault-row"][data-store-id="${storeId}"]`,
+  )
+  await expect(row).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click()
+  const controls = [
+    device.getByTestId('vault-panel-open-away'),
+    device.getByTestId('vault-panel-unlock'),
+    device.getByTestId('vault-panel-open'),
+  ]
+  await expect
+    .poll(
+      async () => {
+        if ((await openStoreId(device)) === storeId) return 'open'
+        for (const control of controls) {
+          if (await pressIfReady(control)) break
+        }
+        return 'waiting'
+      },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe('open')
+}
+
+/** Open one of the keyring's vaults and read its secret. */
+async function readSecretOfVault(
+  device: Page,
+  kept: KeptVault,
+): Promise<string> {
+  await openKeyringVault(device, kept.storeId)
+  await disableVaultIdleLock(device)
+  await openVaultPage(device)
+  await waitForSecretOnDevice(device, kept.key)
+  return revealSecretValue(device, kept.key)
+}
+
+// Every test keeps its objects under its own key prefix in the shared local
+// bucket, so the tests run in parallel and never see each other's keyrings.
+test.describe('keyring recovery passphrase', () => {
+  test('with every device lost, the words bring the keyring and all its vaults back', async ({
+    page,
+    browser,
+  }) => {
+    test.setTimeout(240_000)
+    const keyPrefix = uniqueS3KeyPrefix('recovery-words')
+    const secret = await keepSecretOnS3(page, keptKeyring(keyPrefix))
+    const first: KeptVault = { storeId: await openStoreId(page), ...secret }
+    const words = await addRecoveryPassphrase(page)
+    const later = await addVaultAfterPassphrase(page, first.storeId)
+    // From here the first device is lost: the new one reaches the keyring
+    // only through S3 and the written-down words.
+
+    const newContext = await createIsolatedContext(browser)
+    try {
+      const device = await newContext.newPage()
+      const listed = await listKeyringOnNewDevice(device, keyPrefix)
+      await listed.getByTestId('setup-identity-recover').click()
+      const step = device.getByTestId('first-run-recover-step')
+      await expect(step).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+      await expect(
+        device.getByTestId('first-run-recover-passphrase-label'),
+      ).toContainText(PASSPHRASE_LABEL, {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+
+      // Words of the list that are not this passphrase's are refused, and
+      // nothing joins.
+      const typed = words.split(' ')
+      const wrong = [...typed.slice(1), ...typed.slice(0, 1)].join(' ')
+      await device.getByTestId('first-run-recover-words').fill(wrong)
+      await device.getByTestId('first-run-recover-submit').click()
+      await expect(
+        device.getByTestId('first-run-recover-words-message'),
+      ).not.toBeEmpty({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+      await expect(step).toBeVisible()
+
+      // The words written down join this device. Both Simple vaults open,
+      // the one added after the passphrase too, each with its secret.
+      await device.getByTestId('first-run-recover-words').fill(words)
+      await device.getByTestId('first-run-recover-submit').click()
+      await expect(step).toHaveCount(0, {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      expect(await readSecretOfVault(device, first)).toBe(first.value)
+      expect(await readSecretOfVault(device, later)).toBe(later.value)
+
+      // The device list says the passphrase let this device in.
+      await openManagePage(device, ManagePage.Devices)
+      await expect(device.getByTestId('device-recovered-by')).toContainText(
+        PASSPHRASE_LABEL,
+        { timeout: UI_TIMEOUT_MS },
+      )
+    } finally {
+      await newContext.close()
+    }
+  })
+
+  test('a removed passphrase no longer recovers the keyring', async ({
+    page,
+    browser,
+  }) => {
+    test.setTimeout(180_000)
+    const keyPrefix = uniqueS3KeyPrefix('recovery-removed')
+    await keepSecretOnS3(page, keptKeyring(keyPrefix))
+    await addRecoveryPassphrase(page)
+
+    await page.getByTestId('recovery-passphrase-remove').click()
+    await page.getByTestId('recovery-passphrase-remove-confirm-btn').click()
+    await expect(page.getByTestId('recovery-passphrase')).toHaveCount(0, {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+
+    const newContext = await createIsolatedContext(browser)
+    try {
+      const device = await newContext.newPage()
+      const listed = await listKeyringOnNewDevice(device, keyPrefix)
+      await expect(listed.getByTestId('setup-identity-join')).toBeVisible()
+      await expect(listed.getByTestId('setup-identity-recover')).toHaveCount(0)
+    } finally {
+      await newContext.close()
+    }
+  })
+})

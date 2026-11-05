@@ -70,16 +70,18 @@ pub enum NookIdentityJoinCompletion {
 
 /// An identity's control log, read and not yet verified, for the app key
 /// that completes its join.
-struct IdentityJoinLog<'a> {
-    identity_id: &'a IdentityId,
-    app_key: &'a nook_core::AppKey,
-    events: &'a [EventStorageBytes],
+pub(super) struct IdentityJoinLog<'a> {
+    pub(super) identity_id: &'a IdentityId,
+    pub(super) app_key: &'a nook_core::AppKey,
+    pub(super) events: &'a [EventStorageBytes],
+    /// The name the adopted local identity takes.
+    pub(super) label: nook_core::AdoptedIdentityLabel<'a>,
 }
 
 impl NookVaultManager {
     /// The location an identity's log is read from and written to, opened
     /// once per operation. This browser's own store holds no provider log.
-    async fn identity_source<'a>(
+    pub(super) async fn identity_source<'a>(
         &'a self,
         source: &'a NookProviderSource,
     ) -> Result<OpenedLocation<'a>, NookError> {
@@ -97,13 +99,14 @@ impl NookVaultManager {
     /// Verify the identity's log and complete the join it records for this
     /// app key: once the key is a member, its local identity takes the
     /// identity's id and the membership and DEK grants are kept here.
-    async fn complete_join_from_log(
+    pub(super) async fn complete_join_from_log(
         join: IdentityJoinLog<'_>,
     ) -> Result<NookIdentityJoinCompletion, NookError> {
         let IdentityJoinLog {
             identity_id,
             app_key,
             events,
+            label,
         } = join;
         let log = IdentityControlLog::new(identity_id.clone())
             .union_storage_bytes(events)
@@ -124,7 +127,7 @@ impl NookVaultManager {
                     NookDatabase::rebind_local_identity(KeyringDbRebindLocalIdentity {
                         local_identity_id: &local_identity_id,
                         replicated_identity_id: identity_id,
-                        label: nook_core::AdoptedIdentityLabel::Kept,
+                        label,
                     })
                     .await?;
                 }
@@ -265,6 +268,7 @@ impl NookVaultManager {
             identity_id: &identity_id,
             app_key: &app_key,
             events: &events,
+            label: nook_core::AdoptedIdentityLabel::Kept,
         })
         .await?;
         Ok(completion.encode()?)
@@ -302,6 +306,7 @@ impl NookVaultManager {
             identity_id: &identity_id,
             app_key: &app_key,
             events: &events,
+            label: nook_core::AdoptedIdentityLabel::Kept,
         })
         .await?
         {

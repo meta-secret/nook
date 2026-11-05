@@ -50,11 +50,12 @@ impl ReplicatedMembershipRequest<'_> {
     /// Members, revocations, and this installation's envelope for each vault's
     /// current key epoch. A vault without a current envelope is omitted.
     pub fn project(&self) -> MultiDeviceResult<ReplicatedMembershipProjection> {
+        // A recovery passphrase is a member on no device: the local directory
+        // lists app keys only.
         let members = self
             .state
-            .members
-            .iter()
-            .map(|member| Self::local_member(&member.keys))
+            .app_members()
+            .map(|(member, _)| Self::local_member(&member.keys))
             .collect::<MultiDeviceResult<Vec<_>>>()?;
         let own_grants = self
             .state
@@ -121,6 +122,41 @@ impl VaultRevocationDue<'_> {
         due.sort();
         due.dedup();
         Ok(due)
+    }
+}
+
+/// A vault at its own current key epoch, checked against the members the
+/// identity revoked. A revoked member that held this epoch's DEK can read
+/// whatever the vault writes under it, even when it is on no vault roster: a
+/// recovery passphrase never is, and an app may never have opened the vault.
+pub struct VaultRevokedHolders<'a> {
+    pub state: &'a IdentityControlState,
+    pub store_id: &'a StoreId,
+    /// The vault's own current key epoch.
+    pub key_epoch: &'a nook_event_log::EventId,
+}
+
+/// Whether a vault must rotate for a revoked member that holds its DEK.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VaultHolderRotation {
+    /// No revoked member holds the current epoch's DEK.
+    NotDue,
+    /// Rotate before the next write. One rotation leaves every revoked holder
+    /// without the new epoch's DEK; `app_id` is the one the rotation names.
+    Due { app_id: AppId },
+}
+
+impl VaultRevokedHolders<'_> {
+    #[must_use]
+    pub fn rotation(&self) -> VaultHolderRotation {
+        self.state
+            .vault(self.store_id)
+            .and_then(|vault| vault.revoked_holders(self.key_epoch).first())
+            .map_or(VaultHolderRotation::NotDue, |app_id| {
+                VaultHolderRotation::Due {
+                    app_id: app_id.clone(),
+                }
+            })
     }
 }
 

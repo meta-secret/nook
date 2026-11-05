@@ -11,7 +11,7 @@ use nook_auth2::{
 };
 
 use super::graph::IdentityControlLog;
-use super::projection::IdentityControlState;
+use super::projection::{IdentityControlState, IdentityMemberKind};
 use super::wire::{
     IdentityControlOperation, IdentityEvent, IdentityEventBody, IdentityEventSchemaVersion,
     IdentityInvite, IdentityInviteProof, IdentityMemberKeys, IdentityVaultDekGrant, MemberDevice,
@@ -141,7 +141,7 @@ impl IdentityMemberKeys {
     }
 
     /// Each opened vault's DEK pair wrapped to this member.
-    fn vault_dek_grants(
+    pub(super) fn vault_dek_grants(
         &self,
         vaults: &[OpenedVaultDek<'_>],
     ) -> EventResult<Vec<IdentityVaultDekGrant>> {
@@ -264,7 +264,7 @@ impl IdentityControlState {
 
     /// A new member must receive every vault the identity owns, each at its
     /// current key epoch.
-    fn require_every_vault(&self, vaults: &[OpenedVaultDek<'_>]) -> EventResult<()> {
+    pub(super) fn require_every_vault(&self, vaults: &[OpenedVaultDek<'_>]) -> EventResult<()> {
         for vault in &self.vaults {
             if !vaults.iter().any(|opened| {
                 opened.store_id == &vault.store_id && opened.key_epoch == &vault.current_key_epoch
@@ -287,17 +287,21 @@ impl IdentityControlState {
         })
     }
 
-    /// Revoke an active member. The identity always keeps one member.
+    /// Revoke an active member: an app key or a recovery passphrase. The
+    /// identity always keeps one app key.
     pub fn revocation_operation(&self, app_id: &AppId) -> EventResult<IdentityControlOperation> {
-        if self.member(app_id).is_none() {
-            return Err(EventError::IdentityControlInvalid(format!(
+        let member = self.member(app_id).ok_or_else(|| {
+            EventError::IdentityControlInvalid(format!(
                 "app {app_id} is not an active identity member"
-            )));
-        }
-        if self.members.len() == 1 {
-            return Err(EventError::IdentityControlInvalid(
-                "an identity must keep at least one app key".to_owned(),
-            ));
+            ))
+        })?;
+        match (&member.kind, self.app_members().count()) {
+            (IdentityMemberKind::App { .. }, 1) => {
+                return Err(EventError::IdentityControlInvalid(
+                    "an identity must keep at least one app key".to_owned(),
+                ));
+            }
+            (IdentityMemberKind::App { .. } | IdentityMemberKind::Recovery(_), _) => {}
         }
         Ok(IdentityControlOperation::MemberRevoked {
             app_id: app_id.clone(),
@@ -642,8 +646,10 @@ mod tests {
         assert_eq!(
             state
                 .member(extension.app.app_id())
-                .map(|member| &member.device),
-            Some(&beside_founder)
+                .map(|member| &member.kind),
+            Some(&IdentityMemberKind::App {
+                device: beside_founder.clone()
+            })
         );
 
         // A phone approved through its join request is a device of its own.

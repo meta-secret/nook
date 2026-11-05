@@ -43,17 +43,14 @@ flowchart TD
 
 1. **Device protection gate:**
    - Before provider credentials or device keys are loaded, the user creates or authorizes passkey-backed WebAuthn PRF protection, or a local PIN fallback when PRF is unavailable.
-   - A backup password may instead unwrap a local vault directly.
-   - That path does not load the protected device identity or its sealed provider credentials.
 2. **Login gate (vault locked):** If no saved providers exist, the user sees a provider list (Local, GitHub). This is the primary entry point — not a settings page.
 3. **First-time setup:** User picks a storage provider. GitHub requires a one-time PAT entry; local needs no credentials. On successful connect, the provider (including a device-sealed GitHub PAT) is saved to IndexedDB (`nook_auth`). The vault is created with **device keys** as the default unlock method.
-4. **Return visits:** The login gate shows device keys (default) and any labelled backup passwords.
+4. **Return visits:** The login gate shows device-key unlock.
    - Device-key unlock starts passkey authorization directly when a wrapped passkey identity is present.
    - PIN input, passkey recovery, and failed/cancelled attempts use the device-protection gate.
-   - Backup-password unlock opens the local vault directly.
    - After device authorization, the vault may auto-unlock when device keys work.
    - See [auth-providers.md](../../../nook-platform/.cortex/docs/architecture/auth-providers.md) §3.
-5. **Authenticated navigation:** see [unified-workspace.md](unified-workspace.md). The **Vault** page lists saved items. **Devices & onboarding** holds the enrolled-device roster, join approvals, and the onboarding wizard that generates a QR/link from the sync provider and vault password. **Sync** lists storage providers and reconnect; **Backup passwords** manages vault passwords; **Import** holds the password-manager imports.
+5. **Authenticated navigation:** see [unified-workspace.md](unified-workspace.md). The **Vault** page lists saved items. **Devices & onboarding** holds the enrolled-device roster, join approvals, and one-time invite codes. **Sync** lists storage providers and reconnect; **Import** holds the password-manager imports.
    - On desktop, the fixed authenticated shell owns vertical content scrolling.
      On mobile, the min-height shell may use document scrolling.
    - Expanded security guidance keeps its full content height.

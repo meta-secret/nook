@@ -1,4 +1,4 @@
-//! Cryptographic key epochs for password rotation and device revocation.
+//! Cryptographic key epochs for device revocation and access changes.
 
 use crate::canonical::EventId;
 use crate::event::VaultOperation;
@@ -23,8 +23,6 @@ impl KeyEpoch {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EpochRotationReason {
     Genesis,
-    PasswordRotated,
-    PasswordRemoved,
     DeviceRevoked,
     AccessGrant,
     ConcurrentVaultMutation,
@@ -48,8 +46,6 @@ impl EpochRotationReason {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Genesis => "genesis",
-            Self::PasswordRotated => "password-rotated",
-            Self::PasswordRemoved => "password-removed",
             Self::DeviceRevoked => "device-revoked",
             Self::AccessGrant => "access-grant",
             Self::ConcurrentVaultMutation => "concurrent-vault-mutation",
@@ -73,12 +69,6 @@ impl VaultOperation {
             VaultOperation::VaultImported { .. } => {
                 EpochTransition::Rotated(EpochRotationReason::Genesis)
             }
-            VaultOperation::PasswordRotated { .. } => {
-                EpochTransition::Rotated(EpochRotationReason::PasswordRotated)
-            }
-            VaultOperation::PasswordRemoved { .. } => {
-                EpochTransition::Rotated(EpochRotationReason::PasswordRemoved)
-            }
             VaultOperation::DeviceRevoked { .. } => {
                 EpochTransition::Rotated(EpochRotationReason::DeviceRevoked)
             }
@@ -93,8 +83,6 @@ impl VaultOperation {
             | VaultOperation::SentinelSharesIssued { .. }
             | VaultOperation::JoinDenied { .. }
             | VaultOperation::MemberRenamed { .. }
-            | VaultOperation::PasswordAdded { .. }
-            | VaultOperation::PasswordEnvelopeUpgraded { .. }
             | VaultOperation::VaultCleared
             | VaultOperation::VaultNamed { .. } => EpochTransition::Unchanged,
         }
@@ -106,18 +94,8 @@ impl EpochRotationReason {
     #[must_use]
     pub fn concurrent_epoch_rotations_conflict(request: ConcurrentEpochRotations) -> bool {
         let ConcurrentEpochRotations { left, right } = request;
-        let left_rotates_access = matches!(
-            left,
-            EpochRotationReason::PasswordRotated
-                | EpochRotationReason::PasswordRemoved
-                | EpochRotationReason::DeviceRevoked
-        );
-        let right_rotates_access = matches!(
-            right,
-            EpochRotationReason::PasswordRotated
-                | EpochRotationReason::PasswordRemoved
-                | EpochRotationReason::DeviceRevoked
-        );
+        let left_rotates_access = matches!(left, EpochRotationReason::DeviceRevoked);
+        let right_rotates_access = matches!(right, EpochRotationReason::DeviceRevoked);
         let left_mutates_access = matches!(
             left,
             EpochRotationReason::AccessGrant | EpochRotationReason::ConcurrentVaultMutation
@@ -139,31 +117,13 @@ mod tests {
     use crate::event;
 
     #[test]
-    fn password_and_revoke_rotations_conflict_when_concurrent() -> anyhow::Result<()> {
-        assert!(EpochRotationReason::concurrent_epoch_rotations_conflict(
-            ConcurrentEpochRotations {
-                left: EpochRotationReason::PasswordRotated,
-                right: EpochRotationReason::DeviceRevoked
-            }
-        ));
+    fn genesis_and_revoke_rotations_do_not_conflict() {
         assert!(!EpochRotationReason::concurrent_epoch_rotations_conflict(
             ConcurrentEpochRotations {
                 left: EpochRotationReason::Genesis,
-                right: EpochRotationReason::PasswordRotated
+                right: EpochRotationReason::DeviceRevoked
             }
         ));
-        Ok(())
-    }
-
-    #[test]
-    fn password_removed_and_rotated_conflict_when_concurrent() -> anyhow::Result<()> {
-        assert!(EpochRotationReason::concurrent_epoch_rotations_conflict(
-            ConcurrentEpochRotations {
-                left: EpochRotationReason::PasswordRemoved,
-                right: EpochRotationReason::PasswordRotated
-            }
-        ));
-        Ok(())
     }
 
     #[test]
@@ -194,7 +154,7 @@ mod tests {
         assert!(EpochRotationReason::concurrent_epoch_rotations_conflict(
             ConcurrentEpochRotations {
                 left: EpochRotationReason::ConcurrentVaultMutation,
-                right: EpochRotationReason::PasswordRemoved
+                right: EpochRotationReason::DeviceRevoked
             }
         ));
     }
@@ -205,23 +165,14 @@ mod tests {
             VaultOperation::operation_starts_epoch(&VaultOperation::VaultImported {
                 source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: Vec::new(),
-                password_entries: Vec::new(),
             }),
             EpochTransition::Rotated(EpochRotationReason::Genesis)
         );
         assert_eq!(
-            VaultOperation::operation_starts_epoch(&VaultOperation::PasswordRotated {
-                entry_id: crate::PasswordEntryId::from_trusted("pwdentry001".to_owned()),
-                envelope: crate::PasswordEnvelope {
-                    version: crate::PasswordEnvelopeVersion::LEGACY,
-                    kdf: "scrypt".to_owned(),
-                    work_factor: 10.into(),
-                    recipient: String::new(),
-                    wrapped_keys: String::new(),
-                    ciphertext: "c".to_owned()
-                },
+            VaultOperation::operation_starts_epoch(&VaultOperation::DeviceRevoked {
+                device_id: crate::DeviceId::parse("0123456789abcdef")?,
             }),
-            EpochTransition::Rotated(EpochRotationReason::PasswordRotated)
+            EpochTransition::Rotated(EpochRotationReason::DeviceRevoked)
         );
         assert_eq!(
             VaultOperation::operation_starts_epoch(&VaultOperation::SecretCreated {

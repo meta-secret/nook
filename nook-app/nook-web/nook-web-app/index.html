@@ -451,11 +451,11 @@
                 class="crypto-term"
                 type="button"
                 aria-pressed="false"
-                data-code="SCRYPT · PASSWORD_ENVELOPE"
+                data-code="SCRYPT · RECOVERY_PASSPHRASE"
                 data-i18n-detail="crypto.scrypt"
-                data-detail="Password access is represented by age scrypt envelopes that wrap high-entropy vault keys instead of encrypting every record directly."
+                data-detail="A keyring recovery passphrase is generated words; age scrypt seals the keyring recovery key under them, which can add a new device to the keyring."
               >
-                scrypt password envelopes
+                scrypt-sealed recovery passphrases
               </button>
               <button
                 class="crypto-term"
@@ -463,7 +463,7 @@
                 aria-pressed="false"
                 data-code="KEY_EPOCH · ROTATED"
                 data-i18n-detail="crypto.epochs"
-                data-detail="Password rotation, password removal, and device revocation start new cryptographic epochs for future private event payloads."
+                data-detail="Removing a device or a recovery passphrase starts new cryptographic epochs for future private event payloads."
               >
                 Cryptographic key epochs
               </button>

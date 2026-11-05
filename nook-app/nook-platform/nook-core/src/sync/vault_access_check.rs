@@ -1,10 +1,9 @@
-//! Which vaults a passkey or a backup password opens, proven by decryption.
+//! Which vaults a passkey opens, proven by decryption.
 //!
 //! A passkey check re-derives one device's app key from the passkey. The key
 //! opens a vault when the identity log it is a member of wraps the vault's
 //! current key to it, or when the vault's own log enrolled it; the check
-//! proves it by decrypting the key envelope and the vault's name. A backup
-//! password check opens the vault's password envelope the same way. Results
+//! proves it by decrypting the key envelope and the vault's name. Results
 //! are for the person checking, in memory only: nothing is stored, imported,
 //! or written to any source.
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
@@ -16,13 +15,12 @@
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-use crate::errors::{AgeCryptoError, VaultResult};
+use crate::errors::VaultResult;
 use crate::{
     AgeArmoredCiphertext, AppKey, EventGraph, IdentityControlLog, IdentityControlState, IdentityId,
-    IdentityVaultDekLookup, IdentityWords, LocalEventStore, LocalEventWrite,
-    PasswordEntryResolution, PasswordError, ProjectedVaultName, ProviderIdentityLogEvents,
-    ProviderVaultName, ProviderVaultSummary, StoreId, SymmetricKey, VaultCrypto,
-    VaultMetaGraphProjection, VaultMetaState, VaultProjection, VaultRecordView,
+    IdentityVaultDekLookup, IdentityWords, LocalEventStore, LocalEventWrite, ProjectedVaultName,
+    ProviderIdentityLogEvents, ProviderVaultName, ProviderVaultSummary, StoreId, SymmetricKey,
+    VaultCrypto, VaultMetaGraphProjection, VaultMetaState, VaultProjection, VaultRecordView,
 };
 
 /// One vault a check covers, with the identity whose folder files it and
@@ -33,17 +31,14 @@ pub struct CheckedVaultEvents {
     pub events: Vec<LocalEventWrite>,
 }
 
-/// Whether a key or password opened one vault.
+/// Whether a key opened one vault.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", rename_all = "camelCase")]
 pub enum VaultCheckOutcome {
     /// Its key decrypted; the name is what the vault's log carries.
     Opens { name: ProviderVaultName },
-    /// Nothing wraps the vault's key to the checked passkey, or no backup
-    /// password of the vault accepts the checked password.
+    /// Nothing wraps the vault's key to the checked passkey.
     DoesNotOpen,
-    /// A backup password was checked, and the vault has none set.
-    NoBackupPassword,
 }
 
 /// One vault's result in a check.
@@ -63,8 +58,8 @@ pub struct VaultCheck {
 pub enum IdentityCheckOutcome {
     /// The checked passkey's key is a member of the identity.
     Opens,
-    /// The identity does not open, but some of its vaults do: a backup
-    /// password, or a vault that enrolled the key on its own.
+    /// The identity does not open, but some of its vaults do: a vault that
+    /// enrolled the key on its own.
     VaultsOnly,
     DoesNotOpen,
 }
@@ -82,19 +77,15 @@ pub struct IdentityCheck {
     pub vaults: Vec<VaultCheck>,
 }
 
-/// What was checked.
+/// The checked passkey, told apart by a non-secret fingerprint of its
+/// credential id.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum CheckedCredential {
-    /// One passkey, told apart by a non-secret fingerprint of its credential id.
-    Passkey {
-        fingerprint: String,
-    },
-    BackupPassword,
+#[serde(rename_all = "camelCase")]
+pub struct CheckedCredential {
+    pub fingerprint: String,
 }
 
-/// What one passkey or backup password opens in one source, identity by
-/// identity.
+/// What one passkey opens in one source, identity by identity.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct CredentialCheckReport {
@@ -151,7 +142,7 @@ impl PasskeyAccessCheck<'_> {
             .map(|log| log.identity_id.clone())
             .collect::<Vec<_>>();
         Ok(CredentialCheckReport {
-            credential: CheckedCredential::Passkey {
+            credential: CheckedCredential {
                 fingerprint: self.fingerprint,
             },
             identities: IdentityCheck::group(IdentityGrouping {
@@ -196,34 +187,6 @@ impl PasskeyAccessCheck<'_> {
         Ok(IdentityGrants {
             member: None,
             keys: Vec::new(),
-        })
-    }
-}
-
-/// A typed backup password against every vault of a source.
-pub struct BackupPasswordAccessCheck<'a> {
-    pub password: &'a str,
-    pub vaults: Vec<CheckedVaultEvents>,
-}
-
-impl BackupPasswordAccessCheck<'_> {
-    /// Try the password against each vault's password envelopes. A password
-    /// opens vaults, never an identity; any failure other than a wrong
-    /// password is reported.
-    pub fn report(self) -> VaultResult<CredentialCheckReport> {
-        let mut checked = Vec::with_capacity(self.vaults.len());
-        for vault in self.vaults {
-            let source = CheckedVaultSource::load(&vault.store_id, vault.events)?;
-            let outcome = source.password_outcome(self.password)?;
-            checked.push((vault.filed_under, VaultCheck::of(&vault.store_id, outcome)));
-        }
-        Ok(CredentialCheckReport {
-            credential: CheckedCredential::BackupPassword,
-            identities: IdentityCheck::group(IdentityGrouping {
-                listed: &[],
-                vaults: checked,
-                member: None,
-            }),
         })
     }
 }
@@ -328,25 +291,6 @@ impl CheckedVaultSource {
         Ok(Some(VaultRecordView::new(&records).secrets_key(app_key)?))
     }
 
-    /// Whether a backup password opens the vault: some envelope accepts it.
-    fn password_outcome(&self, password: &str) -> VaultResult<VaultCheckOutcome> {
-        if self.projection.password_entries.is_empty() {
-            return Ok(VaultCheckOutcome::NoBackupPassword);
-        }
-        for entry in &self.projection.password_entries {
-            match PasswordEntryResolution::new(entry, password).resolve() {
-                Ok(keys) => {
-                    return Ok(VaultCheckOutcome::Opens {
-                        name: self.name(&keys.secrets_key)?,
-                    });
-                }
-                Err(PasswordError::Age(AgeCryptoError::EnvelopeDecrypt(_))) => {}
-                Err(other) => return Err(other.into()),
-            }
-        }
-        Ok(VaultCheckOutcome::DoesNotOpen)
-    }
-
     /// The vault's name, decrypted with its secrets key.
     pub(crate) fn name(&self, secrets_key: &SymmetricKey) -> VaultResult<ProviderVaultName> {
         let crypto = VaultCrypto::new(secrets_key)?;
@@ -367,15 +311,12 @@ mod tests {
     use crate::{
         EventId, GenesisImportPayload, GenesisImportRequest, IdentityEvent, IdentityEventSigning,
         IdentityGenesisRequest, IdentityMemberKeys, IdentityNaming, IdentityVaultRegistration,
-        IsoTimestamp, MemberLabel, OpaqueCiphertext, OpenedVaultDek, PasswordEntryIssuance,
-        SigningIdentity, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultKeys,
-        VaultOperation,
+        IsoTimestamp, MemberLabel, OpaqueCiphertext, OpenedVaultDek, SigningIdentity, VaultEvent,
+        VaultEventBody, VaultEventSchemaVersion, VaultKeys, VaultOperation,
     };
 
-    const PASSWORD: &str = "correct horse battery staple";
-
     /// An identity named "Personal" whose founder registered one vault that
-    /// its own log names "Family", optionally with a backup password.
+    /// its own log names "Family".
     struct NamedIdentity {
         app_key: AppKey,
         identity_id: IdentityId,
@@ -385,11 +326,7 @@ mod tests {
     }
 
     impl NamedIdentity {
-        #[expect(
-            clippy::too_many_lines,
-            reason = "one fixture signs an identity log and a named vault log"
-        )]
-        fn new(with_password: bool) -> anyhow::Result<Self> {
+        fn new() -> anyhow::Result<Self> {
             let app_key = AppKey::generate()?;
             let signer = SigningIdentity::generate()?.0;
             let at = IsoTimestamp::parse("2026-10-27T17:28:00Z")?;
@@ -437,21 +374,6 @@ mod tests {
                 .insert(log.build_append(operations, &signing)?)?
                 .log;
 
-            let password_entries = if with_password {
-                vec![
-                    PasswordEntryIssuance::with_work_factor(
-                        &keys,
-                        "pwdentry001",
-                        "Emergency kit",
-                        "2026-10-27T17:28:00Z",
-                        PASSWORD,
-                        10.into(),
-                    )
-                    .issue()?,
-                ]
-            } else {
-                Vec::new()
-            };
             let genesis = VaultEvent::build_genesis_import_event(GenesisImportRequest {
                 store_id: &store_id,
                 actor_id: &signer.actor_id()?,
@@ -459,7 +381,6 @@ mod tests {
                 payload: GenesisImportPayload {
                     source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                     secrets: vec![],
-                    password_entries,
                 },
                 created_at: &at,
                 signing_key: signer.signing_key(),
@@ -533,25 +454,17 @@ mod tests {
             }
             .report()
         }
-
-        fn check_password(&self, password: &str) -> VaultResult<CredentialCheckReport> {
-            BackupPasswordAccessCheck {
-                password,
-                vaults: self.checked_vaults(),
-            }
-            .report()
-        }
     }
 
     #[test]
     fn the_member_passkey_opens_its_identity_and_every_vault_it_keeps() -> anyhow::Result<()> {
-        let named = NamedIdentity::new(false)?;
+        let named = NamedIdentity::new()?;
         let identity_id = named.identity_id();
         let report = named.check(&named.app_key)?;
 
         assert_eq!(
             report.credential,
-            CheckedCredential::Passkey {
+            CheckedCredential {
                 fingerprint: "passkey-a1b2".to_owned()
             }
         );
@@ -576,7 +489,7 @@ mod tests {
 
     #[test]
     fn another_passkey_opens_no_identity_and_no_vault() -> anyhow::Result<()> {
-        let named = NamedIdentity::new(false)?;
+        let named = NamedIdentity::new()?;
         let report = named.check(&AppKey::generate()?)?;
 
         let [identity] = report.identities.as_slice() else {
@@ -589,52 +502,6 @@ mod tests {
                 .vaults
                 .iter()
                 .all(|vault| vault.outcome == VaultCheckOutcome::DoesNotOpen)
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn a_backup_password_opens_its_vault_but_never_the_identity() -> anyhow::Result<()> {
-        let with_password = NamedIdentity::new(true)?;
-        let outcome = |report: CredentialCheckReport| {
-            assert_eq!(report.credential, CheckedCredential::BackupPassword);
-            report
-                .identities
-                .into_iter()
-                .map(|identity| {
-                    (
-                        identity.outcome,
-                        identity
-                            .vaults
-                            .into_iter()
-                            .map(|vault| vault.outcome)
-                            .collect::<Vec<_>>(),
-                    )
-                })
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(
-            outcome(with_password.check_password(PASSWORD)?),
-            [(
-                IdentityCheckOutcome::VaultsOnly,
-                vec![VaultCheckOutcome::Opens {
-                    name: ProviderVaultName::named("Family"),
-                }]
-            )]
-        );
-        assert_eq!(
-            outcome(with_password.check_password("not the backup password")?),
-            [(
-                IdentityCheckOutcome::DoesNotOpen,
-                vec![VaultCheckOutcome::DoesNotOpen]
-            )]
-        );
-        assert_eq!(
-            outcome(NamedIdentity::new(false)?.check_password(PASSWORD)?),
-            [(
-                IdentityCheckOutcome::DoesNotOpen,
-                vec![VaultCheckOutcome::NoBackupPassword]
-            )]
         );
         Ok(())
     }

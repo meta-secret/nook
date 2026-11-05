@@ -1,6 +1,5 @@
 import { err, ok, type Result } from "neverthrow";
 import {
-  check_backup_password_access,
   check_passkey_access,
   provider_failure_translation_key,
   type CredentialCheckReport,
@@ -14,15 +13,8 @@ import type { VaultState } from "$lib/vault.svelte";
 import { LoginSetupKind } from "$lib/vault/state/provider.svelte";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 
-export enum AccessCheckFailureKind {
-  Passkey = "passkey",
-  BackupPassword = "backup-password",
-}
-
-/** A check that could not finish; what it says to the user. */
+/** A passkey check that could not finish; what it says to the user. */
 export class AccessCheckFailure {
-  constructor(readonly kind: AccessCheckFailureKind) {}
-
   /** The same check's failure, with the message Rust picks for what
    * stopped it: a refused GitHub token or S3 key names what to fix, and any
    * other failure keeps the check's own message. */
@@ -33,34 +25,20 @@ export class AccessCheckFailure {
       message,
       operationFailedKey: this.translationKey,
     };
-    const refusalRequest: AccessCheckRefusalRequest = {
-      kind: this.kind,
-      translationKey: provider_failure_translation_key(keyRequest),
-    };
-    return new AccessCheckRefusal(refusalRequest);
+    return new AccessCheckRefusal(provider_failure_translation_key(keyRequest));
   }
 
   get translationKey(): string {
-    switch (this.kind) {
-      case AccessCheckFailureKind.Passkey:
-        return I18N_KEYS.AccessCheckPasskeyFailed;
-      case AccessCheckFailureKind.BackupPassword:
-        return I18N_KEYS.AccessCheckFailed;
-    }
+    return I18N_KEYS.AccessCheckPasskeyFailed;
   }
 }
-
-type AccessCheckRefusalRequest = {
-  readonly kind: AccessCheckFailureKind;
-  readonly translationKey: string;
-};
 
 /** A check a provider refused, with Rust's message for the refusal. */
 class AccessCheckRefusal extends AccessCheckFailure {
   private readonly refusalKey: string;
 
-  constructor({ kind, translationKey }: AccessCheckRefusalRequest) {
-    super(kind);
+  constructor(translationKey: string) {
+    super();
     this.refusalKey = translationKey;
   }
 
@@ -85,12 +63,6 @@ export type AccessCheckTarget =
     }
   | { readonly kind: AccessCheckTargetKind.CurrentProvider };
 
-/** A typed backup password and where to check it. */
-export type BackupPasswordCheckRequest = {
-  readonly target: AccessCheckTarget;
-  readonly password: string;
-};
-
 type CheckResult = Result<CredentialCheckReport, AccessCheckFailure>;
 
 /** The provider this session is connected to or has staged for a recovery. */
@@ -99,7 +71,7 @@ function currentProvider(): NookProviderSource {
 }
 
 /**
- * Read-only checks of which vaults a passkey or backup password opens. Rust
+ * Read-only checks of which vaults a passkey opens. Rust
  * decrypts in memory and reports each vault by name; nothing is stored,
  * imported, or written to the source.
  */
@@ -107,7 +79,7 @@ export class AccessCheckActions {
   constructor(private readonly vault: VaultState) {}
 
   async checkPasskey(target: AccessCheckTarget): Promise<CheckResult> {
-    const failure = new AccessCheckFailure(AccessCheckFailureKind.Passkey);
+    const failure = new AccessCheckFailure();
     switch (target.kind) {
       case AccessCheckTargetKind.Source:
         try {
@@ -124,36 +96,6 @@ export class AccessCheckActions {
             manager.check_passkey_access_from(
               currentProvider(),
               location.hostname,
-            ),
-        };
-        return this.atCurrentProvider(check);
-      }
-    }
-  }
-
-  async checkBackupPassword({
-    target,
-    password,
-  }: BackupPasswordCheckRequest): Promise<CheckResult> {
-    const failure = new AccessCheckFailure(
-      AccessCheckFailureKind.BackupPassword,
-    );
-    switch (target.kind) {
-      case AccessCheckTargetKind.Source:
-        try {
-          return ok(
-            await check_backup_password_access(target.source, password),
-          );
-        } catch (refusal) {
-          return err(failure.refusedBy(refusal));
-        }
-      case AccessCheckTargetKind.CurrentProvider: {
-        const check: CurrentProviderCheck = {
-          failure,
-          run: (manager) =>
-            manager.check_backup_password_access_from(
-              currentProvider(),
-              password,
             ),
         };
         return this.atCurrentProvider(check);
@@ -181,7 +123,7 @@ export class AccessCheckActions {
       }
     });
     // A queue that refused the check (local data being deleted) is the
-    // same failed check to the user; the check's own failure keeps its kind.
+    // same failed check to the user; the check's own failure keeps its message.
     return checked.mapErr((refused) => {
       if (refused instanceof AccessCheckFailure) return refused;
       return failure;
@@ -255,20 +197,14 @@ export class CheckReports {
   /** The short id of the first checked passkey that opened an identity, or
    * empty when none did. */
   identityOpenedBy(identityId: string): string {
-    for (const report of this.reports) {
-      switch (report.credential.kind) {
-        case "backupPassword":
-          continue;
-        case "passkey":
-          if (
-            report.identities.some(
-              (identity) =>
-                identity.identityId === identityId && identityOpens(identity),
-            )
-          )
-            return shortPasskeyId(report.credential.fingerprint);
-      }
-    }
+    for (const report of this.reports)
+      if (
+        report.identities.some(
+          (identity) =>
+            identity.identityId === identityId && identityOpens(identity),
+        )
+      )
+        return shortPasskeyId(report.credential.fingerprint);
     return "";
   }
 
@@ -284,18 +220,6 @@ export class CheckReports {
     return "";
   }
 
-  /** Whether a passkey check ran on this page. */
-  passkeyChecked(): boolean {
-    return this.reports.some((report) => {
-      switch (report.credential.kind) {
-        case "passkey":
-          return true;
-        case "backupPassword":
-          return false;
-      }
-    });
-  }
-
   /** The name some check decrypted for a vault, or empty when none did. */
   vaultName(storeId: string): string {
     for (const row of this.vaultRows())
@@ -306,23 +230,6 @@ export class CheckReports {
       )
         return row.vault.outcome.name.name;
     return "";
-  }
-
-  /** Whether a checked backup password opened a vault. */
-  opensWithBackupPassword(storeId: string): boolean {
-    return this.reports.some((report) => {
-      switch (report.credential.kind) {
-        case "passkey":
-          return false;
-        case "backupPassword":
-          return report.identities.some((identity) =>
-            identity.vaults.some(
-              (vault) =>
-                vault.storeId === storeId && vault.outcome.state === "opens",
-            ),
-          );
-      }
-    });
   }
 
   private vaultRows(): readonly CheckedVaultRow[] {

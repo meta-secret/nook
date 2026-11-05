@@ -67,7 +67,6 @@ panel sits inside the card, which then spans the full row.
     unlockPanel,
     overviewPanel,
     overviewOpen = false,
-    passwordFallback,
     vaultExtension,
     requestPanel,
     preview = false,
@@ -80,7 +79,7 @@ panel sits inside the card, which then spans the full row.
     onOpenVault: (storeId: string) => void
     onNewVault?: () => void
     /** A vault row was opened beside the card: a locked browser selects
-     * that vault, which reads its passphrases. */
+     * that vault. */
     onSelectVault?: (storeId: string) => void
     /** Close what the page opened beside the card (New vault, an import)
      * when another panel opens here. */
@@ -88,7 +87,7 @@ panel sits inside the card, which then spans the full row.
     /** Unlock a vault from its panel and stay on the card; Open vault in
      * the panel then goes in. */
     onUnlockVault?: (storeId: string) => void
-    /** One of a vault's own pages (its passphrases, imports); a locked
+    /** One of a vault's own pages (its imports); a locked
      * vault unlocks first. */
     onManageVault?: (target: IdentitySectionTarget) => void
     onLock?: () => void
@@ -109,8 +108,6 @@ panel sits inside the card, which then spans the full row.
     overviewPanel?: Snippet
     /** The overview is open; Overview on the footer closes it. */
     overviewOpen?: boolean
-    /** Passphrase unlock for the selected vault, while locked. */
-    passwordFallback?: Snippet
     /** The browser extension for the open vault, in its panel. */
     vaultExtension?: Snippet
     /** A request waiting on this identity (a browser extension asking to
@@ -648,10 +645,6 @@ panel sits inside the card, which then spans the full row.
           : vault.t(I18N_KEYS.WorkspaceVaultPanelUnlockPasskey)}
         identityOpen={live}
         {busy}
-        passphraseOffered={!live && Boolean(onSelectVault)}
-        {...passwordFallback && vaultOpenRow.storeId === selectedStoreId
-          ? { passphrase: passwordFallback }
-          : {}}
         {...vaultExtension ? { extension: vaultExtension } : {}}
         onOpen={() => onOpenVault(vaultOpenRow.storeId)}
         onUnlock={() => onUnlockVault?.(vaultOpenRow.storeId)}

@@ -35,8 +35,6 @@ const ERRORS_VALIDATION_IDENTITY_VAULT_EVENT_ID_INVALID: &str =
 const ERRORS_VALIDATION_DEVICE_SIGNING_PUBLIC_KEY_INVALID: &str =
     "errors.validation.device_signing_public_key_invalid";
 const ERRORS_VALIDATION_ISO_TIMESTAMP_INVALID: &str = "errors.validation.iso_timestamp_invalid";
-const ERRORS_VALIDATION_PASSWORD_ENTRY_ID_INVALID: &str =
-    "errors.validation.password_entry_id_invalid";
 const ERRORS_VALIDATION_SIGNING_SEED_INVALID: &str = "errors.validation.signing_seed_invalid";
 const ERRORS_VALIDATION_LOCAL_FOLDER_HANDLE_INVALID: &str =
     "errors.validation.local_folder_handle_invalid";
@@ -379,9 +377,6 @@ pub enum ValidationError {
 
     #[error("{}", ERRORS_VALIDATION_ISO_TIMESTAMP_INVALID)]
     IsoTimestampInvalid,
-
-    #[error("{}", ERRORS_VALIDATION_PASSWORD_ENTRY_ID_INVALID)]
-    PasswordEntryIdInvalid,
 
     #[error("{}", ERRORS_VALIDATION_SIGNING_SEED_INVALID)]
     SigningSeedInvalid,

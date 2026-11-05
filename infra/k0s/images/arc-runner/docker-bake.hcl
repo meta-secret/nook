@@ -1,11 +1,12 @@
 variable "ARC_RUNNER_IMAGE" {
-  default = "ghcr.io/meta-secret/nook-arc-runner:2.336.0-hooks-v2"
+  default = "ghcr.io/meta-secret/nook-arc-runner:2.338.2-hooks-v2"
 }
 
 target "arc-runner" {
   context    = "."
   dockerfile = "infra/k0s/images/arc-runner/Dockerfile"
   target     = "arc-runner"
+  platforms  = ["linux/amd64"]
   tags       = [ARC_RUNNER_IMAGE]
 }
 

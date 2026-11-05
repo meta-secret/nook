@@ -20,7 +20,7 @@ use nook_core::{
     ConnectAccessStatus, DeviceAccessIdentityState, DeviceIdentity, DeviceKeyProtectionSetup,
     DeviceMode, DeviceProtectionStatus, IdentityId, IdentitySelection, SigningIdentity,
     VaultApplication, VaultArchitecture, VaultNameRef, VaultOperation, VaultStoreIdentity,
-    VaultStoreIdentityRef, VaultType, VaultUnlock, VaultVersionWrite,
+    VaultStoreIdentityRef, VaultType, VaultVersionWrite,
 };
 use wasm_bindgen_test::*;
 
@@ -547,16 +547,13 @@ async fn replacement_manager(
     fixture: &ImportFixture,
 ) -> anyhow::Result<(NookVaultManager, String)> {
     let previous_store_id = nook_core::StoreId::generate()?.to_string();
-    let previous_projection =
-        nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
-            &[],
-            &VaultUnlock::Keys,
-            &[],
-            VaultStoreIdentityRef::Assigned(&previous_store_id),
-            VaultNameRef::Named("Previous vault"),
-            VaultVersionWrite::Initial,
-            &VaultArchitecture::default(),
-        )?;
+    let previous_projection = nook_core::VaultRecordSet::serialize_yaml_with_name_architecture(
+        &[],
+        VaultStoreIdentityRef::Assigned(&previous_store_id),
+        VaultNameRef::Named("Previous vault"),
+        VaultVersionWrite::Initial,
+        &VaultArchitecture::default(),
+    )?;
     NookDatabase::import_vault_blob(ImportVaultBlobRequest {
         content: previous_projection.as_str(),
         label: ImportVaultLabel::Override("Previous vault"),
@@ -712,7 +709,7 @@ async fn denied_extension_import_restores_session_and_active_projection() -> any
 }
 
 #[wasm_bindgen_test]
-async fn locked_external_import_preserves_prior_vault_and_password_entries() -> anyhow::Result<()> {
+async fn locked_external_import_preserves_prior_vault() -> anyhow::Result<()> {
     let mut source = NookVaultManager::new();
     source.application = VaultApplication::Simple;
     source
@@ -727,10 +724,6 @@ async fn locked_external_import_preserves_prior_vault_and_password_entries() -> 
     source.initialize_genesis_vault(&identity)?;
     source.vault.store_id = nook_core::StoreId::generate()?.to_string();
     source.bootstrap_event_log_genesis().await?;
-    source
-        .add_vault_password_for_e2e("Recovery".to_owned(), "import-backup-password".to_owned())
-        .await
-        .map_err(|error| anyhow::anyhow!("add backup password: {error:?}"))?;
     let imported_store_id = source.vault.store_id.clone();
     let records = source
         .export_event_log_records()
@@ -743,16 +736,13 @@ async fn locked_external_import_preserves_prior_vault_and_password_entries() -> 
         .collect::<Vec<_>>();
 
     let previous_store_id = nook_core::StoreId::generate()?.to_string();
-    let previous_projection =
-        nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
-            &[],
-            &VaultUnlock::Keys,
-            &[],
-            VaultStoreIdentityRef::Assigned(&previous_store_id),
-            VaultNameRef::Named("Empty local vault"),
-            VaultVersionWrite::Initial,
-            &VaultArchitecture::default(),
-        )?;
+    let previous_projection = nook_core::VaultRecordSet::serialize_yaml_with_name_architecture(
+        &[],
+        VaultStoreIdentityRef::Assigned(&previous_store_id),
+        VaultNameRef::Named("Empty local vault"),
+        VaultVersionWrite::Initial,
+        &VaultArchitecture::default(),
+    )?;
     NookDatabase::import_vault_blob(ImportVaultBlobRequest {
         content: previous_projection.as_str(),
         label: ImportVaultLabel::Override("Empty local vault"),
@@ -766,10 +756,6 @@ async fn locked_external_import_preserves_prior_vault_and_password_entries() -> 
     importer.reset_vault_session();
     let _ = importer.sync_external_event_log_records(records).await?;
     assert_eq!(importer.vault.store_id, imported_store_id);
-    assert!(
-        !importer.vault.password_entries.is_empty(),
-        "locked import must hydrate backup-password entries from the event graph"
-    );
 
     let registry = NookDatabase::list_vault_registry_entries().await?;
     assert!(

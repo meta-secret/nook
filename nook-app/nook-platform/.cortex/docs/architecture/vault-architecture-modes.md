@@ -59,7 +59,7 @@ an owner-issued invitation URL. Sync-provider import remains a secondary
 
 - **Landing handoff (empty device)**
   - **Choice or state:** Vault name
-  - **Transition:** Collect the vault name before path choice. Passkey is **not** required yet. **Exception:** an `#enroll=` deep link skips create landing and opens Finish device onboarding (passkey + vault password).
+  - **Transition:** Collect the vault name before path choice. Passkey is **not** required yet. **Exception:** an `#enroll=` deep link skips create landing and opens Finish device onboarding (device protection + the invite code).
 - **Path chooser**
   - **Choice or state:** Path
   - **Transition:** Choose exactly one: Create Simple or Create Sentinel. There is no unrestricted Join path.
@@ -89,7 +89,7 @@ an owner-issued invitation URL. Sync-provider import remains a secondary
   - **Transition:** List the provider's vaults without decrypting them, fetch the chosen one, then route Simple to its unlock/enrollment path or Sentinel to quorum access. Provider login never opens Sentinel. See [what the provider already holds](auth-providers.md#what-the-provider-already-holds).
 - **Unlocked provider management / Onboard**
   - **Choice or state:** Sync provider
-  - **Transition:** Add/remove post-genesis backup replicas, or onboard another browser with the standard password + sync QR after the vault exists.
+  - **Transition:** Add/remove post-genesis backup replicas, or onboard another browser after the vault exists: an invite code, an approved join request, or the keyring recovery passphrase adds its app key to the identity.
 
 See [sentinel-genesis.md](sentinel-genesis.md) for the complete two-round ceremony and
 security invariants. Product and persisted wire names use **Sentinel** consistently.
@@ -126,7 +126,8 @@ openable on that device. Sync providers are optional and can be connected later
 as backup/replica targets.
 
 Importing a Simple vault retrieves encrypted data first, then uses an existing
-device envelope, password recovery, or explicit enrollment path. Provider
+device envelope, an identity invite code or approved join request, or the
+keyring recovery passphrase. Provider
 credentials grant storage access only.
 
 ## Sentinel Lifecycle
@@ -138,7 +139,6 @@ credentials grant storage access only.
   - Give the initiator no permanent threshold bypass.
   - Never write a per-device full-key envelope.
 - **Unlock boundary:**
-  - Forbid password unlock as the sole unlock path.
   - Fail closed during session hydrate from projection YAML.
   - Never resolve a full-key auth envelope.
   - Treat possession of the local cache or sync-provider credentials as

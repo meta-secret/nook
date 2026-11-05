@@ -72,9 +72,6 @@ This document owns the existing Nook value inventory and compiler-lint rollout.
 - **`MemberLabel`**
   - **Module:** `vault_wire`
   - **Wire / meaning:** human device / member label
-- **`PasswordEntryId`**
-  - **Module:** `vault_wire`
-  - **Wire / meaning:** password-unlock slot id
 
 **Event construction and connection state**
 
@@ -153,7 +150,6 @@ Reachable external reexports and inherited methods must pass before staged crate
 - [x] `sentinel_unlock` — validated `SentinelUnlockVersion`
 - [x] `sentinel_onboarding` — validated `SentinelOnboardingVersion`
 - [x] `identity` — `IdentityControlEpoch`
-- [x] `password_envelope` — `PasswordCharacterCount` for password policy bounds
 - [x] password generation — `PasswordCharacterCount` for requested length
 - [x] passkey secrets — validated `PasskeySecretVersion`
 - [x] passkey secrets — `PasskeySignatureCount`
@@ -165,7 +161,6 @@ Reachable external reexports and inherited methods must pass before staged crate
 - [x] authenticator codes — validated `TotpPeriod`
 - [x] authenticator codes — `TotpRemainingSeconds`
 - [x] authenticator codes — `TotpUnixSeconds` for code-generation instants
-- [ ] `password_envelope` — `PasswordEnvelopeVersion`, typed `ciphertext` field on `PasswordEnvelope`
 - [ ] `multi_device` — `SentinelShareVersion`
 - [ ] `multi_device` — `MemberEntry.enrolled_at: IsoTimestamp`, `label: Option<MemberLabel>`
 - [ ] `vault_sync` — `VaultContentHash` for revision hashes

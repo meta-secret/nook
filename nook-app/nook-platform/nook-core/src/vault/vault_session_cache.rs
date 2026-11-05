@@ -8,7 +8,20 @@
 use crate::SessionError;
 
 use crate::errors::{MultiDeviceError, VaultResult};
-use crate::{DeviceIdentity, VaultFormatDocument, VaultRecordView, VaultType};
+use crate::{
+    DeviceIdentity, StoreId, VaultFormatDocument, VaultRecordView, VaultStoreIdentity, VaultType,
+};
+
+/// The vault a session reads, which decides the projection caches that may
+/// unlock it.
+#[derive(Debug, Clone, Copy)]
+pub enum ProjectionCacheScope<'a> {
+    /// The session reads this vault: only its own cache unlocks it, never
+    /// the cache of another vault this browser holds.
+    Vault(&'a StoreId),
+    /// The session has no vault yet: the cache brings the vault it opens.
+    Unselected,
+}
 
 /// Borrowed projection-cache YAML awaiting a key hydration action.
 pub struct VaultProjectionCache<'a> {
@@ -19,6 +32,30 @@ impl<'a> VaultProjectionCache<'a> {
     #[must_use]
     pub fn new(yaml: &'a str) -> Self {
         Self { yaml }
+    }
+
+    /// Resolve both vault keys for the session's vault. A cache of another
+    /// vault fails closed: its keys would decrypt nothing of this one.
+    pub fn unlock_for(
+        self,
+        identity: &DeviceIdentity,
+        scope: ProjectionCacheScope<'_>,
+    ) -> VaultResult<(String, String)> {
+        if self.yaml.trim().is_empty() {
+            return Err(SessionError::EmptyProjectionCache.into());
+        }
+        match scope {
+            ProjectionCacheScope::Unselected => {}
+            ProjectionCacheScope::Vault(expected) => {
+                match VaultFormatDocument::new(self.yaml).store_id()? {
+                    VaultStoreIdentity::Assigned(cached) if cached == expected.as_str() => {}
+                    VaultStoreIdentity::Assigned(_) | VaultStoreIdentity::Unassigned => {
+                        return Err(SessionError::ProjectionCacheOfAnotherVault.into());
+                    }
+                }
+            }
+        }
+        self.unlock(identity)
     }
 
     /// Resolve both vault keys without accepting a sentinel projection cache.
@@ -48,8 +85,8 @@ mod tests {
     };
 
     use super::*;
+    use crate::VaultResult;
     use crate::test_support;
-    use crate::{VaultResult, VaultUnlock};
 
     #[test]
     fn hydrate_keys_from_genesis_projection_yaml() -> VaultResult<()> {
@@ -58,6 +95,47 @@ mod tests {
             VaultProjectionCache::new(yaml.as_str()).unlock(&identity)?;
         assert_eq!(secrets_key, keys.secrets_key.as_str());
         assert_eq!(members_key, keys.members_key.as_str());
+        Ok(())
+    }
+
+    /// A session that reads one vault takes keys only from that vault's
+    /// cache. Another vault's cache, though this device can open it, fails
+    /// closed; a session with no vault yet takes the cache's own vault.
+    #[test]
+    fn a_cache_unlocks_only_the_vault_it_belongs_to() -> anyhow::Result<()> {
+        let (keys, identity, yaml) = test_support::simple_genesis_projection()?;
+        let cached = match VaultFormatDocument::new(yaml.as_str()).store_id()? {
+            VaultStoreIdentity::Assigned(store_id) => StoreId::parse(&store_id)?,
+            VaultStoreIdentity::Unassigned => anyhow::bail!("the fixture names its vault"),
+        };
+        let own = VaultProjectionCache::new(yaml.as_str())
+            .unlock_for(&identity, ProjectionCacheScope::Vault(&cached))?;
+        assert_eq!(
+            own,
+            (
+                keys.secrets_key.as_str().to_owned(),
+                keys.members_key.as_str().to_owned()
+            )
+        );
+
+        let other = StoreId::generate()?;
+        let refused = VaultProjectionCache::new(yaml.as_str())
+            .unlock_for(&identity, ProjectionCacheScope::Vault(&other))
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("another vault's cache must not unlock this one"))?;
+        assert!(matches!(
+            refused,
+            VaultError::Session(SessionError::ProjectionCacheOfAnotherVault)
+        ));
+
+        let unselected = VaultProjectionCache::new(yaml.as_str())
+            .unlock_for(&identity, ProjectionCacheScope::Unselected)?;
+        assert_eq!(unselected, own);
+        assert!(matches!(
+            VaultProjectionCache::new(" ")
+                .unlock_for(&identity, ProjectionCacheScope::Vault(&other)),
+            Err(VaultError::Session(SessionError::EmptyProjectionCache))
+        ));
         Ok(())
     }
 
@@ -95,10 +173,8 @@ mod tests {
         );
         assert_eq!(architecture.vault_type, VaultType::Sentinel);
         let store_id = StoreId::generate()?;
-        let yaml = VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
+        let yaml = VaultRecordSet::serialize_yaml_with_name_architecture(
             &shares,
-            &VaultUnlock::Keys,
-            &[],
             VaultStoreIdentityRef::Assigned(store_id.as_str()),
             VaultNameRef::Unnamed,
             VaultVersionWrite::Initial,

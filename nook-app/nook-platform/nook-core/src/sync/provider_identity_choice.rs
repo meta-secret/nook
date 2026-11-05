@@ -16,9 +16,9 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 use crate::{
-    CheckedCredential, CredentialCheckReport, FilingIdentity, IdentityCheck, IdentityCheckOutcome,
-    ProviderIdentityJoin, ProviderIdentityLog, ProviderVaultAccess, ProviderVaultName,
-    ProviderVaultSummary, VaultCheckOutcome,
+    CredentialCheckReport, FilingIdentity, IdentityCheck, IdentityCheckOutcome,
+    ProviderIdentityJoin, ProviderIdentityLog, ProviderLogCount, ProviderVaultAccess,
+    ProviderVaultName, ProviderVaultSummary, VaultCheckOutcome,
 };
 
 /// Whether an identity is in use on this browser, which merging needs.
@@ -144,7 +144,41 @@ pub struct ProviderIdentityChoice {
     /// Empty when there is nothing to decide; otherwise **Leave** first.
     pub decisions: Vec<IdentityDecision>,
     pub setup: IdentitySetup,
+    /// Whether setup also offers recovering it with a recovery passphrase.
+    pub recovery: IdentityRecoveryOffer,
     pub vaults: Vec<ProviderVaultSummary>,
+}
+
+/// Whether setup offers to recover an identity with one of its recovery
+/// passphrases, beside asking to join it. It does when this browser may join
+/// the identity and its log lists a passphrase.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub enum IdentityRecoveryOffer {
+    Offered,
+    NotOffered,
+}
+
+impl IdentityRecoveryOffer {
+    fn of(setup: IdentitySetup, log: ProviderIdentityLog) -> Self {
+        match (setup, log) {
+            (
+                IdentitySetup::RequestToJoin | IdentitySetup::Waiting,
+                ProviderIdentityLog::Read {
+                    recovery_passphrases,
+                    ..
+                },
+            ) if recovery_passphrases != ProviderLogCount::default() => Self::Offered,
+            (
+                IdentitySetup::RequestToJoin | IdentitySetup::Waiting,
+                ProviderIdentityLog::Read { .. } | ProviderIdentityLog::Absent,
+            )
+            | (
+                IdentitySetup::Continue { .. } | IdentitySetup::InUse | IdentitySetup::Unavailable,
+                ProviderIdentityLog::Read { .. } | ProviderIdentityLog::Absent,
+            ) => Self::NotOffered,
+        }
+    }
 }
 
 /// A provider listing, the checks run on the page, and the session.
@@ -177,6 +211,7 @@ impl ProviderIdentityChoices<'_> {
                     standing: IdentityStanding::Unchecked,
                     decisions: Vec::new(),
                     setup: IdentitySetup::Unavailable,
+                    recovery: IdentityRecoveryOffer::NotOffered,
                     vaults: vec![vault],
                 });
             }
@@ -191,6 +226,7 @@ impl ProviderIdentityChoices<'_> {
                     standing: IdentityStanding::Unchecked,
                     decisions: Vec::new(),
                     setup: IdentitySetup::Unavailable,
+                    recovery: IdentityRecoveryOffer::NotOffered,
                     vaults: Vec::new(),
                 });
             }
@@ -199,6 +235,7 @@ impl ProviderIdentityChoices<'_> {
             choice.standing = self.standing(choice);
             choice.decisions = self.decisions(&choice.standing);
             choice.setup = choice.standing.setup(self.session);
+            choice.recovery = IdentityRecoveryOffer::of(choice.setup, choice.identity.log);
         }
         choices
     }
@@ -284,25 +321,20 @@ impl ProviderIdentityChoices<'_> {
 
     /// The short id of the first checked passkey that opened the identity.
     fn opening_passkey(&self, identity: &FilingIdentity) -> Option<String> {
-        self.checks
-            .iter()
-            .find_map(|report| match &report.credential {
-                CheckedCredential::Passkey { fingerprint } => report
-                    .identities
-                    .iter()
-                    .any(|checked| {
-                        checked.identity_id == identity.identity_id
-                            && checked.outcome == IdentityCheckOutcome::Opens
-                    })
-                    .then(|| PasskeyFingerprint(fingerprint).short()),
-                CheckedCredential::BackupPassword => None,
-            })
+        self.checks.iter().find_map(|report| {
+            report
+                .identities
+                .iter()
+                .any(|checked| {
+                    checked.identity_id == identity.identity_id
+                        && checked.outcome == IdentityCheckOutcome::Opens
+                })
+                .then(|| PasskeyFingerprint(&report.credential.fingerprint).short())
+        })
     }
 
     fn passkey_checked(&self) -> bool {
-        self.checks
-            .iter()
-            .any(|report| matches!(report.credential, CheckedCredential::Passkey { .. }))
+        !self.checks.is_empty()
     }
 
     fn checked_identities(&self) -> impl Iterator<Item = &IdentityCheck> {
@@ -336,9 +368,7 @@ impl ProviderIdentityChoices<'_> {
                     VaultCheckOutcome::Opens { name } if *name != ProviderVaultName::Unknown => {
                         Some(name)
                     }
-                    VaultCheckOutcome::Opens { .. }
-                    | VaultCheckOutcome::DoesNotOpen
-                    | VaultCheckOutcome::NoBackupPassword => None,
+                    VaultCheckOutcome::Opens { .. } | VaultCheckOutcome::DoesNotOpen => None,
                 })
         {
             named.name = name.clone();
@@ -365,7 +395,9 @@ impl PasskeyFingerprint<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{IdentityId, IdentityWords, ProviderVaultTime, StoreId, VaultCheck};
+    use crate::{
+        CheckedCredential, IdentityId, IdentityWords, ProviderVaultTime, StoreId, VaultCheck,
+    };
 
     struct Fixture;
 
@@ -418,6 +450,7 @@ mod tests {
                 devices: crate::ProviderLogCount::from(2),
                 newest_device: ProviderVaultTime::Unreported,
                 vaults: crate::ProviderLogCount::from(1),
+                recovery_passphrases: crate::ProviderLogCount::from(0),
                 this_browser: false,
                 join,
             }
@@ -451,7 +484,7 @@ mod tests {
             store: &str,
         ) -> anyhow::Result<CredentialCheckReport> {
             Ok(CredentialCheckReport {
-                credential: CheckedCredential::Passkey {
+                credential: CheckedCredential {
                     fingerprint: "passkey_a1b2c3d4e5f60708".to_owned(),
                 },
                 identities: vec![IdentityCheck {
@@ -469,6 +502,54 @@ mod tests {
                 }],
             })
         }
+    }
+
+    /// Setup offers recovering with a passphrase only for an identity this
+    /// browser may join whose log lists one.
+    #[test]
+    fn recovery_is_offered_beside_joining_when_the_log_lists_a_passphrase() -> anyhow::Result<()> {
+        let with_passphrases = |count: u32, join: ProviderIdentityJoin| ProviderIdentityLog::Read {
+            devices: crate::ProviderLogCount::from(1),
+            newest_device: ProviderVaultTime::Unreported,
+            vaults: crate::ProviderLogCount::from(0),
+            recovery_passphrases: crate::ProviderLogCount::from(count),
+            this_browser: false,
+            join,
+        };
+        let offer = |log: ProviderIdentityLog| -> anyhow::Result<IdentityRecoveryOffer> {
+            let identity = Fixture::identity(MINE, log)?;
+            let choices = ProviderIdentityChoices {
+                vaults: &[],
+                identities: &[identity],
+                checks: &[],
+                session: IdentitySession::NoIdentity,
+            }
+            .choices();
+            Ok(Fixture::at(&choices, 0)?.recovery)
+        };
+        assert_eq!(
+            offer(with_passphrases(2, ProviderIdentityJoin::NotAsked))?,
+            IdentityRecoveryOffer::Offered
+        );
+        // Waiting on a join request still lets the passphrase in instead.
+        assert_eq!(
+            offer(with_passphrases(1, ProviderIdentityJoin::Requested))?,
+            IdentityRecoveryOffer::Offered
+        );
+        assert_eq!(
+            offer(with_passphrases(0, ProviderIdentityJoin::NotAsked))?,
+            IdentityRecoveryOffer::NotOffered
+        );
+        assert_eq!(
+            offer(ProviderIdentityLog::Absent)?,
+            IdentityRecoveryOffer::NotOffered
+        );
+        // A browser that can finish joining needs no passphrase.
+        assert_eq!(
+            offer(with_passphrases(2, ProviderIdentityJoin::Approved))?,
+            IdentityRecoveryOffer::NotOffered
+        );
+        Ok(())
     }
 
     /// An identity the provider holds a log for but that files no vault
@@ -733,44 +814,6 @@ mod tests {
         assert_eq!(
             choice.decisions,
             vec![IdentityDecision::Leave, IdentityDecision::AskToJoin]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn a_backup_password_names_a_vault_but_never_opens_its_identity() -> anyhow::Result<()> {
-        let other = Fixture::identity(OTHER, ProviderIdentityLog::Absent)?;
-        let vaults = [Fixture::vault(
-            OTHER_VAULT,
-            &other,
-            ProviderVaultAccess::Locked,
-        )?];
-        let mut password = Fixture::passkey_opening(&other, OTHER_VAULT)?;
-        password.credential = CheckedCredential::BackupPassword;
-        for checked in &mut password.identities {
-            checked.outcome = IdentityCheckOutcome::VaultsOnly;
-            checked.name = ProviderVaultName::Unknown;
-        }
-        let checks = [password];
-        let choices = ProviderIdentityChoices {
-            vaults: &vaults,
-            identities: &[],
-            checks: &checks,
-            session: IdentitySession::IdentityInUse,
-        }
-        .choices();
-
-        assert_eq!(
-            Fixture::at(&choices, 0)?.standing,
-            IdentityStanding::Unchecked
-        );
-        assert_eq!(
-            Fixture::first_vault_name(Fixture::at(&choices, 0)?),
-            Some(&ProviderVaultName::named("Family"))
-        );
-        assert_eq!(
-            Fixture::at(&choices, 0)?.identity.name,
-            ProviderVaultName::Unknown
         );
         Ok(())
     }

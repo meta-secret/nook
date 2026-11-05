@@ -40,11 +40,10 @@ mod tests {
     use crate::event::{VaultEvent, VaultEventBody, VaultEventSchemaVersion};
     use crate::test_support::{actor, public_key, signing_key as key, store};
     use crate::{
-        AgeArmoredCiphertext, DevicePublicKey, EpochCheckpoint, EpochMetadataState,
-        EpochPasswordState, EventError, EventGraphRejection, EventResult, MemberLabel,
-        ProjectionIntegrity, VaultOperation,
+        AgeArmoredCiphertext, DevicePublicKey, EpochCheckpoint, EpochMetadataState, EventError,
+        EventGraphRejection, EventResult, MemberLabel, ProjectionIntegrity, VaultOperation,
     };
-    use nook_auth2::{DeviceId, PasswordEntryId, Sha256Hex};
+    use nook_auth2::{DeviceId, Sha256Hex};
     #[test]
     fn concurrent_security_rotations_surface_conflict() -> EventResult<()> {
         let signing_key = key();
@@ -65,9 +64,8 @@ mod tests {
         let rotate = ProjectionFixtures::signed_operation(
             &signing_key,
             vec![genesis_id],
-            VaultOperation::PasswordRotated {
-                entry_id: PasswordEntryId::parse("pwdentry001")?,
-                envelope: ProjectionFixtures::password_envelope_fixture("x"),
+            VaultOperation::DeviceRevoked {
+                device_id: DeviceId::parse("fedcba9876543210")?,
             },
         )?;
         graph = ProjectionFixtures::insert(ProjectionGraphInsert {
@@ -155,8 +153,8 @@ mod tests {
         let rotation = ProjectionFixtures::signed_operation(
             &owner_key,
             vec![genesis_id],
-            VaultOperation::PasswordRemoved {
-                entry_id: PasswordEntryId::parse("pwdentry001")?,
+            VaultOperation::DeviceRevoked {
+                device_id: DeviceId::parse("fedcba9876543210")?,
             },
         )?;
         let rotation_id = rotation.id()?;
@@ -174,7 +172,6 @@ mod tests {
                     secrets: Vec::new(),
                     members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
                     rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
-                    password_entries: crate::EpochPasswordState::Replace(Vec::new()),
                 }],
             },
             &owner_key,
@@ -301,8 +298,8 @@ mod tests {
         let rotation = ProjectionFixtures::signed_operation(
             &signing_key,
             vec![genesis_id],
-            VaultOperation::PasswordRemoved {
-                entry_id: PasswordEntryId::parse("pwdentry001")?,
+            VaultOperation::DeviceRevoked {
+                device_id: DeviceId::parse("fedcba9876543210")?,
             },
         )?;
         let rotation_id = rotation.id()?;
@@ -328,7 +325,6 @@ mod tests {
                     secrets: Vec::new(),
                     members_checkpoint_hash: Sha256Hex::from_trusted("1".repeat(64)),
                     rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
-                    password_entries: EpochPasswordState::Replace(Vec::new()),
                 }],
             },
             &signing_key,
@@ -341,7 +337,6 @@ mod tests {
                     secrets: Vec::new(),
                     members_checkpoint_hash: Sha256Hex::from_trusted("2".repeat(64)),
                     rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
-                    password_entries: EpochPasswordState::Replace(Vec::new()),
                 }],
                 ..first.body.clone()
             },

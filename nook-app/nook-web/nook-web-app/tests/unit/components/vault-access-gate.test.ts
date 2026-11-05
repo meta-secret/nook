@@ -25,7 +25,6 @@ describe('vault access gate', () => {
       onUnlockOnCard: vi.fn(async () => {}),
       onUseEnrollmentCode: vi.fn(async () => {}),
       onAcceptSentinelOnboardingPackage: vi.fn(async () => {}),
-      onUnlockWithPassword: vi.fn(async () => {}),
       onSentinelUnlocked: vi.fn(async () => {}),
       onCreateDeviceVault: vi.fn(async () => {}),
       onStartSentinelGenesis: vi.fn(async () => false),

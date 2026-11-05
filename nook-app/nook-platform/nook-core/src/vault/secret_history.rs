@@ -252,10 +252,6 @@ impl SecretHistoryRequest<'_> {
                 | VaultOperation::SecretConflictResolved { .. }
                 | VaultOperation::VaultCleared
                 | VaultOperation::VaultNamed { .. }
-                | VaultOperation::PasswordAdded { .. }
-                | VaultOperation::PasswordRotated { .. }
-                | VaultOperation::PasswordEnvelopeUpgraded { .. }
-                | VaultOperation::PasswordRemoved { .. }
                 | VaultOperation::JoinRequested { .. }
                 | VaultOperation::JoinApproved { .. }
                 | VaultOperation::SentinelParticipantEnrolled { .. }
@@ -539,7 +535,6 @@ mod tests {
                 secrets: vec![HistoryFixture::payload("secret_carried1")],
                 members_checkpoint_hash: Sha256Hex::from_trusted("ab".repeat(32)),
                 rotated_meta_records: crate::EpochMetadataState::LegacyRetain,
-                password_entries: crate::EpochPasswordState::LegacyRetain,
             },
         )?;
         fixture.version(
@@ -584,7 +579,6 @@ mod tests {
             VaultOperation::VaultImported {
                 source_content_hash: Sha256Hex::from_trusted("cd".repeat(32)),
                 secrets: vec![HistoryFixture::payload("secret_imported")],
-                password_entries: Vec::new(),
             },
         )?;
         fixture.version("secret_imported", import, ProjectedSecretOrigin::Created);

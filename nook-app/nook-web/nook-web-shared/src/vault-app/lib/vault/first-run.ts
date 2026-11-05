@@ -478,6 +478,17 @@ export class FirstRunActions {
     vault.firstRun = FirstRunStage.Joining;
   }
 
+  /** Join an identity with one of its recovery passphrases instead of
+   * asking its devices: setup shows the passphrase step for it. */
+  recover(identity: FirstRunIdentity): void {
+    const vault = this.vault;
+    vault.firstRunJoin = {
+      kind: FirstRunJoinKind.Recovering,
+      join: this.intent(identity),
+    };
+    vault.firstRun = FirstRunStage.Joining;
+  }
+
   /** A join asked before this page, as after a reload: wait on it again and
    * read its answer at once. */
   async resumeJoin(identity: FirstRunIdentity): Promise<void> {

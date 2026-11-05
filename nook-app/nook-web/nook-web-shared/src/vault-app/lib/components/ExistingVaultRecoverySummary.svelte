@@ -74,32 +74,5 @@
         </p>
       {/if}
     </div>
-
-    {#if !summary.requiresSentinelQuorum}
-      <div
-        class="border-t border-border/60 pt-2 text-xs"
-        data-testid="existing-vault-password-status"
-      >
-        {#if summary.passwordEntries.length > 0}
-          <p class="font-medium text-foreground">
-            {vault.t(I18N_KEYS.VaultRecoveryPasswordAvailable)}
-          </p>
-          <p class="text-[11px] leading-relaxed text-muted-foreground">
-            {vault.t(I18N_KEYS.VaultRecoveryPasswordDescription)}
-          </p>
-          <ul class="mt-1 flex flex-wrap gap-1">
-            {#each summary.passwordEntries as entry (entry.id)}
-              <li class="rounded bg-background px-1.5 py-0.5 text-[11px]">
-                {entry.label}
-              </li>
-            {/each}
-          </ul>
-        {:else}
-          <p class="text-muted-foreground">
-            {vault.t(I18N_KEYS.VaultRecoveryPasswordUnavailable)}
-          </p>
-        {/if}
-      </div>
-    {/if}
   </section>
 {/if}

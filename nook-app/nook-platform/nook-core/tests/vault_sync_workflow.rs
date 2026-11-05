@@ -9,7 +9,7 @@ use nook_core::{VaultStoreIdentity, VaultStoreIdentityRef, VaultVersionWrite};
 use nook_core::{
     MemoryVaultStore, RevisionGuardedWrite, SecretId, StoreRevision, StoreRevisionRef,
     StoredRecordPayload, StoredSecretRecord, VaultFormatDocument, VaultRecordSet, VaultSyncAction,
-    VaultSyncComparison, VaultSyncError, VaultSyncFanOut, VaultSyncPair, VaultUnlock,
+    VaultSyncComparison, VaultSyncError, VaultSyncFanOut, VaultSyncPair,
 };
 use std::collections::HashMap;
 
@@ -19,19 +19,13 @@ struct VaultSyncFixture;
 
 impl VaultSyncFixture {
     fn sample_yaml(version: u64, armor_line: &str) -> anyhow::Result<String> {
-        Ok(VaultRecordSet::serialize_yaml_with_unlock(
-        &[StoredSecretRecord {
+        Ok(VaultRecordSet::serialize_yaml_with_store(&[StoredSecretRecord {
             key: SecretId::from_vault_record("secret_SMypl8K0w9Y"),
             secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted(format!(
                 "-----BEGIN AGE ENCRYPTED FILE-----\n{armor_line}\n-----END AGE ENCRYPTED FILE-----"
             )),
-        }],
-        &VaultUnlock::Keys,
-        &[],
-        VaultStoreIdentityRef::Assigned(STORE_ID),
-        VaultVersionWrite::Version(version.into()),
-    )?
+        }], VaultStoreIdentityRef::Assigned(STORE_ID), VaultVersionWrite::Version(version.into()))?
     .into_inner())
     }
 }

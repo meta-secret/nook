@@ -56,6 +56,7 @@ function family(decisions: IdentityDecision[]): ProviderIdentityChoice {
     standing: { kind: 'unchecked' },
     decisions,
     setup: { kind: 'requestToJoin' },
+    recovery: 'notOffered',
     vaults: [],
   }
 }

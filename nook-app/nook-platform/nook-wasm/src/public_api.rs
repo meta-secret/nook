@@ -7,7 +7,6 @@ use crate::{BrowserCredentialCreationOptions, BrowserCredentialRequestOptions};
 use crate::{BrowserPasskeyClient, BrowserPasskeyCreationOptions, NookTotpCode};
 use crate::{TypedInput, TypedOutput};
 use nook_core::CompactToken;
-use nook_core::PasswordPolicy;
 use nook_core::SecretId;
 use nook_core::StorageProvider;
 use nook_core::{PasswordGenerationOptions, TotpAlgorithm, TotpDigits, TotpPeriod, TotpSecret};
@@ -23,6 +22,8 @@ mod provider_identity_choice;
 pub use provider_identity_choice::*;
 mod mnemonic;
 pub use mnemonic::*;
+mod recovery_words;
+pub use recovery_words::*;
 mod provider_labels;
 pub use provider_labels::*;
 mod provider_state;
@@ -249,47 +250,6 @@ impl NookTotpCode {
 }
 
 #[wasm_bindgen]
-#[must_use]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "FFI boundary: projects the `vault_password_min_length` count through a JavaScript Number scalar"
-    )
-)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn vault_password_min_length() -> u32 {
-    u32::try_from(usize::from(PasswordPolicy::min_length())).unwrap_or(u32::MAX)
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "FFI boundary: projects the `vault_password_recommended_min_length` count through a JavaScript Number scalar"
-    )
-)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn vault_password_recommended_min_length() -> u32 {
-    u32::try_from(usize::from(
-        PasswordPolicy::recommended_min_length(),
-    ))
-    .unwrap_or(u32::MAX)
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn is_vault_password_long_enough(password: &str) -> bool {
-    PasswordPolicy::is_long_enough(password)
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn is_vault_password_recommended_length(password: &str) -> bool {
-    PasswordPolicy::is_recommended_length(password)
-}
-
-#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
@@ -479,7 +439,6 @@ mod browser_tests {
         assert!(super::generate_secret_id()?.len() > 10);
         let options = super::default_password_generation_options()?;
         assert!(!super::generate_password(&options)?.is_empty());
-        assert!(!super::is_vault_password_long_enough("no"));
         let code = super::generate_totp_code("JBSWY3DPEHPK3PXP", 59)?;
         assert_eq!(code.len(), 6);
         assert!(super::verify_totp_code("JBSWY3DPEHPK3PXP", &code, 59)?);
@@ -641,14 +600,6 @@ mod browser_tests {
         assert_eq!(icloud_shared.shared_joiner_identity()?, "bob@example.test");
         Ok(())
     }
-}
-
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn login_unlock_decision(
-    access: nook_core::VaultAccessStatus,
-    passwords: nook_core::PasswordEntryPresence,
-) -> nook_core::LoginUnlockDecision {
-    nook_core::LoginUnlockAssessment { access, passwords }.decide()
 }
 
 mod passkey_material_admission;

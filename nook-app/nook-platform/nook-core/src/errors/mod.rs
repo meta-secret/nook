@@ -10,8 +10,8 @@ mod vault_sync;
 pub use database::{DatabaseError, DatabaseResult};
 pub use nook_auth2::{
     AgeCryptoError, DeviceKeyProtectionError, EnrollmentError, MultiDeviceError, MultiDeviceResult,
-    PasswordError, PasswordResult, SecretPayloadError, SecretPayloadResult, ValidationError,
-    ValidationResult, VaultCryptoError,
+    PasswordError, PasswordResult, RecoveryPassphraseError, SecretPayloadError,
+    SecretPayloadResult, ValidationError, ValidationResult, VaultCryptoError,
 };
 pub use nook_event_log::{EventError, EventResult};
 pub use provider_failure::{
@@ -30,7 +30,6 @@ use wasm_bindgen::prelude::wasm_bindgen;
 pub enum VaultRecoveryErrorKind {
     Other,
     SentinelCeremonyRequired,
-    SentinelPasswordUnlockForbidden,
 }
 
 /// Classify a boundary error into the recovery action understood by hosts.
@@ -44,10 +43,6 @@ impl VaultRecoveryErrorKind {
             || normalized.contains("sentinelceremonyrequired")
         {
             VaultRecoveryErrorKind::SentinelCeremonyRequired
-        } else if normalized.contains("password unlock is forbidden for sentinel")
-            || normalized.contains("sentinelpasswordunlockforbidden")
-        {
-            VaultRecoveryErrorKind::SentinelPasswordUnlockForbidden
         } else {
             VaultRecoveryErrorKind::Other
         }
@@ -96,6 +91,9 @@ pub enum VaultError {
 
     #[error(transparent)]
     Age(#[from] AgeCryptoError),
+
+    #[error(transparent)]
+    RecoveryPassphrase(#[from] RecoveryPassphraseError),
 }
 
 #[cfg(test)]
@@ -109,12 +107,6 @@ mod recovery_tests {
                 "Sentinel vault unlock requires an opened-share ceremony; per-device auth envelopes cannot unlock this vault."
             ),
             VaultRecoveryErrorKind::SentinelCeremonyRequired
-        );
-        assert_eq!(
-            VaultRecoveryErrorKind::classify_vault_recovery_error(
-                "Password unlock is forbidden for sentinel vaults; use the opened-share ceremony instead."
-            ),
-            VaultRecoveryErrorKind::SentinelPasswordUnlockForbidden
         );
         assert_eq!(
             VaultRecoveryErrorKind::classify_vault_recovery_error("network failed"),

@@ -10,8 +10,9 @@ The identity control log is the replicated membership authority of one
 identity. Vaults are built on top of it: a vault belongs to exactly one
 identity, and an installation reaches a vault through the identity that owns it.
 
-- **Records:** app-key members, pending joins, revocations, per-vault DEK
-  envelopes, and credential-free sync-provider mounts.
+- **Records:** app-key members, recovery passphrase members, pending joins,
+  revocations, per-vault DEK envelopes, and credential-free sync-provider
+  mounts.
 - **Mechanics:** the vault log's canonical JSON, Ed25519 actor signatures, and
   causal DAG.
 - **Namespace:** its own remote and local namespace. Identity events never
@@ -81,15 +82,28 @@ The operation set is closed. Every operation is kebab-case tagged on the wire.
     the browser extension `same-as` itself, since the extension connects
     from the web app's browser.
   - The device must not be the joiner's own `app_id`.
-  - The projection counts one device per member, except a member on another
-    current member's device. The identity's protection asks for a second
-    device by that count, so the extension in the same browser does not
-    satisfy it. A founder and an invite holder each run on a device of
-    their own.
+  - The projection counts one device per app member, except a member on
+    another current member's device. The identity's protection asks for a
+    second device by that count, so the extension in the same browser does
+    not satisfy it. A founder and an invite holder each run on a device of
+    their own. A recovery passphrase is on no device and is never counted.
+  - The projection records who approved each member: the founder, an
+    invite, an app member, or a recovery passphrase with its label.
+- **`recovery-key-added`**
+  - Holds a recovery passphrase's member keys, its label, its private keys
+    sealed under its words, and its strength: `standard` (four words) or
+    `high` (five words).
+  - A current app member signs it, with one `vault-dek-granted` per owned
+    vault in the same event, so the recovery member holds every vault's
+    current DEK. Vaults registered later wrap to it like any member.
+  - Several labelled recovery passphrases may coexist.
+  - It is part of identity event schema `1`. Nook has no released versions,
+    so it adds no migration and no compatibility branch.
 - **`member-join-denied`**
   - Answers a pending request without admitting its app key.
 - **`member-revoked`**
-  - Ends an app key's membership and drops its DEK envelopes from the projection.
+  - Ends an app key's or a recovery passphrase's membership and drops its DEK
+    envelopes from the projection.
 - **`member-renamed`**
   - Replaces a member's label.
 - **`vault-registered`**
@@ -173,6 +187,19 @@ An event's actor must be an identity member in that event's causal past.
 - An outsider may publish only a self-signed `member-joined-by-invite` that
   holds, or a self-signed `member-join-requested`. A request grants nothing
   until a member approves it.
+- `recovery-key-added` makes the recovery member's signer a member in every
+  causal descendant. Its app id must not be a member in the event's causal
+  past.
+- A recovery member may sign only these operations:
+  - `member-approved` of an app key that is not a member in the event's
+    causal past, with device `own`;
+  - `member-revoked` of itself.
+  - Any other operation it signs quarantines the whole event.
+- An event a recovery member signs is quarantined when the log holds an
+  authorized `member-revoked` of that recovery member that does not causally
+  follow the event. Removed words cannot add a device by building on heads
+  from before the removal, in any delivery order. App keys keep the plain
+  causal-past rule.
 - An unauthorized event is quarantined with every causal descendant.
 
 The projection applies the same rule over the whole applicable log, so the
@@ -190,7 +217,9 @@ the app is revoked.
 `IdentityControlState::project` folds applicable events in topological order.
 Ties break by event ID.
 
-- **Members:** the effective members with their latest labels.
+- **Members:** the effective members with their latest labels, each of kind
+  `App { device }` or `Recovery` with its sealed keys and strength, and who
+  approved it.
 - **Revoked:** app IDs that were members and are no longer effective.
 - **Pending joins:** requests with no causally later approval, denial, or
   revocation for the same app, from apps that are not members.
@@ -198,7 +227,10 @@ Ties break by event ID.
   whose request a causally later denial answered.
 - **Vaults:** each registered vault with DEK envelopes per key epoch.
   - The current key epoch comes from the latest registration or rewrap.
-  - Revoked members' envelopes are removed.
+  - Revoked members' envelopes are removed. Each epoch lists the revoked
+    members that held one, so a vault whose current epoch a revoked member
+    holds rotates before its next write, even when that member is on no
+    vault roster, as a recovery passphrase never is.
 - **Mounts:** mounted records minus unmounted ones.
 - **Heads:** the applicable heads the next append extends.
 
@@ -261,6 +293,34 @@ the identity namespace.
 **Required:** address every log through `EventLogLocation`; there is no shared
 event root.
 
+### Seal recovery passphrases under generated words
+
+A recovery passphrase lets a person who lost every device add a new one. It
+is the only private key material the log carries.
+
+- **Words:** Rust draws four (`standard`) or five (`high`) words uniformly
+  from the vendored Orchard Street Long List, by rejection sampling. People
+  never choose them.
+- **Seal:** the recovery member's X25519 secret and Ed25519 signing seed are
+  sealed with age scrypt at work factor 18, under the words in lowercase, one
+  space apart.
+- **Adding:** WASM shows the words once and records `recovery-key-added` only
+  after they are typed back.
+- **Recovering:** typed words are checked word by word against the list
+  before scrypt runs. WASM unseals the keys, opens every vault with the
+  recovery member's envelopes, and signs `member-approved` for the device's
+  fresh app key. Wrong words fail closed with a typed error.
+- **Boundary:** the words, the unsealed keys, and the DEKs never reach
+  JavaScript.
+- **Removing:** `member-revoked` of the recovery member. Every vault whose
+  current epoch it holds rotates before its next write.
+
+**Prohibited:** let a recovery passphrase rename members, issue invites, or
+revoke another app because its signer is a member.
+
+**Required:** quarantine every event a recovery member signs unless it only
+approves a new app key on its own device or revokes itself.
+
 ### Start the log with its founder
 
 An identity with no control log gets one when this installation first needs it:
@@ -271,15 +331,19 @@ identity members on their own.
 
 ## Prohibited actions
 
-- Do not let a provider credential, an enrollment code, or a vault backup
-  password grant identity membership.
+- Do not let a provider credential or an enrollment code grant identity
+  membership.
+- Do not let a recovery passphrase do more than a recovery member may: approve
+  a new app key on its own device, or revoke itself.
 - Do not accept an identity event whose actor is not an identity member in its
   causal past, except a self-signed join that holds an issued invite or a
   self-signed join request.
 - Do not store identity events in a vault namespace or vault events in the
   identity namespace.
 - Do not persist private app keys, signing seeds, or plaintext DEKs in the
-  identity log.
+  identity log. The one exception is a recovery member's X25519 secret and
+  signing seed, sealed under its generated words with age scrypt at work
+  factor 18 in `recovery-key-added`.
 
 ## Testing requirements
 
@@ -326,4 +390,24 @@ Behavior-focused Rust tests cover the log in
   - `the_log_tells_this_browser_where_its_join_request_stands`
   - `the_member_passkey_opens_its_identity_and_every_vault_it_keeps`
   - `another_passkey_opens_no_identity_and_no_vault`
-  - `a_backup_password_opens_its_vault_but_never_the_identity`
+- **Recovery passphrases: every vault DEK, several coexisting, restricted
+  signer, no device, rotation after removal**
+  (`identity_control/recovery.rs`)
+  - `a_recovery_passphrase_holds_every_vault_dek_including_later_ones`
+  - `several_labelled_recovery_passphrases_coexist`
+  - `a_recovery_passphrase_approves_a_new_app_key_that_opens_every_vault`
+  - `a_recovery_passphrase_signs_nothing_but_new_app_keys_and_its_own_removal`
+  - `a_removed_recovery_passphrase_holds_the_vault_epoch_until_it_rotates`
+  - `a_removed_recovery_passphrase_cannot_add_a_device_by_backdating`
+- **Adding and recovering with a passphrase** (nook-core)
+  - `a_passphrase_is_recorded_only_after_its_words_are_typed_back`
+  - `a_new_device_recovers_the_keyring_and_opens_every_vault`
+  - `wrong_words_fail_closed_and_add_nothing`
+  - `removing_a_passphrase_rotates_every_vault_and_it_recovers_nothing_more`
+- **Words and seal** (nook-auth2)
+  - `the_vendored_list_is_the_pinned_orchard_street_long_list`
+  - `draws_inside_the_list_map_to_themselves_and_the_rest_are_rejected`
+  - `generated_words_spread_evenly_over_the_list`
+  - `typed_words_ignore_case_and_take_spaces_hyphens_or_no_separator`
+  - `each_unknown_word_is_reported_at_its_typed_position`
+  - `the_words_open_the_seal_and_other_words_fail_closed`

@@ -105,6 +105,7 @@ function summary(
         devices: 2,
         newestDevice: { state: 'reported', at: Date.UTC(2026, 9, 27) },
         vaults: 3,
+        recoveryPassphrases: 0,
         thisBrowser: false,
         join: 'notAsked',
       },
@@ -137,6 +138,7 @@ function joinedSummary(
         devices: 1,
         newestDevice: { state: 'unreported' },
         vaults: 1,
+        recoveryPassphrases: 0,
         thisBrowser: false,
         join,
       },
@@ -156,6 +158,7 @@ function useIdentity(vault: VaultState): void {
         label: '',
         isCurrentInstallation: true,
         onCurrentDevice: true,
+        approvedBy: { kind: 'founder' },
       },
     ],
     devices: [],
@@ -163,6 +166,7 @@ function useIdentity(vault: VaultState): void {
     joinRequests: [],
     vaults: [],
     mounts: [],
+    recoveryPassphrases: [],
   }
   const ready: IdentityControlView = {
     kind: IdentityControlViewKind.Ready,
@@ -508,6 +512,7 @@ describe('Google Drive provider setup', () => {
                 devices: 1,
                 newestDevice: { state: 'unreported' },
                 vaults: 1,
+                recoveryPassphrases: 0,
                 thisBrowser: true,
                 join: 'notAsked',
               },
@@ -551,7 +556,7 @@ describe('Google Drive provider setup', () => {
       },
     })
     const opens: CredentialCheckReport = {
-      credential: { kind: 'passkey', fingerprint: 'passkey_a1b2c3d4e5f60708' },
+      credential: { fingerprint: 'passkey_a1b2c3d4e5f60708' },
       identities: [
         {
           identityId: 'idn_strangerabc',
@@ -688,7 +693,7 @@ describe('Google Drive provider setup', () => {
       },
     })
     const none: CredentialCheckReport = {
-      credential: { kind: 'passkey', fingerprint: 'passkey_ffffffffffffffff' },
+      credential: { fingerprint: 'passkey_ffffffffffffffff' },
       identities: [
         {
           identityId: 'idn_strangerabc',

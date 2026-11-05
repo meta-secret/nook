@@ -114,6 +114,11 @@ export class VaultConnectionActions {
             state,
           ).syncLocalFolderProvider(syncLocalFolderProviderArgs);
           if (localSync.isErr()) {
+            // The banner names no cause; the log keeps the failure kind and
+            // its message key, never the provider message.
+            log.warn(
+              `local folder sync failed: ${localSync.error.kind} (${localSync.error.translationKey})`,
+            );
             state.errorMsg = state.t(localSync.error.translationKey);
             return;
           }
@@ -193,29 +198,16 @@ export class VaultConnectionActions {
         return;
       }
 
-      if (
-        state.clientPolicy.vault_connect_password_lookup_required(accessStatus)
-      ) {
-        const savedProvider1 = await state.ensureProviderSaved();
-        if (savedProvider1.isErr()) {
-          state.errorMsg = state.t(savedProvider1.error.translationKey);
-          return;
-        }
-        const passwordRefresh1 = await state.refreshPasswordEntriesList();
-        if (passwordRefresh1.isErr()) {
-          state.errorMsg = state.t(passwordRefresh1.error.translationKey);
+      const gateDecision =
+        state.clientPolicy.vault_connect_gate_decision(accessStatus);
+      if (gateDecision !== VaultConnectGateDecision.Connect) {
+        const savedProvider = await state.ensureProviderSaved();
+        if (savedProvider.isErr()) {
+          state.errorMsg = state.t(savedProvider.error.translationKey);
           return;
         }
       }
-      const gateDecision = state.clientPolicy.vault_connect_gate_decision(
-        accessStatus,
-        state.passwordEntries.length,
-      );
       switch (gateDecision) {
-        case VaultConnectGateDecision.PromptForPassword:
-          state.loginPasswordPrompt = true;
-          state.joinEnrollmentPrompt = JoinEnrollmentState.None;
-          return;
         case VaultConnectGateDecision.RequestEnrollment:
           state.joinEnrollmentPrompt = JoinEnrollmentState.NeedsRequest;
           state.startVaultSync();
@@ -305,11 +297,6 @@ export class VaultConnectionActions {
       const promoted = await state.promoteSessionVaultToLocalIfNeeded();
       if (promoted.isErr()) {
         state.errorMsg = state.t(promoted.error.translationKey);
-        return;
-      }
-      const passwordRefresh2 = await state.refreshPasswordEntriesList();
-      if (passwordRefresh2.isErr()) {
-        state.errorMsg = state.t(passwordRefresh2.error.translationKey);
         return;
       }
       const rosterRefresh1 = await state.hydrateMultiDeviceState();

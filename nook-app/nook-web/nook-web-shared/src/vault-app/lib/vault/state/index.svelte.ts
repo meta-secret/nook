@@ -123,21 +123,12 @@ const sessionKeys = [
   "enrollMembersKey",
   "joinEnrollmentPrompt",
   "awaitingJoinApproval",
-  "loginPasswordPrompt",
   "remoteVaultRecoveryState",
-  "isPasswordBusy",
-  "passwordError",
+  "isInviteBusy",
   "enrollmentCode",
   "prefillEnrollmentCode",
   "enrollmentFromUrlPending",
   "loginEnrollmentCode",
-  "passwordEntries",
-  "selectedPasswordEntry",
-  "selectPasswordEntry",
-  "clearSelectedPasswordEntry",
-  "activeEnrollmentEntry",
-  "beginEnrollmentEntry",
-  "clearActiveEnrollmentEntry",
   "clearManager",
 ] as const satisfies readonly (keyof VaultSessionState)[];
 
@@ -291,21 +282,12 @@ class VaultStateSlicesImplementation {
   declare enrollMembersKey: VaultSessionState["enrollMembersKey"];
   declare joinEnrollmentPrompt: VaultSessionState["joinEnrollmentPrompt"];
   declare awaitingJoinApproval: VaultSessionState["awaitingJoinApproval"];
-  declare loginPasswordPrompt: VaultSessionState["loginPasswordPrompt"];
   declare remoteVaultRecoveryState: VaultSessionState["remoteVaultRecoveryState"];
-  declare isPasswordBusy: VaultSessionState["isPasswordBusy"];
-  declare passwordError: VaultSessionState["passwordError"];
+  declare isInviteBusy: VaultSessionState["isInviteBusy"];
   declare enrollmentCode: VaultSessionState["enrollmentCode"];
   declare prefillEnrollmentCode: VaultSessionState["prefillEnrollmentCode"];
   declare enrollmentFromUrlPending: VaultSessionState["enrollmentFromUrlPending"];
   declare loginEnrollmentCode: VaultSessionState["loginEnrollmentCode"];
-  declare passwordEntries: VaultSessionState["passwordEntries"];
-  declare selectedPasswordEntry: VaultSessionState["selectedPasswordEntry"];
-  declare selectPasswordEntry: VaultSessionState["selectPasswordEntry"];
-  declare clearSelectedPasswordEntry: VaultSessionState["clearSelectedPasswordEntry"];
-  declare readonly activeEnrollmentEntry: VaultSessionState["activeEnrollmentEntry"];
-  declare beginEnrollmentEntry: VaultSessionState["beginEnrollmentEntry"];
-  declare clearActiveEnrollmentEntry: VaultSessionState["clearActiveEnrollmentEntry"];
   declare clearManager: VaultSessionState["clearManager"];
 
   declare secrets: VaultSecretsState["secrets"];

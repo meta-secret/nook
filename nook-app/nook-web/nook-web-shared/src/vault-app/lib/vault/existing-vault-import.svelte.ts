@@ -12,16 +12,10 @@ import type { VaultState } from "$lib/vault.svelte";
 import {
   ActiveVaultKind,
   LoginSetupKind,
-  RecoveryDiscoveryKind,
   type ActiveVault,
 } from "$lib/vault/state/provider.svelte";
 
 /** Browser orchestration for an existing-vault import retained across device unlock. */
-type ExistingVaultPasswordUnlock = {
-  readonly entryId: string;
-  readonly password: string;
-};
-
 export class ExistingVaultImportLifecycle {
   queue = $state<ExistingVaultImportQueue>({
     kind: ExistingVaultImportQueueKind.Idle,
@@ -90,24 +84,9 @@ export class ExistingVaultImportLifecycle {
     this.vault.loginRequiresExistingVault = true;
     this.vault.activateLoginSetup(pending.kind);
     this.vault.stageProviderDraft($state.snapshot(pending.draft));
-    const recoveryDiscovery = this.vault.recoveryDiscovery;
     await this.vault.connectStagedProvider();
     if (this.vault.isAuthenticated) {
       await this.activatePendingVault();
-      return;
-    }
-    if (this.vault.loginPasswordPrompt) {
-      if (
-        recoveryDiscovery.kind === RecoveryDiscoveryKind.Found &&
-        recoveryDiscovery.summary.passwordEntries.length
-      ) {
-        const entries = recoveryDiscovery.summary.passwordEntries;
-        if (entries.length === 1) {
-          for (const entry of entries) this.vault.selectPasswordEntry(entry.id);
-        } else {
-          this.vault.clearSelectedPasswordEntry();
-        }
-      }
       return;
     }
     if (
@@ -115,23 +94,6 @@ export class ExistingVaultImportLifecycle {
       this.vault.sentinelCeremonyPrompt
     ) {
       return;
-    }
-  }
-
-  async unlockWithPassword({
-    entryId,
-    password,
-  }: ExistingVaultPasswordUnlock): Promise<void> {
-    const unlockRequest: Parameters<typeof this.vault.unlockWithPassword>[0] = {
-      entryId,
-      password,
-    };
-    await this.vault.unlockWithPassword(unlockRequest);
-    if (!this.vault.isAuthenticated) return;
-    if (this.waitingForDevice) {
-      await this.activatePendingVault();
-    } else {
-      this.cancel();
     }
   }
 

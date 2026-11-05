@@ -85,9 +85,9 @@ export const landingMessages = {
     'crypto.pbkdf2':
       'The PIN fallback derives its local wrapping key with PBKDF2-SHA256 and stores the versioned parameters beside authenticated ciphertext.',
     'crypto.scrypt':
-      'Password access is represented by age scrypt envelopes that wrap high-entropy vault keys instead of encrypting every record directly.',
+      'A keyring recovery passphrase is generated words; age scrypt seals the keyring recovery key under them, which can add a new device to the keyring.',
     'crypto.epochs':
-      'Password rotation, password removal, and device revocation start new cryptographic epochs for future private event payloads.',
+      'Removing a device or a recovery passphrase starts new cryptographic epochs for future private event payloads.',
     'crypto.zeroize':
       'Sensitive roots, shares, PRF output, private identities, vault keys, and tokens are explicitly cleared when their Rust-owned lifetime ends.',
     'crypto.aead':
@@ -185,9 +185,9 @@ export const landingMessages = {
     'crypto.pbkdf2':
       'PIN fallback выводит локальный wrapping key через PBKDF2-SHA256 и хранит versioned parameters рядом с authenticated ciphertext.',
     'crypto.scrypt':
-      'Password access представлен age scrypt envelopes, которые оборачивают high-entropy vault keys вместо прямого шифрования каждой записи.',
+      'Фраза восстановления связки ключей состоит из сгенерированных слов; age scrypt запечатывает под ними recovery key связки, который может добавить в неё новое устройство.',
     'crypto.epochs':
-      'Смена или удаление пароля и отзыв устройства начинают новые cryptographic key epochs для будущих private event payloads.',
+      'Отзыв устройства или удаление фразы восстановления начинают новые cryptographic key epochs для будущих private event payloads.',
     'crypto.zeroize':
       'Sensitive roots, shares, PRF output, private identities, vault keys и tokens явно обнуляются по завершении их lifetime, контролируемого Rust.',
     'crypto.aead':

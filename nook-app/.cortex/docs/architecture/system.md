@@ -241,9 +241,7 @@ Vault revision detail:
 
 Unlock mode detail:
 
-- Password-only vaults use `{type: password, …}`.
-- Device-key vaults use `auth:` plus optional `password_entries`.
-- See [password-envelope.md](../../../nook-platform/nook-auth2/.cortex/docs/spec/password-envelope.md).
+- Vaults unlock with device keys from their `auth:` rows.
 
 Authorization and membership detail:
 

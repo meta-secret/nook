@@ -25,7 +25,7 @@ function renderPage() {
 }
 
 const passkeyOpens: CredentialCheckReport = {
-  credential: { kind: 'passkey', fingerprint: 'passkey_a1b2c3d4e5f60708' },
+  credential: { fingerprint: 'passkey_a1b2c3d4e5f60708' },
   identities: [
     {
       identityId: 'idn_personalide',
@@ -127,63 +127,6 @@ describe('Check access page', () => {
         },
       }),
     )
-  })
-
-  test('a backup password opens single vaults, never the identity, and is then cleared', async () => {
-    const passwordReport: CredentialCheckReport = {
-      credential: { kind: 'backupPassword' },
-      identities: [
-        {
-          identityId: 'idn_personalide',
-          words: ['amber', 'falcon', 'tide'],
-          name: { state: 'unknown' },
-          outcome: 'vaultsOnly',
-          vaults: [
-            {
-              storeId: 'store_familyvault',
-              shortId: 'familyva',
-              outcome: {
-                state: 'opens',
-                name: { state: 'named', name: 'Family' },
-              },
-            },
-          ],
-        },
-      ],
-    }
-    const check = vi
-      .spyOn(AccessCheckActions.prototype, 'checkBackupPassword')
-      .mockResolvedValue(ok(passwordReport))
-    const { view } = renderPage()
-
-    await fireEvent.click(view.getByTestId('access-check-method-password'))
-    expect(disabled(view.getByTestId('access-check-run'))).toBe(true)
-    await fireEvent.input(view.getByTestId('access-check-password'), {
-      target: { value: 'correct horse battery staple' },
-    })
-    await fireEvent.click(view.getByTestId('access-check-run'))
-
-    await view.findByTestId('access-check-results')
-    expect(check).toHaveBeenCalledWith({
-      target: {
-        kind: AccessCheckTargetKind.Source,
-        source: { kind: 'thisBrowser' },
-      },
-      password: 'correct horse battery staple',
-    })
-    expect(view.getByTestId('access-check-password')).toHaveProperty(
-      'value',
-      '',
-    )
-    expect(view.getByTestId('access-check-identity').dataset.outcome).toBe(
-      'vaultsOnly',
-    )
-    expect(view.getByTestId('access-check-vault').textContent).toContain(
-      'Family',
-    )
-
-    await fireEvent.click(view.getByTestId('access-check-clear'))
-    expect(view.queryAllByTestId('access-check-results')).toHaveLength(0)
   })
 })
 

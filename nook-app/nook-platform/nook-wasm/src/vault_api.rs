@@ -595,9 +595,6 @@ mod projection_tests {
     use nook_core::VaultStoreIdentityRef;
     #[cfg(test)]
     #[cfg(test)]
-    use nook_core::VaultUnlock;
-    #[cfg(test)]
-    #[cfg(test)]
     use nook_core::VaultVersionWrite;
     #[cfg(test)]
     use nook_core::{
@@ -829,9 +826,7 @@ mod projection_tests {
             vec![ProviderKind::Local]
         );
 
-        let yaml = VaultRecordSet::serialize_yaml_with_unlock(
-            &[],
-            &VaultUnlock::Keys,
+        let yaml = VaultRecordSet::serialize_yaml_with_store(
             &[],
             VaultStoreIdentityRef::Unassigned,
             VaultVersionWrite::Version(1.into()),

@@ -88,7 +88,8 @@ mod tests {
     use super::*;
     use crate::{
         DeviceIdentity, EventId, GithubProvider, IdentityControlMember, IdentityId,
-        IdentityMemberKeys, MemberDevice, MemberLabel, SigningIdentity,
+        IdentityMemberApprover, IdentityMemberKeys, IdentityMemberKind, MemberDevice, MemberLabel,
+        SigningIdentity,
     };
     use std::slice;
 
@@ -146,7 +147,10 @@ mod tests {
                         label: MemberLabel::from_trusted("app".to_owned()),
                     },
                     approved_in: EventId::parse(&format!("sha256u:{}A", "a".repeat(42)))?,
-                    device: MemberDevice::Own,
+                    kind: IdentityMemberKind::App {
+                        device: MemberDevice::Own,
+                    },
+                    approved_by: IdentityMemberApprover::Founder,
                 })
             })
             .collect::<anyhow::Result<Vec<_>>>()?;

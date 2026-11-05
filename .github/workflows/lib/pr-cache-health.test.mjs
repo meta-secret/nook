@@ -810,7 +810,7 @@ void test("PR browser fanout preserves read-only cache boundaries", () => {
     rootWorkflow,
     /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/,
   );
-  assert.match(arcRunnerDockerfile, /FROM ghcr\.io\/actions\/actions-runner:2\.336\.0@sha256:/);
+  assert.match(arcRunnerDockerfile, /FROM ghcr\.io\/actions\/actions-runner:2\.338\.2@sha256:/);
   assert.match(arcRunnerDockerfile, /FROM arc-runner AS proof/);
   assert.match(arcRunnerBake, /target "arc-runner-hooks-proof"/);
   assert.match(arcRunnerPatch, /Synchronizing repository actions/);

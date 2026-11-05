@@ -8,9 +8,7 @@
 
 use crate::errors::{VaultFormatError, VaultFormatResult};
 use crate::vault_wire::{StoredVaultBlob, StoredVaultYaml as VaultYamlBlob};
-use crate::{
-    PasswordUnlockEntry, StoredSecretRecord, VaultArchitecture, VaultSchemaVersion, VaultUnlock,
-};
+use crate::{StoredSecretRecord, VaultArchitecture, VaultSchemaVersion};
 
 mod model;
 mod vault_yaml;
@@ -55,7 +53,6 @@ impl<'a> VaultFormatDocument<'a> {
             || first_line.starts_with("joins:")
             || first_line.starts_with("members:")
             || first_line.starts_with("sentinel_shares:")
-            || first_line.starts_with("unlock:")
         {
             return Ok(VaultFormat::Yaml);
         }
@@ -128,19 +125,6 @@ impl<'a> VaultFormatDocument<'a> {
         Ok(vault.vault_version.into())
     }
 
-    /// Read labelled backup passwords without unwinding the full record list.
-    pub fn password_entries(&self) -> VaultFormatResult<Vec<PasswordUnlockEntry>> {
-        let trimmed = self.stored.trim();
-        if trimmed.is_empty() {
-            return Ok(Vec::new());
-        }
-        self.detect()?;
-        let vault: StoredVaultYaml =
-            serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParsePasswordEntries)?;
-        VaultSchemaVersion::from(vault.schema_version).ensure_supported()?;
-        Ok(vault.password_entries)
-    }
-
     /// Read the logical secret-store id from on-disk YAML.
     pub fn store_id(&self) -> VaultFormatResult<VaultStoreIdentity> {
         let trimmed = self.stored.trim();
@@ -173,19 +157,6 @@ impl<'a> VaultFormatDocument<'a> {
         Ok(vault.architecture)
     }
 
-    /// Read just the active unlock mode without unwinding the full record list.
-    pub fn unlock(&self) -> VaultFormatResult<VaultUnlock> {
-        let trimmed = self.stored.trim();
-        if trimmed.is_empty() {
-            return Ok(VaultUnlock::Keys);
-        }
-        self.detect()?;
-        let vault: StoredVaultYaml =
-            serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseUnlock)?;
-        VaultSchemaVersion::from(vault.schema_version).ensure_supported()?;
-        Ok(vault.unlock)
-    }
-
     /// Deserialize records using the selected persisted format.
     pub fn deserialize(&self, format: VaultFormat) -> VaultFormatResult<Vec<StoredSecretRecord>> {
         match format {
@@ -193,26 +164,17 @@ impl<'a> VaultFormatDocument<'a> {
         }
     }
 
-    /// Deserialize records from YAML and retain the active unlock mode.
-    pub fn deserialize_yaml_with_unlock(
-        &self,
-    ) -> VaultFormatResult<(Vec<StoredSecretRecord>, VaultUnlock)> {
+    /// Deserialize records from YAML.
+    pub fn deserialize_yaml(&self) -> VaultFormatResult<Vec<StoredSecretRecord>> {
         let trimmed = self.stored.trim();
         if trimmed.is_empty() {
-            return Ok((Vec::new(), VaultUnlock::Keys));
+            return Ok(Vec::new());
         }
 
         let vault: StoredVaultYaml =
             serde_yaml::from_str(trimmed).map_err(|_| VaultFormatError::YamlMissingSections)?;
         VaultSchemaVersion::from(vault.schema_version).ensure_supported()?;
-        let unlock = vault.unlock.clone();
-        let records = vault.into_stored_records()?;
-        Ok((records, unlock))
-    }
-
-    /// Deserialize records from YAML.
-    pub fn deserialize_yaml(&self) -> VaultFormatResult<Vec<StoredSecretRecord>> {
-        Ok(self.deserialize_yaml_with_unlock()?.0)
+        vault.into_stored_records()
     }
 }
 
@@ -237,41 +199,27 @@ impl VaultRecordSet {
     }
 
     pub fn write_yaml(&self) -> VaultFormatResult<VaultYamlBlob> {
-        self.write_yaml_with_unlock(
-            &VaultUnlock::Keys,
-            &[],
+        self.write_yaml_with_store(
             VaultStoreIdentityRef::Unassigned,
             VaultVersionWrite::Initial,
         )
     }
 
-    pub fn write_yaml_with_unlock(
+    pub fn write_yaml_with_store(
         &self,
-        unlock: &VaultUnlock,
-        password_entries: &[PasswordUnlockEntry],
         store_id: VaultStoreIdentityRef<'_>,
         vault_version: VaultVersionWrite,
     ) -> VaultFormatResult<VaultYamlBlob> {
-        self.write_yaml_with_unlock_and_name(
-            unlock,
-            password_entries,
-            store_id,
-            VaultNameRef::Unnamed,
-            vault_version,
-        )
+        self.write_yaml_with_name(store_id, VaultNameRef::Unnamed, vault_version)
     }
 
-    pub fn write_yaml_with_unlock_and_name(
+    pub fn write_yaml_with_name(
         &self,
-        unlock: &VaultUnlock,
-        password_entries: &[PasswordUnlockEntry],
         store_id: VaultStoreIdentityRef<'_>,
         vault_name: VaultNameRef<'_>,
         vault_version: VaultVersionWrite,
     ) -> VaultFormatResult<VaultYamlBlob> {
-        self.write_yaml_with_unlock_name_architecture(
-            unlock,
-            password_entries,
+        self.write_yaml_with_name_architecture(
             store_id,
             vault_name,
             vault_version,
@@ -279,10 +227,8 @@ impl VaultRecordSet {
         )
     }
 
-    pub fn write_yaml_with_unlock_name_architecture(
+    pub fn write_yaml_with_name_architecture(
         &self,
-        unlock: &VaultUnlock,
-        password_entries: &[PasswordUnlockEntry],
         store_id: VaultStoreIdentityRef<'_>,
         vault_name: VaultNameRef<'_>,
         vault_version: VaultVersionWrite,
@@ -297,9 +243,7 @@ impl VaultRecordSet {
         };
         vault.store_id = Self::resolve_store_id(store_id)?;
         vault.name = VaultName::from_ref(vault_name);
-        vault.unlock = unlock.projection_unlock();
         vault.architecture = architecture.clone();
-        vault.password_entries = password_entries.to_vec();
         serde_yaml::to_string(&vault)
             .map(VaultYamlBlob::from_trusted)
             .map_err(VaultFormatError::YamlSerialize)
@@ -329,45 +273,31 @@ impl VaultRecordSet {
         Self::new(records).write_yaml()
     }
 
-    pub fn serialize_yaml_with_unlock(
+    pub fn serialize_yaml_with_store(
         records: &[StoredSecretRecord],
-        unlock: &VaultUnlock,
-        password_entries: &[PasswordUnlockEntry],
         store_id: VaultStoreIdentityRef<'_>,
         vault_version: VaultVersionWrite,
     ) -> VaultFormatResult<VaultYamlBlob> {
-        Self::new(records).write_yaml_with_unlock(unlock, password_entries, store_id, vault_version)
+        Self::new(records).write_yaml_with_store(store_id, vault_version)
     }
 
-    pub fn serialize_yaml_with_unlock_and_name(
+    pub fn serialize_yaml_with_name(
         records: &[StoredSecretRecord],
-        unlock: &VaultUnlock,
-        password_entries: &[PasswordUnlockEntry],
         store_id: VaultStoreIdentityRef<'_>,
         vault_name: VaultNameRef<'_>,
         vault_version: VaultVersionWrite,
     ) -> VaultFormatResult<VaultYamlBlob> {
-        Self::new(records).write_yaml_with_unlock_and_name(
-            unlock,
-            password_entries,
-            store_id,
-            vault_name,
-            vault_version,
-        )
+        Self::new(records).write_yaml_with_name(store_id, vault_name, vault_version)
     }
 
-    pub fn serialize_yaml_with_unlock_name_architecture(
+    pub fn serialize_yaml_with_name_architecture(
         records: &[StoredSecretRecord],
-        unlock: &VaultUnlock,
-        password_entries: &[PasswordUnlockEntry],
         store_id: VaultStoreIdentityRef<'_>,
         vault_name: VaultNameRef<'_>,
         vault_version: VaultVersionWrite,
         architecture: &VaultArchitecture,
     ) -> VaultFormatResult<VaultYamlBlob> {
-        Self::new(records).write_yaml_with_unlock_name_architecture(
-            unlock,
-            password_entries,
+        Self::new(records).write_yaml_with_name_architecture(
             store_id,
             vault_name,
             vault_version,
@@ -408,11 +338,9 @@ impl VaultName {
 #[allow(clippy::items_after_test_module, clippy::unnecessary_wraps)]
 mod tests {
     use crate::RecordTypeDeclaration;
-    use crate::{
-        DeviceMode, ReplicationType, SecretType, SentinelConfiguration, SymmetricKey, VaultType,
-    };
+    use crate::{DeviceMode, ReplicationType, SecretType, SentinelConfiguration, VaultType};
 
-    use std::{error, io, slice};
+    use std::{error, io};
 
     use super::*;
     use crate::{SecretId, StoredRecordPayload};
@@ -471,53 +399,32 @@ mod tests {
             VaultRecordSet::serialize_yaml(records)
         }
 
-        fn serialize_stored_yaml_with_unlock(
+        fn serialize_stored_yaml_with_store(
             records: &[StoredSecretRecord],
-            unlock: &VaultUnlock,
-            password_entries: &[PasswordUnlockEntry],
             store_id: VaultStoreIdentityRef<'_>,
             version: VaultVersionWrite,
         ) -> VaultFormatResult<VaultYamlBlob> {
-            VaultRecordSet::serialize_yaml_with_unlock(
-                records,
-                unlock,
-                password_entries,
-                store_id,
-                version,
-            )
+            VaultRecordSet::serialize_yaml_with_store(records, store_id, version)
         }
 
-        fn serialize_stored_yaml_with_unlock_and_name(
+        fn serialize_stored_yaml_with_name(
             records: &[StoredSecretRecord],
-            unlock: &VaultUnlock,
-            password_entries: &[PasswordUnlockEntry],
             store_id: VaultStoreIdentityRef<'_>,
             name: VaultNameRef<'_>,
             version: VaultVersionWrite,
         ) -> VaultFormatResult<VaultYamlBlob> {
-            VaultRecordSet::serialize_yaml_with_unlock_and_name(
-                records,
-                unlock,
-                password_entries,
-                store_id,
-                name,
-                version,
-            )
+            VaultRecordSet::serialize_yaml_with_name(records, store_id, name, version)
         }
 
-        fn serialize_stored_yaml_with_unlock_name_architecture(
+        fn serialize_stored_yaml_with_name_architecture(
             records: &[StoredSecretRecord],
-            unlock: &VaultUnlock,
-            password_entries: &[PasswordUnlockEntry],
             store_id: VaultStoreIdentityRef<'_>,
             name: VaultNameRef<'_>,
             version: VaultVersionWrite,
             architecture: &VaultArchitecture,
         ) -> VaultFormatResult<VaultYamlBlob> {
-            VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
+            VaultRecordSet::serialize_yaml_with_name_architecture(
                 records,
-                unlock,
-                password_entries,
                 store_id,
                 name,
                 version,
@@ -527,22 +434,6 @@ mod tests {
 
         fn deserialize_stored_yaml(stored: &str) -> VaultFormatResult<Vec<StoredSecretRecord>> {
             VaultFormatDocument::new(stored).deserialize_yaml()
-        }
-
-        fn deserialize_stored_yaml_with_unlock(
-            stored: &str,
-        ) -> VaultFormatResult<(Vec<StoredSecretRecord>, VaultUnlock)> {
-            VaultFormatDocument::new(stored).deserialize_yaml_with_unlock()
-        }
-
-        fn read_vault_password_entries(
-            stored: &str,
-        ) -> VaultFormatResult<Vec<PasswordUnlockEntry>> {
-            VaultFormatDocument::new(stored).password_entries()
-        }
-
-        fn read_vault_unlock(stored: &str) -> VaultFormatResult<VaultUnlock> {
-            VaultFormatDocument::new(stored).unlock()
         }
 
         fn read_vault_schema_version(stored: &str) -> VaultFormatResult<VaultSchemaVersion> {
@@ -697,73 +588,15 @@ mod tests {
     }
 
     #[test]
-    fn yaml_password_entries_roundtrip_with_keys_unlock() -> TestResult {
-        use crate::{
-            PasswordEnvelopeAttachment, PasswordEnvelopeResolution, multi_device::VaultKeys,
-        };
-
-        let keys = VaultKeys {
-            secrets_key: SymmetricKey::parse(&"d".repeat(64))?,
-            members_key: SymmetricKey::parse(&"e".repeat(64))?,
-        };
-        let envelope = PasswordEnvelopeAttachment::with_work_factor(
-            &keys,
-            "correct horse battery staple",
-            10.into(),
-        )
-        .attach()?;
-        let entry = PasswordUnlockEntry {
-            id: "pw-1".to_owned(),
-            label: "test password".to_owned(),
-            created_at: "2026-06-23T00:00:00Z".to_owned(),
-            envelope: envelope.clone(),
-        };
-
-        let yaml = VaultFormatTestData::serialize_stored_yaml_with_unlock(
-            &[],
-            &VaultUnlock::Keys,
-            slice::from_ref(&entry),
-            VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
-            VaultVersionWrite::Version(1.into()),
-        )?;
-        assert!(!yaml.as_str().contains("unlock:"));
-        assert!(yaml.as_str().contains("password_entries:"));
-        assert!(!yaml.as_str().starts_with("password_envelope:"));
-
-        let parsed_entries = VaultFormatTestData::read_vault_password_entries(yaml.as_str())?;
-        assert_eq!(parsed_entries.len(), 1);
-        let parsed_envelope = parsed_entries
-            .first()
-            .unwrap_or_else(|| panic!("password fixture must contain one envelope"))
-            .envelope
-            .clone();
-        assert_eq!(parsed_envelope.version, envelope.version);
-        assert_eq!(parsed_envelope.kdf, envelope.kdf);
-        assert_eq!(
-            PasswordEnvelopeResolution::new(&parsed_envelope, "correct horse battery staple")
-                .resolve()?,
-            keys
-        );
-
-        let read = VaultFormatTestData::read_vault_unlock(yaml.as_str())?;
-        assert_eq!(read, VaultUnlock::Keys);
-        Ok(())
-    }
-
-    #[test]
-    fn yaml_keys_unlock_is_default() -> TestResult {
+    fn yaml_carries_only_device_key_access() -> TestResult {
         let records = VaultFormatTestData::sample_records();
         let yaml = VaultFormatTestData::serialize_stored_yaml(&records)?;
         assert!(!yaml.as_str().contains("unlock:"));
         assert!(!yaml.as_str().contains("envelope:"));
 
-        let (parsed_records, unlock) =
-            VaultFormatTestData::deserialize_stored_yaml_with_unlock(yaml.as_str())?;
-        assert_eq!(parsed_records, records);
-        assert_eq!(unlock, VaultUnlock::Keys);
         assert_eq!(
-            VaultFormatTestData::read_vault_unlock(yaml.as_str())?,
-            VaultUnlock::Keys
+            VaultFormatTestData::deserialize_stored_yaml(yaml.as_str())?,
+            records
         );
         Ok(())
     }
@@ -771,10 +604,8 @@ mod tests {
     #[test]
     fn store_id_roundtrip() -> TestResult {
         let records = VaultFormatTestData::sample_records();
-        let yaml = VaultFormatTestData::serialize_stored_yaml_with_unlock(
+        let yaml = VaultFormatTestData::serialize_stored_yaml_with_store(
             &records,
-            &VaultUnlock::Keys,
-            &[],
             VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
             VaultVersionWrite::Version(1.into()),
         )?;
@@ -810,9 +641,7 @@ mod tests {
                 ready_participants: 0.into(),
             }),
         };
-        let yaml = VaultFormatTestData::serialize_stored_yaml_with_unlock_name_architecture(
-            &[],
-            &VaultUnlock::Keys,
+        let yaml = VaultFormatTestData::serialize_stored_yaml_with_name_architecture(
             &[],
             VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
             VaultNameRef::Named("Team vault"),
@@ -874,10 +703,8 @@ mod tests {
     #[test]
     fn vault_name_roundtrip_and_update() -> TestResult {
         let records = VaultFormatTestData::sample_records();
-        let yaml = VaultFormatTestData::serialize_stored_yaml_with_unlock_and_name(
+        let yaml = VaultFormatTestData::serialize_stored_yaml_with_name(
             &records,
-            &VaultUnlock::Keys,
-            &[],
             VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
             VaultNameRef::Named("  Personal vault  "),
             VaultVersionWrite::Version(1.into()),
@@ -914,7 +741,7 @@ mod tests {
 
     #[test]
     fn unsupported_schema_version_is_rejected() -> TestResult {
-        let future = "schema_version: 99\nunlock:\n  type: keys\nsecrets: []\n";
+        let future = "schema_version: 99\nsecrets: []\n";
         let err = VaultFormatTestData::deserialize_stored_yaml(future)
             .err()
             .ok_or_else(|| io::Error::other("vault format test should reject invalid input"))?;

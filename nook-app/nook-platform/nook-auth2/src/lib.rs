@@ -35,7 +35,7 @@
 //!
 //! This crate owns the browser-independent security layer for Nook vaults:
 //! device identities, passkey-PRF wrapping after the platform ceremony,
-//! password envelopes, member authorization rows, and the vault key material
+//! member authorization rows, and the vault key material
 //! those mechanisms resolve. Storage providers and replication stay outside
 //! this crate.
 
@@ -118,11 +118,11 @@ pub mod multi_device_api {
         VaultRecordView,
     };
 }
-pub use auth::password_envelope::{
-    PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEntryIssuance, PasswordEntryResolution,
-    PasswordEnvelope, PasswordEnvelopeAttachment, PasswordEnvelopeResolution,
-    PasswordEnvelopeRewrap, PasswordEnvelopeVersion, PasswordPolicy, PasswordUnlockEntry,
-    VaultUnlock,
+pub use auth::recovery_passphrase::{
+    RecoveryPassphraseError, RecoveryPhrase, RecoverySealedSecret, RecoverySecret,
+    RecoveryStrength, RecoveryWord, RecoveryWordCount, RecoveryWordDraw, RecoveryWordPosition,
+    RecoveryWordSample, RecoveryWordSuggestions, RecoveryWordTyping, TypedRecoveryWord,
+    TypedRecoveryWords, UnknownRecoveryWord,
 };
 pub use auth::sentinel_genesis::{
     CheckedSentinelGenesisDelivery, CheckedSentinelGenesisResponse, ReadySentinelGenesis,
@@ -141,8 +141,8 @@ pub use crypto::vault_crypto::VaultCrypto;
 pub use errors::{
     AgeCryptoError, DeviceKeyProtectionError, DeviceKeyProtectionResult, EnrollmentError,
     EnrollmentResult, MultiDeviceError, MultiDeviceResult, PasswordError, PasswordResult,
-    RejectedPasswordEnvelopeVersion, SecretPayloadError, SecretPayloadResult, ValidationError,
-    ValidationResult, VaultCryptoError, VaultCryptoResult,
+    SecretPayloadError, SecretPayloadResult, ValidationError, ValidationResult, VaultCryptoError,
+    VaultCryptoResult,
 };
 pub use ids::{
     AUTH_KEY_ID_PREFIX, AppId, AuthKeyId, CompactToken, DeviceId, SECRET_ID_PREFIX,
@@ -155,8 +155,7 @@ pub use records::{
 pub use wire::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
     DeviceSigningPublicKey, IdentityVaultEventId, IsoTimestamp, MemberLabel, OpaqueCiphertext,
-    PasswordEntryId, ProviderSecretText, Sha256Hex, SigningSeedHex, SymmetricKey,
-    Url64EncodedString,
+    ProviderSecretText, Sha256Hex, SigningSeedHex, SymmetricKey, Url64EncodedString,
 };
 
 pub use auth::identity_genesis::IdentityVaultGenesisRecordsRequest;

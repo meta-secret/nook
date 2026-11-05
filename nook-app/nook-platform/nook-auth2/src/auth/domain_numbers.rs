@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 #[serde(transparent)]
 pub struct PasswordCharacterCount(pub(crate) usize);
 impl PasswordCharacterCount {
-    pub const VAULT_MINIMUM: Self = Self(5);
     pub const RECOMMENDED_MINIMUM: Self = Self(8);
     pub const GENERATOR_MAXIMUM: Self = Self(128);
 }

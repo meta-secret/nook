@@ -3,8 +3,7 @@ use crate::ConfiguredVaultApplication;
 use nook_core::{
     EventGraph, SentinelConfiguration, SentinelGenesisPhase, SentinelPolicy, StorageConnection,
     StorageMode, StoreId, StoredSecretRecord, VaultArchitecture, VaultMetaGraphProjection,
-    VaultMetaState, VaultProjection, VaultSessionProjection, VaultType, VaultUnlock,
-    VaultUserRecordBatch,
+    VaultMetaState, VaultProjection, VaultSessionProjection, VaultType, VaultUserRecordBatch,
 };
 
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
@@ -170,8 +169,6 @@ pub(in crate::manager) struct VaultSessionState {
     pub(in crate::manager) crypto: VaultCryptoState,
     pub(in crate::manager) meta: nook_core::VaultMetaState,
     pub(in crate::manager) last_synced_content: String,
-    pub(in crate::manager) unlock: nook_core::VaultUnlock,
-    pub(in crate::manager) password_entries: Vec<nook_core::PasswordUnlockEntry>,
     pub(in crate::manager) store_id: String,
     pub(in crate::manager) vault_name: VaultNameState,
     /// The name the event log carries, still encrypted. Epoch rotation
@@ -200,8 +197,6 @@ impl Default for VaultSessionState {
             crypto: VaultCryptoState::Locked,
             meta: VaultMetaState::default(),
             last_synced_content: String::new(),
-            unlock: VaultUnlock::Keys,
-            password_entries: Vec::new(),
             store_id: String::new(),
             vault_name: VaultNameState::Unnamed,
             projected_name: nook_core::ProjectedVaultName::Unnamed,
@@ -237,7 +232,6 @@ impl VaultSessionState {
         let mut vault = Self {
             store_id: input.store_id.to_string(),
             architecture: input.architecture.clone(),
-            password_entries: projection.password_entries,
             ..Self::default()
         };
         VaultUserRecordBatch::new(records).replace(&mut vault.meta);
@@ -287,8 +281,6 @@ impl VaultSessionState {
         self.projection = VaultSessionProjection::Unhydrated;
         self.meta = VaultMetaState::default();
         self.last_synced_content.clear();
-        self.unlock = VaultUnlock::Keys;
-        self.password_entries.clear();
         self.store_id.clear();
         self.vault_name = VaultNameState::Unnamed;
         self.projected_name = nook_core::ProjectedVaultName::Unnamed;
@@ -386,6 +378,8 @@ pub struct NookVaultManager {
     pub(in crate::manager) sentinel_unlock: CeremonyState<nook_core::SentinelUnlockSession>,
     pub(in crate::manager) sync_outbox: SyncOutbox,
     pub(in crate::manager) event_log_sync_issue: EventLogSyncIssueState,
+    /// A recovery passphrase shown on this device and not yet confirmed.
+    pub(in crate::manager) recovery_passphrase: CeremonyState<nook_core::PendingRecoveryPassphrase>,
 }
 
 impl Drop for NookVaultManager {
@@ -399,6 +393,7 @@ impl Drop for NookVaultManager {
         self.sentinel_unlock = CeremonyState::Inactive;
         self.sync_outbox = SyncOutbox::Unbound;
         self.event_log_sync_issue = EventLogSyncIssueState::Clear;
+        self.recovery_passphrase = CeremonyState::Inactive;
     }
 }
 
@@ -419,6 +414,7 @@ impl NookVaultManager {
             sentinel_unlock: CeremonyState::Inactive,
             sync_outbox: SyncOutbox::Unbound,
             event_log_sync_issue: EventLogSyncIssueState::Clear,
+            recovery_passphrase: CeremonyState::Inactive,
         }
     }
 }
@@ -442,6 +438,58 @@ mod tests {
         let unlocked = VaultCryptoState::Unlocked(nook_core::VaultCrypto::new(&keys.secrets_key)?);
         assert!(unlocked.is_unlocked());
         assert!(unlocked.get().is_ok());
+        Ok(())
+    }
+
+    /// Selecting a vault starts a session that reads that vault: the open
+    /// vault's keys and name are gone, and a sync no longer needs to choose
+    /// among the vaults a provider holds. A malformed id leaves the session.
+    #[wasm_bindgen_test]
+    fn a_selected_vault_owns_the_new_session() -> anyhow::Result<()> {
+        let keys = nook_core::VaultKeys::generate()?;
+        let open = nook_core::StoreId::generate()?;
+        let selected = nook_core::StoreId::generate()?;
+        let mut manager = NookVaultManager::new();
+        manager.vault.store_id = open.as_str().to_owned();
+        manager.vault.vault_name = VaultNameState::Named("Open vault".to_owned());
+        manager.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
+
+        assert!(manager.begin_vault_session("not a store").is_err());
+        assert_eq!(manager.vault.store_id, open.as_str());
+        assert!(manager.vault.crypto.is_unlocked());
+
+        manager
+            .begin_vault_session(selected.as_str())
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(manager.vault.store_id, selected.as_str());
+        assert!(!manager.vault.crypto.is_unlocked());
+        assert!(manager.vault.secrets_key.is_empty());
+        assert!(matches!(manager.vault.vault_name, VaultNameState::Unnamed));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn locking_or_resetting_drops_a_recovery_passphrase_waiting_to_be_confirmed()
+    -> Result<(), JsError> {
+        let pending = || {
+            nook_core::PendingRecoveryPassphrase::begin(&nook_core::RecoveryPassphraseStart {
+                label: "Paper",
+                strength: nook_core::RecoveryStrength::Standard,
+            })
+        };
+        let mut manager = NookVaultManager::new();
+        manager.recovery_passphrase = CeremonyState::Active(pending()?);
+        manager.lock_device_identity();
+        assert!(matches!(
+            manager.recovery_passphrase,
+            CeremonyState::Inactive
+        ));
+        manager.recovery_passphrase = CeremonyState::Active(pending()?);
+        manager.reset_vault_session();
+        assert!(matches!(
+            manager.recovery_passphrase,
+            CeremonyState::Inactive
+        ));
         Ok(())
     }
 
@@ -477,19 +525,6 @@ mod tests {
             last_synced_content: "content".to_owned(),
             ..VaultSessionState::default()
         };
-        state.password_entries.push(nook_core::PasswordUnlockEntry {
-            id: "password-entry".to_owned(),
-            label: "Backup".to_owned(),
-            created_at: "2026-09-06T00:00:00Z".to_owned(),
-            envelope: nook_core::PasswordEnvelope {
-                version: nook_core::PasswordEnvelopeVersion::LEGACY,
-                kdf: "argon2id".to_owned(),
-                work_factor: 3.into(),
-                recipient: String::new(),
-                wrapped_keys: String::new(),
-                ciphertext: "AGE-ENCRYPTED-KEYS".to_owned(),
-            },
-        });
         state.store_id = "store_12345678".to_owned();
         state.vault_name = VaultNameState::Named("Vault".to_owned());
         state.vault_version = 4;
@@ -503,8 +538,6 @@ mod tests {
         assert!(state.members_key.is_empty());
         assert!(matches!(state.crypto, VaultCryptoState::Locked));
         assert!(state.last_synced_content.is_empty());
-        assert!(matches!(state.unlock, VaultUnlock::Keys));
-        assert!(state.password_entries.is_empty());
         assert!(state.store_id.is_empty());
         assert!(matches!(state.vault_name, VaultNameState::Unnamed));
         assert_eq!(state.vault_version, 0);

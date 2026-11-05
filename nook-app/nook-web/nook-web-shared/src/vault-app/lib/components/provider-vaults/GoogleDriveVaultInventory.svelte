@@ -27,6 +27,7 @@ decrypts in memory and changes nothing.
   import ProviderIdentityList from '$lib/components/provider-vaults/ProviderIdentityList.svelte'
   import SetupIdentityList from '$lib/components/provider-vaults/SetupIdentityList.svelte'
   import OptionDivider from '$lib/components/provider-vaults/OptionDivider.svelte'
+  import { SetupRecoveryKind } from '$lib/components/provider-vaults/setup-identity-offer'
   import { FirstRunIdentityAction } from '$lib/vault/first-run'
   import { IdentityControlViewKind } from '$lib/vault/identity-control.svelte'
   import {
@@ -337,6 +338,7 @@ decrypts in memory and changes nothing.
           onContinue={act(FirstRunIdentityAction.Continue)}
           onAskToJoin={act(FirstRunIdentityAction.AskToJoin)}
           onCheck={act(FirstRunIdentityAction.CheckJoin)}
+          recovery={{ kind: SetupRecoveryKind.NotOffered }}
         />
       {:else}
         <ProviderIdentityList

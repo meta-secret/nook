@@ -228,7 +228,7 @@ test('admits migrated local Cortex evidence while preserving bounded roots and s
   const request: StructuralEvidenceInvocationRequest = {
     ...StructuralExpertsRequestCodecScenario.cortexEvidenceRequest(),
     evidencePaths: [
-      'nook-app/nook-platform/nook-auth2/.cortex/docs/spec/password-envelope.md',
+      'nook-app/nook-platform/nook-auth2/.cortex/docs/spec/decentralized-auth.md',
     ],
   };
   expect(
@@ -239,7 +239,7 @@ test('admits migrated local Cortex evidence while preserving bounded roots and s
   for (const evidencePath of [
     'nook-app/nook-platform/nook-auth2/.cortex/.session/transient.md',
     'agentic-ai/loom/.cortex/.session/transient.md',
-    'nook-app/nook-platform/nook-auth2/src/auth/password_envelope.rs',
+    'nook-app/nook-platform/nook-auth2/src/lib.rs',
     'node_modules/dependency/.cortex/docs/spec/policy.md',
     '.meta-cortex/teams/dev-team/AGENTS.md',
   ]) {

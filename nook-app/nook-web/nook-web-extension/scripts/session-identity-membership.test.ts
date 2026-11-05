@@ -70,6 +70,7 @@ class MembershipManager {
           joinRequests: [],
           vaults: [],
           mounts: [],
+          recoveryPassphrases: [],
         }
         return Promise.resolve(identity)
       },

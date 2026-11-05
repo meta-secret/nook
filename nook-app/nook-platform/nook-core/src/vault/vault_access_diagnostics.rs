@@ -11,7 +11,7 @@
 //! age ciphertext parser as normal unlock, but it never returns plaintext keys,
 //! private device material, or decrypted secret values.
 
-use crate::{EpochPasswordState, EventId, ProjectionEpoch};
+use crate::{EventId, ProjectionEpoch};
 use nook_auth2::{DeviceJoinStatus, PendingJoinForDeviceRequest, VaultMetaState};
 
 use crate::errors::VaultResult;
@@ -164,29 +164,14 @@ impl EncryptedOperationDiagnostic<'_> {
         let operation = self.0;
 
         match operation {
-            VaultOperation::VaultImported {
-                secrets,
-                password_entries,
-                ..
-            } => secrets.len() + password_entries.len(),
+            VaultOperation::VaultImported { secrets, .. } => secrets.len(),
             VaultOperation::EpochCheckpoint {
                 secrets,
-                password_entries,
                 vault_name,
                 ..
-            } => {
-                secrets.len()
-                    + match password_entries {
-                        EpochPasswordState::LegacyRetain => 0,
-                        EpochPasswordState::Replace(entries) => entries.len(),
-                    }
-                    + usize::from(matches!(vault_name, crate::EpochVaultName::Named(_)))
-            }
+            } => secrets.len() + usize::from(matches!(vault_name, crate::EpochVaultName::Named(_))),
             VaultOperation::SecretCreated { .. }
             | VaultOperation::SecretReplaced { .. }
-            | VaultOperation::PasswordAdded { .. }
-            | VaultOperation::PasswordRotated { .. }
-            | VaultOperation::PasswordEnvelopeUpgraded { .. }
             | VaultOperation::VaultNamed { .. } => 1,
             VaultOperation::JoinApproved { .. } => 2,
             VaultOperation::SentinelSharesIssued { shares } => shares.len(),
@@ -197,7 +182,6 @@ impl EncryptedOperationDiagnostic<'_> {
             | VaultOperation::JoinDenied { .. }
             | VaultOperation::MemberRenamed { .. }
             | VaultOperation::DeviceRevoked { .. }
-            | VaultOperation::PasswordRemoved { .. }
             | VaultOperation::VaultCleared => 0,
         }
     }
@@ -432,16 +416,11 @@ mod tests {
         crypto: &'a VaultCrypto,
         value: &'a str,
     }
-    struct PasswordDiagnosticFixture<'a> {
-        id: &'a str,
-    }
-
     use crate::{OpaqueCiphertext, SecretFingerprint};
 
     use super::*;
     use crate::{
         ApiKeySecret, EncryptedSecretPayload, GenesisImportPayload, IsoTimestamp, KeyEpoch,
-        PasswordEntryId, PasswordEnvelope, PasswordEnvelopeVersion, PasswordUnlockEntry,
         SecretType, SecretValue, SigningIdentity, StoreId, StoredRecordPayload, VaultKeys,
         VaultProjection, VaultResult,
     };
@@ -477,26 +456,6 @@ mod tests {
                     )?,
                 ),
             })
-        }
-    }
-
-    impl PasswordDiagnosticFixture<'_> {
-        fn entry(self) -> PasswordUnlockEntry {
-            let id = self.id;
-
-            PasswordUnlockEntry {
-                id: id.to_owned(),
-                label: "Recovery".to_owned(),
-                created_at: "2026-07-06T00:00:00Z".to_owned(),
-                envelope: PasswordEnvelope {
-                    version: PasswordEnvelopeVersion::LEGACY,
-                    kdf: "scrypt".to_owned(),
-                    work_factor: 15.into(),
-                    recipient: String::new(),
-                    wrapped_keys: String::new(),
-                    ciphertext: "age encrypted vault keys".to_owned(),
-                },
-            }
         }
     }
 
@@ -734,7 +693,6 @@ mod tests {
                         "test:diagnostic-version".to_owned(),
                     ),
                 }],
-                password_entries: Vec::new(),
             },
             created_at: &IsoTimestamp::from_trusted("2026-07-06T00:00:00Z".to_owned()),
             signing_key: &signing_key,
@@ -769,7 +727,7 @@ mod tests {
     }
 
     #[test]
-    fn encrypted_payload_count_includes_password_envelopes() {
+    fn encrypted_payload_count_counts_imported_secrets() {
         let secret = EncryptedSecretPayload {
             id: SecretId::from_vault_record("secret_payload01"),
             secret_type: SecretType::ApiKey,
@@ -784,39 +742,9 @@ mod tests {
             EncryptedOperationDiagnostic(&VaultOperation::VaultImported {
                 source_content_hash: nook_auth2::Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 secrets: vec![secret],
-                password_entries: vec![PasswordDiagnosticFixture { id: "entry-1" }.entry()],
-            })
-            .payload_count(),
-            2
-        );
-        assert_eq!(
-            EncryptedOperationDiagnostic(&VaultOperation::PasswordAdded {
-                entry_id: PasswordEntryId::from_trusted("entry-2".to_owned()),
-                label: "Recovery".to_owned(),
-                created_at: IsoTimestamp::from_trusted("2026-07-06T00:00:00Z".to_owned()),
-                envelope: PasswordDiagnosticFixture { id: "diagnostic" }
-                    .entry()
-                    .envelope,
             })
             .payload_count(),
             1
-        );
-        assert_eq!(
-            EncryptedOperationDiagnostic(&VaultOperation::PasswordRotated {
-                entry_id: PasswordEntryId::from_trusted("entry-3".to_owned()),
-                envelope: PasswordDiagnosticFixture { id: "diagnostic" }
-                    .entry()
-                    .envelope,
-            })
-            .payload_count(),
-            1
-        );
-        assert_eq!(
-            EncryptedOperationDiagnostic(&VaultOperation::PasswordRemoved {
-                entry_id: PasswordEntryId::from_trusted("entry-4".to_owned()),
-            })
-            .payload_count(),
-            0
         );
     }
 
@@ -834,7 +762,6 @@ mod tests {
             payload: GenesisImportPayload {
                 source_content_hash: nook_auth2::Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 secrets: Vec::new(),
-                password_entries: Vec::new(),
             },
             created_at: &IsoTimestamp::from_trusted("2026-07-06T00:00:00Z".to_owned()),
             signing_key: &signing_key,

@@ -20,6 +20,7 @@ adding a device live on the Devices page around this list.
     Check,
     ChevronDown,
     Copy,
+    KeyRound,
     Laptop,
     Pencil,
     ShieldOff,
@@ -33,9 +34,11 @@ adding a device live on the Devices page around this list.
   import type { VaultState } from "$lib/vault.svelte";
   import { VaultType } from "$lib/vault/architecture-model";
   import {
+    MemberApprovalTagKind,
     MemberDetailsKind,
     MemberRenameKind,
     MemberRevocationKind,
+    memberApprovalTag,
     type MemberDetails,
     type MemberRename,
     type MemberRevocation,
@@ -157,6 +160,7 @@ adding a device live on the Devices page around this list.
             revokeAppId.kind === MemberRevocationKind.Confirming &&
             revokeAppId.appId === member.appId}
           {@const canRevoke = members.length > 1}
+          {@const approval = memberApprovalTag(member.approvedBy)}
           <li
             class="border border-border bg-card p-3"
             data-testid="vault-member-row"
@@ -208,6 +212,19 @@ adding a device live on the Devices page around this list.
                     {:else}
                       <span class="nk-tag">
                         {vault.t(I18N_KEYS.DevicesCardEnrolled)}
+                      </span>
+                    {/if}
+                    {#if approval.kind === MemberApprovalTagKind.Recovered}
+                      {@const recovered: Parameters<typeof vault.t>[0] = {
+                        key: I18N_KEYS.RecoveryPassphraseApprovedBy,
+                        replacements: { label: approval.label },
+                      }}
+                      <span
+                        class="nk-tag inline-flex items-center gap-1"
+                        data-testid="device-recovered-by"
+                      >
+                        <KeyRound class="size-3" aria-hidden="true" />
+                        {vault.t(recovered)}
                       </span>
                     {/if}
                   </div>

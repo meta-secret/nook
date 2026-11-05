@@ -102,7 +102,7 @@ pub enum MultiDeviceError {
     #[error("Device name must be 80 characters or fewer.")]
     DeviceNameTooLong,
 
-    #[error("Add another device or a vault password before removing this one.")]
+    #[error("Add another device before removing this one.")]
     CannotRemoveLastAccess,
 
     #[error("Device not found.")]
@@ -195,11 +195,6 @@ pub enum MultiDeviceError {
         "Sentinel vault unlock requires an opened-share ceremony; per-device auth envelopes cannot unlock this vault."
     )]
     SentinelCeremonyRequired,
-
-    #[error(
-        "Password unlock is forbidden for sentinel vaults; use the opened-share ceremony instead."
-    )]
-    SentinelPasswordUnlockForbidden,
 
     #[error(
         "Sentinel participant revocation requires an atomic replacement and share-rotation ceremony."

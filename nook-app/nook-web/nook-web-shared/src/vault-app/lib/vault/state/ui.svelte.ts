@@ -1,8 +1,8 @@
 /**
  * The unified workspace: identities are the hub, a vault is opened from an
  * identity, and management pages are grouped by what they act on — the
- * identity (keys, vaults, devices, sync providers, backup passwords, browser
- * settings) or the open vault (imports).
+ * identity (keys, vaults, devices, sync providers, browser settings) or the
+ * open vault (imports).
  */
 
 import { UnlockReturn } from "$lib/app/unlock-return";
@@ -45,7 +45,6 @@ export enum WorkspaceSection {
   /** Invite another phone or computer into the identity, then approve it. */
   AddDevice = "add-device",
   Sync = "sync",
-  Passwords = "passwords",
   Import = "import",
 }
 
@@ -66,7 +65,6 @@ export class WorkspaceSectionScope {
       case WorkspaceSection.Devices:
       case WorkspaceSection.Sync:
       case WorkspaceSection.Settings:
-      case WorkspaceSection.Passwords:
         return ManageSectionScope.Identity;
       case WorkspaceSection.Import:
         return ManageSectionScope.Vault;

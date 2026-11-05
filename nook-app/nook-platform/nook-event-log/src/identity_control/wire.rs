@@ -10,7 +10,8 @@ use std::{fmt, str};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use nook_auth2::{
     AgeArmoredCiphertext, AppId, AuthKeyId, CompactToken, DevicePublicKey, DeviceSigningPublicKey,
-    IdentityId, IdentityInviteId, IsoTimestamp, MemberLabel, S3KeyPrefix, StoreId,
+    IdentityId, IdentityInviteId, IsoTimestamp, MemberLabel, RecoverySealedSecret,
+    RecoveryStrength, S3KeyPrefix, StoreId,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -298,6 +299,15 @@ pub enum IdentityControlOperation {
         invite_signature: Ed25519Signature,
         vault_deks: Vec<IdentityVaultDekGrant>,
     },
+    /// A member adds a recovery passphrase: a member whose private keys are
+    /// sealed under generated words. It receives every vault DEK like any
+    /// member, may approve one new app key on its own device at a time, and
+    /// is never counted as a device.
+    RecoveryKeyAdded {
+        member: IdentityMemberKeys,
+        sealed_secret: RecoverySealedSecret,
+        strength: RecoveryStrength,
+    },
     MemberRevoked {
         app_id: AppId,
     },
@@ -436,6 +446,7 @@ impl IdentityEvent {
         }
         self.validate_operation_structure()?;
         self.check_member_devices()?;
+        self.check_recovery_members()?;
         self.verify_actor_signature()?;
         self.id()
     }
@@ -456,6 +467,16 @@ impl IdentityEvent {
             return Err(EventError::IdentityControlInvalid(
                 "a member cannot share a device with itself".to_owned(),
             ));
+        }
+        Ok(())
+    }
+
+    /// A recovery passphrase is a member tuple like any other.
+    fn check_recovery_members(&self) -> EventResult<()> {
+        for operation in &self.body.operations {
+            if let IdentityControlOperation::RecoveryKeyAdded { member, .. } = operation {
+                member.signing_actor()?;
+            }
         }
         Ok(())
     }
@@ -550,6 +571,7 @@ impl IdentityEvent {
                     }
                 }
                 IdentityControlOperation::IdentityCreated { .. }
+                | IdentityControlOperation::RecoveryKeyAdded { .. }
                 | IdentityControlOperation::MemberJoinDenied { .. }
                 | IdentityControlOperation::MemberRevoked { .. }
                 | IdentityControlOperation::MemberRenamed { .. }

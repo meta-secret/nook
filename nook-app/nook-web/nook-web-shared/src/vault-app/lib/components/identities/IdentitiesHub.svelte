@@ -62,7 +62,6 @@ join) sit between the hero and the cards.
     onLock = () => {},
     onUnlock = () => {},
     unlockPanel,
-    passwordFallback,
     vaultExtension,
     requestPanel,
     identityPrompt,
@@ -109,9 +108,6 @@ join) sit between the hero and the cards.
     /** A running Sentinel quorum ceremony for `selectedStoreId`: on the
      * card that lists that vault, or on its own when no card does. */
     unlockPanel?: Snippet
-    /** Backup-password unlock, placed on the card that holds the selected
-     * vault. */
-    passwordFallback?: Snippet
     /** The browser extension for the open vault, in its panel. */
     vaultExtension?: Snippet
     /** A request waiting on the current identity (a browser extension
@@ -154,10 +150,9 @@ join) sit between the hero and the cards.
     }
     return ''
   })
-  /** The card that offers the selected vault's backup password: the one
-   * that unlocks it, else any card that lists it. A backup password opens
-   * the vault even after this browser lost the identity's key. */
-  const passwordIdentityId = $derived.by(() => {
+  /** The card that holds the selected vault: the one that unlocks it, else
+   * any card that lists it. */
+  const selectedIdentityId = $derived.by(() => {
     if (unlockingIdentityId) return unlockingIdentityId
     if (!selectedStoreId || !cardsReady) return ''
     for (const card of projection.cards) {
@@ -169,11 +164,6 @@ join) sit between the hero and the cards.
   })
   const directoryFailed = $derived(
     loader.state.kind === IdentityDirectoryLoadKind.Failed,
-  )
-  /** No card can carry the backup password, so it stands on its own. */
-  const passwordStandalone = $derived(
-    Boolean(passwordFallback) &&
-      (directoryFailed || (cardsReady && !passwordIdentityId)),
   )
   /** Local vaults no card lists (all of them when the directory cannot be
    * read): each still opens from its own row. */
@@ -233,7 +223,7 @@ join) sit between the hero and the cards.
   )
   const setupShown = $derived(Boolean(setupIdentityId) && setupOpen)
   const featuredIdentityId = $derived(
-    (setupShown ? setupIdentityId : '') || passwordIdentityId,
+    (setupShown ? setupIdentityId : '') || selectedIdentityId,
   )
   const cards = $derived(
     featuredIdentityId
@@ -365,10 +355,9 @@ join) sit between the hero and the cards.
     {/if}
   {/if}
 
-  {#if showCards && !vaultPicker && (strayVaults.length > 0 || (passwordStandalone && passwordFallback))}
+  {#if showCards && !vaultPicker && strayVaults.length > 0}
     <div class="nk-frame-sheet min-w-0" data-testid="identity-stray-vaults">
-      {#if strayVaults.length > 0}
-        <ul class="p-2">
+      <ul class="p-2">
           {#each strayVaults as stray (stray.storeId)}
             <li>
               <button
@@ -410,10 +399,6 @@ join) sit between the hero and the cards.
             />
           </div>
         {/if}
-      {/if}
-      {#if passwordStandalone && passwordFallback}
-        {@render passwordFallback()}
-      {/if}
     </div>
   {/if}
 
@@ -445,7 +430,7 @@ join) sit between the hero and the cards.
         <h2 class="nk-subpanel-head flex-1">
           {vault.t(I18N_KEYS.WorkspaceCardsLabel)}
         </h2>
-        <!-- Which keyring a passkey or backup password opens: a question
+        <!-- Which keyring a passkey opens: a question
              about these keyrings, so it sits with them, quieter than New. -->
         <Button
           type="button"
@@ -550,11 +535,6 @@ join) sit between the hero and the cards.
                   : unlockPanel && card.identityId === unlockingIdentityId
                     ? { unlockPanel }
                     : {}}
-            {...passwordFallback &&
-            card.identityId === passwordIdentityId &&
-            !(setupShown && card.identityId === setupIdentityId)
-              ? { passwordFallback }
-              : {}}
             {...vaultExtension ? { vaultExtension } : {}}
             {...requestPanel && card.current ? { requestPanel } : {}}
           />

@@ -78,6 +78,8 @@ impl NookVaultManager {
         self.device.identity_private_key.clear();
         self.event_log.signing_seed.zeroize();
         self.event_log.signing_seed.clear();
+        // Locking drops a recovery passphrase still waiting to be confirmed.
+        self.recovery_passphrase = super::CeremonyState::Inactive;
     }
 
     #[wasm_bindgen]

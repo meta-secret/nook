@@ -36,7 +36,6 @@ Task contracts may name these read-only authorities:
 
 - [Devices and access](../../../../../nook-app/.cortex/docs/spec/devices-and-access.md)
 - [Decentralized authentication](../../../../../nook-app/nook-platform/nook-auth2/.cortex/docs/spec/decentralized-auth.md)
-- [Password unlock and device join](../../../../../nook-app/nook-platform/nook-auth2/.cortex/docs/spec/password-envelope.md)
 - [SLIP-0039 recovery](../../../../../nook-app/nook-platform/nook-auth2/.cortex/docs/spec/slip39-recovery.md)
 - [Vault event log](../../../../../nook-app/nook-platform/nook-event-log/.cortex/docs/architecture/vault-event-log.md)
 - [Browser extension](../../../../../nook-app/nook-web/nook-web-extension/.cortex/docs/spec/browser-extension.md)

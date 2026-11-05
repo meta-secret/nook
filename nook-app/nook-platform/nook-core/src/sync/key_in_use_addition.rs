@@ -128,7 +128,7 @@ mod tests {
     use super::*;
     use crate::{
         AddedIdentitySelection, AppKeyIdentityMembership, IdentityCreation, IdentityDirectory,
-        IdentityEvent, IdentityGenesisRequest, MemberDevice, MemberLabelState,
+        IdentityEvent, IdentityGenesisRequest, IdentityMemberKind, MemberDevice, MemberLabelState,
         PasskeyIdentityAddition, ProviderIdentityLogEvents,
     };
     use nook_auth2::MemberLabel;
@@ -217,9 +217,11 @@ mod tests {
             .member(new_key.app.app_id())
             .ok_or_else(|| anyhow::anyhow!("the new key must be a member"))?;
         assert_eq!(
-            added.device,
-            MemberDevice::SameAs {
-                app_id: provider.founder.app.app_id().clone(),
+            added.kind,
+            IdentityMemberKind::App {
+                device: MemberDevice::SameAs {
+                    app_id: provider.founder.app.app_id().clone(),
+                }
             }
         );
         // Both keys run on this browser: still one device.

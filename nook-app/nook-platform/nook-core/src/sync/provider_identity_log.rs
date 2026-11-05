@@ -55,6 +55,10 @@ pub enum ProviderIdentityLog {
         /// Vaults the identity keeps; removed ones are not counted.
         #[tsify(type = "number")]
         vaults: ProviderLogCount,
+        /// Recovery passphrases on the keyring, any of which can add a new
+        /// device; removed ones are not counted.
+        #[tsify(type = "number")]
+        recovery_passphrases: ProviderLogCount,
         /// This browser's own app key is one of its devices and this browser
         /// holds the identity, so it and every vault it keeps open here.
         this_browser: bool,
@@ -178,7 +182,7 @@ impl ProviderIdentityLogEvents {
             .map_err(|rejection| rejection.cause)?;
         let state = IdentityControlState::project(&log)?;
         let mut joining_time = Vec::with_capacity(state.members.len());
-        for member in &state.members {
+        for (member, _) in state.app_members() {
             if let Some(event) = log.event(&member.approved_in) {
                 joining_time.push(ProviderInstant::parse_rfc3339(
                     event.body.created_at.as_str(),
@@ -200,6 +204,7 @@ impl ProviderIdentityLogEvents {
                         ProviderVaultTime::Reported { at }
                     }),
                 vaults: ProviderLogCount::of(state.vaults.len()),
+                recovery_passphrases: ProviderLogCount::of(state.recovery_members().count()),
                 this_browser: held_here,
                 join,
             },
@@ -339,6 +344,7 @@ mod tests {
                     at: ProviderInstant::parse_rfc3339("2026-10-27T17:28:00Z")?,
                 },
                 vaults: ProviderLogCount::from(1),
+                recovery_passphrases: ProviderLogCount::from(0),
                 this_browser: false,
                 join: ProviderIdentityJoin::NotAsked,
             }

@@ -162,15 +162,11 @@ passwords stay as separate items instead of being overwritten.
 
 ### When you come back
 
-- Unlock with this browser's passkey/PIN-protected device keys, or use a backup
-  password to open the encrypted local vault directly. The website and the
+- Unlock with this browser's passkey/PIN-protected device keys. The website and the
   browser extension are separate apps, each with its own app key and passkey;
   the website only ever unlocks with its own.
 - Importing an existing remote vault asks for this browser's passkey or PIN
   before connect.
-- A backup-password session leaves the protected device identity and saved sync
-  credentials locked. Authorize with the passkey or PIN when you want remote
-  sync to resume.
 - Decrypted secrets exist only in the active browser session. Reveal and copy
   decrypt one item on demand, then free it when that action ends.
 - Public list/search metadata is cached separately in IndexedDB so large-vault

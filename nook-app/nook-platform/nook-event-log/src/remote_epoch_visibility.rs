@@ -16,14 +16,10 @@ use crate::{
 
 impl VaultEvent {
     pub(crate) fn starts_security_epoch(&self) -> bool {
-        self.body.operations.iter().any(|operation| {
-            matches!(
-                operation,
-                VaultOperation::PasswordRotated { .. }
-                    | VaultOperation::PasswordRemoved { .. }
-                    | VaultOperation::DeviceRevoked { .. }
-            )
-        })
+        self.body
+            .operations
+            .iter()
+            .any(|operation| matches!(operation, VaultOperation::DeviceRevoked { .. }))
     }
 }
 
@@ -236,9 +232,9 @@ mod tests {
     use super::*;
     use crate::test_support;
     use crate::{
-        DeviceSigningPublicKey, EpochMetadataState, EpochPasswordState, EventError,
-        GenesisImportPayload, GenesisImportRequest, IsoTimestamp, PasswordEntryId, Sha256Hex,
-        SigningIdentity, StoreId, VaultEventBody, VaultEventSchemaVersion,
+        DeviceId, DeviceSigningPublicKey, EpochMetadataState, EventError, GenesisImportPayload,
+        GenesisImportRequest, IsoTimestamp, Sha256Hex, SigningIdentity, StoreId, VaultEventBody,
+        VaultEventSchemaVersion,
     };
     use ed25519_dalek::SigningKey;
 
@@ -286,7 +282,6 @@ mod tests {
                 payload: GenesisImportPayload {
                     source_content_hash: Sha256Hex::from_trusted("00".repeat(32)),
                     secrets: Vec::new(),
-                    password_entries: Vec::new(),
                 },
                 created_at: &IsoTimestamp::from_trusted("2026-08-14T00:00:00Z".to_owned()),
                 signing_key: &signing_key,
@@ -301,8 +296,8 @@ mod tests {
                 &signing_key,
                 vec![previous.clone()],
                 previous,
-                VaultOperation::PasswordRemoved {
-                    entry_id: PasswordEntryId::from_trusted("pwdentry001".to_owned()),
+                VaultOperation::DeviceRevoked {
+                    device_id: DeviceId::parse("0123456789abcdef")?,
                 },
             )?;
             let trigger_id = trigger.id()?;
@@ -315,7 +310,6 @@ mod tests {
                     secrets: Vec::new(),
                     members_checkpoint_hash: Sha256Hex::from_trusted("00".repeat(32)),
                     rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
-                    password_entries: EpochPasswordState::Replace(Vec::new()),
                 },
             )?;
             let checkpoint_id = checkpoint.id()?;
@@ -396,7 +390,6 @@ mod tests {
                 secrets: Vec::new(),
                 members_checkpoint_hash: Sha256Hex::from_trusted("00".repeat(32)),
                 rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
-                password_entries: EpochPasswordState::Replace(Vec::new()),
             },
         )?;
         let remote = vec![

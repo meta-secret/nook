@@ -293,8 +293,8 @@ Revoking a member removes both:
   `secrets_key` / `members_key`
 - the matching encrypted `members:` roster row
 
-Revoking the last enrolled device is blocked with: **Add another device or a
-vault password before removing this one.** Revoking the current browser is
+Revoking the last enrolled device is blocked with: **Add another device before
+removing this one.** Revoking the current browser is
 allowed only when at least one other enrolled device remains; after the write
 succeeds, the current browser locks and must be re-enrolled or unlocked by
 another valid path.
@@ -337,14 +337,3 @@ Rust retains `resolve_dek()` / `resolve_dec()` as thin aliases for `resolve_secr
 - **7**
   - **Scope:** Device-to-device messaging channel
   - **Status:** Planned
-
----
-
-## 7. Backup password unlock (cross-link)
-
-Device keys remain the primary access path. Labelled backup password entries
-coexist with `auth:` rows and wrap the same `secrets_key` + `members_key`, so a
-lost browser can recover without weakening the device roster model. A device
-that unlocks with a backup password self-enrols by writing its own `auth:` and
-`members:` rows. See [password-envelope.md](password-envelope.md) for the full
-spec and threat model.

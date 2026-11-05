@@ -64,7 +64,6 @@ export interface VaultLink {
   verifiedAt: Fact
   lastLocalUpdateAt: Fact
   enrolledDevices: number
-  backupPasswords: number
 }
 
 export interface PasskeyFacts {
@@ -180,7 +179,8 @@ const unlockedScenario: AccessScenario = {
     browser: 'Chrome 141',
     platform: 'macOS 15',
     preparedAt: AccessScenarioView.known('12 Mar 2026, 09:14'),
-    boundary: 'Backup passwords stay wrapped in this browser and never sync.',
+    boundary:
+      'Recovery passphrase words never sync; only the keyring key sealed under them does.',
   },
   vaults: [
     {
@@ -190,7 +190,6 @@ const unlockedScenario: AccessScenario = {
       verifiedAt: AccessScenarioView.known('2 Aug 2026, 10:26'),
       lastLocalUpdateAt: AccessScenarioView.known('2 Aug 2026, 10:27'),
       enrolledDevices: 1,
-      backupPasswords: 1,
     },
   ],
 }
@@ -218,7 +217,8 @@ const sharedScenario: AccessScenario = {
     browser: 'Firefox 139',
     platform: 'Ubuntu 26.04',
     preparedAt: AccessScenarioView.known('4 Jan 2026, 18:03'),
-    boundary: 'Backup passwords stay wrapped in this browser and never sync.',
+    boundary:
+      'Recovery passphrase words never sync; only the keyring key sealed under them does.',
   },
   vaults: [
     {
@@ -228,7 +228,6 @@ const sharedScenario: AccessScenario = {
       verifiedAt: AccessScenarioView.known('2 Aug 2026, 08:41'),
       lastLocalUpdateAt: AccessScenarioView.known('2 Aug 2026, 09:55'),
       enrolledDevices: 3,
-      backupPasswords: 2,
     },
     {
       id: 'store_9c31',
@@ -237,7 +236,6 @@ const sharedScenario: AccessScenario = {
       verifiedAt: AccessScenarioView.known('29 Jul 2026, 21:10'),
       lastLocalUpdateAt: AccessScenarioView.known('1 Aug 2026, 07:12'),
       enrolledDevices: 2,
-      backupPasswords: 1,
     },
     {
       id: 'store_2ad7',
@@ -248,7 +246,6 @@ const sharedScenario: AccessScenario = {
       ),
       lastLocalUpdateAt: AccessScenarioView.known('11 Nov 2025, 13:40'),
       enrolledDevices: 1,
-      backupPasswords: 0,
     },
   ],
 }

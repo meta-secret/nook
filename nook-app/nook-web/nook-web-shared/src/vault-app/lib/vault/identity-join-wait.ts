@@ -36,12 +36,19 @@ export enum FirstRunJoinKind {
   None = "none",
   /** Setup asked; a device of the identity answers. */
   Asked = "asked",
+  /** Setup joins with one of the identity's recovery passphrases. */
+  Recovering = "recovering",
 }
 
-/** The identity first-run setup asked to join, if any. */
+/** The identity first-run setup asked to join, or joins with a recovery
+ * passphrase, if any. */
 export type FirstRunJoin =
   | { readonly kind: FirstRunJoinKind.None }
   | {
       readonly kind: FirstRunJoinKind.Asked;
+      readonly join: IdentityJoinIntent;
+    }
+  | {
+      readonly kind: FirstRunJoinKind.Recovering;
       readonly join: IdentityJoinIntent;
     };

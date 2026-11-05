@@ -1,8 +1,8 @@
-//! Check which vaults a passkey or a backup password opens, read-only.
+//! Check which vaults a passkey opens, read-only.
 //!
 //! A source is this browser, a Google Drive account's Nook root, a local
 //! folder the user picked, or an S3 location. Its identity logs and vault logs
-//! are read, the checked key or password is tried against them in memory, and
+//! are read, the checked key is tried against them in memory, and
 //! the result says which vaults it opens by name. Nothing is stored, imported, or
 //! written, and the passkey's re-derived app key is dropped afterwards.
 use super::wasm_bindgen;
@@ -13,11 +13,10 @@ use crate::storage::s3::{S3Storage, S3VaultListing};
 use crate::{BrowserPasskeyClient, DriveStorageClient, NookDatabase, NookError};
 use crate::{TypedInput, TypedOutput};
 use nook_core::{
-    BackupPasswordAccessCheck, CheckedVaultEvents, CredentialCheckReport, DeviceIdentity,
-    LocalFolderHandleId, PasskeyAccessCheck, PasskeyAccessProfile, PasskeyMemberSigner,
-    PasskeyRecoveryInput, PasskeyRecoveryRequest, ProviderIdentityLogEvents, ProviderSecretText,
-    SigningSeedHex, StoreId, WebAuthnCredentialId, WebAuthnPrfOutput, WebAuthnUserHandle,
-    WrappedDeviceIdentity,
+    CheckedVaultEvents, CredentialCheckReport, DeviceIdentity, LocalFolderHandleId,
+    PasskeyAccessCheck, PasskeyAccessProfile, PasskeyMemberSigner, PasskeyRecoveryInput,
+    PasskeyRecoveryRequest, ProviderIdentityLogEvents, ProviderSecretText, SigningSeedHex, StoreId,
+    WebAuthnCredentialId, WebAuthnPrfOutput, WebAuthnUserHandle, WrappedDeviceIdentity,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -64,19 +63,6 @@ impl SourceContents {
             app_key: &passkey.app_key,
             fingerprint: passkey.fingerprint,
             identity_logs: self.identity_logs,
-            vaults: self.vaults,
-        }
-        .report()?;
-        Ok(report.encode()?)
-    }
-
-    /// Check what a typed backup password opens here.
-    pub(crate) fn check_backup_password(
-        self,
-        password: &str,
-    ) -> Result<tsify::Ts<CredentialCheckReport>, JsError> {
-        let report = BackupPasswordAccessCheck {
-            password,
             vaults: self.vaults,
         }
         .report()?;
@@ -216,17 +202,6 @@ impl CheckedPasskey<'_> {
     source.contents().await?.check_passkey(rp_id).await
 }
 
-/// Report which of the source's vaults a typed backup password opens.
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn check_backup_password_access(
-    source: &tsify::Ts<NookAccessCheckSource>,
-    password: String,
-) -> Result<tsify::Ts<CredentialCheckReport>, JsError> {
-    let source = source.decode()?;
-    let password = zeroize::Zeroizing::new(password);
-    source.contents().await?.check_backup_password(&password)
-}
-
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
@@ -248,8 +223,7 @@ mod browser_tests {
             reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
         )
     )]
-    async fn a_backup_password_opens_nothing_where_only_an_identity_log_is_kept()
-    -> anyhow::Result<()> {
+    async fn a_source_that_keeps_only_an_identity_log_holds_no_vault() -> anyhow::Result<()> {
         let folder = format!("check-{}", IdentityId::generate()?.as_str());
         let mut manager = NookVaultManager::new();
         js(manager.delete_local_browser_data().await)?;
@@ -272,18 +246,21 @@ mod browser_tests {
             .await?;
 
         // This browser and the folder both keep the identity's log and no
-        // vault, so a backup password has nothing to open in either.
+        // vault.
         for source in [
             NookAccessCheckSource::ThisBrowser,
             NookAccessCheckSource::Remote(NookRemoteSource::LocalFolder {
                 handle_id: LocalFolderHandleId::try_from(folder.clone())?,
             }),
         ] {
-            let source = source.encode()?;
-            let report =
-                js(check_backup_password_access(&source, "not a backup".to_owned()).await)?
-                    .decode()?;
-            assert!(report.identities.is_empty());
+            let contents = source.contents().await?;
+            assert!(contents.vaults.is_empty());
+            assert!(
+                contents
+                    .identity_logs
+                    .iter()
+                    .any(|log| log.identity_id == identity_id)
+            );
         }
         js(manager.delete_local_browser_data().await)?;
         Ok(())

@@ -90,7 +90,6 @@ mod tests {
                 [] => vec![VaultOperation::VaultImported {
                     source_content_hash: Sha256Hex::from_bytes(b"projection fixture"),
                     secrets: Vec::new(),
-                    password_entries: Vec::new(),
                 }],
                 [_, ..] => Vec::new(),
             };

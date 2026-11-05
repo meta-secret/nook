@@ -85,6 +85,7 @@ function strangerVault(): ProviderVaultSummary {
         devices: 1,
         newestDevice: { state: 'unreported' },
         vaults: 1,
+        recoveryPassphrases: 0,
         thisBrowser: false,
         join: 'notAsked',
       },

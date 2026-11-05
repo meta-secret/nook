@@ -9,7 +9,6 @@ export const VAULT_WORKSPACE_OUTPUT_ALIASES = [
   "identity/devices",
   "identity/devices/add",
   "identity/keys",
-  "identity/passwords",
   "identity/settings",
   "identity/sync",
   "identity/vaults",
@@ -18,7 +17,6 @@ export const VAULT_WORKSPACE_OUTPUT_ALIASES = [
   "vault",
   "vault/devices",
   "vault/import",
-  "vault/passwords",
   "vault/sync",
 ] as const;
 

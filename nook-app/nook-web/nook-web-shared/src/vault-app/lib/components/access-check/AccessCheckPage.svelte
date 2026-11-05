@@ -1,9 +1,8 @@
 <!--
 Check access: which identities a passkey opens (and with them every vault
-they keep) and which vaults a backup password opens, before recovering or
-importing anything. Choose where to look (this browser, a
-Google Drive account, or a local folder), then check one passkey or one
-backup password at a time; each result adds to the list. Every check
+they keep), before recovering or importing anything. Choose where to look
+(this browser, a Google Drive account, or a local folder), then check one
+passkey at a time; each result adds to the list. Every check
 decrypts in memory only and nothing is saved, imported, or written. The page
 keeps one live action button: preparing a source comes first, then Check.
 -->
@@ -34,12 +33,10 @@ keeps one live action button: preparing a source comes first, then Check.
   import {
     AccessCheckActions,
     AccessCheckTargetKind,
-    type BackupPasswordCheckRequest,
   } from '$lib/vault/access-check'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
     ACCESS_CHECK_SOURCES,
-    AccessCheckMethod,
     AccessCheckSourceKind,
     PreparedSourceKind,
     type PreparedSource,
@@ -53,8 +50,6 @@ keeps one live action button: preparing a source comes first, then Check.
   let driveToken = $state('')
   let folderName = $state('')
   let folderHandle = $state('')
-  let method = $state<AccessCheckMethod>(AccessCheckMethod.Passkey)
-  let password = $state('')
   let busy = $state(false)
   let reports = $state<CredentialCheckReport[]>([])
 
@@ -103,11 +98,7 @@ keeps one live action button: preparing a source comes first, then Check.
       target: { kind: AccessCheckTargetKind.Source, source },
     }
   }
-  const canCheck = $derived(
-    prepared.kind === PreparedSourceKind.Ready &&
-      !busy &&
-      (method === AccessCheckMethod.Passkey || password.length > 0),
-  )
+  const canCheck = $derived(prepared.kind === PreparedSourceKind.Ready && !busy)
 
   function chooseSource(kind: AccessCheckSourceKind): void {
     sourceKind = kind
@@ -152,18 +143,9 @@ keeps one live action button: preparing a source comes first, then Check.
     busy = true
     vault.errorMsg = ''
     try {
-      const actions = new AccessCheckActions(vault)
-      let checked: Awaited<ReturnType<AccessCheckActions['checkPasskey']>>
-      if (method === AccessCheckMethod.Passkey) {
-        checked = await actions.checkPasskey(prepared.target)
-      } else {
-        const request: BackupPasswordCheckRequest = {
-          target: prepared.target,
-          password,
-        }
-        checked = await actions.checkBackupPassword(request)
-        password = ''
-      }
+      const checked = await new AccessCheckActions(vault).checkPasskey(
+        prepared.target,
+      )
       if (checked.isErr()) {
         vault.errorMsg = vault.t(checked.error.translationKey)
         return
@@ -282,53 +264,6 @@ keeps one live action button: preparing a source comes first, then Check.
             {/if}
           </div>
         {/each}
-      </fieldset>
-
-      <fieldset class="space-y-2" data-testid="access-check-methods">
-        <legend class="nk-subpanel-head">
-          {vault.t(I18N_KEYS.AccessCheckMethodLabel)}
-        </legend>
-        <label
-          class="flex min-h-9 cursor-pointer items-center gap-2 text-sm text-foreground"
-        >
-          <input
-            class="size-4"
-            type="radio"
-            name="access-check-method"
-            data-testid="access-check-method-passkey"
-            checked={method === AccessCheckMethod.Passkey}
-            disabled={busy}
-            onchange={() => (method = AccessCheckMethod.Passkey)}
-          />
-          {vault.t(I18N_KEYS.AccessCheckMethodPasskey)}
-        </label>
-        <label
-          class="flex min-h-9 cursor-pointer items-center gap-2 text-sm text-foreground"
-        >
-          <input
-            class="size-4"
-            type="radio"
-            name="access-check-method"
-            data-testid="access-check-method-password"
-            checked={method === AccessCheckMethod.BackupPassword}
-            disabled={busy}
-            onchange={() => (method = AccessCheckMethod.BackupPassword)}
-          />
-          {vault.t(I18N_KEYS.AccessCheckMethodPassword)}
-        </label>
-        {#if method === AccessCheckMethod.BackupPassword}
-          <label class="grid max-w-sm gap-1 text-xs text-muted-foreground">
-            {vault.t(I18N_KEYS.AccessCheckPasswordLabel)}
-            <input
-              type="password"
-              autocomplete="off"
-              class="h-9 border border-border bg-background px-2 text-sm text-foreground outline-none focus:border-foreground/50"
-              data-testid="access-check-password"
-              bind:value={password}
-              disabled={busy}
-            />
-          </label>
-        {/if}
       </fieldset>
 
       {#if vault.errorMsg}

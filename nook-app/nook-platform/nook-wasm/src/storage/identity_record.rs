@@ -110,12 +110,6 @@ pub(crate) struct IdentityDbGenerateVaultDekForIdentity<'a> {
     pub(crate) store_id: nook_core::StoreId,
 }
 
-/// Named values required by `NookDatabase::validate_vault_identity_enrollment`.
-pub(crate) struct IdentityDbValidateVaultIdentityEnrollment<'a> {
-    pub(crate) app_key: &'a nook_core::AppKey,
-    pub(crate) store_id: &'a nook_core::StoreId,
-}
-
 pub(crate) use reconciliation::{
     IdentityReconciliationStore, PendingIdentityRotation, ReconciliationIntent,
 };
@@ -492,18 +486,6 @@ impl NookDatabase {
                 .map_err(|rejected| NookError::Database(rejected.into_cause().to_string()))
         })
         .await
-    }
-}
-
-impl NookDatabase {
-    pub(crate) async fn validate_vault_identity_enrollment(
-        request: IdentityDbValidateVaultIdentityEnrollment<'_>,
-    ) -> Result<(), NookError> {
-        let IdentityDbValidateVaultIdentityEnrollment { app_key, store_id } = request;
-        NookDatabase::load_identity_directory()
-            .await?
-            .validate_vault_enrollment(app_key, store_id)
-            .map_err(|error| NookError::Database(error.to_string()))
     }
 }
 

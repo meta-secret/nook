@@ -1,10 +1,9 @@
 <!--
-What each checked passkey or backup password opens, one card per check in
-the order they ran. The card starts at the key that was checked and a line
-runs down from it to each keyring found there, marked by what the key does
-to it: a passkey opens a keyring, and with it every vault the keyring
-keeps; a backup password opens single vaults, never the keyring itself. A
-keyring shows its name once a passkey opened it, and always its ID (its
+What each checked passkey opens, one card per check in the order they ran.
+The card starts at the key that was checked and a line runs down from it to
+each keyring found there, marked by what the key does to it: a passkey opens
+a keyring, and with it every vault the keyring keeps. A keyring shows its
+name once a passkey opened it, and always its ID (its
 three words, as on its card); a vault shows its name once a check opened
 it.
 -->
@@ -15,7 +14,6 @@ it.
     Fingerprint,
     FolderKey,
     Lock,
-    RectangleEllipsis,
     X,
   } from '@lucide/svelte'
   import type {
@@ -40,17 +38,11 @@ it.
   const checked = $derived(new CheckReports(reports))
 
   function credentialLabel(credential: CheckedCredential): string {
-    switch (credential.kind) {
-      case 'passkey': {
-        const request: Parameters<typeof vault.t>[0] = {
-          key: I18N_KEYS.AccessCheckCredentialPasskey,
-          replacements: { id: shortPasskeyId(credential.fingerprint) },
-        }
-        return vault.t(request)
-      }
-      case 'backupPassword':
-        return vault.t(I18N_KEYS.AccessCheckCredentialPassword)
+    const request: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.AccessCheckCredentialPasskey,
+      replacements: { id: shortPasskeyId(credential.fingerprint) },
     }
+    return vault.t(request)
   }
 
   function checkNumber(index: number): string {
@@ -112,15 +104,6 @@ it.
     }
   }
 
-  function credentialIcon(credential: CheckedCredential): Component {
-    switch (credential.kind) {
-      case 'passkey':
-        return Fingerprint
-      case 'backupPassword':
-        return RectangleEllipsis
-    }
-  }
-
   /** How a keyring's row marks what the checked key does to it. */
   type OutcomeLook = {
     readonly icon: Component
@@ -160,7 +143,6 @@ it.
       case 'opens':
         return FolderKey
       case 'doesNotOpen':
-      case 'noBackupPassword':
         return Lock
     }
   }
@@ -170,15 +152,13 @@ it.
   <p class="nk-subpanel-head">{vault.t(I18N_KEYS.AccessCheckResultsTitle)}</p>
   <ol class="grid gap-3" data-testid="access-check-checks">
     {#each reports as report, index (index)}
-      {@const CredentialIcon = credentialIcon(report.credential)}
       <li
         class="nk-subpanel-recessed grid gap-3 p-4"
         data-testid="access-check-credential"
-        data-credential={report.credential.kind}
       >
         <header class="flex items-center gap-3">
           <span class="nk-vault-icon text-foreground" aria-hidden="true">
-            <CredentialIcon class="size-4" />
+            <Fingerprint class="size-4" />
           </span>
           <span
             class="min-w-0 flex-1 truncate text-sm font-medium text-foreground"

@@ -47,6 +47,7 @@ function snapshot(
     joinRequests: [],
     vaults: [],
     mounts: [],
+    recoveryPassphrases: [],
   }
 }
 

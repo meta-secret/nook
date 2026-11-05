@@ -29,7 +29,7 @@ export class ArcSeparationContract {
           "automountServiceAccountToken: true",
           "ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER",
           "ACTIONS_RUNNER_CONTAINER_HOOK_TEMPLATE",
-          "ghcr.io/meta-secret/nook-arc-runner@sha256:64dc2f6c9e51f560165bacf3b21e87875be70271830924dae3fe0dae4407e10b",
+          "ghcr.io/meta-secret/nook-arc-runner@sha256:0c6d36f124cd33d313cfb7f8b4d602174f9680cb02e686f8743f5ff3b637dc50",
         ],
         forbidden: [
           "NOOK_BUILDKIT",
@@ -50,7 +50,7 @@ export class ArcSeparationContract {
           "fsGroup: 1000",
           "fsGroupChangePolicy: OnRootMismatch",
           "name: fs-init",
-          "ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda",
+          "ghcr.io/actions/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232",
           "chmod -R g+rwX /mnt/work/nook",
           "mountPath: /mnt/externals",
           "mountPath: /mnt/work",

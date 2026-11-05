@@ -46,17 +46,6 @@ export const HELP_SECTIONS: HelpSection[] = [
     diagram: (translate) => new HelpArchitectureDiagram(translate).source,
   },
   {
-    id: "unlock",
-    titleKey: I18N_KEYS.HelpSectionsUnlockTitle,
-    summaryKey: I18N_KEYS.HelpSectionsUnlockSummary,
-    bulletKeys: [
-      I18N_KEYS.HelpSectionsUnlockBullet1,
-      I18N_KEYS.HelpSectionsUnlockBullet2,
-      I18N_KEYS.HelpSectionsUnlockBullet3,
-      I18N_KEYS.HelpSectionsUnlockBullet4,
-    ],
-  },
-  {
     id: "sync",
     titleKey: I18N_KEYS.HelpSectionsSyncTitle,
     summaryKey: I18N_KEYS.HelpSectionsSyncSummary,
@@ -76,17 +65,6 @@ export const HELP_SECTIONS: HelpSection[] = [
       I18N_KEYS.HelpSectionsConflictsBullet2,
       I18N_KEYS.HelpSectionsConflictsBullet3,
       I18N_KEYS.HelpSectionsConflictsBullet4,
-    ],
-  },
-  {
-    id: "onboard",
-    titleKey: I18N_KEYS.HelpSectionsOnboardTitle,
-    summaryKey: I18N_KEYS.HelpSectionsOnboardSummary,
-    bulletKeys: [
-      I18N_KEYS.HelpSectionsOnboardBullet1,
-      I18N_KEYS.HelpSectionsOnboardBullet2,
-      I18N_KEYS.HelpSectionsOnboardBullet3,
-      I18N_KEYS.HelpSectionsOnboardBullet4,
     ],
   },
   {

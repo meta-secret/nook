@@ -208,8 +208,7 @@ impl VaultClientPolicy {
         ) && matches!(
             request.local_vault_present,
             crate::LocalVaultPresence::Present
-        ) && request.password_entry_count.is_zero()
-            && request.sync_provider_count.is_zero()
+        ) && request.sync_provider_count.is_zero()
             && !matches!(
                 request.provider_setup_active,
                 crate::ProviderSetupState::Active
@@ -354,28 +353,25 @@ mod tests {
             crate::ShouldAutoUnlockRequest {
                 session_explicitly_locked: (false).into(),
                 local_vault_present: (true).into(),
-                password_entry_count: 0.into(),
                 sync_provider_count: 0.into(),
                 provider_setup_active: (false).into(),
                 add_provider_open: (false).into()
             }
         ));
         for blocked in [
-            (true, true, 0_usize, 0_usize, false, false),
-            (false, false, 0, 0, false, false),
-            (false, true, 1, 0, false, false),
-            (false, true, 0, 1, false, false),
-            (false, true, 0, 0, true, false),
-            (false, true, 0, 0, false, true),
+            (true, true, 0_usize, false, false),
+            (false, false, 0, false, false),
+            (false, true, 1, false, false),
+            (false, true, 0, true, false),
+            (false, true, 0, false, true),
         ] {
             assert!(!VaultClientPolicy::should_auto_unlock(
                 crate::ShouldAutoUnlockRequest {
                     session_explicitly_locked: (blocked.0).into(),
                     local_vault_present: (blocked.1).into(),
-                    password_entry_count: blocked.2.into(),
-                    sync_provider_count: blocked.3.into(),
-                    provider_setup_active: (blocked.4).into(),
-                    add_provider_open: (blocked.5).into()
+                    sync_provider_count: blocked.2.into(),
+                    provider_setup_active: (blocked.3).into(),
+                    add_provider_open: (blocked.4).into()
                 }
             ));
         }
@@ -519,9 +515,6 @@ mod tests {
         );
     }
 }
-
-mod login_unlock;
-pub use login_unlock::*;
 
 mod states;
 pub use states::*;

@@ -90,14 +90,18 @@ owns:
 - a stable identity id;
 - app-key members (`app_id`, X25519 encryption public key, Ed25519 signing
   public key, label), one-time invites, and revocations;
+- zero or more labelled recovery passphrases: members on no device whose
+  private keys are sealed under generated words;
 - per-vault DEK records: vault `store_id` plus envelopes of that vault DEK to
-  each active app public key, per vault key epoch;
+  each active member's public key, per vault key epoch;
 - zero or more credential-free sync-provider mounts.
 
 Passkey credential records, the identity name, and vault names stay in local
 storage. The log is signed, not encrypted.
 
-Private app keys never enter the replicated identity record.
+Private app keys never enter the replicated identity record. A recovery
+passphrase's keys enter it only sealed under its words; see
+[recover a keyring with a recovery passphrase](#recover-a-keyring-with-a-recovery-passphrase).
 Local private app keys live in `local_identity_keyring_v1`.
 Each entry binds one identity ID to one wrapped app key.
 Each entry also stores an app-key-sealed event-signing seed.
@@ -219,7 +223,7 @@ adopts that generation before it performs another queued storage operation.
 Identity DEK grants
 store the verified observed epoch during import. Legacy omissions require
 verified reconciliation. Locked remote sync persists the verified projected
-epoch before password self-enrollment can append a membership event. The v2
+epoch before self-enrollment can append a membership event. The v2
 reconciliation marker preserves resumable progress across reloads.
 
 The local directory caches the replicated identity control log. Identity sync
@@ -378,16 +382,56 @@ invite, so a second confirmation adds a round trip and no security.
 **Required:** let the invite holder sign itself in, once, with the DEKs the
 code carries. The joiner reaches each vault through the identity.
 
+### Recover a keyring with a recovery passphrase
+
+A recovery passphrase is the keyring's only passphrase backup. Vaults keep
+none of their own.
+
+1. A member adds it on **Keys**: a label and a strength, `standard` (four
+   words, the default) or `high` (five words).
+   - WASM generates the recovery member's X25519 and Ed25519 keys and the
+     words, from the Orchard Street Long List.
+   - The words are shown once. Only after they are typed back does the member
+     append `recovery-key-added` with the keys sealed under the words (age
+     scrypt, work factor 18) and every vault's current DEK wrapped to it.
+   - Several labelled passphrases may coexist.
+2. A person who lost every device connects a sync provider and signs in, as a
+   shared-grant invite holder does, and lists the keyrings there.
+3. They pick a keyring, **Recover with passphrase**, and one of its labelled
+   passphrases. The labels come from the log; the keyring's name stays sealed.
+4. The device's key is chosen and protected as for a join request
+   (`begin_identity_join`, then passkey or PIN).
+5. WASM checks the typed words against the list, unseals the recovery
+   member's keys, opens every Simple vault with its envelopes, and signs
+   `member-approved` for the device's fresh app key, device `own`.
+   - Wrong words fail closed with a typed error and write nothing.
+   - The words, the recovery keys, and the DEKs never reach JavaScript.
+6. The join completes as an approved join request does. Each Simple vault
+   self-enrolls on its first open; Sentinel vaults are listed as needing their
+   ceremony.
+
+The passphrase stays a member, so it can add another device later. The device
+list shows which recovery passphrase approved a device. A recovery passphrase
+is on no device and never counts toward the identity's protection.
+
+**Prohibited:** let a recovery member sign anything but `member-approved` for a
+new app key on its own device or `member-revoked` of itself.
+
+**Required:** quarantine any other event it signs. Rotating a passphrase means
+adding a new one and removing the old one.
+
 ### Revoke an installation
 
-1. A member appends `member-revoked` for the app key.
-   - The identity always keeps at least one member.
+1. A member appends `member-revoked` for the app key or recovery passphrase.
+   - The identity always keeps at least one app key.
 2. The open vault rotates immediately.
    - Its log records `device-revoked` and an epoch checkpoint.
    - The identity log records `vault-dek-granted` for the new epoch.
 3. Every other owned vault rotates before its next write.
    - Opening a vault compares its signed roster with identity membership.
    - A vault actor revoked from the identity is revoked from the vault first.
+   - A revoked member that holds the vault's current DEK but is on no vault
+     roster, as a recovery passphrase never is, rotates the vault too.
    - The rotation and its identity rewrap complete before any edit.
 
 Revocation never protects data the revoked installation already decrypted. It

@@ -81,10 +81,18 @@ actor id must be the SHA-256 digest of that Ed25519 public key. The event
 signature must verify over the canonical body before a current-schema remote
 event enters the local event set.
 
+Vault passphrases are gone from the log. The `password-added`,
+`password-rotated`, and `password-removed` operations and the
+`password_entries` of checkpoints, genesis imports, and the YAML projection
+are removed with no migration: Nook has no released versions, and an event
+that still carries them no longer parses. The keyring recovery passphrase in
+the [identity control log](identity-control-log.md) is the only passphrase
+backup.
+
 Checkpoint and visibility rules:
 
 - An `epoch-checkpoint` persists `secrets`, `members_checkpoint_hash`, and the
-  complete rewrapped `rotated_meta_records` and `password_entries` sets.
+  complete rewrapped `rotated_meta_records` set.
 - It also carries `vault_name`, the vault name re-encrypted under the new
   `secrets_key`. A checkpoint without it leaves the vault unnamed in the new
   epoch, because a name under the retired key is unreadable after rotation.
@@ -93,7 +101,7 @@ Checkpoint and visibility rules:
   equals the trigger event id. Invalid standalone or bundled checkpoints are
   quarantined.
 - Projection replaces the prior sets. Explicit empty arrays clear them.
-- Legacy checkpoints that omit metadata or password state retain the prior set.
+- Legacy checkpoints that omit metadata retain the prior set.
 - Schema `3` owns these fields. Current readers still accept pre-replacement
   schema `2` events. Older readers reject schema `3` before persistence instead
   of extending an epoch they cannot interpret.
@@ -114,7 +122,7 @@ accepted only if it is:
   - **Self-signed rule:** Always allowed when self-signed (pending join)
 - **`join-approved`**
   - **Self-signed rule:** Conditional
-    - Self-signing is only for simple password QR self-enrol.
+    - Self-signing is only for Simple-vault self-enrolment by a vault key holder.
     - Causal ancestry must have no Sentinel membership or share operations.
     - Those operations are `sentinel-participant-enrolled` and `sentinel-shares-issued`.
 - **`sentinel-participant-enrolled`**
@@ -193,7 +201,7 @@ result for every permutation of the same valid event set.
   - **Semantics:** Both preserved as separate live secrets — **no password merge, no LWW**; neither password may be dropped. Sync is not import enrich/dedup.
 - **`vault-named`**
   - **Semantics:** The vault display name, encrypted under the epoch's `secrets_key`. The last name in topological order wins, so concurrent renames settle on one name on every device. Joined devices learn the name from it.
-- **`device-revoked` / password rotate/remove**
+- **`device-revoked`**
   - **Semantics:** Starts new **key epoch** with fresh vault keys and checkpoint
 - **Concurrent security epochs**
   - **Semantics:** Security conflict — fail closed; local edits are blocked until all devices sync/recover
@@ -204,7 +212,7 @@ File-sync disconnect/reconnect coverage (shared vault bucket cleared, offline co
 
 ## Key epochs
 
-Password rotation, password removal, and device revocation rotate
+Device revocation rotates
 `secrets_key` / `members_key` so append-only history cannot resurrect access.
 Epoch identity is the rotation **event id**, not a global integer.
 
@@ -312,8 +320,8 @@ events.
 Setup and recovery list the vaults a target holds before anything is written.
 Each listed namespace becomes a `ProviderVaultSummary` computed in Rust from
 transport metadata. Only the events of a vault no identity on this browser
-holds are downloaded, to read whether a backup password opens it and whether
-this app asked for or was granted access. Nothing is decrypted. A vault this
+holds are downloaded, to read whether this app asked for or was granted
+access. Nothing is decrypted. A vault this
 browser registered shows the name its vault registry keeps; any other vault's
 name stays sealed under that vault's key, so the row shows its short id.
 
@@ -352,7 +360,7 @@ Apply these rules during provider sync:
 - Keep schema v2 readable while schema v3 owns replacements.
 - Let Simple vaults adopt authorized keys before replay. Clear missing
   authorization. Require a new Sentinel ceremony.
-- Use a complete trigger/checkpoint pair for password rotation.
+- Use a complete trigger/checkpoint pair for each security rotation.
 - Classify the provider event set before writing outbox or repair events.
 
 - **Empty**

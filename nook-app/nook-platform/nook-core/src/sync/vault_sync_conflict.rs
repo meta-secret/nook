@@ -278,7 +278,6 @@ mod tests {
                 payload: GenesisImportPayload {
                     source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                     secrets,
-                    password_entries: Vec::new(),
                 },
                 created_at: &IsoTimestamp::parse("2026-09-01T00:00:00Z")?,
                 signing_key: signing.signing_key(),

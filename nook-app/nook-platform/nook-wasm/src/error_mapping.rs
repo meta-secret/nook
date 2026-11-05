@@ -21,6 +21,7 @@ impl From<nook_core::VaultError> for NookError {
             VaultError::SecretPayload(e) => NookError::Database(e.to_string()),
             VaultError::Event(event) => event.into(),
             VaultError::Enrollment(e) => NookError::Encryption(e.to_string()),
+            VaultError::RecoveryPassphrase(e) => NookError::Decryption(e.to_string()),
         }
     }
 }
@@ -146,7 +147,6 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::IdentityVaultEventIdInvalid
             | ValidationError::DeviceSigningPublicKeyInvalid
             | ValidationError::IsoTimestampInvalid
-            | ValidationError::PasswordEntryIdInvalid
             | ValidationError::SigningSeedInvalid => NookError::Database(err.to_string()),
         }
     }

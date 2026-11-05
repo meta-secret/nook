@@ -40,9 +40,6 @@ owns what is read from the provider without a key.
 - **Identities are never merged.**
   - A passkey that opens a listed identity completes it here: the identity
     is added to this browser as its own, and nothing else is decided.
-- **Backup passwords stay out of this step.**
-  - A backup password opens one vault, never an identity.
-  - Recovering a vault with one belongs to Check access.
 
 **Prohibited:** offer "Import as a separate vault" on one vault row while the
 same identity offers "Ask to join".

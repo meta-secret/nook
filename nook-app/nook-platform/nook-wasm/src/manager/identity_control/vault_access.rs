@@ -11,13 +11,14 @@ use nook_core::{
     AuthProvidersSnapshot, EventId, IdentityControlState, IdentityNameStatus,
     IdentityVaultEpochAction, IdentityVaultEpochStatus, IdentityVaultKeyOpening,
     IdentityVaultRegistration, MultiDeviceError, OpenedVaultDek, ProviderRows, SecretTypeFilter,
-    StorageProvider, StoreId, SymmetricKey, VaultKeys, VaultMetaState, VaultRevocationDue,
-    VaultType, VaultUnlock,
+    StorageProvider, StoreId, SymmetricKey, VaultHolderRotation, VaultKeys, VaultMetaState,
+    VaultOperation, VaultRevocationDue, VaultRevokedHolders, VaultType,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 use crate::manager::NookExternalEventLogRecords;
 use crate::manager::NookVaultManager;
+use crate::manager::event_log::SecurityEpochRotationFailure;
 use crate::manager::verified_access::VerifiedVaultAccessFlow;
 use crate::{NookDatabase, NookError, NookSecretPage};
 
@@ -79,12 +80,11 @@ impl NookVaultManager {
             );
         }
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
-        self.vault.unlock = VaultUnlock::Keys;
         self.vault.meta = VaultMetaState::from_stored_records(&records)?;
         self.ensure_event_log_ready().await?;
         self.adopt_vault_name_from_events().await?;
         if !self.vault.meta.auth.contains_key(&app_key.auth_id()) {
-            self.persist_password_unlock_membership(&records, &app_key, &keys)
+            self.persist_self_enrolled_membership(&records, &app_key, &keys)
                 .await?;
         }
         if let Err(error) = self.ensure_identity_after_connect(&app_key).await {
@@ -140,7 +140,9 @@ impl NookVaultManager {
     }
 
     /// Open a vault of the current identity from one of its mounts with the
-    /// DEK the identity granted this installation, then self-enroll.
+    /// DEK the identity granted this installation, then self-enroll. The
+    /// vault replaces any vault open in this session: its events are read
+    /// with its own keys, never the previous vault's.
     #[wasm_bindgen]
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
@@ -158,9 +160,10 @@ impl NookVaultManager {
         let connection = connection.decode()?;
         drop(self.status.tx.send("CONNECT_START".to_owned()));
         let store_id = StoreId::parse(&store_id)?;
+        self.reset_vault_session();
         self.prepare_storage(&connection).await?;
         let keys = self.enter_identity_vault(&store_id).await?;
-        let (event_log_remote, records) = self.load_password_unlock_records("", true).await?;
+        let (event_log_remote, records) = self.load_vault_records("", true).await?;
         let opening = IdentityVaultOpening {
             keys,
             records,
@@ -173,7 +176,8 @@ impl NookVaultManager {
     /// Open a vault of the current identity from the event records the web
     /// app handed over, with no provider: the browser extension opens each
     /// vault of the keyring it was added to this way, with the DEK the
-    /// keyring granted it, then self-enrolls.
+    /// keyring granted it, then self-enrolls. Like a mount's vault, it
+    /// replaces any vault open in this session.
     #[wasm_bindgen]
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
@@ -190,6 +194,7 @@ impl NookVaultManager {
     ) -> Result<NookSecretPage, JsError> {
         drop(self.status.tx.send("CONNECT_START".to_owned()));
         let store_id = StoreId::parse(&store_id)?;
+        self.reset_vault_session();
         self.prepare_storage(&nook_core::StorageConnection::Local)
             .await?;
         let keys = self.enter_identity_vault(&store_id).await?;
@@ -250,6 +255,28 @@ impl NookVaultManager {
                 .await?;
         }
         let key_epoch = EventId::parse(&self.ensure_key_epoch().await?)?;
+        // A revoked member on no vault roster, as a recovery passphrase is,
+        // can still hold this epoch's DEK: rotate it away before any write.
+        let key_epoch = match (VaultRevokedHolders {
+            state: &state,
+            store_id: &store_id,
+            key_epoch: &key_epoch,
+        })
+        .rotation()
+        {
+            VaultHolderRotation::NotDue => key_epoch,
+            VaultHolderRotation::Due { app_id } => {
+                self.rotate_security_epoch_classified(VaultOperation::DeviceRevoked {
+                    device_id: app_id,
+                })
+                .await
+                .map_err(|failure| match failure {
+                    SecurityEpochRotationFailure::BeforeCommit(error)
+                    | SecurityEpochRotationFailure::AfterCommit(error) => error,
+                })?;
+                EventId::parse(&self.ensure_key_epoch().await?)?
+            }
+        };
         let keys = self.open_vault_keys()?;
         let dek = OpenedVaultDek {
             store_id: &store_id,
