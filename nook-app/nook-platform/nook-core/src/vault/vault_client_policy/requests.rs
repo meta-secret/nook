@@ -90,6 +90,7 @@ pub struct ShouldSyncFromProvidersRequest {
     pub force: crate::VaultSyncIntent,
     pub verifying: crate::VaultVerificationState,
     pub saving: crate::VaultSaveActivity,
+    pub invite_busy: crate::VaultInviteActivity,
     pub syncing: crate::VaultSyncActivity,
     pub sync_provider_count: crate::VaultSyncProviderCount,
 }
@@ -123,6 +124,7 @@ pub struct VaultSyncTimerTickDecisionRequest {
     pub verifying: crate::VaultVerificationState,
     pub saving: crate::VaultSaveActivity,
     pub syncing: crate::VaultSyncActivity,
+    pub invite_busy: crate::VaultInviteActivity,
     pub authenticated: crate::VaultAuthenticationState,
     pub join_state: crate::JoinEnrollmentState,
     pub awaiting_join_approval: crate::VaultJoinApprovalWait,
@@ -135,6 +137,7 @@ pub struct VaultStorageSyncDecisionRequest {
     pub freshness: crate::ProviderSyncFreshness,
     pub verifying: crate::VaultVerificationState,
     pub saving: crate::VaultSaveActivity,
+    pub invite_busy: crate::VaultInviteActivity,
     pub syncing: crate::VaultSyncActivity,
     pub authenticated: crate::VaultAuthenticationState,
     pub sync_provider_count: crate::VaultSyncProviderCount,

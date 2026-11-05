@@ -180,6 +180,7 @@ impl NookVaultClientPolicy {
         force: bool,
         verifying: bool,
         saving: bool,
+        invite_busy: bool,
         syncing: bool,
         sync_provider_count: u32,
     ) -> bool {
@@ -188,6 +189,7 @@ impl NookVaultClientPolicy {
             force: (force).into(),
             verifying: (verifying).into(),
             saving: (saving).into(),
+            invite_busy: (invite_busy).into(),
             syncing: (syncing).into(),
             sync_provider_count: (sync_provider_count as usize).into(),
         })
@@ -227,6 +229,7 @@ impl NookVaultClientPolicy {
         verifying: bool,
         saving: bool,
         syncing: bool,
+        invite_busy: bool,
         authenticated: bool,
         join_state: nook_core::JoinEnrollmentState,
         awaiting_join_approval: bool,
@@ -237,6 +240,7 @@ impl NookVaultClientPolicy {
                 verifying: (verifying).into(),
                 saving: (saving).into(),
                 syncing: (syncing).into(),
+                invite_busy: (invite_busy).into(),
                 authenticated: (authenticated).into(),
                 join_state,
                 awaiting_join_approval: (awaiting_join_approval).into(),
@@ -261,6 +265,7 @@ impl NookVaultClientPolicy {
         freshness: nook_core::ProviderSyncFreshness,
         verifying: bool,
         saving: bool,
+        invite_busy: bool,
         syncing: bool,
         authenticated: bool,
         sync_provider_count: u32,
@@ -272,6 +277,7 @@ impl NookVaultClientPolicy {
             freshness,
             verifying: (verifying).into(),
             saving: (saving).into(),
+            invite_busy: (invite_busy).into(),
             syncing: (syncing).into(),
             authenticated: (authenticated).into(),
             sync_provider_count: (sync_provider_count as usize).into(),
@@ -546,9 +552,9 @@ mod tests {
         assert!(policy.edits_blocked(0, false, false));
         assert!(!policy.edits_blocked(0, false, true));
 
-        assert!(policy.should_sync_from_providers(false, false, false, false, false, 1));
-        assert!(policy.should_sync_from_providers(false, true, true, true, true, 1));
-        assert!(!policy.should_sync_from_providers(true, true, false, false, false, 1));
+        assert!(policy.should_sync_from_providers(false, false, false, false, false, false, 1));
+        assert!(policy.should_sync_from_providers(false, true, true, true, true, true, 1));
+        assert!(!policy.should_sync_from_providers(true, true, false, false, false, false, 1));
         assert_eq!(
             policy.vault_sync_timer_start_decision(
                 false,
@@ -573,9 +579,10 @@ mod tests {
                 false,
                 false,
                 false,
+                false,
                 nook_core::JoinEnrollmentState::None,
                 false,
-                0
+                0,
             ),
             nook_core::VaultSyncTimerTickDecision::SkipNoRemoteUpdates
         );
@@ -590,10 +597,11 @@ mod tests {
                 false,
                 false,
                 false,
+                false,
                 true,
                 nook_core::JoinEnrollmentState::None,
                 false,
-                0
+                0,
             ),
             nook_core::VaultSyncTimerTickDecision::SkipLocalOnly
         );
@@ -603,9 +611,10 @@ mod tests {
                 false,
                 false,
                 false,
+                false,
                 nook_core::JoinEnrollmentState::Pending,
                 true,
-                1
+                1,
             ),
             nook_core::VaultSyncTimerTickDecision::Sync
         );
@@ -616,10 +625,11 @@ mod tests {
                 false,
                 true,
                 false,
+                false,
                 true,
                 1,
                 true,
-                true
+                true,
             ),
             nook_core::VaultStorageSyncDecision::Skip
         );
@@ -631,9 +641,10 @@ mod tests {
                 false,
                 false,
                 false,
+                false,
                 1,
                 false,
-                false
+                false,
             ),
             nook_core::VaultStorageSyncDecision::SyncFirstProviderUnauthenticated
         );
@@ -644,10 +655,11 @@ mod tests {
                 false,
                 false,
                 false,
+                false,
                 true,
                 1,
                 true,
-                true
+                true,
             ),
             nook_core::VaultStorageSyncDecision::SyncProviders
         );
@@ -787,7 +799,7 @@ mod browser_tests {
         let _ = policy.edits_blocked(0, false, true);
         let _ = policy.edit_block_message(1, true, false, "{}", "en");
         let _ = policy.is_sync_activity_visible(true, false, false, false);
-        let _ = policy.should_sync_from_providers(false, true, true, true, true, 1);
+        let _ = policy.should_sync_from_providers(false, true, true, true, true, true, 1);
         let _ = policy.vault_sync_timer_start_decision(
             true,
             false,
@@ -795,6 +807,7 @@ mod browser_tests {
             true,
         );
         let _ = policy.vault_sync_timer_tick_decision(
+            false,
             false,
             false,
             false,
@@ -808,7 +821,7 @@ mod browser_tests {
             nook_core::ProviderSyncFreshness::Forced,
         ] {
             let _ = policy.vault_storage_sync_decision(
-                false, freshness, false, false, false, true, 1, true, true,
+                false, freshness, false, false, false, false, true, 1, true, true,
             );
         }
         let _ = policy.should_auto_unlock(false, true, 1, false, false);

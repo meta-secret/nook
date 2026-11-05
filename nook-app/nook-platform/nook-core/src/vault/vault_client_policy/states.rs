@@ -252,6 +252,19 @@ impl From<bool> for VaultSyncIntent {
     }
 }
 
+/// Whether a one-time invite code is being issued or joined; the periodic
+/// sync skips while it is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VaultInviteActivity {
+    Idle,
+    Busy,
+}
+impl From<bool> for VaultInviteActivity {
+    fn from(observed: bool) -> Self {
+        if observed { Self::Busy } else { Self::Idle }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VaultSyncChange {
     Unchanged,

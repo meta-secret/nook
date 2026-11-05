@@ -618,12 +618,12 @@ pub use vault_client_policy::{
     ShouldAutoConnectAfterApprovalRequest, ShouldAutoUnlockRequest,
     ShouldShowLoginVaultPickerRequest, ShouldSyncFromProvidersRequest, SyncActivityVisibleRequest,
     UnauthenticatedSyncDecisionRequest, VaultAuthenticationState, VaultConnectProbeDecisionRequest,
-    VaultExistenceRequirement, VaultFanOutSyncState, VaultIdleExpiration, VaultJoinApprovalWait,
-    VaultProviderSyncState, VaultSaveActivity, VaultSecretCreationPermission, VaultSelectionState,
-    VaultSessionLockIntent, VaultStorageSyncDecisionRequest, VaultSwitchTargetRequest,
-    VaultSyncActivity, VaultSyncChange, VaultSyncConflictState, VaultSyncIntent,
-    VaultSyncPermission, VaultSyncTimerStartDecisionRequest, VaultSyncTimerTickDecisionRequest,
-    VaultVerificationState,
+    VaultExistenceRequirement, VaultFanOutSyncState, VaultIdleExpiration, VaultInviteActivity,
+    VaultJoinApprovalWait, VaultProviderSyncState, VaultSaveActivity,
+    VaultSecretCreationPermission, VaultSelectionState, VaultSessionLockIntent,
+    VaultStorageSyncDecisionRequest, VaultSwitchTargetRequest, VaultSyncActivity, VaultSyncChange,
+    VaultSyncConflictState, VaultSyncIntent, VaultSyncPermission,
+    VaultSyncTimerStartDecisionRequest, VaultSyncTimerTickDecisionRequest, VaultVerificationState,
 };
 
 pub use device_access::DeviceSessionLockState;
