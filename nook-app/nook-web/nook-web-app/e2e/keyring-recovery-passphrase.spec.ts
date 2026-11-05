@@ -1,4 +1,5 @@
 import type { Locator } from '@playwright/test'
+import type { VaultDebugWindow } from '$lib/app/browser-lifecycle'
 import { expect, test, type Page } from './fixtures'
 import {
   addSecret,
@@ -6,6 +7,7 @@ import {
   createFirstRunKey,
   createIsolatedContext,
   disableVaultIdleLock,
+  dumpNookLogs,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   keepSecretOnS3,
   ManagePage,
@@ -162,11 +164,30 @@ async function readSecretOfVault(
   device: Page,
   kept: KeptVault,
 ): Promise<string> {
-  await openKeyringVault(device, kept.storeId)
-  await disableVaultIdleLock(device)
-  await openVaultPage(device)
-  await waitForSecretOnDevice(device, kept.key)
-  return revealSecretValue(device, kept.key)
+  try {
+    await openKeyringVault(device, kept.storeId)
+    await disableVaultIdleLock(device)
+    await openVaultPage(device)
+    await waitForSecretOnDevice(device, kept.key)
+    return await revealSecretValue(device, kept.key)
+  } catch (error) {
+    // The fixture reports the first device only; this one closes with its
+    // isolated context, so its state is printed here.
+    const state = await device.evaluate(() => {
+      const vault = (window as VaultDebugWindow).__nookVault
+      return JSON.stringify({
+        path: window.location.pathname,
+        section: vault?.workspaceSection,
+        active: vault?.activeVault,
+        panel: vault?.vaultPanelStoreId,
+        error: vault?.errorMsg,
+      })
+    })
+    console.log(`[readSecretOfVault ${kept.storeId}] recovered device: ${state}`)
+    console.log(await device.locator('body').ariaSnapshot())
+    await dumpNookLogs(device, 'readSecretOfVault')
+    throw error
+  }
 }
 
 // Every test keeps its objects under its own key prefix in the shared local
