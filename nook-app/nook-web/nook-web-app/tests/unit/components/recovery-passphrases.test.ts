@@ -1,8 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/svelte'
 import type { ComponentProps } from 'svelte'
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest'
-import { ok } from 'neverthrow'
+import { err, ok } from 'neverthrow'
 import initNookWasm, {
+  NookVaultManager,
   type IdentityControlSnapshot,
   type IdentityRecoveryPassphraseView,
   type NookRecoveryWordsCheck,
@@ -15,10 +16,17 @@ import {
   type RecoveryPassphraseRemoval,
   type RecoveryPassphraseRequest,
 } from '$lib/vault/identity-control.svelte'
+import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import RecoveryPassphrases from '../../../../nook-web-shared/src/vault-app/lib/components/recovery-passphrase/RecoveryPassphrases.svelte'
 import VaultDevicesCard from '../../../../nook-web-shared/src/vault-app/lib/components/settings/VaultDevicesCard.svelte'
+import {
+  KeysCoverageKind,
+  keysCoverage,
+  keysCoverageMessage,
+  type KeysCoverageRequest,
+} from '../../../../nook-web-shared/src/vault-app/lib/components/identity-control/identity-keys-coverage'
 
 beforeAll(async () => {
   await initNookWasm()
@@ -100,11 +108,14 @@ class KeyringFixture {
   /** Name the passphrase, pick High, and generate its words. */
   async generate(): Promise<void> {
     await fireEvent.click(screen.getByTestId('recovery-passphrase-add'))
-    await fireEvent.input(screen.getByTestId('recovery-passphrase-label'), {
-      target: { value: 'Kitchen drawer' },
-    })
+    await fireEvent.input(
+      screen.getByTestId('recovery-passphrase-label-input'),
+      {
+        target: { value: 'Kitchen drawer' },
+      },
+    )
     await fireEvent.click(
-      screen.getByTestId('recovery-passphrase-strength-high'),
+      screen.getByTestId('recovery-passphrase-strength-choice-high'),
     )
     await fireEvent.click(screen.getByTestId('recovery-passphrase-generate'))
     await vi.waitFor(() => screen.getByTestId('recovery-passphrase-words'))
@@ -292,5 +303,109 @@ describe('the device list', () => {
       replacements: { label: SAFE.label },
     }
     expect(tags[0]?.textContent).toContain(vault.t(named))
+  })
+})
+
+describe('saving accepted words', () => {
+  test('accepted words stay saved when copying them to the providers fails', async () => {
+    const vault = VaultStateTestFixture.create()
+    const manager = new NookVaultManager()
+    vi.spyOn(manager, 'confirm_recovery_passphrase').mockResolvedValue({
+      state: 'accepted',
+    })
+    vi.spyOn(vault, 'admitManager').mockReturnValue(ok(manager))
+    VaultStateTestFixture.runStorageImmediately(vault)
+    const failure = new NativeVaultStorageFailure('provider unreachable')
+    vi.spyOn(vault.identityControl, 'syncWithMounts').mockResolvedValue(
+      err(failure),
+    )
+    const reloaded = vi
+      .spyOn(vault.identityControl, 'loadSnapshot')
+      .mockResolvedValue(ok(IdentityActionOutcome.Completed))
+
+    const confirmed =
+      await vault.identityControl.confirmRecoveryPassphrase('amber canyon')
+
+    expect(confirmed.isOk() && confirmed.value).toEqual({ state: 'accepted' })
+    expect(reloaded).toHaveBeenCalled()
+    expect(vault.errorMsg).toBe(vault.t(failure.translationKey))
+  })
+
+  test('the add flow closes on saved words and leaves the copy failure shown', async () => {
+    const fixture = new KeyringFixture([])
+    vi.spyOn(
+      fixture.vault.identityControl,
+      'confirmRecoveryPassphrase',
+    ).mockImplementation(() => {
+      fixture.vault.errorMsg = 'copy failed'
+      const accepted: NookRecoveryWordsCheck = { state: 'accepted' }
+      return Promise.resolve(ok(accepted))
+    })
+    fixture.render()
+    await fixture.generate()
+    await fireEvent.click(screen.getByTestId('recovery-passphrase-written'))
+
+    await fixture.typeBack(WORDS.join(' '))
+
+    await vi.waitFor(() =>
+      expect(
+        screen.queryAllByTestId('recovery-passphrase-add-flow'),
+      ).toHaveLength(0),
+    )
+    expect(fixture.vault.errorMsg).toBe('copy failed')
+  })
+})
+
+describe('what the Keys page says about one key', () => {
+  function snapshot(
+    passphrases: IdentityRecoveryPassphraseView[],
+  ): IdentityControlSnapshot {
+    return {
+      identityId: 'idn_test',
+      identityLabel: 'Personal',
+      standing: 'member',
+      members: [],
+      devices: [],
+      deviceCount: 1,
+      joinRequests: [],
+      vaults: [],
+      mounts: [],
+      recoveryPassphrases: passphrases,
+    }
+  }
+
+  test('one key with a recovery passphrase says a new device can get in', () => {
+    const request: KeysCoverageRequest = {
+      keyCount: 1,
+      snapshot: snapshot([SAFE]),
+    }
+    const coverage = keysCoverage(request)
+
+    expect(coverage).toBe(KeysCoverageKind.SingleRecoverable)
+    expect(keysCoverageMessage(coverage)).toBe(
+      I18N_KEYS.IdentityKeysSingleRecoverable,
+    )
+  })
+
+  test('one key and no recovery passphrase still warns', () => {
+    const without: KeysCoverageRequest = {
+      keyCount: 1,
+      snapshot: snapshot([]),
+    }
+    const unloaded: KeysCoverageRequest = { keyCount: 1, snapshot: false }
+
+    expect(keysCoverageMessage(keysCoverage(without))).toBe(
+      I18N_KEYS.IdentityKeysSingleWarning,
+    )
+    expect(keysCoverage(unloaded)).toBe(KeysCoverageKind.Single)
+  })
+
+  test('several keys are covered whatever the passphrases', () => {
+    const request: KeysCoverageRequest = {
+      keyCount: 2,
+      snapshot: snapshot([]),
+    }
+
+    expect(keysCoverage(request)).toBe(KeysCoverageKind.Covered)
   })
 })

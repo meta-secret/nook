@@ -30,6 +30,7 @@ joins the keyring and setup ends on it, as after an approved join.
   import { FirstRunStage } from '$lib/vault/state/ui.svelte'
   import {
     RecoveryListKind,
+    recoveryList,
     type RecoveryList,
   } from './first-run-recover-state'
 
@@ -39,13 +40,12 @@ joins the keyring and setup ends on it, as after an approved join.
   const actions = $derived(new FirstRunActions(vault))
   const recovery = $derived(new FirstRunRecovery(vault))
   let list = $state.raw<RecoveryList>({ kind: RecoveryListKind.Loading })
-  let picked = $state('')
   let typed = $state('')
   let slip = $state<RecoveryWordsSlip>({ kind: RecoveryWordsSlipKind.Clear })
   let working = $state(false)
 
   const passphrases = $derived(
-    list.kind === RecoveryListKind.Loaded ? list.passphrases : [],
+    list.kind === RecoveryListKind.Ready ? list.passphrases : [],
   )
   const choices = $derived(
     passphrases.map(
@@ -64,9 +64,7 @@ joins the keyring and setup ends on it, as after an approved join.
       list = { kind: RecoveryListKind.Failed, message: read.error.message(vault) }
       return
     }
-    list = { kind: RecoveryListKind.Loaded, passphrases: read.value }
-    const [first] = read.value
-    if (first) picked = first.id
+    list = recoveryList(read.value)
   }
 
   onMount(() => {
@@ -74,13 +72,31 @@ joins the keyring and setup ends on it, as after an approved join.
   })
 
   function pick(id: string): void {
-    picked = id
+    switch (list.kind) {
+      case RecoveryListKind.Ready:
+        list = { ...list, picked: id }
+        break
+      case RecoveryListKind.Loading:
+      case RecoveryListKind.None:
+      case RecoveryListKind.Failed:
+        return
+    }
     slip = { kind: RecoveryWordsSlipKind.Clear }
   }
 
   async function submit(event: SubmitEvent): Promise<void> {
     event.preventDefault()
-    if (!picked) return
+    switch (list.kind) {
+      case RecoveryListKind.Ready:
+        return recoverWith(list.picked)
+      case RecoveryListKind.Loading:
+      case RecoveryListKind.None:
+      case RecoveryListKind.Failed:
+        return
+    }
+  }
+
+  async function recoverWith(picked: string): Promise<void> {
     working = true
     vault.errorMsg = ''
     try {
@@ -171,7 +187,7 @@ joins the keyring and setup ends on it, as after an approved join.
         {vault.t(I18N_KEYS.DevicesAccessTryAgain)}
       </Button>
     </div>
-  {:else if passphrases.length === 0}
+  {:else if list.kind === RecoveryListKind.None}
     <p class="text-sm text-muted-foreground" data-testid="first-run-recover-none">
       {vault.t(I18N_KEYS.RecoveryPassphraseRecoverNone)}
     </p>
@@ -185,7 +201,7 @@ joins the keyring and setup ends on it, as after an approved join.
           <ChoiceChips
             label={vault.t(I18N_KEYS.RecoveryPassphraseRecoverChoose)}
             {choices}
-            value={picked}
+            value={list.picked}
             disabled={busy}
             testid="first-run-recover-passphrase"
             onpick={pick}
@@ -212,7 +228,7 @@ joins the keyring and setup ends on it, as after an approved join.
         <Button
           type="submit"
           data-testid="first-run-recover-submit"
-          disabled={busy || !picked}
+          disabled={busy}
         >
           {#if working}
             <RefreshCw class="size-4 animate-spin" aria-hidden="true" />

@@ -1316,6 +1316,7 @@ export const I18N_KEYS = {
   IdentityKeysLastUsed: 'identity_keys.last_used',
   IdentityKeysOtherBody: 'identity_keys.other_body',
   IdentityKeysOtherTitle: 'identity_keys.other_title',
+  IdentityKeysSingleRecoverable: 'identity_keys.single_recoverable',
   IdentityKeysSingleWarning: 'identity_keys.single_warning',
   IdentityKeysUnlocks: 'identity_keys.unlocks',
   IdentityMenuActions: 'identity_menu.actions',

@@ -2481,6 +2481,7 @@
     "count_one": "1 key",
     "count_many": "{count} keys",
     "single_warning": "Only one key unlocks {identity}. If this browser’s data is lost, nothing here opens its vaults.",
+    "single_recoverable": "Only one device key unlocks {identity}. If this browser’s data is lost, one of its recovery passphrases lets a new device in.",
     "covered": "{identity} opens from {count} apps. Losing one device does not lock you out.",
     "unlocks": "Unlocks",
     "kept_in": "Kept in",

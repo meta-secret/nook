@@ -124,7 +124,9 @@ export class FirstRunRecovery {
   }
 
   /** After accepted words: load the keyring as after an approved join,
-   * then connect its provider and end setup there. */
+   * then connect its provider and end setup there. This browser is in the
+   * keyring either way; a load that failed stays said, and setup does not
+   * announce a recovery it did not finish. */
   private async followed(
     ...[join, outcome]: readonly [IdentityJoinIntent, RecoveryWordsOutcome]
   ): Promise<Result<RecoveryWordsOutcome, IdentityPlanFailure>> {
@@ -137,9 +139,13 @@ export class FirstRunRecovery {
     const vault = this.vault;
     await new IdentityDirectoryLoader(vault).reload();
     const loaded = await vault.identityControl.followInviteJoin(join.label);
-    if (loaded.isErr()) vault.errorMsg = vault.t(loaded.error.translationKey);
     vault.firstRunJoin = { kind: FirstRunJoinKind.None };
-    if (await new FirstRunActions(vault).connectProvider()) {
+    const connected = await new FirstRunActions(vault).connectProvider();
+    if (loaded.isErr()) {
+      vault.errorMsg = vault.t(loaded.error.translationKey);
+      return ok(outcome);
+    }
+    if (connected) {
       const request: Parameters<typeof vault.t>[0] = {
         key: I18N_KEYS.RecoveryPassphraseRecovered,
         replacements: { identity: join.label },
