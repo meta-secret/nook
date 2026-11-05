@@ -137,6 +137,11 @@ pub use auth::sentinel_unlock::{
     SentinelUnlockQuorum, SentinelUnlockReadiness, SentinelUnlockRejection, SentinelUnlockRequest,
     SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus, SentinelUnlockVersion,
 };
+pub use auth::recovery_passphrase::{
+    RecoveryPassphraseError, RecoveryPhrase, RecoverySealedSecret, RecoverySecret, RecoveryStrength,
+    RecoveryWord, RecoveryWordCount, RecoveryWordDraw, RecoveryWordPosition, RecoveryWordSample,
+    RecoveryWordSuggestions, TypedRecoveryWord, TypedRecoveryWords, UnknownRecoveryWord,
+};
 pub use crypto::vault_crypto::VaultCrypto;
 pub use errors::{
     AgeCryptoError, DeviceKeyProtectionError, DeviceKeyProtectionResult, EnrollmentError,

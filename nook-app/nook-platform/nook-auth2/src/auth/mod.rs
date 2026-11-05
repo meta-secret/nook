@@ -16,6 +16,7 @@ mod sentinel_genesis_types;
 mod sentinel_signing;
 pub mod sentinel_unlock;
 mod slip39;
+pub mod recovery_passphrase;
 
 pub use domain_numbers::{
     DeviceKeyDerivationIterations, EnrollmentKeyDerivationIterations, IdentityControlEpoch,

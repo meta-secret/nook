@@ -7,7 +7,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use nook_auth2::{AgeArmoredCiphertext, AppId, IdentityId, IsoTimestamp, StoreId};
+use nook_auth2::{
+    AgeArmoredCiphertext, AppId, AuthKeyId, IdentityId, IsoTimestamp, MemberLabel,
+    RecoverySealedSecret, RecoveryStrength, StoreId,
+};
 
 use super::graph::IdentityControlLog;
 use super::wire::{
@@ -16,12 +19,42 @@ use super::wire::{
 };
 use crate::{EventError, EventId, EventResult};
 
-/// An active app-key member of the identity.
+/// A recovery passphrase on the keyring: its private keys sealed under its
+/// words, and how many words it has.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IdentityRecoveryMember {
+    pub sealed_secret: RecoverySealedSecret,
+    pub strength: RecoveryStrength,
+}
+
+/// What a member is: an app key on a device, or a recovery passphrase,
+/// which is on no device.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IdentityMemberKind {
+    App { device: MemberDevice },
+    Recovery(IdentityRecoveryMember),
+}
+
+/// Who let a member in.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IdentityMemberApprover {
+    /// It founded the identity.
+    Founder,
+    /// It joined itself with a one-time invite a member issued.
+    Invite,
+    /// An app key of the identity approved or added it.
+    App { app_id: AppId },
+    /// A recovery passphrase approved it, on a new device.
+    RecoveryPassphrase { app_id: AppId, label: MemberLabel },
+}
+
+/// An active member of the identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IdentityControlMember {
     pub keys: IdentityMemberKeys,
     pub approved_in: EventId,
-    pub device: MemberDevice,
+    pub kind: IdentityMemberKind,
+    pub approved_by: IdentityMemberApprover,
 }
 
 /// A join request no approval, denial, or revocation has resolved.
@@ -37,6 +70,10 @@ pub struct IdentityJoinRequest {
 pub struct IdentityVaultEpochDeks {
     pub key_epoch: EventId,
     pub recipients: Vec<MemberVaultDek>,
+    /// Members revoked from the identity that held an envelope for this
+    /// epoch. Whatever the vault writes under it they can read, so the vault
+    /// rotates before its next write.
+    pub revoked_holders: Vec<AppId>,
 }
 
 /// A vault owned by the identity with its DEK envelopes.
@@ -72,12 +109,22 @@ impl IdentityControlVault {
     pub fn current_dek_for(&self, app_id: &AppId) -> IdentityVaultDekLookup<'_> {
         self.dek_for(app_id, &self.current_key_epoch)
     }
+
+    /// Revoked members that hold this vault's DEK at `key_epoch`.
+    #[must_use]
+    pub fn revoked_holders(&self, key_epoch: &EventId) -> &[AppId] {
+        self.epochs
+            .iter()
+            .find(|epoch| &epoch.key_epoch == key_epoch)
+            .map_or(&[], |epoch| epoch.revoked_holders.as_slice())
+    }
 }
 
 /// Replicated identity state derived from the applicable control log.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IdentityControlState {
     pub identity_id: IdentityId,
+    /// Every active member: app keys and recovery passphrases.
     pub members: Vec<IdentityControlMember>,
     pub revoked: Vec<AppId>,
     pub pending_joins: Vec<IdentityJoinRequest>,
@@ -101,10 +148,29 @@ struct VaultAccumulator {
     epochs: BTreeMap<EventId, BTreeMap<AppId, MemberVaultDek>>,
 }
 
+/// Who admitted a member, as the fold sees it: the founder, an invite, or
+/// the signing key of the member that approved it.
+#[derive(Clone)]
+enum AdmittingActor {
+    Founder,
+    Invite,
+    Member(AuthKeyId),
+}
+
+/// A member as the fold last admitted it.
+struct AdmittedMember {
+    keys: IdentityMemberKeys,
+    approved_in: EventId,
+    kind: IdentityMemberKind,
+    admitted_by: AdmittingActor,
+}
+
 #[derive(Default)]
 struct ProjectionAccumulator {
     created: bool,
-    member_keys: BTreeMap<AppId, (IdentityMemberKeys, EventId, MemberDevice)>,
+    member_keys: BTreeMap<AppId, AdmittedMember>,
+    /// The app every admitted signing key belongs to.
+    signers: BTreeMap<AuthKeyId, AppId>,
     requests: Vec<IdentityJoinRequest>,
     resolutions: Vec<(EventId, AppId)>,
     denials: Vec<(EventId, AppId)>,
@@ -124,25 +190,40 @@ struct VaultRecipients<'a> {
 }
 
 /// A member admitted by one event, with the DEKs that event grants it.
-#[derive(Clone, Copy)]
 struct MemberAdmission<'a> {
     event: &'a EventId,
     member: &'a IdentityMemberKeys,
     vault_deks: &'a [IdentityVaultDekGrant],
-    device: &'a MemberDevice,
+    kind: IdentityMemberKind,
+    admitted_by: AdmittingActor,
+}
+
+/// The event one operation belongs to.
+struct AppliedEvent<'a> {
+    id: &'a EventId,
+    created_at: &'a IsoTimestamp,
+    actor_id: &'a AuthKeyId,
 }
 
 impl ProjectionAccumulator {
-    fn admit(&mut self, admission: MemberAdmission<'_>) {
+    fn admit(&mut self, admission: MemberAdmission<'_>) -> EventResult<()> {
         let MemberAdmission {
             event,
             member,
             vault_deks,
-            device,
+            kind,
+            admitted_by,
         } = admission;
+        self.signers
+            .insert(member.signing_actor()?, member.app_id.clone());
         self.member_keys.insert(
             member.app_id.clone(),
-            (member.clone(), event.clone(), device.clone()),
+            AdmittedMember {
+                keys: member.clone(),
+                approved_in: event.clone(),
+                kind,
+                admitted_by,
+            },
         );
         self.resolutions
             .push((event.clone(), member.app_id.clone()));
@@ -161,6 +242,7 @@ impl ProjectionAccumulator {
                     },
                 );
         }
+        Ok(())
     }
 
     fn grant(&mut self, request: VaultRecipients<'_>) {
@@ -174,23 +256,28 @@ impl ProjectionAccumulator {
 
     fn apply(
         &mut self,
-        id: &EventId,
-        created_at: &IsoTimestamp,
+        event: &AppliedEvent<'_>,
         operation: &IdentityControlOperation,
-    ) {
+    ) -> EventResult<()> {
+        let id = event.id;
         match operation {
             IdentityControlOperation::IdentityCreated { founder } => {
                 self.created = true;
-                self.member_keys.insert(
-                    founder.app_id.clone(),
-                    (founder.clone(), id.clone(), MemberDevice::Own),
-                );
+                self.admit(MemberAdmission {
+                    event: id,
+                    member: founder,
+                    vault_deks: &[],
+                    kind: IdentityMemberKind::App {
+                        device: MemberDevice::Own,
+                    },
+                    admitted_by: AdmittingActor::Founder,
+                })?;
             }
             IdentityControlOperation::MemberJoinRequested { member } => {
                 self.requests.push(IdentityJoinRequest {
                     member: member.clone(),
                     request_event: id.clone(),
-                    requested_at: created_at.clone(),
+                    requested_at: event.created_at.clone(),
                 });
             }
             IdentityControlOperation::MemberApproved {
@@ -201,8 +288,11 @@ impl ProjectionAccumulator {
                 event: id,
                 member,
                 vault_deks,
-                device,
-            }),
+                kind: IdentityMemberKind::App {
+                    device: device.clone(),
+                },
+                admitted_by: AdmittingActor::Member(event.actor_id.clone()),
+            })?,
             // The invite holder joins from wherever it typed the code.
             IdentityControlOperation::MemberJoinedByInvite {
                 member, vault_deks, ..
@@ -210,8 +300,25 @@ impl ProjectionAccumulator {
                 event: id,
                 member,
                 vault_deks,
-                device: &MemberDevice::Own,
-            }),
+                kind: IdentityMemberKind::App {
+                    device: MemberDevice::Own,
+                },
+                admitted_by: AdmittingActor::Invite,
+            })?,
+            IdentityControlOperation::RecoveryKeyAdded {
+                member,
+                sealed_secret,
+                strength,
+            } => self.admit(MemberAdmission {
+                event: id,
+                member,
+                vault_deks: &[],
+                kind: IdentityMemberKind::Recovery(IdentityRecoveryMember {
+                    sealed_secret: sealed_secret.clone(),
+                    strength: *strength,
+                }),
+                admitted_by: AdmittingActor::Member(event.actor_id.clone()),
+            })?,
             IdentityControlOperation::MemberJoinDenied { app_id } => {
                 self.resolutions.push((id.clone(), app_id.clone()));
                 self.denials.push((id.clone(), app_id.clone()));
@@ -222,8 +329,8 @@ impl ProjectionAccumulator {
             // An invite grants nothing until its holder joins with it.
             IdentityControlOperation::MemberInvited { .. } => {}
             IdentityControlOperation::MemberRenamed { app_id, label } => {
-                if let Some((keys, _, _)) = self.member_keys.get_mut(app_id) {
-                    keys.label = label.clone();
+                if let Some(admitted) = self.member_keys.get_mut(app_id) {
+                    admitted.keys.label = label.clone();
                 }
             }
             IdentityControlOperation::VaultRegistered {
@@ -262,6 +369,35 @@ impl ProjectionAccumulator {
                 self.sealed_name.clone_from(recipients);
             }
         }
+        Ok(())
+    }
+
+    /// Who let a member in, by name: the approving member's app, and for a
+    /// recovery passphrase its label, even after it was removed.
+    fn approver(&self, admitted_by: &AdmittingActor) -> EventResult<IdentityMemberApprover> {
+        let actor = match admitted_by {
+            AdmittingActor::Founder => return Ok(IdentityMemberApprover::Founder),
+            AdmittingActor::Invite => return Ok(IdentityMemberApprover::Invite),
+            AdmittingActor::Member(actor) => actor,
+        };
+        let approver = self
+            .signers
+            .get(actor)
+            .and_then(|app_id| self.member_keys.get(app_id))
+            .ok_or_else(|| {
+                EventError::IdentityControlInvalid(format!(
+                    "member approver {actor} is not a member of the identity"
+                ))
+            })?;
+        Ok(match &approver.kind {
+            IdentityMemberKind::App { .. } => IdentityMemberApprover::App {
+                app_id: approver.keys.app_id.clone(),
+            },
+            IdentityMemberKind::Recovery(_) => IdentityMemberApprover::RecoveryPassphrase {
+                app_id: approver.keys.app_id.clone(),
+                label: approver.keys.label.clone(),
+            },
+        })
     }
 }
 
@@ -306,8 +442,13 @@ impl IdentityControlState {
             .collect::<BTreeSet<_>>();
         let mut accumulator = ProjectionAccumulator::default();
         for (id, event) in &ordered {
+            let applied = AppliedEvent {
+                id,
+                created_at: &event.body.created_at,
+                actor_id: &event.body.actor_id,
+            };
             for operation in &event.body.operations {
-                accumulator.apply(id, &event.body.created_at, operation);
+                accumulator.apply(&applied, operation)?;
             }
         }
         if !accumulator.created {
@@ -320,12 +461,15 @@ impl IdentityControlState {
             .member_keys
             .iter()
             .filter(|(app_id, _)| active.contains_key(*app_id))
-            .map(|(_, (keys, approved_in, device))| IdentityControlMember {
-                keys: keys.clone(),
-                approved_in: approved_in.clone(),
-                device: device.clone(),
+            .map(|(_, admitted)| {
+                Ok(IdentityControlMember {
+                    keys: admitted.keys.clone(),
+                    approved_in: admitted.approved_in.clone(),
+                    kind: admitted.kind.clone(),
+                    approved_by: accumulator.approver(&admitted.admitted_by)?,
+                })
             })
-            .collect::<Vec<_>>();
+            .collect::<EventResult<Vec<_>>>()?;
         let revoked = accumulator
             .member_keys
             .keys()
@@ -359,12 +503,18 @@ impl IdentityControlState {
                 let epochs = vault
                     .epochs
                     .into_iter()
-                    .map(|(key_epoch, recipients)| IdentityVaultEpochDeks {
-                        key_epoch,
-                        recipients: recipients
+                    .map(|(key_epoch, recipients)| {
+                        let (recipients, revoked_holders): (Vec<_>, Vec<_>) = recipients
                             .into_values()
-                            .filter(|dek| active.contains_key(&dek.app_id))
-                            .collect(),
+                            .partition(|dek| active.contains_key(&dek.app_id));
+                        IdentityVaultEpochDeks {
+                            key_epoch,
+                            recipients,
+                            revoked_holders: revoked_holders
+                                .into_iter()
+                                .map(|dek| dek.app_id)
+                                .collect(),
+                        }
                     })
                     .collect();
                 Some(IdentityControlVault {
@@ -409,13 +559,42 @@ impl IdentityControlState {
             .find(|member| &member.keys.app_id == app_id)
     }
 
+    /// The app-key members, each with the device it runs on.
+    pub fn app_members(&self) -> impl Iterator<Item = (&IdentityControlMember, &MemberDevice)> {
+        self.members.iter().filter_map(|member| match &member.kind {
+            IdentityMemberKind::App { device } => Some((member, device)),
+            IdentityMemberKind::Recovery(_) => None,
+        })
+    }
+
+    /// The recovery passphrases on the keyring.
+    pub fn recovery_members(
+        &self,
+    ) -> impl Iterator<Item = (&IdentityControlMember, &IdentityRecoveryMember)> {
+        self.members.iter().filter_map(|member| match &member.kind {
+            IdentityMemberKind::Recovery(recovery) => Some((member, recovery)),
+            IdentityMemberKind::App { .. } => None,
+        })
+    }
+
+    /// The recovery passphrase that is the member `app_id`, if it is one.
+    #[must_use]
+    pub fn recovery_member(
+        &self,
+        app_id: &AppId,
+    ) -> Option<(&IdentityControlMember, &IdentityRecoveryMember)> {
+        self.recovery_members()
+            .find(|(member, _)| &member.keys.app_id == app_id)
+    }
+
     /// Whether two members' apps run on one device: one was added on the
     /// other's device.
     #[must_use]
     pub fn share_a_device(&self, app: &AppId, other: &AppId) -> bool {
         let added_beside = |member: &AppId, beside: &AppId| {
-            self.member(member).is_some_and(|member| {
-                matches!(&member.device, MemberDevice::SameAs { app_id } if app_id == beside)
+            self.app_members().any(|(member_app, device)| {
+                &member_app.keys.app_id == member
+                    && matches!(device, MemberDevice::SameAs { app_id } if app_id == beside)
             })
         };
         added_beside(app, other) || added_beside(other, app)
@@ -423,12 +602,15 @@ impl IdentityControlState {
 
     /// One member per device the identity's apps run on. A member on another
     /// member's device adds none: losing that device loses both. Once that
-    /// member is gone, the device is its own again.
+    /// member is gone, the device is its own again. A recovery passphrase is
+    /// on no device.
     pub fn device_members(&self) -> impl Iterator<Item = &IdentityControlMember> {
-        self.members.iter().filter(|member| match &member.device {
-            MemberDevice::Own => true,
-            MemberDevice::SameAs { app_id } => self.member(app_id).is_none(),
-        })
+        self.app_members()
+            .filter(|(_, device)| match device {
+                MemberDevice::Own => true,
+                MemberDevice::SameAs { app_id } => self.member(app_id).is_none(),
+            })
+            .map(|(member, _)| member)
     }
 
     #[must_use]

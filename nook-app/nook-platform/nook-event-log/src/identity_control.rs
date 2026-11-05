@@ -9,6 +9,7 @@
 mod builder;
 mod graph;
 mod projection;
+mod recovery;
 mod wire;
 
 pub use builder::{
@@ -22,8 +23,10 @@ pub use graph::{
 };
 pub use projection::{
     IdentityControlMember, IdentityControlState, IdentityControlVault, IdentityJoinRequest,
-    IdentityVaultDekLookup, IdentityVaultEpochDeks,
+    IdentityMemberApprover, IdentityMemberKind, IdentityRecoveryMember, IdentityVaultDekLookup,
+    IdentityVaultEpochDeks,
 };
+pub use recovery::{IdentityRecoveryAddition, IdentityRecoveryApproval};
 pub use wire::{
     IdentityControlOperation, IdentityEvent, IdentityEventBody, IdentityEventSchemaVersion,
     IdentityInvite, IdentityInviteProof, IdentityMemberKeys, IdentityMountTarget,

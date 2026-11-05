@@ -1,0 +1,15 @@
+orchard-street-long.txt
+
+Orchard Street Long List, 17,576 words, vendored unchanged from
+https://github.com/sts10/orchard-street-wordlists
+file lists/orchard-street-long.txt at commit
+4fd015fe9a8e50d837d9f54cb39883bb801da1ed.
+
+SHA-256: 21b00942246dc7f0ecf5321dc22bc4ce2326b51ea72ea55697d754601ca115d2
+
+Copyright (c) Sam Schlinkert.
+Licensed under the Creative Commons Attribution-ShareAlike 4.0
+International License (CC BY-SA 4.0):
+https://creativecommons.org/licenses/by-sa/4.0/
+
+Nook uses the list unchanged to generate keyring recovery passphrases.

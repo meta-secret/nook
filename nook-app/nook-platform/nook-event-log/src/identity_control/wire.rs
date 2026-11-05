@@ -10,7 +10,8 @@ use std::{fmt, str};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use nook_auth2::{
     AgeArmoredCiphertext, AppId, AuthKeyId, CompactToken, DevicePublicKey, DeviceSigningPublicKey,
-    IdentityId, IdentityInviteId, IsoTimestamp, MemberLabel, S3KeyPrefix, StoreId,
+    IdentityId, IdentityInviteId, IsoTimestamp, MemberLabel, RecoverySealedSecret,
+    RecoveryStrength, S3KeyPrefix, StoreId,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -298,6 +299,15 @@ pub enum IdentityControlOperation {
         invite_signature: Ed25519Signature,
         vault_deks: Vec<IdentityVaultDekGrant>,
     },
+    /// A member adds a recovery passphrase: a member whose private keys are
+    /// sealed under generated words. It receives every vault DEK like any
+    /// member, may approve one new app key on its own device at a time, and
+    /// is never counted as a device.
+    RecoveryKeyAdded {
+        member: IdentityMemberKeys,
+        sealed_secret: RecoverySealedSecret,
+        strength: RecoveryStrength,
+    },
     MemberRevoked {
         app_id: AppId,
     },
@@ -505,6 +515,9 @@ impl IdentityEvent {
                 } => {
                     member.signing_actor()?;
                     Self::check_one_grant_per_vault(vault_deks)?;
+                }
+                IdentityControlOperation::RecoveryKeyAdded { member, .. } => {
+                    member.signing_actor()?;
                 }
                 IdentityControlOperation::MemberInvited { invite } => {
                     SigningIdentity::verifying_key_from_public_key_hex(

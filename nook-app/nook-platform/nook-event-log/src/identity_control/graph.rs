@@ -10,7 +10,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use nook_auth2::{AppId, AuthKeyId, IdentityId, IdentityInviteId};
 use nook_replication::{CausalEventInsertion, CausalGraph, CausalInsertStatus, CausalQuarantine};
 
-use super::wire::{IdentityControlOperation, IdentityEvent, IdentityInvite, IdentityInviteProof};
+use super::wire::{
+    IdentityControlOperation, IdentityEvent, IdentityInvite, IdentityInviteProof, MemberDevice,
+};
 use crate::{EventError, EventId, EventResult, EventStorageBytes};
 
 /// Outcome of inserting one identity control event.
@@ -46,10 +48,34 @@ pub struct IdentityControlInsertion {
     pub status: IdentityEventInsertStatus,
 }
 
+/// What a member may sign: an app key acts for the identity; a recovery
+/// passphrase may only approve a new app key or remove itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(super) enum MemberRole {
+    App,
+    Recovery,
+}
+
+/// One admission of a member's signing key, by the event that admitted it.
+struct MemberApproval {
+    event: EventId,
+    app_id: AppId,
+    actor: AuthKeyId,
+    role: MemberRole,
+}
+
 /// Membership-changing operations observed in one causal past.
 struct MembershipHistory {
-    approvals: Vec<(EventId, AppId, AuthKeyId)>,
+    approvals: Vec<MemberApproval>,
     revocations: Vec<(EventId, AppId)>,
+}
+
+/// A member effective in one causal past: its signing keys and its role.
+/// An app admitted as a recovery passphrase keeps the recovery role.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct EffectiveMember {
+    pub(super) actors: BTreeSet<AuthKeyId>,
+    pub(super) role: MemberRole,
 }
 
 impl IdentityControlLog {
@@ -249,27 +275,36 @@ impl IdentityControlLog {
                 continue;
             };
             for operation in &event.body.operations {
-                match operation {
-                    IdentityControlOperation::IdentityCreated { founder, .. } => {
-                        approvals.push((
-                            id.clone(),
-                            founder.app_id.clone(),
-                            founder.signing_actor()?,
-                        ));
-                    }
-                    IdentityControlOperation::MemberApproved { member, .. }
+                let (member, role) = match operation {
+                    IdentityControlOperation::IdentityCreated { founder: member }
+                    | IdentityControlOperation::MemberApproved { member, .. }
                     | IdentityControlOperation::MemberJoinedByInvite { member, .. } => {
-                        approvals.push((
-                            id.clone(),
-                            member.app_id.clone(),
-                            member.signing_actor()?,
-                        ));
+                        (member, MemberRole::App)
+                    }
+                    IdentityControlOperation::RecoveryKeyAdded { member, .. } => {
+                        (member, MemberRole::Recovery)
                     }
                     IdentityControlOperation::MemberRevoked { app_id } => {
                         revocations.push((id.clone(), app_id.clone()));
+                        continue;
                     }
-                    _ => {}
-                }
+                    IdentityControlOperation::MemberJoinRequested { .. }
+                    | IdentityControlOperation::MemberJoinDenied { .. }
+                    | IdentityControlOperation::MemberInvited { .. }
+                    | IdentityControlOperation::MemberRenamed { .. }
+                    | IdentityControlOperation::VaultRegistered { .. }
+                    | IdentityControlOperation::VaultDekGranted { .. }
+                    | IdentityControlOperation::VaultRemoved { .. }
+                    | IdentityControlOperation::ProviderMounted { .. }
+                    | IdentityControlOperation::ProviderUnmounted { .. }
+                    | IdentityControlOperation::IdentityNamed { .. } => continue,
+                };
+                approvals.push(MemberApproval {
+                    event: id.clone(),
+                    app_id: member.app_id.clone(),
+                    actor: member.signing_actor()?,
+                    role,
+                });
             }
         }
         Ok(MembershipHistory {
@@ -283,29 +318,65 @@ impl IdentityControlLog {
     pub(super) fn effective_members(
         &self,
         events: &BTreeSet<EventId>,
-    ) -> EventResult<BTreeMap<AppId, BTreeSet<AuthKeyId>>> {
+    ) -> EventResult<BTreeMap<AppId, EffectiveMember>> {
         let history = self.membership_history(events)?;
-        let mut members: BTreeMap<AppId, BTreeSet<AuthKeyId>> = BTreeMap::new();
-        for (approval, app_id, actor) in history.approvals {
+        let mut members: BTreeMap<AppId, EffectiveMember> = BTreeMap::new();
+        for approval in history.approvals {
             let survives = history
                 .revocations
                 .iter()
-                .filter(|(_, revoked)| *revoked == app_id)
-                .all(|(revocation, _)| self.causal.is_ancestor(revocation, &approval));
+                .filter(|(_, revoked)| *revoked == approval.app_id)
+                .all(|(revocation, _)| self.causal.is_ancestor(revocation, &approval.event));
             if survives {
-                members.entry(app_id).or_default().insert(actor);
+                let member = members
+                    .entry(approval.app_id)
+                    .or_insert_with(|| EffectiveMember {
+                        actors: BTreeSet::new(),
+                        role: approval.role,
+                    });
+                member.actors.insert(approval.actor);
+                member.role = member.role.max(approval.role);
             }
         }
         Ok(members)
     }
 
-    fn authorized_actors_before(&self, event: &IdentityEvent) -> EventResult<BTreeSet<AuthKeyId>> {
-        let ancestry = self.ancestry(&event.body.parents);
-        Ok(self
-            .effective_members(&ancestry)?
-            .into_values()
-            .flatten()
-            .collect())
+    /// Why a member's event is refused: a recovery passphrase signs anything
+    /// but an approval of a new app key on its own device or its own removal,
+    /// or a recovery passphrase is added under an app that is a member.
+    fn member_action_rejection(
+        event: &IdentityEvent,
+        members: &BTreeMap<AppId, EffectiveMember>,
+    ) -> Option<String> {
+        let actor = &event.body.actor_id;
+        let (acting_app, acting) = members
+            .iter()
+            .find(|(_, member)| member.actors.contains(actor))?;
+        let refused = event.body.operations.iter().find(|operation| {
+            match (acting.role, operation) {
+                (MemberRole::Recovery, IdentityControlOperation::MemberApproved {
+                    member,
+                    device: MemberDevice::Own,
+                    ..
+                }) => members.contains_key(&member.app_id),
+                (MemberRole::Recovery, IdentityControlOperation::MemberRevoked { app_id }) => {
+                    app_id != acting_app
+                }
+                (MemberRole::Recovery, _) => true,
+                (MemberRole::App, IdentityControlOperation::RecoveryKeyAdded { member, .. }) => {
+                    members.contains_key(&member.app_id)
+                }
+                (MemberRole::App, _) => false,
+            }
+        });
+        refused.map(|_| match acting.role {
+            MemberRole::Recovery => format!(
+                "Recovery passphrase {acting_app} may only approve a new app key on its own device or remove itself"
+            ),
+            MemberRole::App => {
+                "A recovery passphrase must be a new member of the identity".to_owned()
+            }
+        })
     }
 
     /// The invite a member issued in `parents`' causal history.
@@ -382,16 +453,16 @@ impl IdentityControlLog {
         if event.invite_join().is_some() {
             return Ok(self.invite_join_rejection(id, event));
         }
-        if self
-            .authorized_actors_before(event)?
-            .contains(&event.body.actor_id)
-        {
-            Ok(None)
-        } else {
-            Ok(Some(format!(
+        let members = self.effective_members(&self.ancestry(&event.body.parents))?;
+        let is_member = members
+            .values()
+            .any(|member| member.actors.contains(&event.body.actor_id));
+        match is_member {
+            true => Ok(Self::member_action_rejection(event, &members)),
+            false => Ok(Some(format!(
                 "Identity actor {} was not an identity member in causal history",
                 event.body.actor_id
-            )))
+            ))),
         }
     }
 
