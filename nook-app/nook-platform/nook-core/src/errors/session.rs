@@ -10,6 +10,9 @@ pub enum SessionError {
     #[error("projection cache is empty")]
     EmptyProjectionCache,
 
+    #[error("The projection cache belongs to another vault than the one this session reads.")]
+    ProjectionCacheOfAnotherVault,
+
     #[error("Replacement id must differ from the item being replaced.")]
     ReplacementIdUnchanged,
 

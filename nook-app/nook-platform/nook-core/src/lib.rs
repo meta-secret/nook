@@ -495,7 +495,7 @@ pub use vault_session::{
     DEFAULT_SECRET_PAGE_SIZE, MAX_SECRET_PAGE_SIZE, SecretPage, SecretTypeFilter,
     VaultSecretSession, VaultUserRecordBatch,
 };
-pub use vault_session_cache::VaultProjectionCache;
+pub use vault_session_cache::{ProjectionCacheScope, VaultProjectionCache};
 pub use vault_sync::{
     CommonContentHash, VaultRevision, VaultRevisionStore, VaultSyncAction, VaultSyncComparison,
 };

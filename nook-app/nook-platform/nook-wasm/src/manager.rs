@@ -443,11 +443,20 @@ impl NookVaultManager {
             self.apply_vault_keys(&secrets_key, &members_key)?;
             return Ok(());
         }
+        // The stored cache is the active local vault's, which need not be the
+        // vault this session reads: only that vault's own cache unlocks it.
         if let VaultSnapshotLookup::Stored(cache) = NookDatabase::load_from_indexed_db().await?
             && !cache.trim().is_empty()
         {
+            let session_store;
+            let scope = if self.vault.store_id.trim().is_empty() {
+                nook_core::ProjectionCacheScope::Unselected
+            } else {
+                session_store = nook_core::StoreId::parse(self.vault.store_id.trim())?;
+                nook_core::ProjectionCacheScope::Vault(&session_store)
+            };
             let (secrets_key, members_key) =
-                nook_core::VaultProjectionCache::new(&cache).unlock(&identity)?;
+                nook_core::VaultProjectionCache::new(&cache).unlock_for(&identity, scope)?;
             self.apply_vault_keys(&secrets_key, &members_key)?;
             self.vault.last_synced_content = cache;
             return Ok(());

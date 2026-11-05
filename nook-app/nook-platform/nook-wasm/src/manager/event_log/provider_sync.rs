@@ -579,7 +579,25 @@ impl NookVaultManager {
         self.export_event_log_records().await
     }
 
+    /// Sync the session's vault with a local folder. A failure is logged at
+    /// warn with its message, which names the refused step and holds no key
+    /// or secret, so a folder sync that fails stays observable.
     pub(in crate::manager) async fn sync_local_folder_provider(
+        &mut self,
+        handle_id: &str,
+    ) -> Result<String, NookError> {
+        let synced = self.sync_local_folder_provider_events(handle_id).await;
+        if let Err(failure) = &synced {
+            tracing::warn!(
+                scope = "wasm-sync",
+                failure = %failure,
+                "local folder sync failed"
+            );
+        }
+        synced
+    }
+
+    async fn sync_local_folder_provider_events(
         &mut self,
         handle_id: &str,
     ) -> Result<String, NookError> {
