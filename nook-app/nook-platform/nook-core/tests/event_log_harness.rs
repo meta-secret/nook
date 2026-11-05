@@ -20,7 +20,7 @@ use nook_core::{
     AuthKeyId, Database, DeviceIdentity, DeviceSigningPublicKey, EncryptedSecretPayload, EventId,
     JoinRequest, LocalEventStore, LoginSecret, MemberLabel, SecretId, SecretType, SecretValue,
     SigningIdentity, StoreId, VaultCrypto, VaultEventSession, VaultKeys, VaultOperation,
-    VaultProjection, VaultProjectionCache, VaultRecordSet, VaultResult, VaultUnlock,
+    VaultProjection, VaultProjectionCache, VaultRecordSet, VaultResult,
 };
 use std::collections::{BTreeSet, HashMap};
 
@@ -83,7 +83,6 @@ impl EventLogDevice {
             .append_signed(vec![VaultOperation::VaultImported {
                 source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: Vec::new(),
-                password_entries: Vec::new(),
             }])
             .map_err(|rejected| rejected.cause)?
             .device;
@@ -336,10 +335,8 @@ fn genesis_yaml(
             enrolled_at: TS,
         },
     )?);
-    VaultRecordSet::serialize_yaml_with_unlock(
+    VaultRecordSet::serialize_yaml_with_store(
         &records,
-        &VaultUnlock::Keys,
-        &[],
         VaultStoreIdentityRef::Assigned(store_id),
         VaultVersionWrite::Initial,
     )

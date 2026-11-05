@@ -14,8 +14,8 @@ a manifest is not evidence that every feature uses that crate.
   - **Implemented purpose:** Per-app vault-key envelopes and enrollment material
   - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/auth/multi_device/`
 - **age scrypt encryption**
-  - **Implemented purpose:** Vault secret records keyed by random vault material; password-protected wrapping identities
-  - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/crypto/vault_crypto.rs`, `nook-app/nook-platform/nook-auth2/src/auth/password_envelope.rs`
+  - **Implemented purpose:** Vault secret records keyed by random vault material
+  - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/crypto/vault_crypto.rs`
 - **AES-256-GCM**
   - **Implemented purpose:** Passkey-wrapped and PIN-wrapped local app encryption identities
   - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/auth/device_key_protection/protected_identity.rs`
@@ -69,12 +69,6 @@ a manifest is not evidence that every feature uses that crate.
   - KDF: HKDF-SHA256 with a random 32-byte salt.
   - Cipher: AES-256-GCM with a 12-byte random nonce.
   - Additional authenticated data binds versioned record metadata.
-- **Password unlock envelope**
-  - Current record version: `2`.
-  - KDF field: `scrypt`.
-  - New human-password work factor: `log_n = 18`.
-  - The password-protected value is a generated age X25519 wrapping identity.
-  - That identity opens the separate vault-key envelope.
 - **Vault secret encryption**
   - Uses age scrypt with a uniformly random 256-bit vault key.
   - New-record programmatic work factor: `log_n = 10`.

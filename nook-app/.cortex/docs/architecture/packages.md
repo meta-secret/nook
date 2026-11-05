@@ -45,7 +45,7 @@ Team owner: development core.
 ### Signed Vault History: `nook-event-log`
 
 - **Canonical envelope:** Content-addressed event ids, canonical JSON body encoding, Ed25519 signatures, schema validation, and stable YAML storage bytes.
-- **Vault operations:** Encrypted secret mutations, membership events, password-envelope changes, epoch checkpoints, and opaque fingerprint metadata.
+- **Vault operations:** Encrypted secret mutations, membership events, epoch checkpoints, and opaque fingerprint metadata.
 - **Authorization graph:** Vault actor authorization layered over `nook-replication` generic causal index, including pending and quarantined events.
 - **Projection:** Deterministic encrypted vault projection, replacement and security conflicts, key-epoch metadata, and replay-invariance checks.
 - **Event-store orchestration:** Typed append, union, store classification, and compatibility between opaque replica bytes and validated vault events.

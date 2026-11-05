@@ -61,9 +61,6 @@ export class VaultSessionActions {
           if (reset.isErr()) log.warn("vault session reset could not complete");
         });
     }
-    state.passwordEntries = [];
-    state.clearSelectedPasswordEntry();
-    state.loginPasswordPrompt = false;
     state.sentinelCeremonyPrompt = false;
     state.sentinelUnlockStatus = SentinelVaultUnlockState.NotSentinel;
     state.sentinelUnlockRequest = "";

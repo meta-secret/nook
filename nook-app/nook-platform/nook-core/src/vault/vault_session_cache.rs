@@ -48,8 +48,8 @@ mod tests {
     };
 
     use super::*;
+    use crate::VaultResult;
     use crate::test_support;
-    use crate::{VaultResult, VaultUnlock};
 
     #[test]
     fn hydrate_keys_from_genesis_projection_yaml() -> VaultResult<()> {
@@ -95,10 +95,8 @@ mod tests {
         );
         assert_eq!(architecture.vault_type, VaultType::Sentinel);
         let store_id = StoreId::generate()?;
-        let yaml = VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
+        let yaml = VaultRecordSet::serialize_yaml_with_name_architecture(
             &shares,
-            &VaultUnlock::Keys,
-            &[],
             VaultStoreIdentityRef::Assigned(store_id.as_str()),
             VaultNameRef::Unnamed,
             VaultVersionWrite::Initial,

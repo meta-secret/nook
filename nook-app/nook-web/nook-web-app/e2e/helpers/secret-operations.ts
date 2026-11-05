@@ -12,10 +12,7 @@ import {
   type GithubE2eTarget,
   waitForGithubVaultState,
 } from './github-sync'
-import {
-  seedOauthFileSyncProvidersWhileUnlocked,
-  syncSecretCount,
-} from './local-sync'
+import { syncSecretCount } from './local-sync'
 import { assertVaultReady, revealSecretInRow } from './settings-auth'
 import {
   waitForStorageChainIdle,
@@ -221,10 +218,6 @@ export async function deleteSecret(
     )
   }
 }
-
-/** @deprecated Use {@link seedOauthFileSyncProvidersWhileUnlocked}. */
-export const seedSyncProvidersWhileUnlocked =
-  seedOauthFileSyncProvidersWhileUnlocked
 
 class BrowserVaultScenario {
   constructor(private readonly page: Page) {}

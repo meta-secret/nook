@@ -279,7 +279,7 @@ impl<'a> VaultMetaRewrap<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{EpochMetadataState, EpochPasswordState, SecretType, VaultMetaState};
+    use crate::{EpochMetadataState, SecretType, VaultMetaState};
 
     use nook_auth2::DeviceJoinStatus;
     use std::io;
@@ -459,7 +459,6 @@ mod tests {
                 secrets: Vec::new(),
                 members_checkpoint_hash: Sha256Hex::from_bytes(b"members"),
                 rotated_meta_records: EpochMetadataState::Replace(rotated_meta_records),
-                password_entries: EpochPasswordState::Replace(Vec::new()),
             },
             requested_at: &requested_at,
         })?;

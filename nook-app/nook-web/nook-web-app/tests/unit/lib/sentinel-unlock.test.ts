@@ -19,7 +19,6 @@ import {
 import LoginGate from '$lib/components/LoginGate.svelte'
 import SentinelUnlockParticipantHelper from '$lib/components/login/SentinelUnlockParticipantHelper.svelte'
 import { DeviceMode, ReplicationType } from '$lib/vault/architecture-model'
-import { PasswordEntrySelectionKind } from '$lib/vault/state/session.svelte'
 import { LoginSetupKind } from '$lib/vault/state/provider.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 import { SentinelUnlockActions } from '$lib/vault/sentinel-unlock'
@@ -177,9 +176,6 @@ class SentinelFinalizationFixture {
   readonly loadProviders = vi.fn<VaultState['loadProviders']>(async () =>
     ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),
   )
-  readonly refreshPasswordEntriesList = vi.fn<
-    VaultState['refreshPasswordEntriesList']
-  >(async () => ok({ entries: [] }))
   readonly hydrateMultiDeviceState = vi.fn<
     VaultState['hydrateMultiDeviceState']
   >(async () => ok({ kind: RosterHydrationKind.Skipped }))
@@ -216,7 +212,6 @@ class SentinelFinalizationFixture {
     this.state.sentinelUnlockRequest = 'current ceremony request'
     this.state.sentinelUnlockStatus = SentinelVaultUnlockState.AwaitingShares
     this.state.sentinelCeremonyPrompt = true
-    this.state.loginPasswordPrompt = false
     this.state.vaultArchitecture = NookVaultArchitecture.sentinel(
       DeviceMode.Standard,
       ReplicationType.Personal,
@@ -226,14 +221,10 @@ class SentinelFinalizationFixture {
     )
     this.state.localVaultPresent = true
     this.state.localVaults = []
-    this.state.passwordEntries = []
     this.state.sentinelStoredDeliveries = []
     this.state.sentinelGenesisPhase = SentinelGenesisPhase.Inactive
     this.state.clearSelectedLoginVaultStore()
     this.state.clearActiveVaultStore()
-    this.state.selectedPasswordEntry = {
-      kind: PasswordEntrySelectionKind.NotSelected,
-    }
     this.state.clearExistingVaultRecoverySummary()
     this.state.useThisBrowser()
     this.state.prepareLocalLogin = vi.fn()
@@ -249,7 +240,6 @@ class SentinelFinalizationFixture {
     this.state.loadSecretPage = this.loadSecretPage
     this.state.ensureProviderSaved = this.ensureProviderSaved
     this.state.loadProviders = this.loadProviders
-    this.state.refreshPasswordEntriesList = this.refreshPasswordEntriesList
     this.state.hydrateMultiDeviceState = this.hydrateMultiDeviceState
     this.state.markVaultUnlocked = this.markVaultUnlocked
     this.state.showSuccess = this.showSuccess
@@ -303,7 +293,6 @@ class SentinelFinalizationFixture {
       isInitializing: false,
       onUnlock: this.openVault,
       onUnlockOnCard: this.openVault,
-      onUnlockWithPassword: vi.fn(),
       appKind: VaultApplication.UnifiedDevelopment,
       providers: [],
       loginSetup: { kind: LoginSetupKind.Inactive },
@@ -635,9 +624,6 @@ describe('Sentinel quorum completion presentation', () => {
       fixture.openVault.mockClear()
       const view = fixture.renderLogin(surface)
       expect(view.queryAllByTestId('sentinel-ceremony-panel')).toHaveLength(0)
-      expect(
-        view.queryAllByTestId('login-unlock-method-password'),
-      ).toHaveLength(0)
       // The vault opens from its identity card, never on its own.
       expect(fixture.openVault).not.toHaveBeenCalled()
       view.unmount()
@@ -762,9 +748,6 @@ describe('Sentinel quorum completion presentation', () => {
         expect(view.queryAllByTestId('sentinel-unlock-start-btn')).toHaveLength(
           0,
         )
-        expect(
-          view.queryAllByTestId('login-unlock-method-password'),
-        ).toHaveLength(0)
         expect(fixture.openVault).not.toHaveBeenCalled()
         view.unmount()
       }
@@ -793,7 +776,6 @@ describe('Sentinel quorum completion presentation', () => {
       fixture.loadSecretPage,
       fixture.ensureProviderSaved,
       fixture.loadProviders,
-      fixture.refreshPasswordEntriesList,
       fixture.hydrateMultiDeviceState,
       fixture.markVaultUnlocked,
       fixture.showSuccess,

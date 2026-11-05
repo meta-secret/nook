@@ -132,7 +132,6 @@ pub(super) mod tests {
                 payload: GenesisImportPayload {
                     source_content_hash: nook_auth2::Sha256Hex::from_trusted("deadbeef".repeat(8)),
                     secrets: vec![],
-                    password_entries: vec![],
                 },
                 created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
                 signing_key: identity.signing_key(),

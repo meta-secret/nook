@@ -392,7 +392,6 @@ mod tests {
             payload: GenesisImportPayload {
                 source_content_hash: genesis_source_hash(),
                 secrets: vec![],
-                password_entries: vec![],
             },
             created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             signing_key,
@@ -891,7 +890,6 @@ mod tests {
                 secrets: Vec::new(),
                 members_checkpoint_hash: Sha256Hex::from_trusted("00".repeat(32)),
                 rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
-                password_entries: crate::EpochPasswordState::Replace(Vec::new()),
             },
             &key,
         )?;

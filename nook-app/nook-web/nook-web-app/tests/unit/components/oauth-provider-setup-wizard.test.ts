@@ -551,7 +551,7 @@ describe('Google Drive provider setup', () => {
       },
     })
     const opens: CredentialCheckReport = {
-      credential: { kind: 'passkey', fingerprint: 'passkey_a1b2c3d4e5f60708' },
+      credential: { fingerprint: 'passkey_a1b2c3d4e5f60708' },
       identities: [
         {
           identityId: 'idn_strangerabc',
@@ -688,7 +688,7 @@ describe('Google Drive provider setup', () => {
       },
     })
     const none: CredentialCheckReport = {
-      credential: { kind: 'passkey', fingerprint: 'passkey_ffffffffffffffff' },
+      credential: { fingerprint: 'passkey_ffffffffffffffff' },
       identities: [
         {
           identityId: 'idn_strangerabc',

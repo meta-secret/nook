@@ -9,7 +9,7 @@ use crate::storage::identity_record::StoredIdentityRecord;
 use nook_core::{
     GenesisMembersRecordsRequest, IdentityRecord, IdentityVaultGenesisRecordsRequest, VaultMember,
 };
-use nook_core::{SymmetricKey, VaultMetaState, VaultType, VaultUnlock};
+use nook_core::{SymmetricKey, VaultMetaState, VaultType};
 use wasm_bindgen::JsError;
 
 impl NookVaultManager {
@@ -107,8 +107,6 @@ impl NookVaultManager {
     }
 
     fn prepare_genesis_vault_keys(&mut self, keys: &nook_core::VaultKeys) -> Result<(), NookError> {
-        self.vault.password_entries.clear();
-        self.vault.unlock = VaultUnlock::Keys;
         self.vault.meta = VaultMetaState::default();
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         self.vault.last_synced_content.clear();

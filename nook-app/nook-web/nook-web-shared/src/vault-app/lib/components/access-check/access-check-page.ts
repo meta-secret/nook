@@ -9,12 +9,6 @@ export enum AccessCheckSourceKind {
   CurrentProvider = "currentProvider",
 }
 
-/** What the page checks: one passkey or one typed backup password. */
-export enum AccessCheckMethod {
-  Passkey = "passkey",
-  BackupPassword = "backupPassword",
-}
-
 export enum PreparedSourceKind {
   Pending = "pending",
   Ready = "ready",

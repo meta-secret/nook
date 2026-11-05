@@ -8,9 +8,7 @@ pub use projection::{
 
 use crate::LocalEventBytes;
 use crate::ResolveMemberRosterRequest;
-use crate::{
-    EpochMetadataState, EpochPasswordState, EventError, EventInsertStatus, VaultEpochError,
-};
+use crate::{EpochMetadataState, EventError, EventInsertStatus, VaultEpochError};
 use nook_auth2::{BuildMembersRecordsRequest, VaultMember};
 use nook_event_log::EventGraphRejection;
 use std::fmt;
@@ -72,7 +70,6 @@ pub struct VaultSecurityEpochRotationInput<'a> {
     pub old_secrets_key: &'a crate::SymmetricKey,
     pub members_records: &'a [StoredSecretRecord],
     pub rotated_meta_records: Vec<StoredSecretRecord>,
-    pub rewrapped_password_entries: Vec<crate::PasswordUnlockEntry>,
     /// The name the projection holds under the retiring key.
     pub vault_name: &'a crate::ProjectedVaultName,
     pub created_at: &'a str,
@@ -374,7 +371,6 @@ impl VaultEventSession {
             old_secrets_key,
             members_records,
             rotated_meta_records,
-            rewrapped_password_entries,
             vault_name,
             created_at,
             destination,
@@ -395,7 +391,6 @@ impl VaultEventSession {
                 secrets,
                 members_checkpoint_hash,
                 rotated_meta_records: EpochMetadataState::Replace(rotated_meta_records),
-                password_entries: EpochPasswordState::Replace(rewrapped_password_entries),
                 vault_name,
             };
             let store_id = StoreId::parse(&self.store_id)?;

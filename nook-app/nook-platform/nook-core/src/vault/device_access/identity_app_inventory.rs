@@ -175,10 +175,6 @@ impl VaultAppRoster {
             | VaultOperation::SecretDeleted { .. }
             | VaultOperation::SecretReplaced { .. }
             | VaultOperation::SecretConflictResolved { .. }
-            | VaultOperation::PasswordAdded { .. }
-            | VaultOperation::PasswordRotated { .. }
-            | VaultOperation::PasswordEnvelopeUpgraded { .. }
-            | VaultOperation::PasswordRemoved { .. }
             | VaultOperation::SentinelSharesIssued { .. }
             | VaultOperation::VaultCleared
             | VaultOperation::VaultNamed { .. }
@@ -241,7 +237,6 @@ pub mod tests {
                 VaultOperation::VaultImported {
                     source_content_hash: Sha256Hex::from_bytes(b"inventory fixture"),
                     secrets: Vec::new(),
-                    password_entries: Vec::new(),
                 },
                 approval,
             ])

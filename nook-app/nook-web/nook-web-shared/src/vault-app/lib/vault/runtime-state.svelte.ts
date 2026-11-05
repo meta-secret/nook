@@ -181,10 +181,6 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     );
   }
 
-  get hasPasswordEnvelope(): boolean {
-    return this.passwordEntries.length > 0;
-  }
-
   enqueueStorage<T, E = VaultStorageFailure>(
     operation: () => Result<T, E> | Promise<Result<T, E>>,
   ): Promise<Result<T, E | VaultStorageFailure>> {

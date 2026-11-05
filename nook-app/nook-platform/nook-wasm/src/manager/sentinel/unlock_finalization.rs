@@ -302,7 +302,6 @@ mod tests {
             assert!(manager.stored_records_snapshot().is_empty());
             assert!(manager.vault.store_id.is_empty());
             assert!(manager.vault.last_synced_content.is_empty());
-            assert!(manager.vault.password_entries.is_empty());
             assert!(!manager.vault.search_catalog.is_ready());
             assert!(manager.vault.search_catalog_store_id.is_empty());
             assert_eq!(manager.vault.search_catalog_pending_bucket_mask, 0);
@@ -486,7 +485,6 @@ mod tests {
                 let mut operations = vec![VaultOperation::VaultImported {
                     source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                     secrets: Vec::new(),
-                    password_entries: Vec::new(),
                 }];
                 operations.extend(fixture.output.operations());
                 let epoch = EventId::from_sha256_hex(

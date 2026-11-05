@@ -359,19 +359,6 @@ pub fn provider_draft_gap_translation_key(
     Ok(gap.translation_key().to_owned())
 }
 
-/// What the provider needs before a backup password can unlock through it.
-#[wasm_bindgen]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn provider_draft_gap_unlock_translation_key(
-    gap: &tsify::Ts<nook_core::ProviderDraftGap>,
-) -> Result<String, wasm_bindgen::JsError> {
-    let gap = gap.decode()?;
-    Ok(gap.unlock_translation_key().to_owned())
-}
-
 /// Return a masked GitHub PAT hint without exposing the full credential.
 #[wasm_bindgen]
 #[must_use]
@@ -457,10 +444,6 @@ mod tests {
         assert_eq!(
             provider_draft_gap_translation_key(&gap)?,
             i18n_keys::ERRORS_VALIDATION_GITHUB_PAT_EMPTY
-        );
-        assert_eq!(
-            provider_draft_gap_unlock_translation_key(&gap)?,
-            i18n_keys::ERRORS_GITHUB_CREDENTIALS_REQUIRED
         );
         Ok(())
     }

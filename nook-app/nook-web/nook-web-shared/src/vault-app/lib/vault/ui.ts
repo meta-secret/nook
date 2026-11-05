@@ -45,8 +45,6 @@ export class WorkspaceSectionRoute {
         return WorkspaceRoute.AddDevice;
       case WorkspaceSection.Sync:
         return WorkspaceRoute.Sync;
-      case WorkspaceSection.Passwords:
-        return WorkspaceRoute.Passwords;
       case WorkspaceSection.Import:
         return WorkspaceRoute.Import;
     }
@@ -64,13 +62,13 @@ export class VaultWorkspaceActions {
     if (!state.hasManager) return;
     void state.refreshDeviceState().then((refreshed) => {
       if (refreshed.isOk()) return;
-      // A backup-password session has no device key to sync with; the
-      // page still shows what this browser last read.
-      const passwordSession =
+      // A session whose device key is still locked cannot sync; the page
+      // still shows what this browser last read.
+      const deviceLocked =
         refreshed.error instanceof StorageOperationFailure &&
         refreshed.error.kind ===
           StorageOperationFailureKind.DeviceAuthorizationRequired;
-      if (!passwordSession)
+      if (!deviceLocked)
         state.errorMsg = state.t(refreshed.error.translationKey);
     });
   }
@@ -116,7 +114,6 @@ export class VaultWorkspaceActions {
       case WorkspaceSection.Overview:
       case WorkspaceSection.Vaults:
       case WorkspaceSection.Sync:
-      case WorkspaceSection.Passwords:
       case WorkspaceSection.Import:
         state.cancelProviderSetup();
         state.cancelAddProvider();
@@ -165,9 +162,6 @@ export class VaultWorkspaceActions {
         return;
       case WorkspaceRoute.Sync:
         this.applySection(WorkspaceSection.Sync);
-        return;
-      case WorkspaceRoute.Passwords:
-        this.applySection(WorkspaceSection.Passwords);
         return;
       case WorkspaceRoute.Import:
         this.applySection(WorkspaceSection.Import);

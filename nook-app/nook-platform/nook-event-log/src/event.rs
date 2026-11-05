@@ -3,17 +3,17 @@
 use nook_auth2::RecordTypeDeclaration;
 use std::{fmt, str};
 
+use crate::EpochMetadataState;
 use crate::canonical::{Ed25519Signature, EventId};
 use crate::signing::SigningIdentity;
 use crate::{CanonicalEventBodyBytes, EventError, EventResult, EventStorageBytes};
-use crate::{EpochMetadataState, EpochPasswordState};
-use crate::{PasswordEnvelope, PasswordUnlockEntry, SecretFingerprint, SentinelShareVersion};
+use crate::{SecretFingerprint, SentinelShareVersion};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use nook_auth2::{
     AgeArmoredCiphertext, AuthKeyId, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
-    IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId, SENTINEL_SHARE_RECORD_PREFIX,
-    SecretId, SecretType, SentinelParticipantCount, SentinelShareIndex, SentinelThreshold,
-    Sha256Hex, StoreId, StoredRecordPayload, StoredSecretRecord,
+    IsoTimestamp, MemberLabel, OpaqueCiphertext, SENTINEL_SHARE_RECORD_PREFIX, SecretId,
+    SecretType, SentinelParticipantCount, SentinelShareIndex, SentinelThreshold, Sha256Hex,
+    StoreId, StoredRecordPayload, StoredSecretRecord,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -109,7 +109,6 @@ pub enum VaultOperation {
     VaultImported {
         source_content_hash: Sha256Hex,
         secrets: Vec<EncryptedSecretPayload>,
-        password_entries: Vec<PasswordUnlockEntry>,
     },
     SecretCreated {
         secret: EncryptedSecretPayload,
@@ -165,23 +164,6 @@ pub enum VaultOperation {
     DeviceRevoked {
         device_id: DeviceId,
     },
-    PasswordAdded {
-        entry_id: PasswordEntryId,
-        label: String,
-        created_at: IsoTimestamp,
-        envelope: PasswordEnvelope,
-    },
-    PasswordRotated {
-        entry_id: PasswordEntryId,
-        envelope: PasswordEnvelope,
-    },
-    PasswordEnvelopeUpgraded {
-        entry_id: PasswordEntryId,
-        envelope: PasswordEnvelope,
-    },
-    PasswordRemoved {
-        entry_id: PasswordEntryId,
-    },
     VaultCleared,
     /// The vault's display name under `secrets_key`; the last in topological order wins.
     VaultNamed {
@@ -198,14 +180,6 @@ pub enum VaultOperation {
         // This custom serde field emits Replace records as an array and omits LegacyRetain.
         #[tsify(type = "StoredSecretRecord[]", optional)]
         rotated_meta_records: EpochMetadataState,
-        #[serde(
-            default,
-            skip_serializing_if = "EpochPasswordState::is_legacy_retain",
-            serialize_with = "EpochPasswordState::serialize_epoch_password_state"
-        )]
-        // The custom serializer likewise preserves the legacy omitted/explicit-array distinction.
-        #[tsify(type = "PasswordUnlockEntry[]", optional)]
-        password_entries: EpochPasswordState,
         #[serde(
             default,
             skip_serializing_if = "crate::EpochVaultName::is_unnamed",
@@ -262,22 +236,14 @@ pub enum EpochCheckpointRequirement<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SecurityRotationTrigger {
     Other,
-    PasswordRotated,
-    PasswordRemoved,
     DeviceRevoked,
 }
 impl VaultEventBody {
     #[must_use]
     pub fn genesis_import_contents(&self) -> GenesisImportContents {
         match self.operations.as_slice() {
-            [
-                VaultOperation::VaultImported {
-                    secrets,
-                    password_entries,
-                    ..
-                },
-            ] => {
-                if secrets.is_empty() && password_entries.is_empty() {
+            [VaultOperation::VaultImported { secrets, .. }] => {
+                if secrets.is_empty() {
                     GenesisImportContents::Empty
                 } else {
                     GenesisImportContents::Populated
@@ -289,8 +255,6 @@ impl VaultEventBody {
     #[must_use]
     pub fn security_rotation_trigger(&self) -> SecurityRotationTrigger {
         match self.operations.as_slice() {
-            [VaultOperation::PasswordRotated { .. }] => SecurityRotationTrigger::PasswordRotated,
-            [VaultOperation::PasswordRemoved { .. }] => SecurityRotationTrigger::PasswordRemoved,
             [VaultOperation::DeviceRevoked { .. }] => SecurityRotationTrigger::DeviceRevoked,
             _ => SecurityRotationTrigger::Other,
         }
@@ -409,21 +373,13 @@ impl VaultEvent {
         if self.body.schema_version >= VaultEventSchemaVersion::V3 {
             for operation in &self.body.operations {
                 if let VaultOperation::EpochCheckpoint {
-                    rotated_meta_records,
-                    password_entries,
+                    rotated_meta_records: EpochMetadataState::LegacyRetain,
                     ..
                 } = operation
                 {
-                    if matches!(rotated_meta_records, EpochMetadataState::LegacyRetain) {
-                        return Err(EventError::MissingEpochCheckpointReplacement {
-                            field: "rotated_meta_records",
-                        });
-                    }
-                    if matches!(password_entries, EpochPasswordState::LegacyRetain) {
-                        return Err(EventError::MissingEpochCheckpointReplacement {
-                            field: "password_entries",
-                        });
-                    }
+                    return Err(EventError::MissingEpochCheckpointReplacement {
+                        field: "rotated_meta_records",
+                    });
                 }
             }
         }
@@ -485,7 +441,6 @@ impl VaultEvent {
 pub struct GenesisImportPayload {
     pub source_content_hash: Sha256Hex,
     pub secrets: Vec<EncryptedSecretPayload>,
-    pub password_entries: Vec<PasswordUnlockEntry>,
 }
 
 impl VaultEvent {
@@ -521,7 +476,6 @@ impl VaultEvent {
             operations: vec![VaultOperation::VaultImported {
                 source_content_hash: payload.source_content_hash,
                 secrets: payload.secrets,
-                password_entries: payload.password_entries,
             }],
         };
         VaultEvent::sign(body, signing_key)
@@ -543,7 +497,6 @@ mod tests {
             payload: GenesisImportPayload {
                 source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 secrets: Vec::new(),
-                password_entries: Vec::new(),
             },
             created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             signing_key,
@@ -572,7 +525,6 @@ mod tests {
             operation,
             VaultOperation::EpochCheckpoint {
                 rotated_meta_records: EpochMetadataState::Replace(records),
-                password_entries: EpochPasswordState::LegacyRetain,
                 ..
             } if records.is_empty()
         ));
@@ -585,7 +537,6 @@ mod tests {
             legacy,
             VaultOperation::EpochCheckpoint {
                 rotated_meta_records: EpochMetadataState::LegacyRetain,
-                password_entries: EpochPasswordState::LegacyRetain,
                 ..
             }
         ));
@@ -604,7 +555,6 @@ mod tests {
             secrets: Vec::new(),
             members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
             rotated_meta_records: EpochMetadataState::Replace(vec![malformed_share]),
-            password_entries: EpochPasswordState::Replace(Vec::new()),
         };
 
         assert!(operation.is_sentinel_architecture_evidence());
@@ -619,7 +569,6 @@ mod tests {
             secrets: Vec::new(),
             members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
             rotated_meta_records: EpochMetadataState::LegacyRetain,
-            password_entries: EpochPasswordState::LegacyRetain,
         });
         let current = VaultEvent::sign(body.clone(), &signing_key)?;
         assert!(matches!(
@@ -668,18 +617,10 @@ mod tests {
         let parent = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
         body.parents = vec![parent.clone()];
         body.key_epoch = parent.clone();
-        body.operations = vec![VaultOperation::PasswordRemoved {
-            entry_id: PasswordEntryId::from_trusted("pwdentry001".to_owned()),
-        }];
-        assert_eq!(body.genesis_import_contents(), GenesisImportContents::Other);
-        assert_eq!(
-            body.security_rotation_trigger(),
-            SecurityRotationTrigger::PasswordRemoved
-        );
-
         body.operations = vec![VaultOperation::DeviceRevoked {
             device_id: DeviceId::parse("0123456789abcdef")?,
         }];
+        assert_eq!(body.genesis_import_contents(), GenesisImportContents::Other);
         assert_eq!(
             body.security_rotation_trigger(),
             SecurityRotationTrigger::DeviceRevoked
@@ -690,7 +631,6 @@ mod tests {
             secrets: Vec::new(),
             members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
             rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
-            password_entries: EpochPasswordState::Replace(Vec::new()),
         }];
         assert!(matches!(
             body.epoch_checkpoint_requirement()?,
@@ -803,7 +743,6 @@ mod tests {
                         "ab".repeat(32)
                     )),
                 }],
-                password_entries: vec![],
             },
             created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             signing_key: &signing_key,
@@ -880,49 +819,6 @@ mod tests {
                 .ok_or_else(|| anyhow::anyhow!("event test should reject invalid input"))?,
             EventError::MissingActorSigningPublicKey
         ));
-        Ok(())
-    }
-
-    #[test]
-    fn password_envelope_event_storage_is_yaml_map() -> anyhow::Result<()> {
-        let signing_key = test_signing_key();
-        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
-        let body = VaultEventBody {
-            schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: StoreId::parse("store_testtoken11")?,
-            actor_id: actor(&signing_key)?,
-            actor_signing_public_key: public_key(&signing_key),
-            parents: vec![epoch.clone()],
-            created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-            key_epoch: epoch,
-            operations: vec![VaultOperation::PasswordAdded {
-                entry_id: PasswordEntryId::from_trusted("pwdentry001".to_owned()),
-                label: "Recovery".to_owned(),
-                created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:01Z".to_owned()),
-                envelope: PasswordEnvelope {
-                    version: crate::PasswordEnvelopeVersion::LEGACY,
-                    kdf: "scrypt".to_owned(),
-                    work_factor: 18.into(),
-                    recipient: String::new(),
-                    wrapped_keys: String::new(),
-                    ciphertext: "age-ciphertext".to_owned(),
-                },
-            }],
-        };
-        let event = VaultEvent::sign(body, &signing_key)?;
-
-        let yaml = String::from_utf8(VaultEvent::serialize_event_storage_yaml(&event)?.into())?;
-        assert!(yaml.contains("  envelope:\n"));
-        assert!(yaml.contains("    version: 1\n"));
-        assert!(yaml.contains("    kdf: scrypt\n"));
-        assert!(yaml.contains("    work_factor: 18\n"));
-        assert!(yaml.contains("    ciphertext: age-ciphertext\n"));
-        assert!(!yaml.contains("envelope_"));
-        assert!(!yaml.contains('{'));
-        assert_eq!(
-            VaultEvent::parse_event_storage_bytes(&yaml.as_bytes().to_vec().into())?,
-            event
-        );
         Ok(())
     }
 }

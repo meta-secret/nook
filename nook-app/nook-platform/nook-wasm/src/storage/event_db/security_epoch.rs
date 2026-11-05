@@ -447,9 +447,8 @@ impl PreparedRemoteUnion<'_> {
 mod browser {
     use super::*;
     use nook_core::{
-        EpochMetadataState, EpochPasswordState, GenesisImportPayload, IsoTimestamp,
-        PasswordEntryId, Sha256Hex, SigningIdentity, StoreId, VaultEventBody,
-        VaultEventSchemaVersion, VaultOperation,
+        DeviceId, EpochMetadataState, GenesisImportPayload, IsoTimestamp, Sha256Hex,
+        SigningIdentity, StoreId, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
     };
     use std::slice;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -499,7 +498,6 @@ mod browser {
                     payload: GenesisImportPayload {
                         source_content_hash: Sha256Hex::from_trusted("00".repeat(32)),
                         secrets: Vec::new(),
-                        password_entries: Vec::new(),
                     },
                     created_at: &created_at,
                     signing_key: signing.signing_key(),
@@ -514,8 +512,8 @@ mod browser {
                     parents: vec![genesis.event.id()?],
                     created_at: created_at.clone(),
                     key_epoch: genesis.event.id()?,
-                    operations: vec![VaultOperation::PasswordRemoved {
-                        entry_id: PasswordEntryId::from_trusted("pwdentry001".to_owned()),
+                    operations: vec![VaultOperation::DeviceRevoked {
+                        device_id: DeviceId::parse("0123456789abcdef")?,
                     }],
                 },
                 signing.signing_key(),
@@ -534,7 +532,6 @@ mod browser {
                         secrets: Vec::new(),
                         members_checkpoint_hash: Sha256Hex::from_trusted("00".repeat(32)),
                         rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
-                        password_entries: EpochPasswordState::Replace(Vec::new()),
                     }],
                 },
                 signing.signing_key(),

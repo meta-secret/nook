@@ -147,7 +147,6 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::IdentityVaultEventIdInvalid
             | ValidationError::DeviceSigningPublicKeyInvalid
             | ValidationError::IsoTimestampInvalid
-            | ValidationError::PasswordEntryIdInvalid
             | ValidationError::SigningSeedInvalid => NookError::Database(err.to_string()),
         }
     }

@@ -59,7 +59,7 @@ an owner-issued invitation URL. Sync-provider import remains a secondary
 
 - **Landing handoff (empty device)**
   - **Choice or state:** Vault name
-  - **Transition:** Collect the vault name before path choice. Passkey is **not** required yet. **Exception:** an `#enroll=` deep link skips create landing and opens Finish device onboarding (passkey + vault password).
+  - **Transition:** Collect the vault name before path choice. Passkey is **not** required yet. **Exception:** an `#enroll=` deep link skips create landing and opens Finish device onboarding (device protection + the invite code).
 - **Path chooser**
   - **Choice or state:** Path
   - **Transition:** Choose exactly one: Create Simple or Create Sentinel. There is no unrestricted Join path.
@@ -138,7 +138,6 @@ credentials grant storage access only.
   - Give the initiator no permanent threshold bypass.
   - Never write a per-device full-key envelope.
 - **Unlock boundary:**
-  - Forbid password unlock as the sole unlock path.
   - Fail closed during session hydrate from projection YAML.
   - Never resolve a full-key auth envelope.
   - Treat possession of the local cache or sync-provider credentials as

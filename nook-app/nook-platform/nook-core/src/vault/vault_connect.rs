@@ -11,7 +11,7 @@ use nook_auth2::AssessConnectAccessRequest;
 use crate::errors::{self, VaultResult};
 use crate::{
     ConnectAccessStatus, Database, DeviceIdentity, StoredSecretRecord, VaultArchitecture,
-    VaultCrypto, VaultFormatDocument, VaultMetaState, VaultRecordView, VaultType, VaultUnlock,
+    VaultCrypto, VaultFormatDocument, VaultMetaState, VaultRecordView, VaultType,
 };
 use std::fmt;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -90,8 +90,6 @@ pub struct UnlockedVaultMaterial {
 
 /// Non-secret top-level YAML metadata captured without decrypting records.
 pub struct VaultContentMetadata {
-    pub unlock: VaultUnlock,
-    pub password_entries: Vec<crate::PasswordUnlockEntry>,
     pub store_id: String,
     pub vault_name: String,
     pub version: crate::VaultVersion,
@@ -138,10 +136,8 @@ impl<'a> VaultContent<'a> {
         )
     }
 
-    /// Read unlock metadata without decrypting secrets.
-    pub fn capture_unlock(&self) -> VaultResult<VaultContentMetadata> {
-        let unlock = crate::VaultFormatDocument::new(self.content).unlock()?;
-        let password_entries = crate::VaultFormatDocument::new(self.content).password_entries()?;
+    /// Read vault metadata without decrypting secrets.
+    pub fn capture_metadata(&self) -> VaultResult<VaultContentMetadata> {
         let store_id = match crate::VaultFormatDocument::new(self.content).store_id()? {
             VaultStoreIdentity::Assigned(store_id) => store_id,
             VaultStoreIdentity::Unassigned => {
@@ -157,8 +153,6 @@ impl<'a> VaultContent<'a> {
             .unwrap_or_default();
         let architecture = crate::VaultFormatDocument::new(self.content).architecture()?;
         Ok(VaultContentMetadata {
-            unlock,
-            password_entries,
             store_id,
             vault_name,
             version,
@@ -338,21 +332,6 @@ mod tests {
     }
 
     #[test]
-    fn capture_rejects_unsupported_password_envelope_version() -> anyhow::Result<()> {
-        let content = "schema_version: 1\nstore_id: store_testtoken11\npassword_entries:\n  - id: pwdentry001\n    label: Recovery\n    created_at: 2026-06-23T00:00:00Z\n    envelope:\n      version: 3\n      kdf: scrypt\n      work_factor: 18\n      ciphertext: invalid\n";
-        let error = VaultContent::new(content)
-            .capture_unlock()
-            .err()
-            .ok_or_else(|| anyhow::anyhow!("vault metadata capture must reject version 3"))?;
-
-        assert!(matches!(
-            error,
-            VaultError::VaultFormat(VaultFormatError::YamlParseUnlock(_))
-        ));
-        Ok(())
-    }
-
-    #[test]
     fn genesis_yaml_reports_ready_for_enrolled_device() -> VaultResult<()> {
         let (keys, identity, yaml) = test_support::simple_genesis_projection()?;
         assert!(
@@ -386,10 +365,8 @@ mod tests {
             }),
         };
         let store_id = StoreId::generate()?;
-        let error = VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
+        let error = VaultRecordSet::serialize_yaml_with_name_architecture(
             &records,
-            &VaultUnlock::Keys,
-            &[],
             VaultStoreIdentityRef::Assigned(store_id.as_str()),
             VaultNameRef::Unnamed,
             VaultVersionWrite::Initial,
@@ -435,10 +412,8 @@ mod tests {
             },
         );
         let store_id = StoreId::generate()?;
-        let yaml = VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
+        let yaml = VaultRecordSet::serialize_yaml_with_name_architecture(
             &records,
-            &VaultUnlock::Keys,
-            &[],
             VaultStoreIdentityRef::Assigned(store_id.as_str()),
             VaultNameRef::Unnamed,
             VaultVersionWrite::Initial,

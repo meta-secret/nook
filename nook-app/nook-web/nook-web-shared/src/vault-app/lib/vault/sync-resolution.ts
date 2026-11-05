@@ -30,7 +30,6 @@ import {
 } from "$lib/vault/sync-operation-state";
 import { StagedRemoteStorageKind } from "$lib/vault/state/provider.svelte";
 import { scopedProviderVault } from "$lib/auth/providers";
-import { LoginUnlockPresentation } from "$lib/vault/login-unlock-capabilities";
 import {
   ProviderVaultIdentitySelectionKind,
   type ProviderVaultIdentitySelection,
@@ -301,11 +300,6 @@ export class SyncConflictActions {
         await state.loadDb();
         return;
       }
-      const passwordRefresh1 = await state.refreshPasswordEntriesList();
-      if (passwordRefresh1.isErr()) {
-        state.errorMsg = state.t(passwordRefresh1.error.translationKey);
-        return;
-      }
     } catch (error) {
       state.errorMsg =
         error instanceof Error
@@ -542,20 +536,6 @@ export class SyncConflictActions {
         state.clearPendingSyncConflict();
         set_vault_session_locked(true);
         state.clearUnlockedSession();
-        const passwordRefresh2 = await state.refreshPasswordEntriesList();
-        if (passwordRefresh2.isErr()) {
-          state.errorMsg = state.t(passwordRefresh2.error.translationKey);
-          return;
-        }
-        if (state.localVaults.length <= 1) {
-          const presentation = await new LoginUnlockPresentation(
-            state,
-          ).refresh();
-          if (presentation.isErr()) {
-            state.errorMsg = state.t(presentation.error.translationKey);
-            return;
-          }
-        }
         const tArgs: Parameters<typeof state.t>[0] = {
           key: I18N_KEYS.AuthStorageSyncConflictImportedVault,
           replacements: {

@@ -156,8 +156,6 @@ distinguish wasm-bindgen's generated ABI code from authored code.
   - **Use:** Pending device join rows (`deviceId`, `publicKey`, `requestedAt`)
 - **`NookVaultMember`**
   - **Use:** Enrolled devices (`authId`, `deviceId`, …)
-- **`NookPasswordEntrySummary`**
-  - **Use:** Backup-password list entries
 - **`NookVaultSyncResult`**
   - **Use:** `sync_vault_from_storage` payload (`changed`, `accessStatus`, `secrets`, `pendingJoins`, `vaultMembers`)
 - **`NookVaultClientPolicy`**

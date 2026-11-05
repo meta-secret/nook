@@ -12,9 +12,8 @@ use crate::storage::identity_record::{
 };
 use nook_core::VaultEvent;
 use nook_core::{
-    EpochMetadataState, EpochPasswordState, EventId, IdentityVaultEventId, MembersCheckpointHash,
-    ProjectionEpoch, StoreId, SymmetricKey, VaultKeyRotation, VaultMetaGraphProjection,
-    VaultMetaRecordRewrap,
+    EpochMetadataState, EventId, IdentityVaultEventId, MembersCheckpointHash, ProjectionEpoch,
+    StoreId, SymmetricKey, VaultKeyRotation, VaultMetaGraphProjection, VaultMetaRecordRewrap,
 };
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, Zeroizing};
@@ -72,35 +71,6 @@ impl SecurityEpochRotationFailure {
         match self {
             Self::BeforeCommit(error) | Self::AfterCommit(error) => error,
         }
-    }
-}
-
-impl PreparedEpochRotation {
-    fn rewrap_password_entries(
-        entries: &[nook_core::PasswordUnlockEntry],
-        new_keys: &nook_core::VaultKeys,
-        trigger: &VaultOperation,
-    ) -> Result<Vec<nook_core::PasswordUnlockEntry>, NookError> {
-        let mut entries = entries.to_vec();
-        match trigger {
-            VaultOperation::PasswordRotated { entry_id, envelope } => {
-                let entry = entries
-                    .iter_mut()
-                    .find(|entry| entry.id == entry_id.as_str())
-                    .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
-                entry.envelope.clone_from(envelope);
-            }
-            VaultOperation::PasswordRemoved { entry_id } => {
-                entries.retain(|entry| entry.id != entry_id.as_str());
-            }
-            _ => {}
-        }
-        for entry in &mut entries {
-            entry.envelope = nook_core::PasswordEnvelopeRewrap::new(&entry.envelope, new_keys)
-                .rewrap()
-                .map_err(|error| NookError::Database(error.to_string()))?;
-        }
-        Ok(entries)
     }
 }
 
@@ -196,7 +166,6 @@ impl NookVaultManager {
         &mut self,
         prepared: PreparedEpochRotation,
         trigger: VaultOperation,
-        password_entries: &[nook_core::PasswordUnlockEntry],
     ) -> Result<PersistedSecurityEpochRecoveryPlan, NookError> {
         let previous_key_epoch = prepared.previous_key_epoch.clone();
         let previous_checkpoint = prepared.previous_checkpoint.clone();
@@ -211,11 +180,6 @@ impl NookVaultManager {
                 "Vault changed while preparing security epoch rotation; retry.".to_owned(),
             ));
         }
-        let password_entries = PreparedEpochRotation::rewrap_password_entries(
-            password_entries,
-            &prepared.new_keys,
-            &trigger,
-        )?;
         let previous_epoch = EventId::parse(prepared.previous_key_epoch.as_str())?;
         let trigger_event = self
             .build_vault_operations_event(vec![trigger], parents, previous_epoch)
@@ -229,7 +193,6 @@ impl NookVaultManager {
                     rotated_meta_records: EpochMetadataState::Replace(
                         prepared.rotated_meta_records,
                     ),
-                    password_entries: EpochPasswordState::Replace(password_entries),
                     vault_name: prepared.vault_name,
                 }],
                 vec![trigger_event_id.clone()],
@@ -443,26 +406,6 @@ impl NookVaultManager {
         &mut self,
         trigger: VaultOperation,
     ) -> Result<(), SecurityEpochRotationFailure> {
-        let password_entries = self.vault.password_entries.clone();
-        self.rotate_security_epoch_with_password_entries_classified(trigger, password_entries)
-            .await
-    }
-
-    pub(in crate::manager) async fn rotate_security_epoch_with_password_entries(
-        &mut self,
-        trigger: VaultOperation,
-        password_entries: Vec<nook_core::PasswordUnlockEntry>,
-    ) -> Result<(), NookError> {
-        self.rotate_security_epoch_with_password_entries_classified(trigger, password_entries)
-            .await
-            .map_err(SecurityEpochRotationFailure::into_error)
-    }
-
-    async fn rotate_security_epoch_with_password_entries_classified(
-        &mut self,
-        trigger: VaultOperation,
-        password_entries: Vec<nook_core::PasswordUnlockEntry>,
-    ) -> Result<(), SecurityEpochRotationFailure> {
         self.activate_event_log_mode()
             .await
             .map_err(SecurityEpochRotationFailure::before)?;
@@ -484,7 +427,7 @@ impl NookVaultManager {
             .prepare_security_epoch_rotation(previous_key_epoch, previous_checkpoint)
             .map_err(SecurityEpochRotationFailure::before)?;
         let persisted = self
-            .persist_security_epoch_recovery_plan(prepared, trigger, &password_entries)
+            .persist_security_epoch_recovery_plan(prepared, trigger)
             .await
             .map_err(SecurityEpochRotationFailure::before)?;
         self.execute_security_epoch_recovery_plan(
@@ -494,55 +437,13 @@ impl NookVaultManager {
         )
         .await
     }
-
-    pub(in crate::manager) async fn rotate_password_security_epoch(
-        &mut self,
-        entry_id: nook_core::PasswordEntryId,
-        password: &str,
-        work_factor: u8,
-    ) -> Result<nook_core::PasswordEnvelope, NookError> {
-        self.activate_event_log_mode().await?;
-
-        let previous_key_epoch = IdentityVaultEventId::parse(&self.ensure_key_epoch().await?)?;
-        let previous_checkpoint =
-            IdentityVaultEventId::parse(&self.ensure_causal_event_checkpoint().await?)?;
-        let prepared =
-            self.prepare_security_epoch_rotation(previous_key_epoch, previous_checkpoint)?;
-        let envelope = nook_core::PasswordEnvelopeAttachment::with_work_factor(
-            &prepared.new_keys,
-            password,
-            work_factor.into(),
-        )
-        .attach()?;
-
-        let password_entries = self.vault.password_entries.clone();
-        let persisted = self
-            .persist_security_epoch_recovery_plan(
-                prepared,
-                VaultOperation::PasswordRotated {
-                    entry_id,
-                    envelope: envelope.clone(),
-                },
-                &password_entries,
-            )
-            .await?;
-        self.execute_security_epoch_recovery_plan(
-            persisted.plan,
-            &persisted.plan_envelope,
-            EpochPublication::Unpublished,
-        )
-        .await
-        .map_err(SecurityEpochRotationFailure::into_error)?;
-        Ok(envelope)
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use nook_core::{
-        IsoTimestamp, PasswordEntryId, SigningIdentity, VaultEvent, VaultEventBody,
-        VaultEventSchemaVersion,
+        IsoTimestamp, SigningIdentity, VaultEvent, VaultEventBody, VaultEventSchemaVersion,
     };
     use std::slice;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -649,127 +550,6 @@ mod tests {
             ..Default::default()
         };
         assert!(committed.projection_advanced_past(&projection));
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test callback"
-        )
-    )]
-    fn replaces_a_legacy_target_before_epoch_rewrap() -> anyhow::Result<()> {
-        let keys = nook_core::VaultKeys::generate()?;
-        let legacy = serde_json::from_value(serde_json::json!({
-            "id": "pwdentry001", "label": "Legacy", "created_at": "2026-08-15T00:00:00Z",
-            "envelope": { "version": 1, "kdf": "scrypt", "work_factor": 10, "ciphertext": "old" }
-        }))?;
-        let envelope =
-            nook_core::PasswordEnvelopeAttachment::with_work_factor(&keys, "updated", 10.into())
-                .attach()?;
-        let entries = PreparedEpochRotation::rewrap_password_entries(
-            &[legacy],
-            &keys,
-            &VaultOperation::PasswordRotated {
-                entry_id: PasswordEntryId::parse("pwdentry001")?,
-                envelope,
-            },
-        )?;
-        let entry = entries
-            .first()
-            .ok_or_else(|| anyhow::anyhow!("rotated password entry must be present"))?;
-        assert_eq!(
-            nook_core::PasswordEntryResolution::new(entry, "updated").resolve()?,
-            keys
-        );
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test callback"
-        )
-    )]
-    fn password_removal_drops_only_the_requested_entry_and_rewraps_the_rest() -> anyhow::Result<()>
-    {
-        let old_keys = nook_core::VaultKeys::generate()?;
-        let new_keys = nook_core::VaultKeys::generate()?;
-        let keep = serde_json::from_value(serde_json::json!({
-            "id": "pwdentry001", "label": "Keep", "created_at": "2026-08-15T00:00:00Z",
-            "envelope": serde_json::from_str::<serde_json::Value>(
-                &serde_json::to_string(
-                    &nook_core::PasswordEnvelopeAttachment::with_work_factor(
-                        &old_keys,
-                        "keep-password",
-                        10.into(),
-                    )
-                    .attach()?,
-                )?
-            )?
-        }))?;
-        let remove = serde_json::from_value(serde_json::json!({
-            "id": "pwdentry002", "label": "Drop", "created_at": "2026-08-15T00:00:00Z",
-            "envelope": serde_json::from_str::<serde_json::Value>(
-                &serde_json::to_string(
-                    &nook_core::PasswordEnvelopeAttachment::with_work_factor(
-                        &old_keys,
-                        "drop-password",
-                        10.into(),
-                    )
-                    .attach()?,
-                )?
-            )?
-        }))?;
-        let entries = PreparedEpochRotation::rewrap_password_entries(
-            &[keep, remove],
-            &new_keys,
-            &VaultOperation::PasswordRemoved {
-                entry_id: PasswordEntryId::parse("pwdentry002")?,
-            },
-        )?;
-        assert_eq!(entries.len(), 1);
-        let entry = entries
-            .first()
-            .ok_or_else(|| anyhow::anyhow!("retained password entry must be present"))?;
-        assert_eq!(entry.id, "pwdentry001");
-        assert_eq!(
-            nook_core::PasswordEntryResolution::new(entry, "keep-password").resolve()?,
-            new_keys
-        );
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test callback"
-        )
-    )]
-    fn password_rotation_rejects_an_unknown_entry() -> anyhow::Result<()> {
-        let keys = nook_core::VaultKeys::generate()?;
-        let envelope =
-            nook_core::PasswordEnvelopeAttachment::with_work_factor(&keys, "updated", 10.into())
-                .attach()?;
-        let Err(error) = PreparedEpochRotation::rewrap_password_entries(
-            &[],
-            &keys,
-            &VaultOperation::PasswordRotated {
-                entry_id: PasswordEntryId::parse("pwdentry002")?,
-                envelope,
-            },
-        ) else {
-            anyhow::bail!("unknown password entries must fail closed");
-        };
-        assert!(
-            matches!(error, NookError::Database(message) if message == "Password entry not found.")
-        );
         Ok(())
     }
 
@@ -940,13 +720,6 @@ mod tests {
         };
         assert!(committed.projection_advanced_past(&advanced));
 
-        let keys = nook_core::VaultKeys::generate()?;
-        let entries = PreparedEpochRotation::rewrap_password_entries(
-            &[],
-            &keys,
-            &VaultOperation::VaultCleared,
-        )?;
-        assert!(entries.is_empty());
         assert!(matches!(
             SecurityEpochRotationFailure::before(NookError::Database("before".to_owned()))
                 .into_error(),

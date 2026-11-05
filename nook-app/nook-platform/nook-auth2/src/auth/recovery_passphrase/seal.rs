@@ -1,7 +1,7 @@
 //! The recovery member's private keys sealed under its passphrase.
 //!
-//! The same age scrypt construction vault password envelopes used: an age
-//! file whose only recipient is the passphrase, at scrypt work factor 18.
+//! An age file whose only recipient is the passphrase, at scrypt work
+//! factor 18.
 //! The plaintext is the member's X25519 secret and Ed25519 signing seed.
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 #![cfg_attr(

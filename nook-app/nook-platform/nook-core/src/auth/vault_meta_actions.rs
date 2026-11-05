@@ -105,10 +105,6 @@ impl<'a> VaultMetaOperationApplier<'a> {
             | VaultOperation::SecretDeleted { .. }
             | VaultOperation::SecretReplaced { .. }
             | VaultOperation::SecretConflictResolved { .. }
-            | VaultOperation::PasswordAdded { .. }
-            | VaultOperation::PasswordRotated { .. }
-            | VaultOperation::PasswordEnvelopeUpgraded { .. }
-            | VaultOperation::PasswordRemoved { .. }
             | VaultOperation::VaultCleared
             | VaultOperation::VaultNamed { .. }
             | VaultOperation::EpochCheckpoint {

@@ -2,7 +2,6 @@ import { test, expect, type Page } from './fixtures'
 import {
   beginAddSyncProvider,
   addSecret,
-  addVaultPassword,
   assertVaultReady,
   clearBrowserVault,
   connectLocalVault,
@@ -88,12 +87,6 @@ test.describe('local folder backup provider', () => {
     await page.reload()
     await connectLocalVault(page)
     await openStorageSettings(page)
-    await expandSettingsSection(page, 'unlock')
-    await addVaultPassword(
-      page,
-      'Emergency recovery',
-      'existing-folder-backup-password',
-    )
     await connectLocalFolderProviderFromSettings(page)
     await openVaultPage(page)
     await assertVaultReady(page)
@@ -120,12 +113,6 @@ test.describe('local folder backup provider', () => {
     await expect(recoverySummary).toBeVisible()
     await expect(page.getByTestId('existing-vault-passkey-hints')).toBeVisible()
     await expect(recoverySummary).toContainText(`device ${passkeyDeviceHint}`)
-    await expect(
-      page.getByTestId('existing-vault-password-status'),
-    ).toContainText('Passphrase available')
-    await expect(
-      page.getByTestId('existing-vault-password-status'),
-    ).toContainText('Emergency recovery')
     await expect(page.locator('body')).not.toContainText(
       "Authorize before using this browser's device key.",
     )

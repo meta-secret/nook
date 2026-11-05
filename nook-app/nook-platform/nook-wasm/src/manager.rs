@@ -7,7 +7,6 @@
 //! - [`connect`] — `connect` / `connect_fresh` / `assess_vault_connect` /
 //!   genesis initialisation.
 //! - [`sync`] — `sync_vault_from_storage` (periodic poll, mode-aware).
-//! - [`password`] — set / remove / verify / `connect_with_password`.
 //! - [`multi_device`] — `init_device`, `list_pending_joins`,
 //!   `list_vault_members`, request/approve/enroll flows.
 //! - [`secrets`] — `add_secret` / `delete_secret`, search, password & id
@@ -28,8 +27,7 @@ use crate::storage::local_folder::LocalFolderHandles;
 use nook_core::{
     DeviceIdentity, DeviceIdentitySecret, MultiDeviceError, SelfRosterSync, SentinelGenesisPhase,
     StorageConnection, StorageMode, SymmetricKey, VaultCrypto, VaultNameRef,
-    VaultSessionProjection, VaultStoreIdentityRef, VaultType, VaultUnlock, VaultVersionWrite,
-    i18n_keys,
+    VaultSessionProjection, VaultStoreIdentityRef, VaultType, VaultVersionWrite, i18n_keys,
 };
 use nook_core::{EnsureSelfInRosterRequest, VaultMetaState, VaultOperation};
 use std::mem;
@@ -50,13 +48,12 @@ mod login_save;
 mod member_lifecycle;
 mod multi_device;
 mod passkeys;
-mod password;
-mod password_unlock;
 mod personal_fill;
 mod prepared_provider;
 mod remote_vault_choice;
 mod search_catalog;
 mod secrets;
+mod self_enrollment;
 mod sentinel;
 mod session;
 mod site_secret_listing;
@@ -351,10 +348,8 @@ impl NookVaultManager {
         }
         let records = self.vault.meta.to_stored_records();
         Ok(
-            nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
+            nook_core::VaultRecordSet::serialize_yaml_with_name_architecture(
                 &records,
-                &self.vault.unlock,
-                &self.vault.password_entries,
                 VaultStoreIdentityRef::Assigned(self.vault.store_id.as_str()),
                 match &self.vault.vault_name {
                     VaultNameState::Unnamed => VaultNameRef::Unnamed,
@@ -383,8 +378,8 @@ impl NookVaultManager {
         self.device.identity_private_key = identity.secret_string().into_inner();
     }
 
-    /// Pull the active unlock mode from a freshly-accepted vault YAML and
-    /// stash it in session state.
+    /// Pull the vault metadata from a freshly-accepted vault YAML and stash
+    /// it in session state.
     ///
     /// Callers should only invoke this with content they intend to adopt
     /// as the new authoritative state (e.g. after the first connect or
@@ -392,16 +387,14 @@ impl NookVaultManager {
     /// differs from our last saved snapshot). Calling on every poll
     /// blindly is unsafe: GitHub is eventually-consistent, so a poll can
     /// race with our own write and return the pre-write YAML, which
-    /// would clobber a freshly-set password envelope back to keys mode.
-    pub(in crate::manager) fn capture_vault_unlock(
+    /// would clobber freshly-written metadata.
+    pub(in crate::manager) fn capture_vault_metadata(
         &mut self,
         content: &str,
     ) -> Result<(), NookError> {
-        let metadata = nook_core::VaultContent::new(content).capture_unlock()?;
+        let metadata = nook_core::VaultContent::new(content).capture_metadata()?;
         self.application
             .validate_session_access(metadata.architecture.vault_type)?;
-        self.vault.unlock = metadata.unlock;
-        self.vault.password_entries = metadata.password_entries;
         self.vault.store_id = metadata.store_id;
         self.vault.vault_name = VaultNameState::Named(metadata.vault_name);
         self.vault.vault_version = metadata.version.into();
@@ -530,8 +523,6 @@ impl NookVaultManager {
             .cache_ref()
             .switch_to(&self.storage.provider.cache_ref())
         {
-            self.vault.password_entries.clear();
-            self.vault.unlock = VaultUnlock::Keys;
             self.vault.vault_name = VaultNameState::Unnamed;
         }
         if let PreparedProvider::Remote(remote) = &self.storage.provider {
@@ -547,12 +538,8 @@ impl NookVaultManager {
         &mut self,
         connection: &StorageConnection,
     ) -> Result<(), NookError> {
-        let password_entries = self.vault.password_entries.clone();
-        let unlock = self.vault.unlock.clone();
         let vault_name = self.vault.vault_name.clone();
         self.prepare_storage(connection).await?;
-        self.vault.password_entries = password_entries;
-        self.vault.unlock = unlock;
         self.vault.vault_name = vault_name;
         Ok(())
     }
@@ -666,12 +653,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn capture_unlock_adopts_metadata_and_version() -> Result<(), NookError> {
+    fn capture_metadata_adopts_metadata_and_version() -> Result<(), NookError> {
         let mut manager = NookVaultManager::new();
         let store_id = nook_core::StoreId::generate()?;
-        let yaml = nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
-            &[],
-            &VaultUnlock::Keys,
+        let yaml = nook_core::VaultRecordSet::serialize_yaml_with_name_architecture(
             &[],
             VaultStoreIdentityRef::Assigned(store_id.as_str()),
             VaultNameRef::Named("Captured"),
@@ -680,14 +665,13 @@ mod tests {
         )?
         .into_inner();
 
-        manager.capture_vault_unlock(&yaml)?;
+        manager.capture_vault_metadata(&yaml)?;
 
         assert_eq!(manager.vault.store_id, store_id.as_str());
         assert!(matches!(
             manager.vault.vault_name,
             VaultNameState::Named(ref name) if name == "Captured"
         ));
-        assert!(matches!(manager.vault.unlock, VaultUnlock::Keys));
         assert_eq!(manager.vault.vault_version, 0);
         Ok(())
     }

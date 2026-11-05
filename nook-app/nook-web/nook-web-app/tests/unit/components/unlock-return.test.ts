@@ -5,10 +5,10 @@ import { WorkspaceRoute } from '$lib/app/workspace-route'
 describe('Open vault after unlocking from a panel', () => {
   test('returns once to the deep link the lock interrupted', () => {
     const unlockReturn = new UnlockReturn()
-    unlockReturn.remember(WorkspaceRoute.Passwords)
+    unlockReturn.remember(WorkspaceRoute.Import)
 
     expect(unlockReturn.routeFrom(WorkspaceRoute.Identities)).toBe(
-      WorkspaceRoute.Passwords,
+      WorkspaceRoute.Import,
     )
     expect(unlockReturn.routeFrom(WorkspaceRoute.Identities)).toBe(
       WorkspaceRoute.Vault,
@@ -26,7 +26,7 @@ describe('Open vault after unlocking from a panel', () => {
 
   test('keeps nothing from a page outside the workspace', () => {
     const unlockReturn = new UnlockReturn()
-    unlockReturn.remember(WorkspaceRoute.Passwords)
+    unlockReturn.remember(WorkspaceRoute.Import)
     unlockReturn.forget()
 
     expect(unlockReturn.routeFrom(WorkspaceRoute.Identities)).toBe(
@@ -36,7 +36,7 @@ describe('Open vault after unlocking from a panel', () => {
 
   test('a workspace page the URL names wins over a kept deep link', () => {
     const unlockReturn = new UnlockReturn()
-    unlockReturn.remember(WorkspaceRoute.Passwords)
+    unlockReturn.remember(WorkspaceRoute.Import)
 
     expect(unlockReturn.routeFrom(WorkspaceRoute.Sync)).toBe(
       WorkspaceRoute.Sync,

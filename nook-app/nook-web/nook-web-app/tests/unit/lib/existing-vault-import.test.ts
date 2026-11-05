@@ -31,7 +31,6 @@ function lifecycleHarness(authenticated = false) {
   state.errorMsg = ''
   state.loginRequiresExistingVault = false
   state.clearExistingVaultRecoverySummary()
-  state.loginPasswordPrompt = true
   state.joinEnrollmentPrompt = JoinEnrollmentState.None
   state.sentinelCeremonyPrompt = false
   state.t = (request: Parameters<VaultState['t']>[0]) =>
@@ -40,7 +39,6 @@ function lifecycleHarness(authenticated = false) {
   const clearUnlockedSession = vi.spyOn(state, 'clearUnlockedSession')
   const selectVaultForUnlock = vi.spyOn(state, 'selectVaultForUnlock')
   const activateLoginSetup = vi.spyOn(state, 'activateLoginSetup')
-  const unlockWithPassword = vi.spyOn(state, 'unlockWithPassword')
   const stageProviderDraft = vi.spyOn(state, 'stageProviderDraft')
   const connectStagedProvider = vi
     .spyOn(state, 'connectStagedProvider')
@@ -64,9 +62,6 @@ function lifecycleHarness(authenticated = false) {
   activateLoginSetup.mockImplementation((kind) => {
     activateLoginSetupImplementation(kind)
   })
-  unlockWithPassword.mockImplementation(async () => {
-    state.isAuthenticated = true
-  })
 
   return {
     state,
@@ -80,7 +75,7 @@ function lifecycleHarness(authenticated = false) {
 }
 
 describe('ExistingVaultImportLifecycle', () => {
-  test('resumes a protected import and activates it after password unlock', async () => {
+  test('resumes a protected import and activates it after the device unlocks', async () => {
     const {
       state,
       lifecycle,
@@ -117,15 +112,9 @@ describe('ExistingVaultImportLifecycle', () => {
     expect(connectStagedProvider).toHaveBeenCalledOnce()
     expect(lifecycle.waitingForDevice).toBe(true)
 
-    await lifecycle.unlockWithPassword({
-      entryId: 'password-entry',
-      password: 'vault-password',
-    })
+    state.isAuthenticated = true
+    await lifecycle.finish()
 
-    expect(state.unlockWithPassword).toHaveBeenCalledWith({
-      entryId: 'password-entry',
-      password: 'vault-password',
-    })
     expect(activateConnectedExistingVault).toHaveBeenCalledWith(
       'incoming-vault',
     )

@@ -4,15 +4,13 @@ import { NookVaultManager } from '$app-wasm'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import {
   AccessCheckActions,
-  AccessCheckFailureKind,
   AccessCheckTargetKind,
-  type BackupPasswordCheckRequest,
 } from '$lib/vault/access-check'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 afterEach(() => vi.restoreAllMocks())
 
-/** A backup password check at the connected provider, whose read fails. */
+/** A passkey check at the connected provider, whose read fails. */
 class FailingCheck {
   readonly vault = VaultStateTestFixture.create()
   readonly manager = new NookVaultManager()
@@ -20,18 +18,15 @@ class FailingCheck {
   constructor(refusal: Error) {
     vi.spyOn(this.vault, 'admitManager').mockReturnValue(ok(this.manager))
     VaultStateTestFixture.runStorageImmediately(this.vault)
-    vi.spyOn(
-      this.manager,
-      'check_backup_password_access_from',
-    ).mockRejectedValue(refusal)
+    vi.spyOn(this.manager, 'check_passkey_access_from').mockRejectedValue(
+      refusal,
+    )
   }
 
   run() {
-    const request: BackupPasswordCheckRequest = {
-      target: { kind: AccessCheckTargetKind.CurrentProvider },
-      password: 'correct horse battery staple',
-    }
-    return new AccessCheckActions(this.vault).checkBackupPassword(request)
+    return new AccessCheckActions(this.vault).checkPasskey({
+      kind: AccessCheckTargetKind.CurrentProvider,
+    })
   }
 }
 
@@ -44,7 +39,6 @@ describe('a check the connected provider refused', () => {
 
     expect(checked.isErr()).toBe(true)
     if (checked.isOk()) return
-    expect(checked.error.kind).toBe(AccessCheckFailureKind.BackupPassword)
     expect(checked.error.translationKey).toBe(I18N_KEYS.ErrorsS3KeyAccessDenied)
   })
 
@@ -57,7 +51,8 @@ describe('a check the connected provider refused', () => {
 
     expect(checked.isErr()).toBe(true)
     if (checked.isOk()) return
-    expect(checked.error.kind).toBe(AccessCheckFailureKind.BackupPassword)
-    expect(checked.error.translationKey).toBe(I18N_KEYS.AccessCheckFailed)
+    expect(checked.error.translationKey).toBe(
+      I18N_KEYS.AccessCheckPasskeyFailed,
+    )
   })
 })

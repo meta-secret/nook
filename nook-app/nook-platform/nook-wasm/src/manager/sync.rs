@@ -28,11 +28,9 @@ impl NookVaultManager {
             "sync_vault_from_storage started"
         );
         let initial_storage_mode = self.storage.mode();
-        // `prepare_storage` clears `password_entries`/`unlock` on a mode/ref
-        // switch (it assumes a *different* vault). A same-vault sync only
-        // toggles the local-cache/remote tag, so preserve the backup-password
-        // envelope; otherwise the subsequent `persist_projection_cache` rewrites
-        // the local YAML without it and drops the password unlock envelope.
+        // `prepare_storage` clears the vault name on a mode/ref switch (it
+        // assumes a *different* vault). A same-vault sync only toggles the
+        // local-cache/remote tag, so preserve the vault metadata.
         self.prepare_storage_preserving_vault_metadata(&connection)
             .await?;
 
@@ -65,7 +63,7 @@ impl NookVaultManager {
         }
 
         if self.vault.members_key.is_empty() {
-            self.capture_vault_unlock(&content)?;
+            self.capture_vault_metadata(&content)?;
             self.vault.last_synced_content = content.clone();
             let identity = self.ensure_device_identity()?;
             let status = nook_core::VaultContent::new(&content).access_status(&identity)?;

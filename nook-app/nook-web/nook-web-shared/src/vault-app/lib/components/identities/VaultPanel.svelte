@@ -1,9 +1,8 @@
 <!--
 One vault, opened beside its identity's card from the vault's row. Locked,
-it unlocks with this device's passkey or PIN, or with the vault's own
-passphrase. Open, it offers to go in. Below, what belongs to this vault
-alone (its name, passphrases, imports, the browser extension), usable
-once it is open.
+it unlocks with this device's passkey or PIN. Open, it offers to go in.
+Below, what belongs to this vault alone (its name, imports, the browser
+extension), usable once it is open.
 -->
 <script lang="ts">
   import type { Snippet } from 'svelte'
@@ -17,7 +16,6 @@ once it is open.
     Lock,
     PencilLine,
     RefreshCw,
-    ShieldCheck,
     Trash2,
     UserRoundCheck,
     X,
@@ -45,8 +43,6 @@ once it is open.
     unlockLabel,
     identityOpen = false,
     busy = false,
-    passphrase,
-    passphraseOffered = false,
     extension,
     onOpen,
     onUnlock,
@@ -65,10 +61,6 @@ once it is open.
      * key asked for, so the panel offers the vault's own actions. */
     identityOpen?: boolean
     busy?: boolean
-    /** The vault's passphrase unlock, once its passphrases are read. */
-    passphrase?: Snippet
-    /** Unlocking with a passphrase applies here (a locked browser). */
-    passphraseOffered?: boolean
     /** The browser extension for this vault, offered while it is open. */
     extension?: Snippet
     /** Go into the open vault. */
@@ -169,25 +161,6 @@ once it is open.
     return vault.t(request)
   })
 
-  /** Passphrases named before "+N more". */
-  const PASSPHRASE_NAMES = 2
-
-  /** The open vault is the session's vault, so its passphrases are the
-   * ones the session holds; they change as the Passphrases page edits them. */
-  const passphrasesHint = $derived.by(() => {
-    if (!open) return vault.t(I18N_KEYS.WorkspaceVaultPanelPassphrasesHint)
-    const names = vault.passwordEntries.map((entry) => entry.label)
-    if (names.length === 0)
-      return vault.t(I18N_KEYS.WorkspaceVaultPanelPassphrasesNone)
-    const shown = names.slice(0, PASSPHRASE_NAMES).join(', ')
-    if (names.length <= PASSPHRASE_NAMES) return shown
-    const moreRequest: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.IdentityOverviewMore,
-      replacements: { count: String(names.length - PASSPHRASE_NAMES) },
-    }
-    return `${shown} ${vault.t(moreRequest)}`
-  })
-
   type ManageItem = {
     readonly section: WorkspaceSection
     readonly testId: string
@@ -197,13 +170,6 @@ once it is open.
     readonly count: string
   }
   const manageItems = $derived.by((): ManageItem[] => [
-    {
-      section: WorkspaceSection.Passwords,
-      testId: 'vault-panel-passphrases',
-      title: vault.t(I18N_KEYS.WorkspaceSectionPasswords),
-      hint: passphrasesHint,
-      count: open ? String(vault.passwordEntries.length) : '',
-    },
     {
       section: WorkspaceSection.Import,
       testId: 'vault-panel-import',
@@ -403,29 +369,6 @@ once it is open.
           />
         {/if}
       {/if}
-      {#if passphraseOffered}
-        <div
-          class="flex items-center gap-3 text-xs text-muted-foreground"
-          aria-hidden="true"
-        >
-          <span class="h-px flex-1 bg-border"></span>
-          {vault.t(I18N_KEYS.WorkspaceVaultPanelOrPassphrase)}
-          <span class="h-px flex-1 bg-border"></span>
-        </div>
-        <div data-testid="vault-panel-passphrase">
-          {#if passphrase}
-            {@render passphrase()}
-          {:else}
-            <p
-              class="flex items-center gap-2 text-sm text-muted-foreground"
-              role="status"
-            >
-              <RefreshCw class="size-3.5 animate-spin" aria-hidden="true" />
-              {vault.t(I18N_KEYS.WorkspaceVaultPanelReading)}
-            </p>
-          {/if}
-        </div>
-      {/if}
     </section>
   {:else}
     <section class="grid w-full max-w-md gap-4" data-testid="vault-panel-away">
@@ -545,11 +488,7 @@ once it is open.
             onclick={() => onManage(item.section)}
           >
             <span class="nk-vault-icon" aria-hidden="true">
-              {#if item.section === WorkspaceSection.Passwords}
-                <ShieldCheck class="size-4" />
-              {:else}
-                <Download class="size-4" />
-              {/if}
+              <Download class="size-4" />
             </span>
             <span class="flex min-w-0 flex-1 flex-col">
               <span class="flex min-w-0 items-baseline gap-2">

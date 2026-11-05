@@ -12,7 +12,7 @@ use nook_core::{
     IdentityVaultEpochAction, IdentityVaultEpochStatus, IdentityVaultKeyOpening,
     IdentityVaultRegistration, MultiDeviceError, OpenedVaultDek, ProviderRows, SecretTypeFilter,
     StorageProvider, StoreId, SymmetricKey, VaultHolderRotation, VaultKeys, VaultMetaState,
-    VaultOperation, VaultRevocationDue, VaultRevokedHolders, VaultType, VaultUnlock,
+    VaultOperation, VaultRevocationDue, VaultRevokedHolders, VaultType,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -80,12 +80,11 @@ impl NookVaultManager {
             );
         }
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
-        self.vault.unlock = VaultUnlock::Keys;
         self.vault.meta = VaultMetaState::from_stored_records(&records)?;
         self.ensure_event_log_ready().await?;
         self.adopt_vault_name_from_events().await?;
         if !self.vault.meta.auth.contains_key(&app_key.auth_id()) {
-            self.persist_password_unlock_membership(&records, &app_key, &keys)
+            self.persist_self_enrolled_membership(&records, &app_key, &keys)
                 .await?;
         }
         if let Err(error) = self.ensure_identity_after_connect(&app_key).await {
@@ -161,7 +160,7 @@ impl NookVaultManager {
         let store_id = StoreId::parse(&store_id)?;
         self.prepare_storage(&connection).await?;
         let keys = self.enter_identity_vault(&store_id).await?;
-        let (event_log_remote, records) = self.load_password_unlock_records("", true).await?;
+        let (event_log_remote, records) = self.load_vault_records("", true).await?;
         let opening = IdentityVaultOpening {
             keys,
             records,

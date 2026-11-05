@@ -1,9 +1,7 @@
-//! Keys-mode multi-device flows.
+//! Multi-device flows.
 //!
 //! Wraps the join / approve / enroll choreography that the `auth:` /
-//! `joins:` / `members:` sections of a keys-mode vault use. None of these
-//! methods are reachable when the vault is in password mode — the
-//! password-mode counterpart is `connect_with_password` (`manager::password`).
+//! `joins:` / `members:` sections of a vault use.
 
 use super::NookVaultManager;
 use super::verified_access::VerifiedVaultAccessFlow;
@@ -71,7 +69,7 @@ impl NookVaultManager {
                 return Err(NookError::Database("No vault found to join.".to_owned()).into());
             }
         } else {
-            self.capture_vault_unlock(&content)?;
+            self.capture_vault_metadata(&content)?;
             self.sync_events_from_current_provider().await?;
             if self.vault.store_id.is_empty() || !self.event_log_has_events().await? {
                 return Err(NookError::Database("Vault event log is required.".to_owned()).into());
@@ -121,7 +119,7 @@ impl NookVaultManager {
             return Err(NookError::Database("No vault found to join.".to_owned()).into());
         }
         // Fresh enrolment — adopt the remote unlock mode.
-        self.capture_vault_unlock(&content)?;
+        self.capture_vault_metadata(&content)?;
 
         if self.vault.architecture.vault_type == VaultType::Sentinel {
             return Err(MultiDeviceError::SentinelCeremonyRequired.into());

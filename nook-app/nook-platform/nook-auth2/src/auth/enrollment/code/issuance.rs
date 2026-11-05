@@ -207,7 +207,7 @@ mod tests {
     }
 
     #[test]
-    fn issuance_validation_keeps_password_entry_provider_vault_order() -> anyhow::Result<()> {
+    fn issuance_validation_checks_passphrase_then_entry_then_providers() -> anyhow::Result<()> {
         let mut input = EnrollmentIssueInput::github_fixture()?;
         input.entry_id = " ".to_owned();
         input.identity.label = "\n".to_owned();
@@ -641,7 +641,7 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("enrollment test should reject invalid input"))?;
         assert_eq!(
             err.to_string(),
-            "Vault password does not decrypt this enrollment code."
+            "This passphrase does not decrypt this enrollment code."
         );
         Ok(())
     }

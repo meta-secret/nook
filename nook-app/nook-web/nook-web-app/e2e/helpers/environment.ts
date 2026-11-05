@@ -57,7 +57,7 @@ export function createE2eGithubRepoName(): string {
 
 /** UI actions we control should complete in a couple of seconds. */
 export const UI_TIMEOUT_MS = 5_000
-/** Password unlock / enrollment runs scrypt in wasm — allow more time on CI. */
+/** Enrollment and unlock run key derivation in wasm — allow more time on CI. */
 export const ENROLLMENT_UNLOCK_TIMEOUT_MS = 30_000
 
 export function configuredVaultSyncIntervalMs(): number {

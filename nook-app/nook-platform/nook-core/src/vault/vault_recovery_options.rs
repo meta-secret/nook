@@ -1,9 +1,9 @@
 //! Safe recovery choices that can be shown before a vault is unlocked.
 //!
-//! The signed event log contains public membership identifiers and encrypted
-//! backup-password envelopes. This projection exposes only the identifiers and
-//! labels a person needs to choose a recovery path. It never exposes an
-//! envelope, credential id, private key, or decrypted vault value.
+//! The signed event log contains public membership identifiers. This
+//! projection exposes only the identifiers and labels a person needs to choose
+//! a recovery path. It never exposes a credential id, private key, or
+//! decrypted vault value.
 
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 #![cfg_attr(
@@ -14,7 +14,7 @@
 use crate::EventError;
 use crate::EventLookup;
 
-use crate::{DeviceId, EventGraph, StoreId, VaultOperation, VaultProjection, VaultResult};
+use crate::{DeviceId, EventGraph, StoreId, VaultOperation, VaultResult};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use tsify::Tsify;
@@ -48,25 +48,15 @@ impl VaultRecoveryDevice {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-pub struct VaultRecoveryPassword {
-    pub id: String,
-    pub label: String,
-    pub created_at: String,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VaultRecoveryOptions {
     pub devices: Vec<VaultRecoveryDevice>,
-    pub password_entries: Vec<VaultRecoveryPassword>,
     pub requires_sentinel_quorum: bool,
 }
 
 /// Validated inputs for projecting recovery choices from a signed event graph.
 pub struct VaultRecoveryProjectionRequest<'a> {
     pub graph: &'a EventGraph,
-    pub store_id: &'a StoreId,
 }
 
 /// Safe, Rust-owned recovery DTO returned across the WASM boundary.
@@ -77,7 +67,6 @@ pub struct VaultRecoverySummary {
     pub store_id: StoreId,
     pub vault_name: String,
     pub devices: Vec<VaultRecoveryDevice>,
-    pub password_entries: Vec<VaultRecoveryPassword>,
     pub requires_sentinel_quorum: bool,
 }
 
@@ -92,7 +81,6 @@ impl VaultRecoverySummary {
             store_id,
             vault_name,
             devices: options.devices,
-            password_entries: options.password_entries,
             requires_sentinel_quorum: options.requires_sentinel_quorum,
         }
     }
@@ -102,8 +90,6 @@ impl VaultRecoveryOptions {
     /// Project the recovery choices present in a signed vault event graph.
     pub fn from_request(request: &VaultRecoveryProjectionRequest<'_>) -> VaultResult<Self> {
         let graph = request.graph;
-        let store_id = request.store_id;
-        let projection = VaultProjection::from_graph(graph, store_id.as_str())?;
         let mut devices = BTreeMap::<DeviceId, String>::new();
         let mut requires_sentinel_quorum = false;
 
@@ -155,15 +141,6 @@ impl VaultRecoveryOptions {
                     label,
                 })
                 .collect(),
-            password_entries: projection
-                .password_entries
-                .into_iter()
-                .map(|entry| VaultRecoveryPassword {
-                    id: entry.id,
-                    label: entry.label,
-                    created_at: entry.created_at,
-                })
-                .collect(),
             requires_sentinel_quorum,
         })
     }
@@ -181,8 +158,8 @@ mod tests {
     use super::*;
     use crate::{
         DeviceIdentity, DeviceSigningPublicKey, EventId, GenesisImportPayload,
-        GenesisImportRequest, IsoTimestamp, MemberLabel, PasswordEntryId, PasswordEntryIssuance,
-        SigningIdentity, StoreId, VaultEvent, VaultEventBody, VaultEventSchemaVersion,
+        GenesisImportRequest, IsoTimestamp, MemberLabel, SigningIdentity, StoreId, VaultEvent,
+        VaultEventBody, VaultEventSchemaVersion,
     };
 
     const STORE_ID: &str = "store_recovery01x";
@@ -240,20 +217,10 @@ mod tests {
         clippy::too_many_lines,
         reason = "test scenario covers the complete recovery projection lifecycle"
     )]
-    fn reports_only_active_devices_and_current_password_labels() -> anyhow::Result<()> {
+    fn reports_only_active_devices_with_current_labels() -> anyhow::Result<()> {
         let signing = SigningIdentity::generate()?.0;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
-        let keys = crate::VaultKeys::generate()?;
-        let password = PasswordEntryIssuance::with_work_factor(
-            &keys,
-            "pwdentry001",
-            "Emergency kit",
-            "2026-07-22T00:00:00Z",
-            "correct horse battery staple",
-            10.into(),
-        )
-        .issue()?;
         let genesis = VaultEvent::build_genesis_import_event(GenesisImportRequest {
             store_id: &StoreId::parse(STORE_ID)?,
             actor_id: &signing.actor_id()?,
@@ -263,7 +230,6 @@ mod tests {
             payload: GenesisImportPayload {
                 source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: vec![],
-                password_entries: vec![password.clone()],
             },
             created_at: &Fixtures::timestamp("2026-07-22T00:00:00Z")?,
             signing_key: signing.signing_key(),
@@ -348,11 +314,8 @@ mod tests {
             prepared.event_id
         };
 
-        let store_id = StoreId::parse(STORE_ID)?;
-        let options = VaultRecoveryOptions::from_request(&VaultRecoveryProjectionRequest {
-            graph: &graph,
-            store_id: &store_id,
-        })?;
+        let options =
+            VaultRecoveryOptions::from_request(&VaultRecoveryProjectionRequest { graph: &graph })?;
         assert_eq!(
             options.devices,
             vec![VaultRecoveryDevice {
@@ -361,20 +324,12 @@ mod tests {
                 passkey_hint: VaultRecoveryDevice::passkey_hint_for(second.device_id()),
             }]
         );
-        assert_eq!(
-            options.password_entries,
-            vec![VaultRecoveryPassword {
-                id: password.id,
-                label: password.label,
-                created_at: password.created_at,
-            }]
-        );
         assert!(!options.requires_sentinel_quorum);
         Ok(())
     }
 
     #[test]
-    fn sentinel_participants_require_quorum_and_never_offer_passwords() -> anyhow::Result<()> {
+    fn sentinel_participants_require_quorum() -> anyhow::Result<()> {
         let signing = SigningIdentity::generate()?.0;
         let device = DeviceIdentity::generate()?;
         let genesis = VaultEvent::build_genesis_import_event(GenesisImportRequest {
@@ -386,7 +341,6 @@ mod tests {
             payload: GenesisImportPayload {
                 source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: vec![],
-                password_entries: vec![],
             },
             created_at: &Fixtures::timestamp("2026-07-22T00:00:00Z")?,
             signing_key: signing.signing_key(),
@@ -423,79 +377,10 @@ mod tests {
             prepared.event_id
         };
 
-        let store_id = StoreId::parse(STORE_ID)?;
-        let options = VaultRecoveryOptions::from_request(&VaultRecoveryProjectionRequest {
-            graph: &graph,
-            store_id: &store_id,
-        })?;
+        let options =
+            VaultRecoveryOptions::from_request(&VaultRecoveryProjectionRequest { graph: &graph })?;
         assert!(options.requires_sentinel_quorum);
         assert_eq!(options.devices.len(), 1);
-        assert!(options.password_entries.is_empty());
-        Ok(())
-    }
-
-    #[test]
-    fn removed_password_is_not_reported() -> anyhow::Result<()> {
-        let signing = SigningIdentity::generate()?.0;
-        let keys = crate::VaultKeys::generate()?;
-        let password = PasswordEntryIssuance::with_work_factor(
-            &keys,
-            "pwdentry001",
-            "Old recovery",
-            "2026-07-22T00:00:00Z",
-            "correct horse battery staple",
-            10.into(),
-        )
-        .issue()?;
-        let genesis = VaultEvent::build_genesis_import_event(GenesisImportRequest {
-            store_id: &StoreId::parse(STORE_ID)?,
-            actor_id: &signing.actor_id()?,
-            key_epoch: &EventId::from_sha256_hex(
-                nook_auth2::Sha256Hex::from_trusted("1".repeat(64)).as_str(),
-            )?,
-            payload: GenesisImportPayload {
-                source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
-                secrets: vec![],
-                password_entries: vec![password.clone()],
-            },
-            created_at: &Fixtures::timestamp("2026-07-22T00:00:00Z")?,
-            signing_key: signing.signing_key(),
-        })?;
-        let genesis_id = genesis.id()?;
-        let mut graph = EventGraph::new();
-        match graph.insert(crate::EventGraphInsert {
-            event: genesis,
-            expected_store_id: STORE_ID,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
-        {
-            let prepared = Fixtures::append_event(
-                graph,
-                &signing,
-                genesis_id,
-                vec![VaultOperation::PasswordRemoved {
-                    entry_id: PasswordEntryId::parse(&password.id)?,
-                }],
-                "2026-07-22T00:00:01Z",
-            )?;
-            graph = prepared.graph;
-            prepared.event_id
-        };
-
-        let store_id = StoreId::parse(STORE_ID)?;
-        let options = VaultRecoveryOptions::from_request(&VaultRecoveryProjectionRequest {
-            graph: &graph,
-            store_id: &store_id,
-        })?;
-        assert!(options.password_entries.is_empty());
         Ok(())
     }
 }

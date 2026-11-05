@@ -252,12 +252,14 @@ impl From<bool> for VaultSyncIntent {
     }
 }
 
+/// Whether a one-time invite code is being issued or joined; the periodic
+/// sync skips while it is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VaultPasswordActivity {
+pub enum VaultInviteActivity {
     Idle,
     Busy,
 }
-impl From<bool> for VaultPasswordActivity {
+impl From<bool> for VaultInviteActivity {
     fn from(observed: bool) -> Self {
         if observed { Self::Busy } else { Self::Idle }
     }
@@ -290,17 +292,6 @@ impl From<bool> for VaultJoinApprovalWait {
         } else {
             Self::NotWaiting
         }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VaultPasswordPromptState {
-    Closed,
-    Open,
-}
-impl From<bool> for VaultPasswordPromptState {
-    fn from(observed: bool) -> Self {
-        if observed { Self::Open } else { Self::Closed }
     }
 }
 

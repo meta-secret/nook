@@ -154,42 +154,6 @@ impl AsRef<str> for MemberLabel {
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify, Serialize,
 )]
 #[tsify(type = "string")]
-#[serde(try_from = "String")]
-pub struct PasswordEntryId(String);
-
-impl PasswordEntryId {
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    #[must_use]
-    pub fn into_inner(mut self) -> String {
-        mem::take(&mut self.0)
-    }
-
-    #[must_use]
-    pub fn from_trusted(value: String) -> Self {
-        Self(value)
-    }
-}
-
-impl fmt::Display for PasswordEntryId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-impl AsRef<str> for PasswordEntryId {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-#[derive(
-    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify, Serialize,
-)]
-#[tsify(type = "string")]
 #[serde(from = "String")]
 pub struct OpaqueCiphertext(String);
 
@@ -473,24 +437,6 @@ impl TryFrom<String> for SigningSeedHex {
     }
 }
 
-impl PasswordEntryId {
-    pub fn parse(raw: &str) -> ValidationResult<Self> {
-        let id = raw.trim();
-        if id.is_empty() {
-            return Err(ValidationError::PasswordEntryIdInvalid);
-        }
-        CompactToken::parse(id)?;
-        Ok(Self(id.to_owned()))
-    }
-}
-
-impl TryFrom<String> for PasswordEntryId {
-    type Error = ValidationError;
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        Self::parse(&value)
-    }
-}
-
 impl From<String> for MemberLabel {
     fn from(value: String) -> Self {
         Self(value)
@@ -592,15 +538,6 @@ mod tests {
         let sk = DeviceIdentitySecret::parse(&secret)?;
         assert_eq!(sk.as_str(), secret);
         assert_eq!(format!("{sk:?}"), "DeviceIdentitySecret([REDACTED])");
-        Ok(())
-    }
-
-    #[test]
-    fn password_entry_id_requires_compact_token() -> anyhow::Result<()> {
-        let id = PasswordEntryId::parse("pwdentry001")?;
-        assert_eq!(PasswordEntryId::parse(id.as_str())?, id);
-        assert!(PasswordEntryId::parse("").is_err());
-        assert!(PasswordEntryId::parse("too-long-token-value").is_err());
         Ok(())
     }
 

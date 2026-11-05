@@ -7,7 +7,7 @@
 
 use crate::errors::VaultResult;
 use crate::vault_connect::VaultAccessStatus;
-use crate::{Database, DeviceIdentity, VaultContent, VaultMetaState, VaultUnlock};
+use crate::{Database, DeviceIdentity, VaultContent, VaultMetaState};
 
 /// Outcome of comparing remote YAML against the last synced snapshot.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,8 +25,6 @@ pub struct YamlSyncReloaded {
     pub meta: VaultMetaState,
     pub secrets_key: crate::SymmetricKey,
     pub members_key: crate::SymmetricKey,
-    pub unlock: VaultUnlock,
-    pub password_entries: Vec<crate::PasswordUnlockEntry>,
     pub store_id: String,
     pub vault_name: String,
     pub version: crate::VaultVersion,
@@ -91,14 +89,12 @@ impl<'a> YamlSyncSession<'a> {
 
     fn reload(&self) -> VaultResult<YamlSyncReloaded> {
         let loaded = VaultContent::new(self.content).load(self.identity)?;
-        let metadata = VaultContent::new(self.content).capture_unlock()?;
+        let metadata = VaultContent::new(self.content).capture_metadata()?;
         Ok(YamlSyncReloaded {
             database: loaded.database,
             meta: loaded.meta,
             secrets_key: loaded.secrets_key,
             members_key: loaded.members_key,
-            unlock: metadata.unlock,
-            password_entries: metadata.password_entries,
             store_id: metadata.store_id,
             vault_name: metadata.vault_name,
             version: metadata.version,
@@ -113,8 +109,7 @@ mod tests {
     use super::*;
     use crate::errors;
     use crate::{
-        GenesisMembersRecordsRequest, PasswordEnvelope, PasswordUnlockEntry, StoreId, VaultKeys,
-        VaultMember, VaultRecordSet, VaultResult,
+        GenesisMembersRecordsRequest, StoreId, VaultKeys, VaultMember, VaultRecordSet, VaultResult,
     };
 
     struct YamlSyncTestData;
@@ -133,30 +128,12 @@ mod tests {
                 },
             )?);
             let store_id = StoreId::generate()?;
-            VaultRecordSet::serialize_yaml_with_unlock(
+            VaultRecordSet::serialize_yaml_with_store(
                 &records,
-                &VaultUnlock::Keys,
-                &[],
                 VaultStoreIdentityRef::Assigned(store_id.as_str()),
                 VaultVersionWrite::Initial,
             )
             .map_err(Into::into)
-        }
-
-        fn password_entry(id: &str) -> PasswordUnlockEntry {
-            PasswordUnlockEntry {
-                id: id.to_owned(),
-                label: "Backup password".to_owned(),
-                created_at: "2026-06-28T00:00:00Z".to_owned(),
-                envelope: PasswordEnvelope {
-                    version: crate::PasswordEnvelopeVersion::LEGACY,
-                    kdf: "argon2id".to_owned(),
-                    work_factor: 3.into(),
-                    recipient: String::new(),
-                    wrapped_keys: String::new(),
-                    ciphertext: "AGE-ENCRYPTED-KEYS".to_owned(),
-                },
-            }
         }
     }
 
@@ -184,7 +161,6 @@ mod tests {
     fn event_log_mode_rehydrates_when_keys_missing_but_cache_present() -> VaultResult<()> {
         let keys = VaultKeys::generate()?;
         let identity = DeviceIdentity::generate()?;
-        let password_entries = vec![YamlSyncTestData::password_entry("backup-password")];
         let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
         records.extend(VaultMember::genesis_members_records(
             GenesisMembersRecordsRequest {
@@ -194,12 +170,8 @@ mod tests {
             },
         )?);
         let store_id = StoreId::generate()?;
-        let yaml = VaultRecordSet::serialize_yaml_with_unlock_and_name(
+        let yaml = VaultRecordSet::serialize_yaml_with_name(
             &records,
-            &VaultUnlock::Passwords {
-                entries: password_entries.clone(),
-            },
-            &password_entries,
             VaultStoreIdentityRef::Assigned(store_id.as_str()),
             VaultNameRef::Named("Team Vault"),
             VaultVersionWrite::Version(42.into()),
@@ -218,8 +190,6 @@ mod tests {
             YamlSyncOutcome::Reloaded(reloaded) => {
                 assert_eq!(reloaded.secrets_key.as_str(), keys.secrets_key.as_str());
                 assert_eq!(reloaded.members_key.as_str(), keys.members_key.as_str());
-                assert_eq!(reloaded.unlock, VaultUnlock::Keys);
-                assert_eq!(reloaded.password_entries, password_entries);
                 assert_eq!(reloaded.store_id, store_id.as_str());
                 assert_eq!(reloaded.vault_name, "Team Vault");
                 assert_eq!(u64::from(reloaded.version), 42);

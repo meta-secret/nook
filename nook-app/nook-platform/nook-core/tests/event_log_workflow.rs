@@ -120,7 +120,6 @@ fn unauthorized_append_and_rotation_do_not_publish() -> anyhow::Result<()> {
             old_secrets_key: &old_secrets_key,
             members_records: &[],
             rotated_meta_records: Vec::new(),
-            rewrapped_password_entries: Vec::new(),
             created_at: TS,
             destination: EventPublicationDestination::Provider("github"),
         }) {

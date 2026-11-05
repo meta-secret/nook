@@ -206,7 +206,6 @@ export class SentinelUnlockActions {
       status === SentinelVaultUnlockState.AwaitingShares
     ) {
       state.sentinelCeremonyPrompt = true;
-      state.loginPasswordPrompt = false;
     } else if (status === SentinelVaultUnlockState.Unlocked) {
       state.sentinelCeremonyPrompt = false;
     } else if (
@@ -250,7 +249,6 @@ export class SentinelUnlockActions {
       const architecture = state.refreshVaultArchitectureFromManager();
       if (architecture.isErr()) return storageErr(architecture.error);
       state.sentinelCeremonyPrompt = true;
-      state.loginPasswordPrompt = false;
       return storageOk(SentinelCeremonyHydrationOutcome.CeremonyRestored);
     }
     const connected = await state.enqueueStorage(async () => {
@@ -274,7 +272,6 @@ export class SentinelUnlockActions {
       const architecture = state.refreshVaultArchitectureFromManager();
       if (architecture.isErr()) return storageErr(architecture.error);
       state.sentinelCeremonyPrompt = true;
-      state.loginPasswordPrompt = false;
       return storageOk(SentinelCeremonyHydrationOutcome.CeremonyRestored);
     }
     return storageOk(SentinelCeremonyHydrationOutcome.StorageConnected);
@@ -516,10 +513,6 @@ export class SentinelUnlockActions {
       if (loadedProviders1.isErr()) {
         return this.restoreFinalizationFailure(loadedProviders1.error);
       }
-      const passwordRefresh1 = await state.refreshPasswordEntriesList();
-      if (passwordRefresh1.isErr()) {
-        return this.restoreFinalizationFailure(passwordRefresh1.error);
-      }
       const rosterRefresh1 = await state.hydrateMultiDeviceState();
       if (rosterRefresh1.isErr()) {
         return this.restoreFinalizationFailure(rosterRefresh1.error);
@@ -530,7 +523,6 @@ export class SentinelUnlockActions {
       }
       log.info("vault unlocked with sentinel quorum");
       state.joinEnrollmentPrompt = JoinEnrollmentState.None;
-      state.loginPasswordPrompt = false;
       state.showSuccess(state.t(I18N_KEYS.ToastsVaultUnlocked));
       state.startIdleSessionTracking();
       state.startVaultSync();
@@ -571,7 +563,6 @@ export class SentinelUnlockActions {
       status === SentinelVaultUnlockState.AwaitingShares
     ) {
       state.sentinelCeremonyPrompt = true;
-      state.loginPasswordPrompt = false;
       state.errorMsg = "";
       return true;
     }

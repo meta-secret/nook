@@ -1,15 +1,6 @@
 <script lang="ts">
   import type { ComponentProps } from 'svelte'
-  import type { PasswordOperationResult } from '$lib/vault/password-unlock'
   import { type SecretOperationResult } from '$lib/vault/secret-operation-failure'
-  type VaultPasswordCreation = {
-    readonly label: string
-    readonly password: string
-  }
-  type VaultPasswordEntryUpdate = {
-    readonly entryId: PasswordEntryId
-    readonly password: string
-  }
   type BitwardenVaultImport = {
     readonly json: string
     readonly password: string
@@ -17,12 +8,10 @@
   type AuthenticatorMigrationUriCollection = string[]
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { Lock, ShieldCheck } from '@lucide/svelte'
   import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
   import ManageSection from '$lib/components/settings/ManageSection.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import VaultAdminVaults from '$lib/components/VaultAdminVaults.svelte'
-  import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
   import IdentityMountsPanel from '$lib/components/identity-control/IdentityMountsPanel.svelte'
   import BitwardenImportPanel from '$lib/components/BitwardenImportPanel.svelte'
   import KeePassXcImportPanel from '$lib/components/KeePassXcImportPanel.svelte'
@@ -34,7 +23,6 @@
   import DashlaneImportPanel from '$lib/components/DashlaneImportPanel.svelte'
   import GoogleAuthenticatorImportPanel from '$lib/components/GoogleAuthenticatorImportPanel.svelte'
   import ProtonPassImportPanel from '$lib/components/ProtonPassImportPanel.svelte'
-  import type { NookPasswordEntrySummary, PasswordEntryId } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
   import type { NookImportResult } from '$lib/nook'
   import type {
@@ -62,10 +50,6 @@
     isSaving,
     addProviderOpen = false,
     loginSetup,
-    passwordEntries,
-    isPasswordBusy,
-    passwordError,
-    canManageExistingPasswords,
     onReconnect,
     onSyncProvider,
     onBeginAddProvider,
@@ -73,9 +57,6 @@
     onBeginSetup,
     onCancelSetup,
     onRemoveProvider,
-    onAddPassword,
-    onUpdatePassword,
-    onRemovePassword,
     onImportBitwarden,
     onImportKeePassXc,
     onImportLastPass,
@@ -98,10 +79,6 @@
     isSaving: boolean
     addProviderOpen?: boolean
     loginSetup: LoginSetup
-    passwordEntries: NookPasswordEntrySummary[]
-    isPasswordBusy: boolean
-    passwordError: string
-    canManageExistingPasswords: boolean
     onReconnect: () => void | Promise<void>
     onSyncProvider?: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void
@@ -109,15 +86,6 @@
     onBeginSetup: (kind: ProviderKind) => void
     onCancelSetup: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>
-    onAddPassword: (
-      args: VaultPasswordCreation,
-    ) => Promise<PasswordOperationResult>
-    onUpdatePassword: (
-      args: VaultPasswordEntryUpdate,
-    ) => Promise<PasswordOperationResult>
-    onRemovePassword: (
-      entryId: PasswordEntryId,
-    ) => Promise<PasswordOperationResult>
     onImportBitwarden: (
       args: BitwardenVaultImport,
     ) => Promise<SecretOperationResult<NookImportResult>>
@@ -186,8 +154,6 @@
       ? { kind: ImportProviderSectionKind.Closed }
       : { kind: ImportProviderSectionKind.Open, providerId }
   }
-
-  const hasPasswords = $derived(passwordEntries.length > 0)
 </script>
 
 <div
@@ -226,51 +192,6 @@
       {#if isAuthenticated}
         <IdentityMountsPanel {vault} />
       {/if}
-    </ManageSection>
-  {/if}
-
-  {#if section === WorkspaceSection.Passwords}
-    <ManageSection
-      compact
-      title={vault.t(I18N_KEYS.SettingsPasswords)}
-      subtitle={vault.t(I18N_KEYS.WorkspaceSectionPasswordsDescription)}
-      testId="vault-unlock-section"
-    >
-      {#snippet badge()}
-        <span
-          class="nk-tag {hasPasswords ? 'nk-tag-success' : ''}"
-          data-testid="vault-password-status"
-        >
-          {#if hasPasswords}
-            <ShieldCheck class="size-3" />
-            {passwordEntries.length === 1
-              ? vault.t(I18N_KEYS.SettingsPasswordCountSingular)
-              : (() => {
-                  const tArgs2: Parameters<typeof vault.t>[0] = {
-                    key: I18N_KEYS.SettingsPasswordCountPlural,
-                    replacements: {
-                      count: String(passwordEntries.length),
-                    },
-                  }
-                  return vault.t(tArgs2)
-                })()}
-          {:else}
-            <Lock class="size-3" />
-            {vault.t(I18N_KEYS.SettingsNoPasswords)}
-          {/if}
-        </span>
-      {/snippet}
-      <VaultPasswordCard
-        {vault}
-        embedded
-        {passwordEntries}
-        isBusy={isPasswordBusy}
-        {passwordError}
-        {canManageExistingPasswords}
-        {onAddPassword}
-        {onUpdatePassword}
-        {onRemovePassword}
-      />
     </ManageSection>
   {/if}
 

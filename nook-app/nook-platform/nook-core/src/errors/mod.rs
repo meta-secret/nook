@@ -30,7 +30,6 @@ use wasm_bindgen::prelude::wasm_bindgen;
 pub enum VaultRecoveryErrorKind {
     Other,
     SentinelCeremonyRequired,
-    SentinelPasswordUnlockForbidden,
 }
 
 /// Classify a boundary error into the recovery action understood by hosts.
@@ -44,10 +43,6 @@ impl VaultRecoveryErrorKind {
             || normalized.contains("sentinelceremonyrequired")
         {
             VaultRecoveryErrorKind::SentinelCeremonyRequired
-        } else if normalized.contains("password unlock is forbidden for sentinel")
-            || normalized.contains("sentinelpasswordunlockforbidden")
-        {
-            VaultRecoveryErrorKind::SentinelPasswordUnlockForbidden
         } else {
             VaultRecoveryErrorKind::Other
         }
@@ -112,12 +107,6 @@ mod recovery_tests {
                 "Sentinel vault unlock requires an opened-share ceremony; per-device auth envelopes cannot unlock this vault."
             ),
             VaultRecoveryErrorKind::SentinelCeremonyRequired
-        );
-        assert_eq!(
-            VaultRecoveryErrorKind::classify_vault_recovery_error(
-                "Password unlock is forbidden for sentinel vaults; use the opened-share ceremony instead."
-            ),
-            VaultRecoveryErrorKind::SentinelPasswordUnlockForbidden
         );
         assert_eq!(
             VaultRecoveryErrorKind::classify_vault_recovery_error("network failed"),

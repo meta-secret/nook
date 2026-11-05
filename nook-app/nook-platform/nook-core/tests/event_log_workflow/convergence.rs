@@ -343,7 +343,6 @@ fn epoch_rotation_decrypts_under_new_key() -> VaultResult<()> {
                 old_secrets_key: &wrong_old_keys.secrets_key,
                 members_records: &[],
                 rotated_meta_records: Vec::new(),
-                rewrapped_password_entries: Vec::new(),
                 created_at: TS,
                 destination: EventPublicationDestination::Provider("github"),
             }) {
@@ -370,7 +369,6 @@ fn epoch_rotation_decrypts_under_new_key() -> VaultResult<()> {
             old_secrets_key: &old_secrets,
             members_records: &[],
             rotated_meta_records: Vec::new(),
-            rewrapped_password_entries: Vec::new(),
             created_at: TS,
             destination: EventPublicationDestination::Provider("github"),
         }) {

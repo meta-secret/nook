@@ -15,7 +15,6 @@ export enum WorkspaceRoute {
   Devices = "devices",
   AddDevice = "add-device",
   Sync = "sync",
-  Passwords = "passwords",
   Import = "import",
   Help = "help",
   AccessCheck = "access-check",
@@ -40,7 +39,6 @@ const WORKSPACE_PATHS: Record<WorkspaceRoute, string> = {
   [WorkspaceRoute.Devices]: "/identity/devices",
   [WorkspaceRoute.AddDevice]: "/identity/devices/add",
   [WorkspaceRoute.Sync]: "/identity/sync",
-  [WorkspaceRoute.Passwords]: "/identity/passwords",
   [WorkspaceRoute.Import]: "/vault/import",
   [WorkspaceRoute.Help]: "/help",
   [WorkspaceRoute.AccessCheck]: "/access-check",
@@ -60,7 +58,6 @@ const LEGACY_WORKSPACE_PATHS: Readonly<Record<string, WorkspaceRoute>> = {
   "/onboard": WorkspaceRoute.AddDevice,
   "/vault/devices": WorkspaceRoute.Devices,
   "/vault/sync": WorkspaceRoute.Sync,
-  "/vault/passwords": WorkspaceRoute.Passwords,
   "/settings": WorkspaceRoute.Settings,
 };
 

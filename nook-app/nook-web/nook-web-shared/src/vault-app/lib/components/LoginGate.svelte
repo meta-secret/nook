@@ -11,11 +11,6 @@
   import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
   import type { EnrollmentCodeUnlock } from '$lib/components/login/login-create-vault-chooser-contract'
 
-  type VaultPasswordUnlock = {
-    readonly entryId: string
-    readonly password: string
-  }
-
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { RefreshCw, ShieldCheck } from '@lucide/svelte'
   import {
@@ -66,7 +61,6 @@
   import { LoginProviderManagementVariant } from '$lib/components/login/login-provider-management-state'
   import JoinThisDevice from '$lib/components/join/JoinThisDevice.svelte'
   import { FirstRunStage, NewIdentityStage } from '$lib/vault/state/ui.svelte'
-  import CardPasswordUnlock from '$lib/components/identities/CardPasswordUnlock.svelte'
   import CardPinUnlock from '$lib/components/identities/CardPinUnlock.svelte'
   import {
     PinPromptKind,
@@ -95,10 +89,8 @@
     ActiveVaultKind,
     LoginSetupKind,
     LoginVaultSelectionKind,
-    RecoveryDiscoveryKind,
     type LoginSetup,
   } from '$lib/vault/state/provider.svelte'
-  import { LocalLoginPreparationState } from '$lib/vault/state/local-login-preparation-state'
 
   let {
     vault,
@@ -116,7 +108,6 @@
     onBeginSetup,
     onCancelSetup,
     onUseEnrollmentCode,
-    onUnlockWithPassword,
     onSentinelUnlocked,
     onCreateDeviceVault,
     onStartSentinelGenesis,
@@ -153,7 +144,6 @@
     onBeginSetup: (kind: ProviderKind) => void
     onCancelSetup: () => void
     onUseEnrollmentCode?: (args: EnrollmentCodeUnlock) => void | Promise<void>
-    onUnlockWithPassword: (args: VaultPasswordUnlock) => void | Promise<void>
     onSentinelUnlocked?: () => void | Promise<void>
     onCreateDeviceVault: (label: string) => void | Promise<void>
     onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>
@@ -265,15 +255,7 @@
       vault.beginExistingVaultOpen()
   })
 
-  /** The selected vault's passphrases have been read: its passphrase unlock
-   * shows even when it has none, to say so. Reading them is part of
-   * preparing the local login, after a row is opened, a lock, or a reload. */
-  const passphrasesRead = $derived(
-    vault.localLoginPreparation === LocalLoginPreparationState.Ready,
-  )
-
-  /** Opening a locked vault's row selects that vault, which reads its
-   * passphrases, without unlocking it. */
+  /** Opening a locked vault's row selects that vault without unlocking it. */
   async function selectVault(storeId: string): Promise<void> {
     if (selectedCardStoreId === storeId) return
     await openVaultFromCard(storeId)
@@ -539,17 +521,6 @@
   const isUnlocking = $derived(
     isVerifying && (showLocalUnlock || showSetup) && !showSetup,
   )
-  const recoveryPasswordEntries = $derived(
-    vault.recoveryDiscovery.kind === RecoveryDiscoveryKind.Found
-      ? vault.recoveryDiscovery.summary.passwordEntries
-      : [],
-  )
-  /** Backup passwords of the selected vault, offered on its locked card. */
-  const cardPasswordEntries = $derived(
-    vault.passwordEntries.length > 0
-      ? vault.passwordEntries
-      : recoveryPasswordEntries,
-  )
   const setupProviderName = $derived.by(() => {
     const request: ProviderSetupNameRequest = {
       vault,
@@ -648,19 +619,6 @@
     {isVerifying}
     onUnlock={unlockWithPin}
     onCancel={() => (pinPrompt = { kind: PinPromptKind.Closed })}
-  />
-{/snippet}
-{#snippet cardPasswordUnlock()}
-  <CardPasswordUnlock
-    {vault}
-    vaultLabel={activeLoginVault.kind === LoginVaultEntryKind.Available
-      ? activeLoginVault.entry.display_label(
-          vault.t(I18N_KEYS.LoginVaultPickerUnnamed),
-        )
-      : ''}
-    entries={cardPasswordEntries}
-    {isVerifying}
-    onUnlock={onUnlockWithPassword}
   />
 {/snippet}
 {#snippet vaultPicker()}
@@ -898,11 +856,6 @@
       : {}}
     {...showLocalUnlock && !newVaultOpen && showSentinelCeremony
       ? { unlockPanel: sentinelCeremony }
-      : {}}
-    {...showLocalUnlock &&
-    !newVaultOpen &&
-    (cardPasswordEntries.length > 0 || passphrasesRead)
-      ? { passwordFallback: cardPasswordUnlock }
       : {}}
     {...pinPrompt.kind !== PinPromptKind.Closed && !vault.deviceProtectionReady
       ? { identityPrompt: cardPinUnlock }

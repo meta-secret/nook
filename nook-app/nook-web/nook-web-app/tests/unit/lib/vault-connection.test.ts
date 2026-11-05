@@ -113,7 +113,6 @@ function connectionScenario(
       localVaultPresent: false,
     }),
   )
-  state.refreshPasswordEntriesList = vi.fn(async () => ok({ entries: [] }))
   state.hydrateMultiDeviceState = vi.fn<VaultState['hydrateMultiDeviceState']>(
     async () => ok({ kind: RosterHydrationKind.Skipped }),
   )

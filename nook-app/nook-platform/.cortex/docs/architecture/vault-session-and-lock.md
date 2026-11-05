@@ -45,7 +45,6 @@ concepts:
 
 - device identities;
 - `auth:` envelopes;
-- `password_entries`;
 - member roster encryption;
 - passkey-PRF/PIN wrapping; and
 - vault key resolution.
@@ -124,7 +123,6 @@ It never deletes:
 - `nook_db.device_identity_wrapped`
 - WebAuthn credential in the platform authenticator, or PIN fallback for PRF-missing platforms
 - `nook_auth` sync provider list + tokens
-- Password entries inside encrypted YAML
 
 **Refresh:** `sessionStorage` flag `nook_vault_session_locked` blocks `shouldAutoUnlock()` until the user unlocks again (`markVaultUnlocked()` clears the flag). Device-key vaults still auto-unlock on reload when the user did **not** lock.
 
@@ -135,9 +133,6 @@ It never deletes:
   - Use `syncProviders` for fan-out after local save.
   - Unlocking that path earlier lets a fast edit push with an empty provider
     list and leave the remote event log stale.
-  - Backup-password unlock is the exception. It may open the local vault while
-    the device identity and sealed provider credentials remain locked.
-  - Keep remote fan-out disabled until device authorization.
 - **Post-lock action:** Keep the app in **`LoginGate`** without opening a passkey
   prompt.
   - When the user chooses **This device's keys**, start stored-passkey browser
@@ -147,8 +142,6 @@ It never deletes:
   - Keep `DeviceProtectionGate` in `PasskeyAuthOverlay` as the interactive
     surface for PIN input, missing identity/passkey recovery, and failed or
     cancelled passkey attempts.
-  - Treat **Backup password** as an alternative vault-key credential. Open the
-    local vault directly without the passkey/PIN form.
 - **Gate meaning:** Present **Device setup — Step 1 of 2**, not vault login.
   - Explain that it prepares or unlocks the browser's protected device identity.
   - Explain that vault selection, creation, or import follows.
@@ -176,11 +169,7 @@ It never deletes:
     state.
 
 - **Multiple local vaults** → vault picker (`login-vault-picker`); unlock chosen vault.
-- **Single local vault** → unlock with device keys and/or backup password.
-- Backup-password summaries are read from the encrypted local vault before
-  device authorization, so Lock must not hide the password choice. Selecting a
-  backup password unwraps the vault keys directly; it does not unlock the
-  wrapped device identity or its sealed sync-provider credentials.
+- **Single local vault** → unlock with device keys.
 - **No local vault yet** → create on device or connect a sync provider to pull
   an existing vault. Choosing Simple creates locally. Choosing Sentinel starts
   the pre-vault reverse-onboarding ceremony in
@@ -200,8 +189,7 @@ It never deletes:
 - **Safe recovery metadata:** Project only these values from signed events:
 
 - active device labels/IDs (matching the `device …` suffix written into Nook
-  passkey display names);
-- backup-password labels; and
+  passkey display names); and
 - whether Sentinel quorum is required.
 
 - **Staged credential continuity:** Device authorization may reload sealed

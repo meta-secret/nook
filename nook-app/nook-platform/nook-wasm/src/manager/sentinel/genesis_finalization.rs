@@ -11,7 +11,7 @@ use crate::storage::indexed_db::StoredSentinelShareDelivery;
 use crate::{NookError, NookSentinelGenesisFinalizeResult};
 use nook_core::{
     SentinelGenesisOutput, SentinelGenesisPhase, SigningIdentity, VaultMetaState, VaultNameRef,
-    VaultStoreIdentityRef, VaultUnlock, VaultVersionWrite,
+    VaultStoreIdentityRef, VaultVersionWrite,
 };
 use serde::{Deserialize, Serialize};
 use std::mem;
@@ -128,10 +128,8 @@ impl NookVaultManager {
         let participants = output.participants;
         let store_id = output.store_id.as_str().to_owned();
         let vault_name = self.vault.vault_name.clone();
-        let yaml = nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
+        let yaml = nook_core::VaultRecordSet::serialize_yaml_with_name_architecture(
             &output.stored_records,
-            &VaultUnlock::Keys,
-            &[],
             VaultStoreIdentityRef::Assigned(&store_id),
             match &vault_name {
                 VaultNameState::Unnamed => VaultNameRef::Unnamed,

@@ -9,8 +9,8 @@ web
 ## Users
 
 People who keep encrypted secrets in one or more Nook vaults and need to
-understand, recover, and control how browsers, devices, passkeys, local
-PIN/passphrases, and backup passwords grant access.
+understand, recover, and control how browsers, devices, passkeys, and local
+PIN/passphrases grant access.
 
 ## Product Purpose
 
@@ -30,8 +30,7 @@ sync providers carry encrypted event data but do not become vault identities.
 Simple Vault and Sentinel are separate origin-isolated web applications that
 share audited Rust/WASM and Svelte building blocks. A person may use several
 vaults, several enrolled devices, passkey-PRF device protection, a local
-PIN/passphrase fallback, per-vault backup passwords, and multiple encrypted
-sync replicas.
+PIN/passphrase fallback, and multiple encrypted sync replicas.
 
 ## Capabilities and Constraints
 
@@ -39,9 +38,7 @@ sync replicas.
   identity; it is not itself a vault key.
 - One device identity may be authorized for multiple independent vaults.
 - Each vault owns independent encryption keys, enrolled-device relationships,
-  backup passwords, and sync-provider configuration.
-- Backup passwords open their owning vault directly and do not unlock the
-  browser device identity.
+  and sync-provider configuration.
 - WebAuthn does not provide a general inventory of credentials held by external
   passkey providers and does not reliably disclose which provider the user
   selected. Nook must label observed, user-supplied, last-known, and unknown

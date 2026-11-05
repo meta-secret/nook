@@ -72,7 +72,6 @@ pub enum VaultConnectProbeDecision {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VaultConnectGateDecision {
     Connect,
-    PromptForPassword,
     RequestEnrollment,
     AwaitJoinApproval,
 }
@@ -148,26 +147,15 @@ impl VaultClientPolicy {
     #[must_use]
     pub const fn vault_connect_gate_decision(
         access_status: VaultAccessStatus,
-        password_entry_count: crate::VaultPasswordEntryCount,
     ) -> VaultConnectGateDecision {
-        match (access_status, password_entry_count.is_nonzero()) {
-            (VaultAccessStatus::NeedsEnrollment | VaultAccessStatus::JoinPending, true) => {
-                VaultConnectGateDecision::PromptForPassword
-            }
-            (VaultAccessStatus::NeedsEnrollment, false) => {
-                VaultConnectGateDecision::RequestEnrollment
-            }
-            (VaultAccessStatus::JoinPending, false) => VaultConnectGateDecision::AwaitJoinApproval,
-            _ => VaultConnectGateDecision::Connect,
+        match access_status {
+            VaultAccessStatus::NeedsEnrollment => VaultConnectGateDecision::RequestEnrollment,
+            VaultAccessStatus::JoinPending => VaultConnectGateDecision::AwaitJoinApproval,
+            VaultAccessStatus::NewVault
+            | VaultAccessStatus::Ready
+            | VaultAccessStatus::RemoteMissing
+            | VaultAccessStatus::RemoteMissingLocalCache => VaultConnectGateDecision::Connect,
         }
-    }
-
-    #[must_use]
-    pub const fn vault_connect_password_lookup_required(access_status: VaultAccessStatus) -> bool {
-        matches!(
-            access_status,
-            VaultAccessStatus::NeedsEnrollment | VaultAccessStatus::JoinPending
-        )
     }
 
     #[must_use]
@@ -327,43 +315,19 @@ mod tests {
     }
 
     #[test]
-    fn connect_gate_prioritizes_password_fallback_before_enrollment() {
-        for status in [
-            VaultAccessStatus::NeedsEnrollment,
-            VaultAccessStatus::JoinPending,
-        ] {
-            assert_eq!(
-                VaultClientPolicy::vault_connect_gate_decision(status, 1.into()),
-                VaultConnectGateDecision::PromptForPassword
-            );
-        }
+    fn connect_gate_requests_enrollment_or_waits_for_approval() {
         assert_eq!(
-            VaultClientPolicy::vault_connect_gate_decision(
-                VaultAccessStatus::NeedsEnrollment,
-                0.into(),
-            ),
+            VaultClientPolicy::vault_connect_gate_decision(VaultAccessStatus::NeedsEnrollment),
             VaultConnectGateDecision::RequestEnrollment
         );
         assert_eq!(
-            VaultClientPolicy::vault_connect_gate_decision(
-                VaultAccessStatus::JoinPending,
-                0.into(),
-            ),
+            VaultClientPolicy::vault_connect_gate_decision(VaultAccessStatus::JoinPending),
             VaultConnectGateDecision::AwaitJoinApproval
         );
         assert_eq!(
-            VaultClientPolicy::vault_connect_gate_decision(VaultAccessStatus::Ready, 1.into()),
+            VaultClientPolicy::vault_connect_gate_decision(VaultAccessStatus::Ready),
             VaultConnectGateDecision::Connect
         );
-        assert!(VaultClientPolicy::vault_connect_password_lookup_required(
-            VaultAccessStatus::NeedsEnrollment
-        ));
-        assert!(VaultClientPolicy::vault_connect_password_lookup_required(
-            VaultAccessStatus::JoinPending
-        ));
-        assert!(!VaultClientPolicy::vault_connect_password_lookup_required(
-            VaultAccessStatus::Ready
-        ));
     }
 
     #[test]

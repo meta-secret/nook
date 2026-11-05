@@ -6,8 +6,3 @@ export type EnrollmentCodeUseRequest = {
   /** Keys typed for providers whose key this device adds. */
   readonly keys: readonly InviteKeyEntry[];
 };
-
-export type ExistingVaultPasswordUnlock = {
-  readonly entryId: string;
-  readonly password: string;
-};

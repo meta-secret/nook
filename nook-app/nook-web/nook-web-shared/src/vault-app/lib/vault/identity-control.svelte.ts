@@ -523,7 +523,6 @@ export class IdentityControlModel {
     const steps = [
       () => vault.refreshLocalVaultCatalog(),
       () => vault.syncActiveVaultStoreIdToAuth(),
-      () => vault.refreshPasswordEntriesList(),
       () => vault.hydrateMultiDeviceState(),
     ];
     for (const step of steps) {

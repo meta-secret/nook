@@ -125,19 +125,6 @@ impl ProviderDraftGap {
             Self::S3Key => i18n_keys::ERRORS_VALIDATION_S3_ACCESS_KEY_ID_REQUIRED,
         }
     }
-
-    /// What the provider needs before a backup password can unlock through
-    /// it. A local folder asks for its folder, not for GitHub credentials.
-    #[must_use]
-    pub const fn unlock_translation_key(self) -> &'static str {
-        match self {
-            Self::LocalFolder => i18n_keys::ERRORS_LOCAL_BACKUP_FOLDER_REQUIRED,
-            Self::GithubToken => i18n_keys::ERRORS_GITHUB_CREDENTIALS_REQUIRED,
-            Self::OAuthSignIn | Self::SharedTarget => i18n_keys::ERRORS_GOOGLE_SIGN_IN_REQUIRED,
-            Self::S3Connection => i18n_keys::ERRORS_VALIDATION_S3_STORAGE_TARGET_INVALID,
-            Self::S3Key => i18n_keys::ERRORS_VALIDATION_S3_ACCESS_KEY_ID_REQUIRED,
-        }
-    }
 }
 
 /// The form's text, trimmed once: a blank token is not entered yet and a
@@ -482,60 +469,35 @@ mod tests {
     }
 
     #[test]
-    fn each_gap_names_its_connect_and_unlock_wording() {
-        for (gap, connect, unlock) in [
+    fn each_gap_names_its_connect_wording() {
+        for (gap, connect) in [
             (
                 ProviderDraftGap::LocalFolder,
-                i18n_keys::ERRORS_LOCAL_BACKUP_FOLDER_REQUIRED,
                 i18n_keys::ERRORS_LOCAL_BACKUP_FOLDER_REQUIRED,
             ),
             (
                 ProviderDraftGap::GithubToken,
                 i18n_keys::ERRORS_VALIDATION_GITHUB_PAT_EMPTY,
-                i18n_keys::ERRORS_GITHUB_CREDENTIALS_REQUIRED,
             ),
             (
                 ProviderDraftGap::OAuthSignIn,
                 i18n_keys::ERRORS_VALIDATION_OAUTH_ACCESS_TOKEN_EMPTY,
-                i18n_keys::ERRORS_GOOGLE_SIGN_IN_REQUIRED,
             ),
             (
                 ProviderDraftGap::SharedTarget,
                 i18n_keys::ERRORS_VALIDATION_SHARED_STORAGE_TARGET_REQUIRED,
-                i18n_keys::ERRORS_GOOGLE_SIGN_IN_REQUIRED,
             ),
             (
                 ProviderDraftGap::S3Connection,
-                i18n_keys::ERRORS_VALIDATION_S3_STORAGE_TARGET_INVALID,
                 i18n_keys::ERRORS_VALIDATION_S3_STORAGE_TARGET_INVALID,
             ),
             (
                 ProviderDraftGap::S3Key,
                 i18n_keys::ERRORS_VALIDATION_S3_ACCESS_KEY_ID_REQUIRED,
-                i18n_keys::ERRORS_VALIDATION_S3_ACCESS_KEY_ID_REQUIRED,
             ),
         ] {
             assert_eq!(gap.translation_key(), connect);
-            assert_eq!(gap.unlock_translation_key(), unlock);
         }
-    }
-
-    #[test]
-    fn a_folder_that_is_not_chosen_asks_for_the_folder_at_unlock() -> anyhow::Result<()> {
-        let ProviderCredentialReadiness::Required(gap) =
-            ProviderDraft::begin(ProviderKind::LocalFolder).credential_readiness()
-        else {
-            anyhow::bail!("a new local-folder draft has no folder");
-        };
-        assert_eq!(
-            gap.unlock_translation_key(),
-            i18n_keys::ERRORS_LOCAL_BACKUP_FOLDER_REQUIRED
-        );
-        assert_ne!(
-            gap.unlock_translation_key(),
-            i18n_keys::ERRORS_GITHUB_CREDENTIALS_REQUIRED
-        );
-        Ok(())
     }
 
     #[test]

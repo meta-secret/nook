@@ -124,9 +124,6 @@
         {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockDescription)}
       {/if}
     </p>
-    <p class="text-xs leading-snug text-pretty text-muted-foreground">
-      {vault.t(I18N_KEYS.ArchitectureModesSentinelPasswordForbidden)}
-    </p>
   </div>
 
   {#if !session.active}

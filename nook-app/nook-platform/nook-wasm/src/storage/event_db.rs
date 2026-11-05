@@ -899,7 +899,6 @@ mod tests {
             operations: vec![VaultOperation::VaultImported {
                 source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: Vec::new(),
-                password_entries: Vec::new(),
             }],
         })?;
         let index_key = format!("event_index:{store_id}");
