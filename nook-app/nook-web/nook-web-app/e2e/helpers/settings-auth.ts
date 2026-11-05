@@ -1,7 +1,6 @@
 import { expect, type Page } from '@playwright/test'
 import { deviceProtectionButtonReady } from './device-protection-readiness'
 import type { ProviderLoadOptions } from '$lib/vault/providers.svelte'
-import { parseVaultYamlSnapshot, type VaultYamlSnapshot } from '../vault-yaml'
 import { E2E_OAUTH_ONBOARD_PROVIDER } from './auth-providers'
 import {
   AuthenticatedWorkspaceObservation,
@@ -12,18 +11,13 @@ import {
   dismissJoinEnrollmentDialog,
   keepVaultIdleLockDisabled,
 } from './device-enrollment'
-import {
-  ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  UI_TIMEOUT_MS,
-  sleep,
-} from './environment'
+import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
 import {
   beginAddSyncProvider,
   ManagePage,
   openManagePage,
   pressIfReady,
 } from './workspace-navigation'
-import { readLocalVaultYamlFromIdb } from './local-sync'
 import {
   disableVaultIdleLock,
   installGoogleOAuthMock,
@@ -189,7 +183,6 @@ export async function connectGithubSyncProviderFromSettings(
 
 export const SETTINGS_SECTION_TEST_IDS = {
   storage: 'storage-providers-section',
-  unlock: 'vault-unlock-section',
   import: 'vault-import-export-section',
   devices: 'vault-devices-section',
 } as const
@@ -198,7 +191,6 @@ export type SettingsSection = keyof typeof SETTINGS_SECTION_TEST_IDS
 
 const SETTINGS_SECTION_PAGES: Record<SettingsSection, ManagePage> = {
   storage: ManagePage.Sync,
-  unlock: ManagePage.Passwords,
   import: ManagePage.Import,
   devices: ManagePage.Devices,
 }
@@ -214,136 +206,12 @@ export async function expandSettingsSection(
   ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 }
 
-export async function addVaultPassword(
-  page: Page,
-  label: string,
-  password: string,
-  options?: { expectedCount?: number },
-) {
-  const [expectedCount = 1] = [options?.expectedCount]
-  await expandSettingsSection(page, 'unlock')
-  await page.getByTestId('set-vault-password-btn').click()
-  await page.getByTestId('vault-password-label').fill(label)
-  await page.getByTestId('vault-password-input').fill(password)
-  await page.getByTestId('vault-password-confirm').fill(password)
-  await page.getByTestId('submit-vault-password').click()
-  await expect(page.getByTestId('app-success')).toContainText(/passphrase/i, {
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await waitForVaultOperationsIdle(page)
-  await waitForStableLocalVaultState(
-    page,
-    (snapshot) => snapshot.hasPasswordEnvelope,
-    { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS, stableReads: 2 },
-  )
-  await expectVaultPasswordStatus(page, expectedCount, {
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-}
-
-/** Rotate the active backup password and wait for a new envelope in local IDB. */
-export async function rotateVaultPassword(page: Page, password: string) {
-  await expandSettingsSection(page, 'unlock')
-  await page.getByTestId('rotate-vault-password-btn').click()
-  await page.getByTestId('vault-password-input').fill(password)
-  await page.getByTestId('vault-password-confirm').fill(password)
-  await page.getByTestId('submit-vault-password').click()
-  const success = page.getByTestId('app-success')
-  const error = page.getByTestId('vault-password-error')
-  await expect(success.or(error)).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  if (await error.isVisible()) {
-    throw new Error(`Password rotation failed: ${await error.innerText()}`)
-  }
-  await expect(success).toContainText(/passphrase/i)
-  await expectVaultPasswordStatus(page, 1, {
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-}
-
-/** Poll local vault YAML until predicate holds for several consecutive reads. */
-export async function waitForStableLocalVaultState(
-  page: Page,
-  predicate: (snapshot: VaultYamlSnapshot) => boolean,
-  options?: {
-    timeoutMs?: number
-    intervalMs?: number
-    stableReads?: number
-  },
-): Promise<VaultYamlSnapshot> {
-  const [timeoutMs = ENROLLMENT_UNLOCK_TIMEOUT_MS] = [options?.timeoutMs]
-  // IndexedDB read via page.evaluate — small round-trip, still much cheaper than network.
-  const [intervalMs = 150] = [options?.intervalMs]
-  const [stableReads = 3] = [options?.stableReads]
-  const deadline = Date.now() + timeoutMs
-  let consecutive = 0
-  let lastError = 'local vault missing'
-
-  while (Date.now() < deadline) {
-    const yaml = await readLocalVaultYamlFromIdb(page)
-    if (yaml.trim()) {
-      const snapshot = parseVaultYamlSnapshot(yaml)
-      if (predicate(snapshot)) {
-        consecutive += 1
-        if (consecutive >= stableReads) {
-          return snapshot
-        }
-      } else {
-        consecutive = 0
-        lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, passwords=${snapshot.hasPasswordEnvelope})`
-      }
-    } else {
-      consecutive = 0
-    }
-    await sleep(intervalMs)
-  }
-
-  throw new Error(`Timed out waiting for stable local vault YAML: ${lastError}`)
-}
-
-/** Match the vault password badge copy. */
 export async function dismissSyncConflictIfVisible(page: Page) {
   const dialog = page.getByTestId('vault-sync-conflict-dialog')
   if (!(await dialog.isVisible())) return
   await page.getByTestId('sync-conflict-keep-local-btn').click()
   await expect(dialog).not.toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-}
-
-export async function expectVaultPasswordStatus(
-  page: Page,
-  count: number,
-  options?: { timeout?: number },
-) {
-  await expandSettingsSection(page, 'unlock')
-  const status = page
-    .getByTestId('vault-unlock-section')
-    .getByTestId('vault-password-status')
-  const [timeout = UI_TIMEOUT_MS] = [options?.timeout]
-  if (count === 1) {
-    await expect(status).toContainText(/1 (passphrase|item)/, { timeout })
-    return
-  }
-  await expect(status).toContainText(
-    new RegExp(`${count} (passphrases|items)`),
-    {
-      timeout,
-    },
-  )
-}
-
-export async function expectNoVaultPasswords(
-  page: Page,
-  options?: { timeout?: number },
-) {
-  await expandSettingsSection(page, 'unlock')
-  const status = page
-    .getByTestId('vault-unlock-section')
-    .getByTestId('vault-password-status')
-  await expect(status).toContainText('None', {
-    timeout: ((...[v = UI_TIMEOUT_MS]) => v)(options?.timeout),
   })
 }
 
@@ -734,7 +602,6 @@ async function ensureLoginLocalUnlockReady(page: Page) {
       async () => {
         if (await vaultPanel.isVisible()) return 'ready'
         if (await vaultRow.isVisible()) return 'ready'
-        if (await vaultPassphraseKey(page).isVisible()) return 'ready'
         await page.evaluate(async () => {
           const vault = window.__nookVault
           await vault?.refreshLocalVaultCatalog?.()
@@ -747,52 +614,10 @@ async function ensureLoginLocalUnlockReady(page: Page) {
     .toBe('ready')
 }
 
-/** The row that opens a locked vault's panel, where its passphrase is
- * offered: the given vault's, else the first. */
-export function vaultPassphraseKey(page: Page, storeId = '') {
-  return vaultChoiceOption(page, storeId)
-}
-
-/** Open the passphrase field beside the locked card and unlock with it. */
-export async function unlockWithCardPassword(
-  page: Page,
-  opts: { password: string; entryLabel?: string; storeId?: string },
-) {
-  if (opts.storeId) {
-    await page.evaluate(async (storeId) => {
-      await window.__nookVault?.chooseLoginVault(storeId)
-    }, opts.storeId)
-  }
-  const input = page.getByTestId('card-password-input')
-  const open = vaultPassphraseKey(page, opts.storeId)
-  await expect(open.or(input).first()).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  // The vault row opens its panel beside the card, where the passphrase is
-  // read; with no card for the vault, the field stands on its own.
-  if (
-    !(await input.isVisible()) &&
-    (await open.getAttribute('aria-expanded')) !== 'true'
-  ) {
-    await open.click()
-  }
-  await expect(input).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-  if (opts.entryLabel) {
-    await page
-      .getByTestId('card-password-entry')
-      .locator('label', { hasText: opts.entryLabel })
-      .click()
-  }
-  await page.getByTestId('card-password-input').fill(opts.password)
-  await dismissSyncConflictIfVisible(page)
-  await page.getByTestId('card-password-submit').click()
-}
-
-/** Unlock from the login gate: the vault row (this device's passkey), or a
- * backup password when one is given. */
+/** Unlock from the login gate with the vault row (this device's passkey). */
 export async function unlockVaultOnLogin(
   page: Page,
-  opts?: { password?: string; entryLabel?: string; storeId?: string },
+  opts?: { storeId?: string },
 ) {
   const opened = openedWorkspace(page)
   if (await opened.isVisible()) {
@@ -800,16 +625,6 @@ export async function unlockVaultOnLogin(
   }
   await ensureLoginLocalUnlockReady(page)
   if (await opened.isVisible()) {
-    return
-  }
-  if (opts?.password) {
-    const passwordUnlock: Parameters<typeof unlockWithCardPassword>[1] = {
-      password: opts.password,
-      ...(opts.entryLabel ? { entryLabel: opts.entryLabel } : {}),
-      ...(opts.storeId ? { storeId: opts.storeId } : {}),
-    }
-    await unlockWithCardPassword(page, passwordUnlock)
-    await openUnlockedVault(page)
     return
   }
   await openVaultPanelAndUnlock(page, opts?.storeId)

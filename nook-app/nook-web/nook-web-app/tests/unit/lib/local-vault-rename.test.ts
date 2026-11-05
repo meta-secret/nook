@@ -144,7 +144,6 @@ describe('selectVaultForUnlock', () => {
     state.dismissSuccess = vi.fn()
     const openActiveVault = vi.fn()
     state.openActiveVault = openActiveVault
-    state.refreshPasswordEntriesList = vi.fn(async () => ok({ entries: [] }))
     state.syncActiveVaultStoreIdToAuth = syncActiveVaultStoreIdToAuth
     state.reloadProvidersForActiveVault = reloadProvidersForActiveVault
 

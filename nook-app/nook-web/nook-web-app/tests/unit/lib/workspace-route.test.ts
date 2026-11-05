@@ -32,7 +32,6 @@ describe('workspace routes', () => {
     ['/identity/devices', WorkspaceRoute.Devices],
     ['/identity/devices/add', WorkspaceRoute.AddDevice],
     ['/identity/sync', WorkspaceRoute.Sync],
-    ['/vault/passwords', WorkspaceRoute.Passwords],
     ['/vault/import', WorkspaceRoute.Import],
     ['/simple/identity/keys', WorkspaceRoute.Keys],
     ['/help', WorkspaceRoute.Help],
@@ -74,7 +73,6 @@ describe('workspace routes', () => {
     [WorkspaceRoute.Devices, '/identity/devices'],
     [WorkspaceRoute.AddDevice, '/identity/devices/add'],
     [WorkspaceRoute.Sync, '/identity/sync'],
-    [WorkspaceRoute.Passwords, '/identity/passwords'],
     [WorkspaceRoute.Import, '/vault/import'],
     [WorkspaceRoute.Help, '/help'],
   ])('builds the canonical %s path', (route, path) => {
@@ -131,7 +129,7 @@ describe('workspace routes', () => {
   // a domain root and under /simple/ or /sentinel/ in the preview harness.
   test.each([
     ['/identity/devices', '/identity/keys'],
-    ['/vault/passwords', '/identity/keys'],
+    ['/vault/sync', '/identity/keys'],
     ['/simple/identity/devices', '/simple/identity/keys'],
     ['/sentinel', '/sentinel/identity/keys'],
   ])('builds an absolute path from %s under a relative base', (from, path) => {
@@ -148,7 +146,6 @@ describe('workspace routes', () => {
     for (const route of [
       WorkspaceRoute.Sync,
       WorkspaceRoute.Settings,
-      WorkspaceRoute.Passwords,
       WorkspaceRoute.Import,
       WorkspaceRoute.Vault,
     ]) {
@@ -164,11 +161,11 @@ describe('workspace route application', () => {
     const vault = VaultStateTestFixture.create()
     const refreshDevice = vi.spyOn(vault, 'refreshDeviceState')
     const refreshCatalog = vi.spyOn(vault, 'refreshLocalVaultCatalog')
-    const passwordsPage: Parameters<
+    const importPage: Parameters<
       InstanceType<typeof VaultWorkspaceActions>['applyWorkspaceRoute']
-    >[0] = { route: WorkspaceRoute.Passwords }
+    >[0] = { route: WorkspaceRoute.Import }
 
-    new VaultWorkspaceActions(vault).applyWorkspaceRoute(passwordsPage)
+    new VaultWorkspaceActions(vault).applyWorkspaceRoute(importPage)
     await Promise.resolve()
 
     expect(vault.hasManager).toBe(false)
@@ -177,7 +174,7 @@ describe('workspace route application', () => {
     expect(vault.errorMsg).toBe('')
   })
 
-  test('a backup-password session opens a page without a device-key error', async () => {
+  test('a session without device authorization opens a page without a device-key error', async () => {
     const vault = VaultStateTestFixture.create()
     vi.spyOn(vault, 'hasManager', 'get').mockReturnValue(true)
     vi.spyOn(vault, 'refreshLocalVaultCatalog').mockResolvedValue(

@@ -95,10 +95,10 @@ export class IdentityEnrollmentIssue {
         ),
       );
     }
-    // `isPasswordBusy` makes the periodic sync tick skip, but we still wait for
+    // `isInviteBusy` makes the periodic sync tick skip, but we still wait for
     // any already in-flight `&mut self` storage future before pushing the
     // identity log, or wasm-bindgen's borrow detector trips.
-    state.isPasswordBusy = true;
+    state.isInviteBusy = true;
     log.info("enrollment code issue started");
     try {
       // Wait for the queued wasm op to settle. We deliberately do NOT
@@ -194,7 +194,7 @@ export class IdentityEnrollmentIssue {
       log.info("enrollment code issued");
       return storageOk(code);
     } finally {
-      state.isPasswordBusy = false;
+      state.isInviteBusy = false;
     }
   }
 

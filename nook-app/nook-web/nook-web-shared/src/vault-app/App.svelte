@@ -24,10 +24,7 @@
     VaultCreationQueueKind,
   } from '$lib/vault/creation-queue'
   import AppSurface from '$lib/components/app/AppSurface.svelte'
-  import type {
-    EnrollmentCodeUseRequest,
-    ExistingVaultPasswordUnlock,
-  } from '$lib/app/app-interaction-types'
+  import type { EnrollmentCodeUseRequest } from '$lib/app/app-interaction-types'
   import {
     ExtensionSetupOfferModel,
     type ExtensionSetupOfferSource,
@@ -75,12 +72,6 @@
   const SUPPORTS_EXTENSION = configured_vault_application_supports_extension()
   const vault = new VaultState()
   const existingVaultImportLifecycle = new ExistingVaultImportLifecycle(vault)
-
-  function unlockExistingVaultWithPassword(
-    request: ExistingVaultPasswordUnlock,
-  ): Promise<void> {
-    return existingVaultImportLifecycle.unlockWithPassword(request)
-  }
 
   function setSecretsAddOpen(open: boolean): void {
     secretsAddOpen = open
@@ -584,7 +575,6 @@
     identityHealth,
     onUseEnrollmentCode: handleUseEnrollmentCode,
     onAcceptSentinelOnboardingPackage: handleAcceptSentinelOnboarding,
-    onUnlockWithPassword: unlockExistingVaultWithPassword,
     onSentinelUnlocked: () => {
       routeCoordinator.sentinelInvitationRequest = ''
       return existingVaultImportLifecycle.finish()

@@ -145,7 +145,6 @@ export class PasswordEnrollmentActions {
   clearEnrollmentCode() {
     const state = this.state;
     state.enrollmentCode = "";
-    state.clearActiveEnrollmentEntry();
   }
 
   /** How one provider of the invite serves this device. */
@@ -595,7 +594,7 @@ export class PasswordEnrollmentActions {
     state.errorMsg = "";
     state.dismissSuccess();
     state.isVerifying = true;
-    state.isPasswordBusy = true;
+    state.isInviteBusy = true;
     try {
       let payload: ReturnType<typeof decrypt_enrollment_payload>;
       try {
@@ -717,7 +716,7 @@ export class PasswordEnrollmentActions {
         payload.free();
       }
     } finally {
-      state.isPasswordBusy = false;
+      state.isInviteBusy = false;
       state.isVerifying = false;
     }
   }

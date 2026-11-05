@@ -295,11 +295,6 @@ export class VaultProviderActions {
       case RemoteVaultAssessDecision.PromptRecoveryFromCache: {
         state.remoteVaultRecoveryState =
           RemoteVaultRecoveryState.PromptWithCache;
-        const passwordRefresh1 = await state.refreshPasswordEntriesList();
-        if (passwordRefresh1.isErr()) {
-          state.errorMsg = state.t(passwordRefresh1.error.translationKey);
-          return true;
-        }
         return true;
       }
       case RemoteVaultAssessDecision.RejectMissingExistingVault:

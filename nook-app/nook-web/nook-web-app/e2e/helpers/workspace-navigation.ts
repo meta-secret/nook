@@ -22,14 +22,13 @@ export enum ManagePage {
   Settings = 'settings',
   Devices = 'devices',
   Sync = 'sync',
-  Passwords = 'passwords',
   Import = 'import',
 }
 
 /** How each identity page opens from the identity panel beside its card.
  * The vault's own pages open from its panel. */
 const MANAGE_PAGE_OPENERS: Record<
-  Exclude<ManagePage, ManagePage.Import | ManagePage.Passwords>,
+  Exclude<ManagePage, ManagePage.Import>,
   string
 > = {
   [ManagePage.Sync]: 'overview-open-sync',
@@ -45,7 +44,6 @@ const MANAGE_PAGE_MARKERS: Record<ManagePage, string> = {
   [ManagePage.Settings]: 'browser-settings-panel',
   [ManagePage.Devices]: 'vault-devices-panel',
   [ManagePage.Sync]: 'storage-providers-section',
-  [ManagePage.Passwords]: 'vault-unlock-section',
   [ManagePage.Import]: 'vault-import-export-section',
 }
 
@@ -113,7 +111,7 @@ export async function openIdentitiesPage(page: Page): Promise<void> {
 }
 
 /** Open the open vault's panel beside its card on the identities page: its
- * passphrases, imports and browser extension live there. */
+ * imports and browser extension live there. */
 export async function openOpenVaultPanel(page: Page): Promise<void> {
   if (!(await page.getByTestId('identities-hub').isVisible())) {
     await openIdentitiesPage(page)
@@ -137,17 +135,10 @@ export async function openManagePage(
 ): Promise<void> {
   const marker = page.getByTestId(MANAGE_PAGE_MARKERS[target])
   if (await marker.isVisible()) return
-  // Passphrases and imports belong to the open vault: its row opens its
-  // panel.
-  if (target === ManagePage.Passwords || target === ManagePage.Import) {
+  // Imports belong to the open vault: its row opens its panel.
+  if (target === ManagePage.Import) {
     await openOpenVaultPanel(page)
-    await page
-      .getByTestId(
-        target === ManagePage.Import
-          ? 'vault-panel-import'
-          : 'vault-panel-passphrases',
-      )
-      .click()
+    await page.getByTestId('vault-panel-import').click()
     await expect(marker).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     return
   }

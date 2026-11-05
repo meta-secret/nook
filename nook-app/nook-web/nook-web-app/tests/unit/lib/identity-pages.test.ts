@@ -59,12 +59,11 @@ describe('IdentityPages', () => {
     expect(vault.identityInUse).toBe(true)
   })
 
-  test('Vaults and Passwords have no page without a vault', () => {
+  test('Vaults and Import have no page without a vault', () => {
     const vault = unlocked()
     const pages = new IdentityPages(vault)
     for (const section of [
       WorkspaceSection.Vaults,
-      WorkspaceSection.Passwords,
       WorkspaceSection.Import,
     ]) {
       pages.show(section)

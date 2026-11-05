@@ -35,7 +35,6 @@ import {
   type LocalVaultCatalog,
 } from "$lib/vault/state/provider.svelte";
 import { LocalLoginPreparationState } from "$lib/vault/state/local-login-preparation-state";
-import type { PasswordEntriesRefreshSnapshot } from "$lib/vault/action-contexts";
 import { VaultChangeOutcome } from "$lib/vault/vault-change-outcome";
 import { PaintOpportunity } from "$lib/runtime/paint-opportunity";
 
@@ -278,6 +277,7 @@ export class VaultLoginActions {
     }
   }
 
+  /** Point the login gate at this browser's local vault once per session. */
   async prepareLocalLogin(): Promise<void> {
     const state = this.state;
     if (
@@ -285,40 +285,9 @@ export class VaultLoginActions {
       state.localLoginPreparation !== LocalLoginPreparationState.Idle
     )
       return;
-    const preparationSessionEpoch = state.sessionEpoch;
-    const canPublishPreparationResult = () =>
-      !state.isAuthenticated &&
-      !state.isVerifying &&
-      state.sessionEpoch === preparationSessionEpoch;
-    state.localLoginPreparation = LocalLoginPreparationState.Preparing;
     log.debug("preparing local login gate");
-    try {
-      state.useThisBrowser();
-      const passwordRefresh1 = await state.refreshPasswordEntriesList();
-      if (passwordRefresh1.isErr()) {
-        if (canPublishPreparationResult())
-          state.errorMsg = state.t(
-            new StorageOperationFailure(
-              StorageOperationFailureKind.UnlockMetadataUnavailable,
-            ).translationKey,
-          );
-        else
-          log.warn(
-            `discarded local login metadata failure authenticated=${state.isAuthenticated} verifying=${state.isVerifying} epoch=${state.sessionEpoch}/${preparationSessionEpoch}`,
-          );
-        return;
-      }
-      if (
-        canPublishPreparationResult() &&
-        state.errorMsg ===
-          state.t(I18N_KEYS.ErrorsVaultUnlockMetadataUnavailable)
-      )
-        state.errorMsg = "";
-      state.localLoginPreparation = LocalLoginPreparationState.Ready;
-    } finally {
-      if (state.localLoginPreparation === LocalLoginPreparationState.Preparing)
-        state.localLoginPreparation = LocalLoginPreparationState.Idle;
-    }
+    state.useThisBrowser();
+    state.localLoginPreparation = LocalLoginPreparationState.Ready;
   }
 
   selectVaultForUnlock({
@@ -329,7 +298,6 @@ export class VaultLoginActions {
   > {
     const state = this.state;
     const enqueueStorageEffect = this.enqueueStorageEffect.bind(this);
-    const liftStorageResult = this.liftStorageResult.bind(this);
     return Effect.gen(function* () {
       state.errorMsg = "";
       state.dismissSuccess();
@@ -363,14 +331,6 @@ export class VaultLoginActions {
         catch: (failure) => new NativeVaultStorageFailure(failure),
       };
       state.localVaultPresent = yield* Effect.tryPromise(presenceAttempt);
-      state.localLoginPreparation = LocalLoginPreparationState.Idle;
-      const passwordRefresh: StorageResultOperation<
-        PasswordEntriesRefreshSnapshot,
-        OAuthFailure | StorageOperationFailure
-      > = {
-        operation: () => state.refreshPasswordEntriesList(),
-      };
-      yield* liftStorageResult(passwordRefresh);
       state.localLoginPreparation = LocalLoginPreparationState.Ready;
       return storeId;
     }).pipe(

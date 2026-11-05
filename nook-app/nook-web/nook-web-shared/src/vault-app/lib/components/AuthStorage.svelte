@@ -442,7 +442,7 @@
             <!-- Adding a provider starts from the identity panel; this list
                  manages the providers it has, with their accounts. -->
           {/if}
-          <!-- Which passkey or backup password opens what these providers
+          <!-- Which passkey opens what these providers
                hold; the check reads only and changes nothing. -->
           <button
             type="button"

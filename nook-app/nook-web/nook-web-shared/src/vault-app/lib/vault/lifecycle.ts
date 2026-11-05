@@ -36,7 +36,6 @@ import * as localLoginActions from "$lib/vault/local-login";
 import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
 import {
   ActiveVaultKind,
-  LocalProviderLookupKind,
   LocalVaultCatalogKind,
 } from "$lib/vault/state/provider.svelte";
 import {
@@ -47,7 +46,6 @@ import {
   VaultDiscoveryTimeout,
   type DiscoveryCompletion,
 } from "$lib/vault/vault-discovery-timeout";
-import { LoginUnlockPresentation } from "$lib/vault/login-unlock-capabilities";
 import { VaultChangeOutcome } from "$lib/vault/vault-change-outcome";
 
 const log = browserLogRuntime.createLogger("vault-lifecycle");
@@ -251,10 +249,8 @@ export class VaultInitializationActions {
             state.prefillEnrollmentCode = enrollment.payload;
             state.enrollmentFromUrlPending = true;
           }
-          // A backup password opens only its vault keys. Do not create a new app
-          // key merely because this browser still has a local vault: that key has
-          // not been granted membership and password recovery must remain usable
-          // without altering identity ownership.
+          // Do not create a new app key merely because this browser still has a
+          // local vault: that key has not been granted membership.
           if (state.localVaultPresent) {
             state.useThisBrowser();
             await state.prepareLocalLogin();
@@ -627,14 +623,6 @@ class DeviceInitializationContinuation {
     } else {
       state.applyActiveProviderCredentials();
     }
-    if (state.localVaultPresent) {
-      const passwordRefresh1 = await state.refreshPasswordEntriesList();
-      if (passwordRefresh1.isErr()) {
-        return storageErr(passwordRefresh1.error);
-      }
-      const presentation = await new LoginUnlockPresentation(state).refresh();
-      if (presentation.isErr()) return storageErr(presentation.error);
-    }
     return storageOk(initialized.value);
   }
 
@@ -650,17 +638,8 @@ class DeviceInitializationContinuation {
     const autoUnlock = !hasPendingEnrollment && state.shouldAutoUnlock();
     if (autoUnlock) {
       await state.loadDb();
-      if (
-        !state.isAuthenticated &&
-        state.localProvider.kind === LocalProviderLookupKind.Found
-      ) {
-        void state.refreshPasswordEntriesList().then((result) => {
-          if (result.isErr())
-            state.errorMsg = state.t(result.error.translationKey);
-        });
-      }
     } else if (!hasPendingEnrollment) {
-      // Enrollment owns its first device/provider sync after the password admits
+      // Enrollment owns its first device/provider sync after the invite admits
       // this browser to the vault; no roster authority exists before that step.
       const devices = await state.refreshDeviceState();
       if (devices.isErr()) return storageErr(devices.error);

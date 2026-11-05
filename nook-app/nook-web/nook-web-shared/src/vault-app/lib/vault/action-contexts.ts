@@ -43,12 +43,7 @@ import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import type { TranslationRequest } from "$lib/vault/translation";
 import type { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 import type { EventOutboxRequest } from "$lib/vault/sync-operation-state";
-import type { NookPasswordEntrySummary } from "$app-wasm";
 import type { VaultOperationStale } from "$lib/runtime/vault-operation-stale";
-export type PasswordEntriesRefreshSnapshot = {
-  readonly entries: readonly NookPasswordEntrySummary[];
-};
-
 export type SecretPageRefreshSnapshot = {
   readonly displayedSecretCount: number;
   readonly totalSecretCount: number;
@@ -88,7 +83,6 @@ export type RosterHydrationOutcome =
       readonly kind: RosterHydrationKind.Hydrated;
       readonly pendingJoinCount: number;
       readonly vaultMemberCount: number;
-      readonly passwordEntryCount: number;
     };
 
 export enum EventOutboxFlushKind {
@@ -226,9 +220,6 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
     options: ProviderPersistenceOptions,
   ): Promise<Result<ProviderPersistenceOutcome, VaultStorageFailure>>;
   resetVaultSessionState(resetManager?: boolean): void;
-  refreshPasswordEntriesList(): Promise<
-    Result<PasswordEntriesRefreshSnapshot, OAuthFailure | VaultStorageFailure>
-  >;
   showSuccess(message: string): void;
   stageStagedProviderSyncIssue(
     args: NookStorageConnection,
@@ -318,12 +309,10 @@ type SyncSessionFields = Pick<
   | "devicePublicKey"
   | "isAuthenticated"
   | "sessionEpoch"
-  | "isPasswordBusy"
+  | "isInviteBusy"
   | "joinEnrollmentPrompt"
-  | "loginPasswordPrompt"
   | "hasManager"
   | "admitManager"
-  | "passwordEntries"
   | "pendingJoins"
   | "remoteVaultRecoveryState"
   | "sessionExpiredByIdle"
@@ -426,9 +415,6 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   refreshLocalVaultCatalog(): Promise<
     Result<LocalVaultCatalog, VaultStorageFailure>
   >;
-  refreshPasswordEntriesList(): Promise<
-    Result<PasswordEntriesRefreshSnapshot, OAuthFailure | VaultStorageFailure>
-  >;
   refreshReplacementConflicts(): Promise<
     Result<ProjectionConflictRefreshSnapshot, VaultStorageFailure>
   >;
@@ -502,19 +488,14 @@ export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
   Pick<
     VaultSessionState,
     | "awaitingJoinApproval"
-    | "clearSelectedPasswordEntry"
     | "enrollmentCode"
     | "enrollMembersKey"
     | "enrollSecretsKey"
     | "isAuthenticated"
     | "joinEnrollmentPrompt"
-    | "loginPasswordPrompt"
-    | "hasManager"
+      | "hasManager"
     | "admitManager"
-    | "passwordEntries"
-    | "pendingJoins"
-    | "selectedPasswordEntry"
-    | "selectPasswordEntry"
+      | "pendingJoins"
     | "sessionExpiredByIdle"
     | "sessionEpoch"
     | "vaultMembers"

@@ -45,8 +45,6 @@ export class WorkspaceSectionRoute {
         return WorkspaceRoute.AddDevice;
       case WorkspaceSection.Sync:
         return WorkspaceRoute.Sync;
-      case WorkspaceSection.Passwords:
-        return WorkspaceRoute.Passwords;
       case WorkspaceSection.Import:
         return WorkspaceRoute.Import;
     }
@@ -116,7 +114,6 @@ export class VaultWorkspaceActions {
       case WorkspaceSection.Overview:
       case WorkspaceSection.Vaults:
       case WorkspaceSection.Sync:
-      case WorkspaceSection.Passwords:
       case WorkspaceSection.Import:
         state.cancelProviderSetup();
         state.cancelAddProvider();
@@ -165,9 +162,6 @@ export class VaultWorkspaceActions {
         return;
       case WorkspaceRoute.Sync:
         this.applySection(WorkspaceSection.Sync);
-        return;
-      case WorkspaceRoute.Passwords:
-        this.applySection(WorkspaceSection.Passwords);
         return;
       case WorkspaceRoute.Import:
         this.applySection(WorkspaceSection.Import);

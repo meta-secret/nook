@@ -25,31 +25,11 @@ type MembersYamlRecord = {
   ciphertext: string
 }
 
-type PasswordEnvelopeYaml = {
-  version?: number
-  kdf?: string
-  work_factor?: number
-  ciphertext?: string
-}
-
-type PasswordEntryYaml = {
-  id?: string
-  label?: string
-  envelope?: PasswordEnvelopeYaml
-}
-
-type UnlockYaml = {
-  type?: string
-  entries?: PasswordEntryYaml[]
-}
-
 type StoredVaultYaml = {
   secrets?: StoredSecretRecord[]
   auth?: AuthYamlRecord[]
   joins?: StoredSecretRecord[]
   members?: MembersYamlRecord[]
-  unlock?: UnlockYaml
-  password_entries?: PasswordEntryYaml[]
   sentinel_shares?: StoredSecretRecord[]
 }
 
@@ -72,11 +52,6 @@ type VaultEventOperation = {
   encryption_public_key?: string
   secrets_key_ciphertext?: string
   members_key_ciphertext?: string
-  entry_id?: string
-  label?: string
-  created_at?: string
-  envelope?: PasswordEnvelopeYaml
-  password_entries?: PasswordEntryYaml[]
   shares?: Array<{ device_id?: string; ciphertext?: string }>
 }
 
@@ -107,13 +82,6 @@ class VaultYamlDecoder {
         vault.joins = this.decodeStoredSecrets(vaultValue.joins)
       if ('members' in vaultValue)
         vault.members = this.decodeMembers(vaultValue.members)
-      if ('unlock' in vaultValue)
-        vault.unlock = this.decodeUnlock(vaultValue.unlock)
-      if ('password_entries' in vaultValue) {
-        vault.password_entries = this.decodePasswordEntries(
-          vaultValue.password_entries,
-        )
-      }
       if ('sentinel_shares' in vaultValue) {
         vault.sentinel_shares = this.decodeStoredSecrets(
           vaultValue.sentinel_shares,
@@ -271,64 +239,6 @@ class VaultYamlDecoder {
     })
   }
 
-  private decodeUnlock(value: unknown): UnlockYaml {
-    const unlockValue = this.decodeObject(value, 'unlock')
-    const unlock: UnlockYaml = {}
-    const type = this.optionalString(unlockValue, 'type')
-    if (type.kind === VaultYamlOptionalStringStateKind.Present) {
-      unlock.type = type.value
-    }
-    if ('entries' in unlockValue)
-      unlock.entries = this.decodePasswordEntries(unlockValue.entries)
-    return unlock
-  }
-
-  private decodePasswordEntries(value: unknown): PasswordEntryYaml[] {
-    if (!Array.isArray(value))
-      throw new TypeError('password entries must be an array')
-    return value.map((entry) => {
-      const passwordEntry = this.decodeObject(entry, 'password entry')
-      const decoded: PasswordEntryYaml = {}
-      const id = this.optionalString(passwordEntry, 'id')
-      const label = this.optionalString(passwordEntry, 'label')
-      if (id.kind === VaultYamlOptionalStringStateKind.Present) {
-        decoded.id = id.value
-      }
-      if (label.kind === VaultYamlOptionalStringStateKind.Present) {
-        decoded.label = label.value
-      }
-      if ('envelope' in passwordEntry)
-        decoded.envelope = this.decodePasswordEnvelope(passwordEntry.envelope)
-      return decoded
-    })
-  }
-
-  private decodePasswordEnvelope(value: unknown): PasswordEnvelopeYaml {
-    const envelopeValue = this.decodeObject(value, 'password envelope')
-    const envelope: PasswordEnvelopeYaml = {}
-    if ('version' in envelopeValue) {
-      const version: unknown = Reflect.get(envelopeValue, 'version')
-      if (typeof version !== 'number')
-        throw new TypeError('envelope version must be a number')
-      envelope.version = version
-    }
-    if ('work_factor' in envelopeValue) {
-      const workFactor: unknown = Reflect.get(envelopeValue, 'work_factor')
-      if (typeof workFactor !== 'number')
-        throw new TypeError('envelope work factor must be a number')
-      envelope.work_factor = workFactor
-    }
-    const kdf = this.optionalString(envelopeValue, 'kdf')
-    const ciphertext = this.optionalString(envelopeValue, 'ciphertext')
-    if (kdf.kind === VaultYamlOptionalStringStateKind.Present) {
-      envelope.kdf = kdf.value
-    }
-    if (ciphertext.kind === VaultYamlOptionalStringStateKind.Present) {
-      envelope.ciphertext = ciphertext.value
-    }
-    return envelope
-  }
-
   private decodeOperation(value: unknown): VaultEventOperation {
     const operationValue = this.decodeObject(value, 'event operation')
     const operation: VaultEventOperation = {}
@@ -341,9 +251,6 @@ class VaultYamlDecoder {
       'encryption_public_key',
       'secrets_key_ciphertext',
       'members_key_ciphertext',
-      'entry_id',
-      'label',
-      'created_at',
     ] as const
     for (const field of stringFields) {
       const decoded = this.optionalString(operationValue, field)
@@ -360,13 +267,6 @@ class VaultYamlDecoder {
     if ('rejected_secret_ids' in operationValue) {
       operation.rejected_secret_ids = this.decodeStringList(
         operationValue.rejected_secret_ids,
-      )
-    }
-    if ('envelope' in operationValue)
-      operation.envelope = this.decodePasswordEnvelope(operationValue.envelope)
-    if ('password_entries' in operationValue) {
-      operation.password_entries = this.decodePasswordEntries(
-        operationValue.password_entries,
       )
     }
     if ('shares' in operationValue)
@@ -430,24 +330,6 @@ class VaultYamlDecoder {
 
 const vaultYamlDecoder = new VaultYamlDecoder()
 
-export enum PasswordEnvelopeCiphertextStateKind {
-  Absent = 'absent',
-  Present = 'present',
-}
-
-export type PasswordEnvelopeCiphertextState =
-  | { kind: PasswordEnvelopeCiphertextStateKind.Absent }
-  | {
-      kind: PasswordEnvelopeCiphertextStateKind.Present
-      ciphertext: string
-    }
-
-/** How a stored vault is opened: device-key rows, or backup passwords only. */
-export enum VaultUnlockMode {
-  Keys = 'keys',
-  Password = 'password',
-}
-
 export type VaultYamlSnapshot = {
   raw: string
   secretIds: string[]
@@ -456,15 +338,6 @@ export type VaultYamlSnapshot = {
   memberPkIds: string[]
   /** Count of sentinel share records / issued share payloads observed. */
   sentinelShareCount: number
-  unlockMode: VaultUnlockMode
-  hasPasswordEnvelope: boolean
-  /**
-   * Raw ciphertext of the active password envelope (when present). Useful
-   * for waiting on password-rotation propagation: every rotation produces a
-   * fresh ciphertext (scrypt nonce + random salt), so a poll that compares
-   * against a previously-captured value is a reliable "rotated yet?" check.
-   */
-  passwordEnvelopeCiphertext: PasswordEnvelopeCiphertextState
 }
 
 function parseJoinValue(
@@ -473,16 +346,6 @@ function parseJoinValue(
 ): { deviceId: string; publicKey: string } {
   const parsed: unknown = JSON.parse(value)
   return vaultYamlDecoder.decodeJoin(parsed, key)
-}
-
-function collectPasswordEntries(vault: StoredVaultYaml): PasswordEntryYaml[] {
-  if (vault.password_entries && vault.password_entries.length > 0) {
-    return vault.password_entries
-  }
-  if (vault.unlock?.entries && vault.unlock.entries.length > 0) {
-    return vault.unlock.entries
-  }
-  return []
 }
 
 export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
@@ -503,24 +366,6 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
   )
   const sentinelShareCount = ((v) => (v ? v : []))(vault.sentinel_shares).length
 
-  const passwordEntries = collectPasswordEntries(vault)
-  const hasPasswordEnvelope = passwordEntries.length > 0
-  // Device-key auth rows are primary; hybrid vaults keep auth alongside
-  // password_entries.
-  const unlockMode =
-    authPkIds.length > 0
-      ? VaultUnlockMode.Keys
-      : hasPasswordEnvelope
-        ? VaultUnlockMode.Password
-        : VaultUnlockMode.Keys
-  const activeEnvelope = passwordEntries[0]?.envelope
-  const passwordEnvelopeCiphertext: PasswordEnvelopeCiphertextState =
-    typeof activeEnvelope?.ciphertext === 'string'
-      ? {
-          kind: PasswordEnvelopeCiphertextStateKind.Present,
-          ciphertext: activeEnvelope.ciphertext.trim(),
-        }
-      : { kind: PasswordEnvelopeCiphertextStateKind.Absent }
 
   return {
     raw: yaml,
@@ -529,9 +374,6 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
     joinEntries,
     memberPkIds,
     sentinelShareCount,
-    unlockMode,
-    hasPasswordEnvelope,
-    passwordEnvelopeCiphertext,
   }
 }
 
@@ -554,12 +396,6 @@ function eventSecretToStored(secret?: EventSecretRecord): EventSecretParse {
       data: ((v) => (v ? v : ''))(secret.ciphertext),
     },
   }
-}
-
-function passwordEventEnvelope(
-  envelope?: PasswordEnvelopeYaml,
-): PasswordEnvelopeYaml {
-  return ((v) => (v ? v : {}))(envelope)
 }
 
 function sortEventYamls(eventYamls: string[]): VaultEventYaml[] {
@@ -586,7 +422,6 @@ export function parseVaultEventLogSnapshot(
     { pk_id: string; secrets_key: string; members_key: string }
   >()
   const members = new Map<string, { pk_id: string; ciphertext: string }>()
-  const passwordEntries = new Map<string, PasswordEntryYaml>()
   const sentinelShares = new Map<string, StoredSecretRecord>()
 
   for (const event of sortEventYamls(eventYamls)) {
@@ -599,12 +434,6 @@ export function parseVaultEventLogSnapshot(
             if (stored.kind === EventSecretParseKind.Valid) {
               secrets.set(stored.secret.id, stored.secret)
             }
-          }
-          passwordEntries.clear()
-          for (const entry of ((v) => (v ? v : []))(
-            operation.password_entries,
-          )) {
-            if (entry.id) passwordEntries.set(entry.id, entry)
           }
           break
         case 'epoch-checkpoint':
@@ -699,34 +528,9 @@ export function parseVaultEventLogSnapshot(
             sentinelShares.delete(operation.device_id)
           }
           break
-        case 'password-added':
-          if (operation.entry_id) {
-            const entry: PasswordEntryYaml = {
-              id: operation.entry_id,
-              envelope: passwordEventEnvelope(operation.envelope),
-            }
-            if (operation.label) entry.label = operation.label
-            passwordEntries.set(operation.entry_id, entry)
-          }
-          break
-        case 'password-rotated':
-          if (operation.entry_id) {
-            const existing = passwordEntries.get(operation.entry_id)
-            const entry: PasswordEntryYaml = {
-              id: operation.entry_id,
-              envelope: passwordEventEnvelope(operation.envelope),
-            }
-            if (existing?.label) entry.label = existing.label
-            passwordEntries.set(operation.entry_id, entry)
-          }
-          break
-        case 'password-removed':
-          if (operation.entry_id) passwordEntries.delete(operation.entry_id)
-          break
         case 'vault-cleared':
           secrets.clear()
           joins.clear()
-          passwordEntries.clear()
           break
         default:
           break
@@ -747,7 +551,6 @@ export function parseVaultEventLogSnapshot(
     })),
     members: [...members.values()],
     sentinel_shares: [...sentinelShares.values()],
-    password_entries: [...passwordEntries.values()],
   })
 
   return parseVaultYamlSnapshot(projectionLikeYaml)

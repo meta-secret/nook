@@ -8,9 +8,7 @@ import {
   DeviceProtectionStatus,
   JoinEnrollmentState,
   RemoteVaultRecoveryState,
-  type NookPasswordEntrySummary,
   type NookVaultManager,
-  type PasswordEntryId,
 } from "$app-wasm";
 export enum ManagerSessionKind {
   Unavailable = "unavailable",
@@ -20,22 +18,6 @@ export enum ManagerSessionKind {
 export type ManagerSession =
   | { kind: ManagerSessionKind.Unavailable }
   | { kind: ManagerSessionKind.Available; manager: NookVaultManager };
-export enum PasswordEntrySelectionKind {
-  NotSelected = "not-selected",
-  Selected = "selected",
-}
-
-export type PasswordEntrySelection =
-  | { kind: PasswordEntrySelectionKind.NotSelected }
-  | { kind: PasswordEntrySelectionKind.Selected; entryId: PasswordEntryId };
-export enum EnrollmentEntryKind {
-  Inactive = "inactive",
-  Active = "active",
-}
-
-export type EnrollmentEntry =
-  | { kind: EnrollmentEntryKind.Inactive }
-  | { kind: EnrollmentEntryKind.Active; entryId: PasswordEntryId };
 export class VaultSessionState {
   private managerState = $state<ManagerSession>({
     kind: ManagerSessionKind.Unavailable,
@@ -84,7 +66,6 @@ export class VaultSessionState {
    */
   awaitingJoinApproval = $state(false);
 
-  loginPasswordPrompt = $state(false);
   /**
    * Whether the current device identity can unwrap vault keys for the selected
    * login vault. Unknown until assess runs with a device identity in memory.
@@ -92,47 +73,10 @@ export class VaultSessionState {
   remoteVaultRecoveryState = $state<RemoteVaultRecoveryState>(
     RemoteVaultRecoveryState.None,
   );
-  isPasswordBusy = $state(false);
-  passwordError = $state("");
+  /** A one-time invite code is being issued or joined; sync waits. */
+  isInviteBusy = $state(false);
   enrollmentCode = $state("");
   prefillEnrollmentCode = $state("");
   enrollmentFromUrlPending = $state(false);
   loginEnrollmentCode = $state("");
-  passwordEntries = $state<NookPasswordEntrySummary[]>([]);
-  private selectedPasswordEntryState = $state<PasswordEntrySelection>({
-    kind: PasswordEntrySelectionKind.NotSelected,
-  });
-  get selectedPasswordEntry(): PasswordEntrySelection {
-    return this.selectedPasswordEntryState;
-  }
-  set selectedPasswordEntry(value: PasswordEntrySelection) {
-    this.selectedPasswordEntryState = value;
-  }
-  selectPasswordEntry(value: PasswordEntryId): void {
-    this.selectedPasswordEntryState = {
-      kind: PasswordEntrySelectionKind.Selected,
-      entryId: value,
-    };
-  }
-  clearSelectedPasswordEntry(): void {
-    this.selectedPasswordEntryState = {
-      kind: PasswordEntrySelectionKind.NotSelected,
-    };
-  }
-
-  private activeEnrollmentEntryState = $state<EnrollmentEntry>({
-    kind: EnrollmentEntryKind.Inactive,
-  });
-  get activeEnrollmentEntry(): EnrollmentEntry {
-    return this.activeEnrollmentEntryState;
-  }
-  beginEnrollmentEntry(value: PasswordEntryId): void {
-    this.activeEnrollmentEntryState = {
-      kind: EnrollmentEntryKind.Active,
-      entryId: value,
-    };
-  }
-  clearActiveEnrollmentEntry(): void {
-    this.activeEnrollmentEntryState = { kind: EnrollmentEntryKind.Inactive };
-  }
 }

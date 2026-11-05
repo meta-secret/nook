@@ -2,11 +2,6 @@
   import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
   import type { EnrollmentCodeUnlock } from '$lib/components/login/login-create-vault-chooser-contract'
 
-  type VaultPasswordUnlock = {
-    readonly entryId: string
-    readonly password: string
-  }
-
   import {
     configured_vault_application,
     type StartSentinelGenesisArgs,
@@ -57,7 +52,6 @@
     onUnlockOnCard,
     onUseEnrollmentCode,
     onAcceptSentinelOnboardingPackage,
-    onUnlockWithPassword,
     onSentinelUnlocked,
     onCreateDeviceVault,
     onStartSentinelGenesis,
@@ -81,7 +75,6 @@
     onUnlockOnCard: () => Promise<void>
     onUseEnrollmentCode: (args: EnrollmentCodeUnlock) => Promise<void>
     onAcceptSentinelOnboardingPackage: (packageJson: string) => Promise<void>
-    onUnlockWithPassword: (args: VaultPasswordUnlock) => Promise<void>
     onSentinelUnlocked: () => Promise<void>
     onCreateDeviceVault: (label: string) => Promise<void>
     onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>
@@ -181,7 +174,6 @@
         {sentinelParticipantResponse}
         {sentinelOnboardingPackage}
         {onAcceptSentinelOnboardingPackage}
-        {onUnlockWithPassword}
         {onSentinelUnlocked}
         {onCreateDeviceVault}
         {extensionConnectRequest}

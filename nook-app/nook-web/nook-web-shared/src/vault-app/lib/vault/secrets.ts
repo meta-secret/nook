@@ -1,4 +1,3 @@
-import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import {
   SecretEditRejection,
   type SecretOperationResult,
@@ -37,11 +36,7 @@ import {
   VaultEditDecision,
   type NookSecretHistory,
 } from "$app-wasm";
-import { PasswordEntrySelectionKind } from "$lib/vault/state/session.svelte";
-import type {
-  PasswordEntriesRefreshSnapshot,
-  SecretPageRefreshSnapshot,
-} from "$lib/vault/action-contexts";
+import type { SecretPageRefreshSnapshot } from "$lib/vault/action-contexts";
 import {
   VaultOperationStale,
   VaultOperationStaleKind,
@@ -570,60 +565,6 @@ export class VaultSecretActions {
     } finally {
       state.isSaving = false;
     }
-  }
-
-  async refreshPasswordEntriesList(): Promise<
-    Result<
-      PasswordEntriesRefreshSnapshot,
-      OAuthFailure | StorageOperationFailure
-    >
-  > {
-    const state = this.state;
-    // A provider that still lacks its credentials lists no passwords.
-    switch (state.credentialReadiness().state) {
-      case "required": {
-        state.passwordEntries = [];
-        const snapshot: PasswordEntriesRefreshSnapshot = {
-          entries: state.passwordEntries,
-        };
-        return storageOk(snapshot);
-      }
-      case "ready":
-        break;
-    }
-    const refreshed = await state.ensureOAuthTokensFresh();
-    if (refreshed.isErr()) return storageErr(refreshed.error);
-    if (refreshed.value instanceof VaultOperationStale) {
-      const snapshot: PasswordEntriesRefreshSnapshot = {
-        entries: state.passwordEntries,
-      };
-      return storageOk(snapshot);
-    }
-    const entries = await state.enqueueStorage(async () => {
-      const manager = state.admitManager();
-      if (manager.isErr()) return storageErr(manager.error);
-      const args = state.wasmStorageArgs();
-      if (args.isErr()) return storageErr(args.error);
-      try {
-        return storageOk(
-          await manager.value.fetch_vault_password_entries(args.value),
-        );
-      } catch (failure) {
-        return storageErr(new NativeVaultStorageFailure(failure));
-      }
-    });
-    if (entries.isErr()) return storageErr(entries.error);
-    state.passwordEntries = entries.value;
-    if (
-      state.passwordEntries.length === 1 &&
-      state.selectedPasswordEntry.kind ===
-        PasswordEntrySelectionKind.NotSelected
-    ) {
-      for (const entry of state.passwordEntries)
-        state.selectPasswordEntry(entry.id);
-    }
-    const snapshot: PasswordEntriesRefreshSnapshot = { entries: entries.value };
-    return storageOk(snapshot);
   }
 
   async refreshSecretsFromSession(): Promise<

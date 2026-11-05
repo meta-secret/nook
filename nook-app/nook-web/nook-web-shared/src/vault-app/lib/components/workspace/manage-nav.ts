@@ -35,10 +35,6 @@ const DEFINITIONS: readonly ManageNavDefinition[] = [
     labelKey: I18N_KEYS.WorkspaceSectionKeys,
   },
   {
-    section: WorkspaceSection.Passwords,
-    labelKey: I18N_KEYS.WorkspaceSectionPasswords,
-  },
-  {
     section: WorkspaceSection.Settings,
     labelKey: I18N_KEYS.IdentityMenuBrowser,
   },

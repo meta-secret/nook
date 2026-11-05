@@ -1,18 +1,12 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 import {
-  addVaultPassword,
   clearBrowserVault,
-  connectLocalVault,
   disableVaultIdleLock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  expandSettingsSection,
   expectFirstVaultOpen,
-  expectVaultPasswordStatus,
   openIdentitiesPage,
-  openStorageSettings,
   startFirstRun,
-  UI_TIMEOUT_MS,
 } from './helpers'
 
 /** Run one check on the access check page and wait for its card. */
@@ -62,40 +56,6 @@ test.describe('check access', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible()
   })
 
-  test('a backup password opens its vault and a wrong one does not', async ({
-    page,
-  }) => {
-    await page.goto('/app/')
-    await clearBrowserVault(page)
-    await page.reload()
-    await connectLocalVault(page)
-    await openStorageSettings(page)
-    await expandSettingsSection(page, 'unlock')
-    await addVaultPassword(page, 'Primary password', 'correct-horse-1')
-    await expectVaultPasswordStatus(page, 1, { timeout: UI_TIMEOUT_MS })
-
-    // Check access sits with the keyrings, on the keyrings page.
-    await openIdentitiesPage(page)
-    await page.getByTestId('access-check-open-btn').click()
-    await page.getByTestId('access-check-method-password').click()
-    await expect(page.getByTestId('access-check-run')).toBeDisabled()
-
-    await page.getByTestId('access-check-password').fill('not-the-password')
-    await runCheck(page, 1)
-    await page.getByTestId('access-check-password').fill('correct-horse-1')
-    await runCheck(page, 2)
-
-    // One card per check: the wrong password, then the right one, which
-    // opens the vault but never the keyring itself.
-    await expect(page.getByTestId('access-check-identity')).toHaveCount(2)
-    const outcomes = await page
-      .getByTestId('access-check-identity')
-      .evaluateAll((rows) =>
-        rows.map((row) => row.getAttribute('data-outcome')),
-      )
-    expect(outcomes).toEqual(['doesNotOpen', 'vaultsOnly'])
-  })
-
   test('opens from the first-run screen before any identity exists', async ({
     page,
   }) => {
@@ -109,10 +69,6 @@ test.describe('check access', () => {
     await page.getByTestId('login-access-check-link').click()
     await expect(page.getByTestId('access-check-page')).toBeVisible()
     await expect(page).toHaveURL(/\/access-check$/)
-    await page.getByTestId('access-check-method-password').click()
-    await page.getByTestId('access-check-password').fill('anything-at-all')
-    await runCheck(page, 1)
-    await expect(page.getByTestId('access-check-empty')).toBeVisible()
 
     await page.getByTestId('access-check-back-btn').click()
     await expect(page.getByTestId('first-vault-start')).toBeVisible()

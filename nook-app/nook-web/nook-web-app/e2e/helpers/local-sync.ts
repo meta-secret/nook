@@ -27,7 +27,6 @@ import {
   expectLoginGateAfterLoad,
   invokeInitializedVaultProviderReload,
   unlockVaultOnLogin,
-  waitForStableLocalVaultState,
 } from './settings-auth'
 import {
   disableVaultIdleLock,
@@ -111,7 +110,7 @@ export async function waitForLocalVaultState(
       if (predicate(snapshot)) {
         return snapshot
       }
-      lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, passwords=${snapshot.hasPasswordEnvelope})`
+      lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length})`
     }
     await sleep(intervalMs)
   }
@@ -559,7 +558,7 @@ export async function reloadUnlockLocalVaultWithSync(
   }
 }
 
-/** Add GitHub sync provider stubs while vault stays unlocked (preserves password UI state). */
+/** Add GitHub sync provider stubs while vault stays unlocked. */
 export async function seedGithubSyncProvidersWhileUnlocked(
   page: Page,
   providers = [E2E_GITHUB_ONBOARD_PROVIDER],
@@ -607,8 +606,6 @@ export async function seedOauthFileSyncProvidersWhileUnlocked(
 export async function reloadUnlockWithSyncProvider(
   page: Page,
   opts?: {
-    password?: string
-    entryLabel?: string
     providers?: SeededDriveProviderInput[]
     sharedStub?: E2eOauthFileStub
   },
@@ -654,15 +651,7 @@ export async function reloadUnlockWithSyncProvider(
   await keepVaultIdleLockDisabled(page)
   await expectLoginGateAfterLoad(page)
   await ensureLoginLocalUnlockReady(page)
-  if (opts?.password) {
-    const unlockRequest: { password: string; entryLabel?: string } = {
-      password: opts.password,
-    }
-    if (opts.entryLabel) unlockRequest.entryLabel = opts.entryLabel
-    await unlockVaultOnLogin(page, unlockRequest)
-  } else {
-    await unlockVaultOnLogin(page)
-  }
+  await unlockVaultOnLogin(page)
   await expect(
     page.getByTestId('vault-panel').or(page.getByTestId('vault-admin-panel')),
   ).toBeVisible({
@@ -681,13 +670,6 @@ export async function reloadUnlockWithSyncProvider(
       })
       .toBeGreaterThan(0)
     sharedStub.setVaultYaml('')
-  }
-  if (opts?.password) {
-    await waitForStableLocalVaultState(
-      page,
-      (snapshot) => snapshot.hasPasswordEnvelope,
-      { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS, stableReads: 2 },
-    )
   }
 }
 

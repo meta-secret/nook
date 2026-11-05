@@ -600,12 +600,5 @@ mod browser_tests {
     }
 }
 
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn login_unlock_decision(
-    access: nook_core::VaultAccessStatus,
-) -> nook_core::LoginUnlockDecision {
-    nook_core::LoginUnlockAssessment { access }.decide()
-}
-
 mod passkey_material_admission;
 pub use passkey_material_admission::*;

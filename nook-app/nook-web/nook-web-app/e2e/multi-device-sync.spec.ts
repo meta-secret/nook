@@ -155,15 +155,13 @@ test.describe(`multi-device ${providerLabel} vault`, () => {
     expect(revealed).toBe(joinerSecretValue)
   })
 
-  test('management keeps sync, backup passwords, and devices on their own pages', async () => {
+  test('management keeps sync and devices on their own pages', async () => {
     await openStorageSettings(deviceA)
     await expect(deviceA.getByTestId('storage-providers-section')).toBeVisible()
-    await openManagePage(deviceA, ManagePage.Passwords)
-    await expect(deviceA.getByTestId('vault-unlock-section')).toBeVisible()
+    await openManagePage(deviceA, ManagePage.Devices)
     await expect(deviceA.getByTestId('storage-providers-section')).toHaveCount(
       0,
     )
-    await openManagePage(deviceA, ManagePage.Devices)
     await expect(deviceA.getByTestId('vault-devices-section')).toBeVisible()
     await expandSettingsSection(deviceA, 'devices')
     await expect(deviceA.getByTestId('vault-members-list')).toBeVisible()

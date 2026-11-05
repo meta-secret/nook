@@ -3,7 +3,7 @@ import type { StorageProvider } from '$lib/auth/providers'
 import {
   findSharedGrantProvider,
   SharedStorageTargetKind,
-} from '$lib/vault/password-unlock'
+} from '$lib/vault/password-enrollment'
 import { ProviderRowFixture } from '../provider-fixtures'
 
 function driveProvider(id: string, folderId: string): StorageProvider {

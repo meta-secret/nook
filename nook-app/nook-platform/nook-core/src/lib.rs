@@ -598,9 +598,6 @@ pub use nook_companion_core::BackupCodePageText;
 pub use nook_companion_core::{VaultHostObservation, VaultHostPolicy};
 
 pub use vault_client_policy::{JoinConnectEnrollment, JoinConnectRequest, JoinConnectSource};
-pub use vault_client_policy::{
-    LoginDeviceKeyAvailability, LoginUnlockAssessment, LoginUnlockDecision,
-};
 
 pub use sync_provider_store::{AuthProviderPersistenceMode, AuthProviderPersistenceRequest};
 

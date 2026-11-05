@@ -263,15 +263,10 @@ export class VaultSyncActions {
           ? snapshot.value.pendingJoins
           : mergedJoins.splice(0);
       state.vaultMembers = snapshot.value.vaultMembers;
-      const passwordRefresh1 = await state.refreshPasswordEntriesList();
-      if (passwordRefresh1.isErr()) {
-        return storageErr(passwordRefresh1.error);
-      }
       const outcome: RosterHydrationOutcome = {
         kind: RosterHydrationKind.Hydrated,
         pendingJoinCount: state.pendingJoins.length,
         vaultMemberCount: state.vaultMembers.length,
-        passwordEntryCount: passwordRefresh1.value.entries.length,
       };
       return storageOk(outcome);
     } finally {
@@ -293,7 +288,7 @@ export class VaultSyncActions {
         freshness === ProviderSyncFreshness.Forced,
         state.isVerifying,
         state.isSaving,
-        state.isPasswordBusy,
+        state.isInviteBusy,
         state.isSyncing,
         state.syncProviders.length,
       );
@@ -645,7 +640,7 @@ export class VaultSyncActions {
           state.isVerifying,
           state.isSaving,
           state.isSyncing,
-          state.isPasswordBusy,
+          state.isInviteBusy,
           state.isAuthenticated,
           state.joinEnrollmentPrompt,
           state.awaitingJoinApproval,
@@ -693,7 +688,7 @@ export class VaultSyncActions {
         freshness,
         state.isVerifying,
         state.isSaving,
-        state.isPasswordBusy,
+        state.isInviteBusy,
         state.isSyncing,
         state.isAuthenticated,
         state.syncProviders.length,
