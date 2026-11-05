@@ -3,9 +3,9 @@
 //!
 //! A provider's Nook root can hold vaults of several identities. The identity
 //! in use syncs its own vaults. Any other vault opens only with keys this
-//! browser already holds under another identity, or with the vault's backup
-//! password. A vault nothing here can open is shown as such: a device that
-//! can open it must grant this one access.
+//! browser already holds under another identity, or with a key a member
+//! granted this device. A vault nothing here can open is shown as such: a
+//! device that can open it must grant this one access.
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
@@ -17,7 +17,7 @@ use crate::{
     IdentityDirectory, IdentitySelection, IdentitySession, IdentityVaultAppGrant,
     IdentityVaultAppGrantKind, ListingAppKey, ListingIdentity, ListingLocalIdentity,
     LocalEventStore, LocalEventWrite, LocalIdentityKeyring, LocalIdentityLog, StoreId,
-    VaultMetaGraphProjection, VaultMetaState, VaultProjection,
+    VaultMetaGraphProjection, VaultMetaState,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -151,24 +151,18 @@ pub enum ProviderVaultStanding {
 /// What a vault's events tell without its keys.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProviderVaultInspection {
-    /// The event log keeps a backup password.
-    pub backup_password: bool,
     pub standing: ProviderVaultStanding,
 }
 
 impl ProviderVaultEvents<'_> {
-    /// Read whether a backup password opens the vault and whether this
-    /// device's app key asked for or was granted access. Password envelopes
-    /// and membership are readable without the vault keys.
+    /// Read whether this device's app key asked for or was granted access.
+    /// Membership is readable without the vault keys.
     pub fn inspect(self, this_browser: &ListingIdentity) -> VaultResult<ProviderVaultInspection> {
         let store = self
             .events
             .into_iter()
             .fold(LocalEventStore::new(), LocalEventStore::put_event);
         let graph = store.load_graph(self.store_id.as_str())?;
-        let backup_password = !VaultProjection::from_graph(&graph, self.store_id.as_str())?
-            .password_entries
-            .is_empty();
         let mut meta = VaultMetaState::default();
         VaultMetaGraphProjection::new(&graph).materialize(&mut meta)?;
         let standing = match this_browser {
@@ -182,10 +176,7 @@ impl ProviderVaultEvents<'_> {
                 ProviderVaultStanding::Stranger
             }
         };
-        Ok(ProviderVaultInspection {
-            backup_password,
-            standing,
-        })
+        Ok(ProviderVaultInspection { standing })
     }
 }
 
@@ -198,8 +189,6 @@ pub struct ProviderVaultKeyholding<'a> {
     pub browser_vaults: &'a [BrowserIdentityVault],
     /// Vaults a member granted this device's app key.
     pub granted_vaults: &'a [StoreId],
-    /// Vaults whose event log carries a backup password.
-    pub password_vaults: &'a [StoreId],
     /// Vaults this device asked to be granted.
     pub requested_vaults: &'a [StoreId],
     /// Whether an identity is in use on this browser. Without one nothing
@@ -214,7 +203,6 @@ impl ProviderVaultKeyholding<'_> {
         identity_vaults: &[],
         browser_vaults: &[],
         granted_vaults: &[],
-        password_vaults: &[],
         requested_vaults: &[],
         session: IdentitySession::NoIdentity,
     };
@@ -237,9 +225,6 @@ impl ProviderVaultKeyholding<'_> {
         if self.granted_vaults.contains(store_id) {
             return ProviderVaultAccess::Granted;
         }
-        if self.password_vaults.contains(store_id) {
-            return ProviderVaultAccess::BackupPassword;
-        }
         if self.session == IdentitySession::NoIdentity {
             return ProviderVaultAccess::Unchecked;
         }
@@ -261,10 +246,8 @@ pub enum ProviderVaultAccess {
     OtherIdentityHere { identity_label: String },
     /// A member granted this device access: its app key opens it.
     Granted,
-    /// Its backup password opens it.
-    BackupPassword,
     /// No identity is in use on this browser, so no key was checked; the
-    /// user's passkey or backup password may still open it.
+    /// user's passkey may still open it.
     Unchecked,
     /// This device asked for access and waits for a member to grant it.
     Requested,
@@ -279,11 +262,10 @@ impl ProviderVaultAccess {
         match self {
             Self::Syncs => 0,
             Self::Granted => 1,
-            Self::BackupPassword => 2,
-            Self::OtherIdentityHere { .. } => 3,
-            Self::Unchecked => 4,
-            Self::Requested => 5,
-            Self::Locked => 6,
+            Self::OtherIdentityHere { .. } => 2,
+            Self::Unchecked => 3,
+            Self::Requested => 4,
+            Self::Locked => 5,
         }
     }
 }
@@ -322,7 +304,7 @@ impl OpenVaultContents {
             | ProviderVaultAccess::Requested => Vec::new(),
             ProviderVaultAccess::Locked => vec![ProviderVaultAction::RequestAccess],
             ProviderVaultAccess::Unchecked => vec![ProviderVaultAction::ImportSeparately],
-            ProviderVaultAccess::Granted | ProviderVaultAccess::BackupPassword => match self {
+            ProviderVaultAccess::Granted => match self {
                 Self::Closed | Self::Occupied => vec![ProviderVaultAction::ImportSeparately],
                 Self::Empty => vec![
                     ProviderVaultAction::UseInstead,
@@ -346,7 +328,6 @@ mod tests {
     fn each_vault_opens_by_the_strongest_key_this_device_holds() -> anyhow::Result<()> {
         let own = store("store_ownvault001")?;
         let travel = store("store_travelvault")?;
-        let backed = store("store_backedvault")?;
         let stranger = store("store_strangervlt")?;
         let identity_vaults = [own.clone()];
         let browser_vaults = [BrowserIdentityVault {
@@ -355,16 +336,12 @@ mod tests {
         }];
         let granted = store("store_grantedvlt1")?;
         let asked = store("store_askedvault1")?;
-        // A vault this identity holds syncs even when it also has a password,
-        // and a granted vault opens with this device's key before any password.
-        let password_vaults = [own.clone(), backed.clone(), granted.clone()];
         let granted_vaults = [granted.clone()];
         let requested_vaults = [asked.clone()];
         let keys = ProviderVaultKeyholding {
             identity_vaults: &identity_vaults,
             browser_vaults: &browser_vaults,
             granted_vaults: &granted_vaults,
-            password_vaults: &password_vaults,
             requested_vaults: &requested_vaults,
             session: IdentitySession::IdentityInUse,
         };
@@ -377,7 +354,6 @@ mod tests {
                 identity_label: "Travel".to_owned()
             }
         );
-        assert_eq!(keys.access(&backed), ProviderVaultAccess::BackupPassword);
         assert_eq!(keys.access(&stranger), ProviderVaultAccess::Locked);
         // Without an identity in use nothing was checked, so recovery may
         // still open the vault with the user's passkey.
@@ -391,29 +367,24 @@ mod tests {
     #[test]
     fn actions_follow_what_the_open_vault_holds() {
         use ProviderVaultAction::{ImportSeparately, RequestAccess, UseInstead};
-        let password = ProviderVaultAccess::BackupPassword;
+        let granted = ProviderVaultAccess::Granted;
         assert_eq!(
-            OpenVaultContents::Empty.actions(&password),
+            OpenVaultContents::Empty.actions(&granted),
             [UseInstead, ImportSeparately]
         );
         assert_eq!(
-            OpenVaultContents::Occupied.actions(&password),
+            OpenVaultContents::Occupied.actions(&granted),
             [ImportSeparately]
         );
         assert_eq!(
-            OpenVaultContents::Closed.actions(&password),
+            OpenVaultContents::Closed.actions(&granted),
             [ImportSeparately]
         );
-        // A vault granted to this device offers what a password-opened one does.
         for contents in [
             OpenVaultContents::Closed,
             OpenVaultContents::Empty,
             OpenVaultContents::Occupied,
         ] {
-            assert_eq!(
-                contents.actions(&ProviderVaultAccess::Granted),
-                contents.actions(&password)
-            );
             assert!(contents.actions(&ProviderVaultAccess::Requested).is_empty());
             assert_eq!(
                 contents.actions(&ProviderVaultAccess::Unchecked),
@@ -569,59 +540,6 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn a_backup_password_is_read_from_the_events_without_the_vault_keys() -> anyhow::Result<()> {
-        let signing = crate::SigningIdentity::generate()?.0;
-        let store_id = store("store_backedvault")?;
-        let genesis = |password_entries| -> anyhow::Result<LocalEventWrite> {
-            let event =
-                crate::VaultEvent::build_genesis_import_event(crate::GenesisImportRequest {
-                    store_id: &store_id,
-                    actor_id: &signing.actor_id()?,
-                    key_epoch: &crate::EventId::from_sha256_hex(
-                        nook_auth2::Sha256Hex::from_trusted("1".repeat(64)).as_str(),
-                    )?,
-                    payload: crate::GenesisImportPayload {
-                        source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
-                        secrets: vec![],
-                        password_entries,
-                    },
-                    created_at: &crate::IsoTimestamp::parse("2026-07-22T00:00:00Z")?,
-                    signing_key: signing.signing_key(),
-                })?;
-            Ok(LocalEventWrite {
-                event_id: event.id()?,
-                bytes: crate::VaultEvent::serialize_event_storage_yaml(&event)?,
-            })
-        };
-        let password = crate::PasswordEntryIssuance::with_work_factor(
-            &crate::VaultKeys::generate()?,
-            "pwdentry001",
-            "Emergency kit",
-            "2026-07-22T00:00:00Z",
-            "correct horse battery staple",
-            10.into(),
-        )
-        .issue()?;
-        assert!(
-            ProviderVaultEvents {
-                store_id: &store_id,
-                events: vec![genesis(vec![password])?],
-            }
-            .inspect(&ListingIdentity::NoIdentityInUse)?
-            .backup_password
-        );
-        assert!(
-            !ProviderVaultEvents {
-                store_id: &store_id,
-                events: vec![genesis(vec![])?],
-            }
-            .inspect(&ListingIdentity::NoIdentityInUse)?
-            .backup_password
-        );
-        Ok(())
-    }
-
     /// An identity in use here whose key is `app_id`.
     fn in_use_with(app_id: &crate::AppId) -> anyhow::Result<ListingIdentity> {
         Ok(ListingIdentity::InUse(ListingAppKey {
@@ -648,7 +566,6 @@ mod tests {
             payload: crate::GenesisImportPayload {
                 source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: vec![],
-                password_entries: vec![],
             },
             created_at: &at,
             signing_key: owner.signing_key(),

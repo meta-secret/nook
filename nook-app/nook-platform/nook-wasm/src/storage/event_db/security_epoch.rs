@@ -499,7 +499,6 @@ mod browser {
                     payload: GenesisImportPayload {
                         source_content_hash: Sha256Hex::from_trusted("00".repeat(32)),
                         secrets: Vec::new(),
-                        password_entries: Vec::new(),
                     },
                     created_at: &created_at,
                     signing_key: signing.signing_key(),
@@ -534,7 +533,6 @@ mod browser {
                         secrets: Vec::new(),
                         members_checkpoint_hash: Sha256Hex::from_trusted("00".repeat(32)),
                         rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
-                        password_entries: EpochPasswordState::Replace(Vec::new()),
                     }],
                 },
                 signing.signing_key(),

@@ -27,7 +27,6 @@ pub struct EditBlockMessageRequest<'a> {
 pub struct ShouldAutoUnlockRequest {
     pub session_explicitly_locked: crate::VaultSessionLockIntent,
     pub local_vault_present: crate::LocalVaultPresence,
-    pub password_entry_count: crate::VaultPasswordEntryCount,
     pub sync_provider_count: crate::VaultSyncProviderCount,
     pub provider_setup_active: crate::ProviderSetupState,
     pub add_provider_open: crate::AddProviderPromptState,
@@ -91,7 +90,6 @@ pub struct ShouldSyncFromProvidersRequest {
     pub force: crate::VaultSyncIntent,
     pub verifying: crate::VaultVerificationState,
     pub saving: crate::VaultSaveActivity,
-    pub password_busy: crate::VaultPasswordActivity,
     pub syncing: crate::VaultSyncActivity,
     pub sync_provider_count: crate::VaultSyncProviderCount,
 }
@@ -108,7 +106,6 @@ pub struct UnauthenticatedSyncDecisionRequest {
 pub struct ShouldAutoConnectAfterApprovalRequest {
     pub authenticated: crate::VaultAuthenticationState,
     pub verifying: crate::VaultVerificationState,
-    pub password_prompt_open: crate::VaultPasswordPromptState,
     pub session_expired_by_idle: crate::VaultIdleExpiration,
     pub session_explicitly_locked: crate::VaultSessionLockIntent,
 }
@@ -126,7 +123,6 @@ pub struct VaultSyncTimerTickDecisionRequest {
     pub verifying: crate::VaultVerificationState,
     pub saving: crate::VaultSaveActivity,
     pub syncing: crate::VaultSyncActivity,
-    pub password_busy: crate::VaultPasswordActivity,
     pub authenticated: crate::VaultAuthenticationState,
     pub join_state: crate::JoinEnrollmentState,
     pub awaiting_join_approval: crate::VaultJoinApprovalWait,
@@ -139,7 +135,6 @@ pub struct VaultStorageSyncDecisionRequest {
     pub freshness: crate::ProviderSyncFreshness,
     pub verifying: crate::VaultVerificationState,
     pub saving: crate::VaultSaveActivity,
-    pub password_busy: crate::VaultPasswordActivity,
     pub syncing: crate::VaultSyncActivity,
     pub authenticated: crate::VaultAuthenticationState,
     pub sync_provider_count: crate::VaultSyncProviderCount,

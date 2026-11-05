@@ -5,7 +5,7 @@ use nook_core::{SymmetricKey, VaultError, VaultStoreIdentityRef, VaultVersionWri
 
 use nook_core::{
     DeviceIdentity, StoreId, VaultCrypto, VaultKeys, VaultProjectionCache, VaultRecordSet,
-    VaultResult, VaultUnlock,
+    VaultResult,
 };
 
 fn genesis_projection_yaml(keys: &VaultKeys, identity: &DeviceIdentity) -> VaultResult<String> {
@@ -18,10 +18,8 @@ fn genesis_projection_yaml(keys: &VaultKeys, identity: &DeviceIdentity) -> Vault
         },
     )?);
     let store_id = StoreId::generate()?;
-    Ok(VaultRecordSet::serialize_yaml_with_unlock(
+    Ok(VaultRecordSet::serialize_yaml_with_store(
         &records,
-        &VaultUnlock::Keys,
-        &[],
         VaultStoreIdentityRef::Assigned(store_id.as_str()),
         VaultVersionWrite::Initial,
     )

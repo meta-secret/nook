@@ -2,8 +2,8 @@ use super::{VaultName, VaultStoreIdentity};
 use crate::RecordTypeDeclaration;
 use crate::errors::{VaultFormatError, VaultFormatResult};
 use crate::{
-    AgeArmoredCiphertext, AuthEnvelopes, AuthKeyId, PasswordUnlockEntry, SecretId,
-    StoredRecordPayload, StoredSecretRecord, VaultArchitecture, VaultMetaRecord, VaultUnlock,
+    AgeArmoredCiphertext, AuthEnvelopes, AuthKeyId, SecretId, StoredRecordPayload,
+    StoredSecretRecord, VaultArchitecture, VaultMetaRecord,
 };
 use serde::{Deserialize, Serialize};
 
@@ -34,28 +34,19 @@ pub(super) struct StoredVaultYaml {
     /// Human-readable vault label.
     #[serde(default, skip_serializing_if = "VaultName::is_unnamed")]
     pub(super) name: VaultName,
-    /// Active unlock mechanism. Omitted on write when `Keys` (the default).
-    #[serde(default, skip_serializing_if = "VaultUnlock::is_keys")]
-    pub(super) unlock: VaultUnlock,
     /// Grouped vault architecture modes.
     #[serde(default, skip_serializing_if = "VaultArchitecture::is_default")]
     pub(super) architecture: VaultArchitecture,
     #[serde(default)]
     pub(super) secrets: Vec<StoredSecretRecord>,
-    /// Populated only when `unlock = Keys`. Strict mutex: writing this
-    /// section in password mode is rejected by `serialize_stored_yaml_with_unlock`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(super) auth: Vec<AuthYamlRecord>,
-    /// Same mutex as `auth:` — joins/approve flow exists only in keys mode.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(super) joins: Vec<StoredSecretRecord>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(super) members: Vec<MembersYamlRecord>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(super) sentinel_shares: Vec<StoredSecretRecord>,
-    /// Optional backup passwords — coexist with `auth:` device-key unlock.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub(super) password_entries: Vec<PasswordUnlockEntry>,
 }
 
 impl AuthYamlRecord {
@@ -206,19 +197,15 @@ mod tests {
             VaultRecordSet::serialize_yaml(records)
         }
 
-        fn serialize_stored_yaml_with_unlock_name_architecture(
+        fn serialize_stored_yaml_with_name_architecture(
             records: &[StoredSecretRecord],
-            unlock: &VaultUnlock,
-            password_entries: &[PasswordUnlockEntry],
             store_id: VaultStoreIdentityRef<'_>,
             name: VaultNameRef<'_>,
             version: VaultVersionWrite,
             architecture: &VaultArchitecture,
         ) -> VaultFormatResult<super::super::VaultYamlBlob> {
-            VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
+            VaultRecordSet::serialize_yaml_with_name_architecture(
                 records,
-                unlock,
-                password_entries,
                 store_id,
                 name,
                 version,
@@ -389,10 +376,8 @@ mod tests {
             ..VaultArchitecture::default()
         };
 
-        let yaml = VaultYamlTestData::serialize_stored_yaml_with_unlock_name_architecture(
+        let yaml = VaultYamlTestData::serialize_stored_yaml_with_name_architecture(
             &records,
-            &VaultUnlock::Keys,
-            &[],
             VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
             VaultNameRef::Named("Anti-hacker vault"),
             VaultVersionWrite::Version(1.into()),
@@ -431,10 +416,8 @@ mod tests {
             },
         );
 
-        let yaml = VaultYamlTestData::serialize_stored_yaml_with_unlock_name_architecture(
+        let yaml = VaultYamlTestData::serialize_stored_yaml_with_name_architecture(
             &shares,
-            &VaultUnlock::Keys,
-            &[],
             VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
             VaultNameRef::Named("Sentinel vault"),
             VaultVersionWrite::Version(1.into()),

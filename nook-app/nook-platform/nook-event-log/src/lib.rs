@@ -44,7 +44,7 @@ pub use canonical::{Ed25519Signature, EventId};
 pub use epoch::{
     ConcurrentEpochRotations, EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch,
 };
-pub use epoch_checkpoint_state::{EpochMetadataState, EpochPasswordState};
+pub use epoch_checkpoint_state::EpochMetadataState;
 pub use epoch_vault_name::EpochVaultName;
 pub use errors::{EventError, EventResult};
 pub use event::{
@@ -100,8 +100,7 @@ pub use store::{
 )]
 pub use nook_auth2::{
     AgeArmoredCiphertext, AuthKeyId, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
-    IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId, PasswordEnvelope,
-    PasswordEnvelopeVersion, PasswordUnlockEntry, SecretId, SecretType, SentinelParticipantCount,
+    IsoTimestamp, MemberLabel, OpaqueCiphertext, SecretId, SecretType, SentinelParticipantCount,
     SentinelShareIndex, SentinelShareVersion, SentinelThreshold, Sha256Hex, SigningSeedHex,
     StoreId, StoredRecordPayload, StoredSecretRecord,
 };

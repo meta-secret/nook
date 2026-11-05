@@ -383,7 +383,6 @@ impl NookVaultManager {
         let mut operations = vec![VaultOperation::VaultImported {
             source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
             secrets: vec![],
-            password_entries: vec![],
         }];
         operations.extend(participants.iter().map(|participant| {
             VaultOperation::SentinelParticipantEnrolled {

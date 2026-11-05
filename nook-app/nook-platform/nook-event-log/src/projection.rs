@@ -10,12 +10,12 @@ mod operation_application;
 mod security_conflicts;
 
 use crate::EventLookup;
+use crate::SecretFingerprint;
 use crate::canonical::EventId;
 use crate::epoch::{EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch};
 use crate::graph::EventGraph;
 use crate::{ConcurrentEpochRotations, VaultOperation};
 use crate::{EventError, EventResult};
-use crate::{PasswordUnlockEntry, SecretFingerprint};
 use nook_auth2::{OpaqueCiphertext, StoredSecretRecord};
 use nook_auth2::{SecretId, StoreId};
 use std::collections::BTreeMap;
@@ -85,7 +85,6 @@ pub struct VaultProjection {
     pub epoch: ProjectionEpoch,
     pub epoch_history: Vec<EpochRecord>,
     pub secrets: BTreeMap<SecretId, ProjectedSecret>,
-    pub password_entries: Vec<PasswordUnlockEntry>,
     pub vault_name: ProjectedVaultName,
     pub replacement_conflicts: BTreeMap<SecretId, SecretReplacementConflict>,
     pub security_conflicts: Vec<SecurityConflict>,
@@ -106,7 +105,6 @@ impl Default for VaultProjection {
             epoch: ProjectionEpoch::BeforeGenesis,
             epoch_history: Vec::new(),
             secrets: BTreeMap::new(),
-            password_entries: Vec::new(),
             vault_name: ProjectedVaultName::Unnamed,
             replacement_conflicts: BTreeMap::new(),
             security_conflicts: Vec::new(),
@@ -339,7 +337,6 @@ mod tests {
     }
 
     use super::*;
-    use crate::PasswordEnvelope;
     use crate::event::{
         EncryptedSecretPayload, GenesisImportPayload, VaultEvent, VaultEventBody,
         VaultEventSchemaVersion, VaultOperation,
@@ -348,7 +345,7 @@ mod tests {
     use crate::{EventGraphRejection, EventResult, GenesisImportRequest, SecretFingerprint};
     use ed25519_dalek::SigningKey;
     use nook_auth2::SecretType;
-    use nook_auth2::{IsoTimestamp, OpaqueCiphertext, PasswordEntryId, SecretId, Sha256Hex};
+    use nook_auth2::{DeviceId, IsoTimestamp, OpaqueCiphertext, SecretId, Sha256Hex};
 
     pub(super) const STORE: &str = "store_testtoken11";
 
@@ -372,21 +369,6 @@ mod tests {
 
         pub(super) fn sid(value: &str) -> SecretId {
             SecretId::from_vault_record(value)
-        }
-
-        pub(super) fn password_envelope(ciphertext: &str) -> PasswordEnvelope {
-            PasswordEnvelope {
-                version: crate::PasswordEnvelopeVersion::LEGACY,
-                kdf: "scrypt".to_owned(),
-                work_factor: 10.into(),
-                recipient: String::new(),
-                wrapped_keys: String::new(),
-                ciphertext: ciphertext.to_owned(),
-            }
-        }
-
-        pub(super) fn password_envelope_fixture(ciphertext: &str) -> PasswordEnvelope {
-            Self::password_envelope(ciphertext)
         }
 
         pub(super) fn genesis_source_hash() -> Sha256Hex {
@@ -449,7 +431,6 @@ mod tests {
                 payload: GenesisImportPayload {
                     source_content_hash: Self::genesis_source_hash(),
                     secrets: vec![],
-                    password_entries: vec![],
                 },
                 created_at: &Self::ts("2026-06-28T00:00:00Z"),
                 signing_key,
@@ -777,8 +758,8 @@ mod tests {
         let rotation = ProjectionFixtures::signed_operation(
             &signing_key,
             vec![genesis_id],
-            VaultOperation::PasswordRemoved {
-                entry_id: PasswordEntryId::parse("pwdentry001")?,
+            VaultOperation::DeviceRevoked {
+                device_id: DeviceId::parse("0123456789abcdef")?,
             },
         )?;
         graph = ProjectionFixtures::insert(ProjectionGraphInsert {

@@ -42,7 +42,6 @@ impl NookVaultManager {
         let options =
             VaultRecoveryOptions::from_request(&nook_core::VaultRecoveryProjectionRequest {
                 graph: &graph,
-                store_id: &store_id,
             })?;
         let vault_name = match &self.vault.vault_name {
             VaultNameState::Named(name) => name.clone(),

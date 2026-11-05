@@ -128,18 +128,10 @@ impl NookVaultManager {
         let participants = output.participants;
         let store_id = output.store_id.as_str().to_owned();
         let vault_name = self.vault.vault_name.clone();
-        let yaml = nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
-            &output.stored_records,
-            &VaultUnlock::Keys,
-            &[],
-            VaultStoreIdentityRef::Assigned(&store_id),
-            match &vault_name {
+        let yaml = nook_core::VaultRecordSet::serialize_yaml_with_name_architecture(&output.stored_records, VaultStoreIdentityRef::Assigned(&store_id), match &vault_name {
                 VaultNameState::Unnamed => VaultNameRef::Unnamed,
                 VaultNameState::Named(name) => VaultNameRef::Named(name),
-            },
-            VaultVersionWrite::Initial,
-            &output.architecture,
-        )?;
+            }, VaultVersionWrite::Initial, &output.architecture)?;
         let pending = PendingSentinelGenesisFinalization {
             store_id,
             vault_name,

@@ -21,9 +21,7 @@ mod secrets;
 mod sync;
 mod vault;
 
-pub(crate) use auth::{
-    device_key_protection, enrollment, multi_device, password_envelope, website_login_save,
-};
+pub(crate) use auth::{device_key_protection, enrollment, multi_device, website_login_save};
 pub(crate) use crypto::{vault_crypto, vault_epoch_crypto};
 pub use device_access::{
     AppProtectionAppBinding, AppProtectionAppBindingRequest, AuthenticatorGuidEvidence,
@@ -305,19 +303,18 @@ pub use multi_device::{
 
 pub use nook_event_log::{
     AppendEventInput, CanonicalEventBodyBytes, CheckedRemoteEvent, ConcurrentEpochRotations,
-    Ed25519Signature, EncryptedSecretPayload, EpochCheckpoint, EpochMetadataState,
-    EpochPasswordState, EpochRecord, EpochRotationReason, EpochTransition, EpochVaultName,
-    EventCount, EventGraph, EventGraphInsert, EventGraphInsertion, EventGraphRejection,
-    EventGraphVaultArchitecture, EventId, EventInsertStatus, EventLookup, EventPendingReason,
-    EventStorageBytes, GenesisImportPayload, GenesisImportRequest, KeyEpoch, LocalEventAppend,
-    LocalEventAppendOutcome, LocalEventBytes, LocalEventStore, LocalEventStoreRejection,
-    LocalEventWrite, LocalOutboxRemoval, LocalOutboxRemovalResult, LocalOutboxRemoved,
-    LocalOutboxWrite, LocalRemoteUnion, LocalRemoteUnionOutcome, ObservedHeads, ProjectedSecret,
-    ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectedVaultName, ProjectionEpoch,
-    RemoteEventBatch, RemoteEventLogClassification, RemoteEventWrites, RemoteStoreIdentity,
-    SecretFingerprint, SecretReplacementConflict, SecurityConflict, SentinelShareIssuedPayload,
-    SigningIdentity, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
-    VaultProjection,
+    Ed25519Signature, EncryptedSecretPayload, EpochCheckpoint, EpochMetadataState, EpochRecord,
+    EpochRotationReason, EpochTransition, EpochVaultName, EventCount, EventGraph, EventGraphInsert,
+    EventGraphInsertion, EventGraphRejection, EventGraphVaultArchitecture, EventId,
+    EventInsertStatus, EventLookup, EventPendingReason, EventStorageBytes, GenesisImportPayload,
+    GenesisImportRequest, KeyEpoch, LocalEventAppend, LocalEventAppendOutcome, LocalEventBytes,
+    LocalEventStore, LocalEventStoreRejection, LocalEventWrite, LocalOutboxRemoval,
+    LocalOutboxRemovalResult, LocalOutboxRemoved, LocalOutboxWrite, LocalRemoteUnion,
+    LocalRemoteUnionOutcome, ObservedHeads, ProjectedSecret, ProjectedSecretLifecycle,
+    ProjectedSecretOrigin, ProjectedVaultName, ProjectionEpoch, RemoteEventBatch,
+    RemoteEventLogClassification, RemoteEventWrites, RemoteStoreIdentity, SecretFingerprint,
+    SecretReplacementConflict, SecurityConflict, SentinelShareIssuedPayload, SigningIdentity,
+    VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation, VaultProjection,
 };
 pub use nook_event_log::{
     EventLogLocation, EventLogNamespaceKind, IDENTITY_LOG_DIR, IdentityApprovalRequest,
@@ -334,12 +331,6 @@ pub use nook_event_log::{
 pub use password::{
     MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordCharacterSet, PasswordGeneration,
     PasswordGenerationOptions, PasswordStrengthLevel,
-};
-pub use password_envelope::{
-    PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEntryIssuance, PasswordEntryResolution,
-    PasswordEnvelope, PasswordEnvelopeAttachment, PasswordEnvelopeResolution,
-    PasswordEnvelopeRewrap, PasswordEnvelopeVersion, PasswordPolicy, PasswordUnlockEntry,
-    VaultUnlock,
 };
 
 pub use authorized_accounts::{
@@ -428,12 +419,11 @@ pub use validation::{
     S3Location, S3ServiceGuide, StorageMode,
 };
 pub use vault::vault_recovery_options::{
-    VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryPassword,
-    VaultRecoveryProjectionRequest, VaultRecoverySummary,
+    VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryProjectionRequest, VaultRecoverySummary,
 };
 pub use vault_access_check::{
-    BackupPasswordAccessCheck, CheckedCredential, CheckedVaultEvents, CredentialCheckReport,
-    IdentityCheck, IdentityCheckOutcome, PasskeyAccessCheck, VaultCheck, VaultCheckOutcome,
+    CheckedCredential, CheckedVaultEvents, CredentialCheckReport, IdentityCheck,
+    IdentityCheckOutcome, PasskeyAccessCheck, VaultCheck, VaultCheckOutcome,
 };
 pub use vault_access_diagnostics::{
     DiagnosticEpoch, ProjectionDiagnosticInput, VaultAccessDiagnosticRequest,
@@ -517,9 +507,8 @@ pub use vault_sync_store::{
 )]
 pub use vault_wire::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
-    DeviceSigningPublicKey, IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId,
-    SecretPayloadYaml, Sha256Hex, SigningSeedHex, StoredVaultBlob, StoredVaultYaml, SymmetricKey,
-    Url64EncodedString,
+    DeviceSigningPublicKey, IsoTimestamp, MemberLabel, OpaqueCiphertext, SecretPayloadYaml,
+    Sha256Hex, SigningSeedHex, StoredVaultBlob, StoredVaultYaml, SymmetricKey, Url64EncodedString,
 };
 
 #[cfg(test)]
@@ -530,7 +519,6 @@ mod test_support {
     use crate::{
         DeviceIdentity, GenesisMembersRecordsRequest, RecordTypeDeclaration, SecretId, StoreId,
         StoredRecordPayload, StoredVaultYaml, VaultKeys, VaultMember, VaultRecordSet, VaultResult,
-        VaultUnlock,
     };
 
     pub(crate) fn sample_vault_yaml(
@@ -538,19 +526,13 @@ mod test_support {
         store_id: &str,
         armor_line: &str,
     ) -> VaultResult<String> {
-        Ok(VaultRecordSet::serialize_yaml_with_unlock(
-            &[crate::StoredSecretRecord {
+        Ok(VaultRecordSet::serialize_yaml_with_store(&[crate::StoredSecretRecord {
                 key: SecretId::from_vault_record("secret_SMypl8K0w9Y"),
                 secret_type: RecordTypeDeclaration::Undeclared,
                 value: StoredRecordPayload::from_trusted(format!(
                     "-----BEGIN AGE ENCRYPTED FILE-----\n{armor_line}\n-----END AGE ENCRYPTED FILE-----"
                 )),
-            }],
-            &VaultUnlock::Keys,
-            &[],
-            VaultStoreIdentityRef::Assigned(store_id),
-            VaultVersionWrite::Version(version.into()),
-        )?
+            }], VaultStoreIdentityRef::Assigned(store_id), VaultVersionWrite::Version(version.into()))?
         .into_inner())
     }
 
@@ -567,10 +549,8 @@ mod test_support {
             },
         )?);
         let store_id = StoreId::generate()?;
-        let yaml = VaultRecordSet::serialize_yaml_with_unlock(
+        let yaml = VaultRecordSet::serialize_yaml_with_store(
             &records,
-            &VaultUnlock::Keys,
-            &[],
             VaultStoreIdentityRef::Assigned(store_id.as_str()),
             VaultVersionWrite::Initial,
         )?;
@@ -619,8 +599,7 @@ pub use nook_companion_core::{VaultHostObservation, VaultHostPolicy};
 
 pub use vault_client_policy::{JoinConnectEnrollment, JoinConnectRequest, JoinConnectSource};
 pub use vault_client_policy::{
-    LoginDeviceKeyAvailability, LoginPasswordPromptUpdate, LoginUnlockAssessment,
-    LoginUnlockDecision, PasswordEntryPresence,
+    LoginDeviceKeyAvailability, LoginUnlockAssessment, LoginUnlockDecision,
 };
 
 pub use sync_provider_store::{AuthProviderPersistenceMode, AuthProviderPersistenceRequest};
@@ -640,11 +619,11 @@ pub use vault_client_policy::{
     ShouldShowLoginVaultPickerRequest, ShouldSyncFromProvidersRequest, SyncActivityVisibleRequest,
     UnauthenticatedSyncDecisionRequest, VaultAuthenticationState, VaultConnectProbeDecisionRequest,
     VaultExistenceRequirement, VaultFanOutSyncState, VaultIdleExpiration, VaultJoinApprovalWait,
-    VaultPasswordActivity, VaultPasswordPromptState, VaultProviderSyncState, VaultSaveActivity,
-    VaultSecretCreationPermission, VaultSelectionState, VaultSessionLockIntent,
-    VaultStorageSyncDecisionRequest, VaultSwitchTargetRequest, VaultSyncActivity, VaultSyncChange,
-    VaultSyncConflictState, VaultSyncIntent, VaultSyncPermission,
-    VaultSyncTimerStartDecisionRequest, VaultSyncTimerTickDecisionRequest, VaultVerificationState,
+    VaultProviderSyncState, VaultSaveActivity, VaultSecretCreationPermission, VaultSelectionState,
+    VaultSessionLockIntent, VaultStorageSyncDecisionRequest, VaultSwitchTargetRequest,
+    VaultSyncActivity, VaultSyncChange, VaultSyncConflictState, VaultSyncIntent,
+    VaultSyncPermission, VaultSyncTimerStartDecisionRequest, VaultSyncTimerTickDecisionRequest,
+    VaultVerificationState,
 };
 
 pub use device_access::DeviceSessionLockState;

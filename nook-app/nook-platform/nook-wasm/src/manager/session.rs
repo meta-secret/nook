@@ -201,7 +201,6 @@ impl Default for VaultSessionState {
             meta: VaultMetaState::default(),
             last_synced_content: String::new(),
             unlock: VaultUnlock::Keys,
-            password_entries: Vec::new(),
             store_id: String::new(),
             vault_name: VaultNameState::Unnamed,
             projected_name: nook_core::ProjectedVaultName::Unnamed,

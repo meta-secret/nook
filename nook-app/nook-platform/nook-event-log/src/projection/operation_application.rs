@@ -9,7 +9,6 @@ use super::{
     ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectedVaultName,
     VaultProjection,
 };
-use crate::PasswordUnlockEntry;
 use crate::canonical::EventId;
 use crate::event::{EncryptedSecretPayload, VaultOperation};
 use nook_auth2::SecretId;
@@ -24,19 +23,13 @@ impl VaultProjection {
         replacements_by_old: &mut BTreeMap<SecretId, Vec<(EventId, SecretId)>>,
     ) {
         match operation {
-            VaultOperation::VaultImported {
-                secrets,
-                password_entries,
-                ..
-            } => {
+            VaultOperation::VaultImported { secrets, .. } => {
                 for secret in secrets {
                     self.insert_secret(event_id, secret, ProjectedSecretOrigin::Created);
                 }
-                self.password_entries.clone_from(password_entries);
             }
             VaultOperation::EpochCheckpoint {
                 secrets,
-                password_entries,
                 vault_name,
                 ..
             } => {
@@ -49,9 +42,6 @@ impl VaultProjection {
                 };
                 for secret in secrets {
                     self.insert_secret(event_id, secret, ProjectedSecretOrigin::Created);
-                }
-                if let crate::EpochPasswordState::Replace(password_entries) = password_entries {
-                    self.password_entries.clone_from(password_entries);
                 }
             }
             VaultOperation::SecretCreated { secret } => {
@@ -106,34 +96,6 @@ impl VaultProjection {
             VaultOperation::VaultCleared => {
                 self.cleared = true;
                 self.secrets.clear();
-                self.password_entries.clear();
-            }
-            VaultOperation::PasswordAdded {
-                entry_id,
-                label,
-                created_at,
-                envelope,
-            } => {
-                self.upsert_password_entry(PasswordUnlockEntry {
-                    id: entry_id.as_str().to_owned(),
-                    label: label.to_owned(),
-                    created_at: created_at.as_str().to_owned(),
-                    envelope: envelope.clone(),
-                });
-            }
-            VaultOperation::PasswordRotated { entry_id, envelope }
-            | VaultOperation::PasswordEnvelopeUpgraded { entry_id, envelope } => {
-                if let Some(entry) = self
-                    .password_entries
-                    .iter_mut()
-                    .find(|entry| entry.id == entry_id.as_str())
-                {
-                    entry.envelope.clone_from(envelope);
-                }
-            }
-            VaultOperation::PasswordRemoved { entry_id } => {
-                self.password_entries
-                    .retain(|entry| entry.id != entry_id.as_str());
             }
             VaultOperation::JoinRequested { .. }
             | VaultOperation::JoinApproved { .. }
@@ -163,25 +125,13 @@ impl VaultProjection {
             },
         );
     }
-
-    fn upsert_password_entry(&mut self, entry: PasswordUnlockEntry) {
-        if let Some(existing) = self
-            .password_entries
-            .iter_mut()
-            .find(|existing| existing.id == entry.id)
-        {
-            *existing = entry;
-            return;
-        }
-        self.password_entries.push(entry);
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{PasswordEnvelope, SecretFingerprint};
-    use nook_auth2::{IsoTimestamp, OpaqueCiphertext, PasswordEntryId, SecretType, Sha256Hex};
+    use crate::SecretFingerprint;
+    use nook_auth2::{OpaqueCiphertext, SecretType, Sha256Hex};
 
     impl EventId {
         fn projection_fixture() -> crate::EventResult<Self> {
@@ -197,21 +147,6 @@ mod tests {
                 ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{value}")),
                 identity_fingerprint: SecretFingerprint::from_trusted(format!("identity-{value}")),
                 fingerprint: SecretFingerprint::from_trusted(format!("version-{value}")),
-            }
-        }
-    }
-
-    struct PasswordEnvelopeFixture<'a>(&'a str);
-
-    impl PasswordEnvelopeFixture<'_> {
-        fn into_envelope(self) -> PasswordEnvelope {
-            PasswordEnvelope {
-                version: crate::PasswordEnvelopeVersion::LEGACY,
-                kdf: "scrypt".to_owned(),
-                work_factor: 10.into(),
-                recipient: String::new(),
-                wrapped_keys: String::new(),
-                ciphertext: self.0.to_owned(),
             }
         }
     }
@@ -294,13 +229,6 @@ mod tests {
         let mut projection = VaultProjection::default();
         let mut replacements = BTreeMap::new();
         let importer = EventId::projection_fixture()?;
-        let imported_entry = PasswordUnlockEntry {
-            id: "pwdentry001".to_owned(),
-            label: "Travel recovery".to_owned(),
-            created_at: "2026-06-28T00:00:00Z".to_owned(),
-            envelope: PasswordEnvelopeFixture("imported").into_envelope(),
-        };
-
         projection.apply_operation(
             &importer,
             &VaultOperation::VaultImported {
@@ -308,7 +236,6 @@ mod tests {
                 secrets: vec![EncryptedSecretPayload::projection_fixture(
                     "secret_imported1",
                 )],
-                password_entries: vec![imported_entry.clone()],
             },
             &mut replacements,
         );
@@ -317,144 +244,10 @@ mod tests {
                 .secrets
                 .contains_key(&SecretId::from_vault_record("secret_imported1"))
         );
-        assert_eq!(projection.password_entries, vec![imported_entry]);
 
         projection.apply_operation(&importer, &VaultOperation::VaultCleared, &mut replacements);
         assert!(projection.cleared);
         assert!(projection.secrets.is_empty());
-        assert!(projection.password_entries.is_empty());
-        Ok(())
-    }
-
-    #[test]
-    fn password_operations_add_rotate_and_remove() -> anyhow::Result<()> {
-        let mut projection = VaultProjection::default();
-        let mut replacements = BTreeMap::new();
-        let entry_id = PasswordEntryId::parse("pwdentry001")?;
-        let actor = EventId::projection_fixture()?;
-
-        projection.apply_operation(
-            &actor,
-            &VaultOperation::PasswordAdded {
-                entry_id: entry_id.clone(),
-                label: "Primary recovery".to_owned(),
-                created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:01Z".to_owned()),
-                envelope: PasswordEnvelopeFixture("initial").into_envelope(),
-            },
-            &mut replacements,
-        );
-        assert_eq!(projection.password_entries.len(), 1);
-        let entry = projection
-            .password_entries
-            .first()
-            .ok_or_else(|| anyhow::anyhow!("added password entry must be projected"))?;
-        assert_eq!(entry.label, "Primary recovery");
-
-        projection.apply_operation(
-            &actor,
-            &VaultOperation::PasswordRotated {
-                entry_id: entry_id.clone(),
-                envelope: PasswordEnvelopeFixture("rotated").into_envelope(),
-            },
-            &mut replacements,
-        );
-        let entry = projection
-            .password_entries
-            .first()
-            .ok_or_else(|| anyhow::anyhow!("rotated password entry must remain projected"))?;
-        assert_eq!(entry.envelope.ciphertext, "rotated");
-        projection.apply_operation(
-            &actor,
-            &VaultOperation::PasswordEnvelopeUpgraded {
-                entry_id: entry_id.clone(),
-                envelope: PasswordEnvelopeFixture("upgraded").into_envelope(),
-            },
-            &mut replacements,
-        );
-        let entry = projection
-            .password_entries
-            .first()
-            .ok_or_else(|| anyhow::anyhow!("upgraded password entry must remain projected"))?;
-        assert_eq!(entry.envelope.ciphertext, "upgraded");
-
-        projection.apply_operation(
-            &actor,
-            &VaultOperation::PasswordRemoved { entry_id },
-            &mut replacements,
-        );
-        assert!(projection.password_entries.is_empty());
-        Ok(())
-    }
-
-    #[test]
-    fn epoch_checkpoint_replaces_password_entries() -> anyhow::Result<()> {
-        let mut projection = VaultProjection {
-            password_entries: vec![PasswordUnlockEntry {
-                id: "pwdentry001".to_owned(),
-                label: "Old".to_owned(),
-                created_at: "2026-06-28T00:00:00Z".to_owned(),
-                envelope: PasswordEnvelopeFixture("old-keys").into_envelope(),
-            }],
-            ..VaultProjection::default()
-        };
-        let replacement = PasswordUnlockEntry {
-            id: "pwdentry002".to_owned(),
-            label: "Survivor".to_owned(),
-            created_at: "2026-06-28T00:00:01Z".to_owned(),
-            envelope: PasswordEnvelopeFixture("new-keys").into_envelope(),
-        };
-
-        projection.apply_operation(
-            &EventId::projection_fixture()?,
-            &VaultOperation::EpochCheckpoint {
-                vault_name: crate::EpochVaultName::Unnamed,
-                secrets: Vec::new(),
-                members_checkpoint_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
-                rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
-                password_entries: crate::EpochPasswordState::Replace(vec![replacement.clone()]),
-            },
-            &mut BTreeMap::new(),
-        );
-
-        assert_eq!(projection.password_entries, vec![replacement]);
-        Ok(())
-    }
-
-    #[test]
-    fn legacy_checkpoint_preserves_passwords_while_replacing_secrets() -> anyhow::Result<()> {
-        let retained = PasswordUnlockEntry {
-            id: "pwdentry001".to_owned(),
-            label: "Retained".to_owned(),
-            created_at: "2026-06-28T00:00:00Z".to_owned(),
-            envelope: PasswordEnvelopeFixture("retained-keys").into_envelope(),
-        };
-        let mut projection = VaultProjection {
-            password_entries: vec![retained.clone()],
-            ..VaultProjection::default()
-        };
-        let event = EventId::projection_fixture()?;
-        let old = EncryptedSecretPayload::projection_fixture("secret_oldrecord1");
-        projection.insert_secret(&event, &old, ProjectedSecretOrigin::Created);
-        let replacement = EncryptedSecretPayload::projection_fixture("secret_newrecord1");
-        projection.apply_operation(
-            &event,
-            &VaultOperation::EpochCheckpoint {
-                vault_name: crate::EpochVaultName::Unnamed,
-                secrets: vec![replacement.clone()],
-                members_checkpoint_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
-                rotated_meta_records: crate::EpochMetadataState::LegacyRetain,
-                password_entries: crate::EpochPasswordState::LegacyRetain,
-            },
-            &mut BTreeMap::new(),
-        );
-        assert_eq!(projection.password_entries, vec![retained]);
-        assert_eq!(projection.secrets.len(), 1);
-        assert!(!projection.secrets.contains_key(&old.id));
-        let projected_replacement = projection
-            .secrets
-            .get(&replacement.id)
-            .ok_or_else(|| anyhow::anyhow!("checkpoint replacement must be projected"))?;
-        assert_eq!(projected_replacement.record, replacement.to_stored());
         Ok(())
     }
 
@@ -476,7 +269,6 @@ mod tests {
                 secrets: vec![replacement.clone()],
                 members_checkpoint_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
-                password_entries: crate::EpochPasswordState::Replace(Vec::new()),
             },
             &mut BTreeMap::new(),
         );
@@ -501,7 +293,6 @@ mod tests {
             secrets: Vec::new(),
             members_checkpoint_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
             rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
-            password_entries: crate::EpochPasswordState::Replace(Vec::new()),
             vault_name,
         };
         assert_eq!(projection.vault_name, ProjectedVaultName::Unnamed);

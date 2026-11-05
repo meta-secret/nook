@@ -548,15 +548,7 @@ async fn replacement_manager(
 ) -> anyhow::Result<(NookVaultManager, String)> {
     let previous_store_id = nook_core::StoreId::generate()?.to_string();
     let previous_projection =
-        nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
-            &[],
-            &VaultUnlock::Keys,
-            &[],
-            VaultStoreIdentityRef::Assigned(&previous_store_id),
-            VaultNameRef::Named("Previous vault"),
-            VaultVersionWrite::Initial,
-            &VaultArchitecture::default(),
-        )?;
+        nook_core::VaultRecordSet::serialize_yaml_with_name_architecture(&[], VaultStoreIdentityRef::Assigned(&previous_store_id), VaultNameRef::Named("Previous vault"), VaultVersionWrite::Initial, &VaultArchitecture::default())?;
     NookDatabase::import_vault_blob(ImportVaultBlobRequest {
         content: previous_projection.as_str(),
         label: ImportVaultLabel::Override("Previous vault"),
@@ -744,15 +736,7 @@ async fn locked_external_import_preserves_prior_vault_and_password_entries() -> 
 
     let previous_store_id = nook_core::StoreId::generate()?.to_string();
     let previous_projection =
-        nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
-            &[],
-            &VaultUnlock::Keys,
-            &[],
-            VaultStoreIdentityRef::Assigned(&previous_store_id),
-            VaultNameRef::Named("Empty local vault"),
-            VaultVersionWrite::Initial,
-            &VaultArchitecture::default(),
-        )?;
+        nook_core::VaultRecordSet::serialize_yaml_with_name_architecture(&[], VaultStoreIdentityRef::Assigned(&previous_store_id), VaultNameRef::Named("Empty local vault"), VaultVersionWrite::Initial, &VaultArchitecture::default())?;
     NookDatabase::import_vault_blob(ImportVaultBlobRequest {
         content: previous_projection.as_str(),
         label: ImportVaultLabel::Override("Empty local vault"),

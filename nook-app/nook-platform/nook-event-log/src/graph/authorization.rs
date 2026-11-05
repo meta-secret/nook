@@ -130,9 +130,7 @@ impl EventGraph {
                             reason: "checkpoint parent must be one security rotation trigger",
                         })
                     }
-                    SecurityRotationTrigger::PasswordRotated
-                    | SecurityRotationTrigger::PasswordRemoved
-                    | SecurityRotationTrigger::DeviceRevoked => Ok(()),
+                    SecurityRotationTrigger::DeviceRevoked => Ok(()),
                 }
             }
         }
@@ -260,7 +258,6 @@ pub(super) mod tests {
             payload: GenesisImportPayload {
                 source_content_hash: genesis_source_hash(),
                 secrets: vec![],
-                password_entries: vec![],
             },
             created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             signing_key,
@@ -509,7 +506,7 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn self_signed_password_join_approval_is_allowed() -> EventResult<()> {
+    fn self_signed_join_approval_is_allowed() -> EventResult<()> {
         let root_key = signing_key();
         let joiner_key = signing_key();
         let (mut graph, genesis_id) = graph_with_genesis(&root_key)?;

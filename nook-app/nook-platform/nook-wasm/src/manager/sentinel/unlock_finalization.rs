@@ -486,7 +486,6 @@ mod tests {
                 let mut operations = vec![VaultOperation::VaultImported {
                     source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                     secrets: Vec::new(),
-                    password_entries: Vec::new(),
                 }];
                 operations.extend(fixture.output.operations());
                 let epoch = EventId::from_sha256_hex(

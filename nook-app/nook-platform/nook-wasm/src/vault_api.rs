@@ -829,13 +829,7 @@ mod projection_tests {
             vec![ProviderKind::Local]
         );
 
-        let yaml = VaultRecordSet::serialize_yaml_with_unlock(
-            &[],
-            &VaultUnlock::Keys,
-            &[],
-            VaultStoreIdentityRef::Unassigned,
-            VaultVersionWrite::Version(1.into()),
-        )?;
+        let yaml = VaultRecordSet::serialize_yaml_with_store(&[], VaultStoreIdentityRef::Unassigned, VaultVersionWrite::Version(1.into()))?;
         assert_eq!(read_vault_version(yaml.as_str()), 1);
         Ok(())
     }

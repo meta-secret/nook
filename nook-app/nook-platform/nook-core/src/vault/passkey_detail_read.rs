@@ -270,7 +270,6 @@ mod tests {
                 operation: VaultOperation::VaultImported {
                     source_content_hash: Sha256Hex::from_bytes(b"passkey read genesis"),
                     secrets: Vec::new(),
-                    password_entries: Vec::new(),
                 },
             })?;
             let payload = fixture.payload(&fixture.original_id)?;

@@ -619,23 +619,9 @@ mod sentinel_genesis_storage_tests {
         let _ = Rexie::delete("nook_db").await;
         let first_id = nook_core::StoreId::generate()?.to_string();
         let second_id = nook_core::StoreId::generate()?.to_string();
-        let first = nook_core::VaultRecordSet::serialize_yaml_with_unlock_and_name(
-            &[],
-            &nook_core::VaultUnlock::Keys,
-            &[],
-            nook_core::VaultStoreIdentityRef::Assigned(&first_id),
-            nook_core::VaultNameRef::Named("Original"),
-            nook_core::VaultVersionWrite::Initial,
-        )?
+        let first = nook_core::VaultRecordSet::serialize_yaml_with_name(&[], nook_core::VaultStoreIdentityRef::Assigned(&first_id), nook_core::VaultNameRef::Named("Original"), nook_core::VaultVersionWrite::Initial)?
         .into_inner();
-        let second = nook_core::VaultRecordSet::serialize_yaml_with_unlock_and_name(
-            &[],
-            &nook_core::VaultUnlock::Keys,
-            &[],
-            nook_core::VaultStoreIdentityRef::Assigned(&second_id),
-            nook_core::VaultNameRef::Named("Imported"),
-            nook_core::VaultVersionWrite::Initial,
-        )?
+        let second = nook_core::VaultRecordSet::serialize_yaml_with_name(&[], nook_core::VaultStoreIdentityRef::Assigned(&second_id), nook_core::VaultNameRef::Named("Imported"), nook_core::VaultVersionWrite::Initial)?
         .into_inner();
 
         assert_eq!(

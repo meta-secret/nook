@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 use crate::{
-    CheckedCredential, CredentialCheckReport, FilingIdentity, IdentityCheck, IdentityCheckOutcome,
+    CredentialCheckReport, FilingIdentity, IdentityCheck, IdentityCheckOutcome,
     ProviderIdentityJoin, ProviderIdentityLog, ProviderVaultAccess, ProviderVaultName,
     ProviderVaultSummary, VaultCheckOutcome,
 };
@@ -284,25 +284,20 @@ impl ProviderIdentityChoices<'_> {
 
     /// The short id of the first checked passkey that opened the identity.
     fn opening_passkey(&self, identity: &FilingIdentity) -> Option<String> {
-        self.checks
-            .iter()
-            .find_map(|report| match &report.credential {
-                CheckedCredential::Passkey { fingerprint } => report
-                    .identities
-                    .iter()
-                    .any(|checked| {
-                        checked.identity_id == identity.identity_id
-                            && checked.outcome == IdentityCheckOutcome::Opens
-                    })
-                    .then(|| PasskeyFingerprint(fingerprint).short()),
-                CheckedCredential::BackupPassword => None,
-            })
+        self.checks.iter().find_map(|report| {
+            report
+                .identities
+                .iter()
+                .any(|checked| {
+                    checked.identity_id == identity.identity_id
+                        && checked.outcome == IdentityCheckOutcome::Opens
+                })
+                .then(|| PasskeyFingerprint(&report.credential.fingerprint).short())
+        })
     }
 
     fn passkey_checked(&self) -> bool {
-        self.checks
-            .iter()
-            .any(|report| matches!(report.credential, CheckedCredential::Passkey { .. }))
+        !self.checks.is_empty()
     }
 
     fn checked_identities(&self) -> impl Iterator<Item = &IdentityCheck> {
@@ -336,9 +331,7 @@ impl ProviderIdentityChoices<'_> {
                     VaultCheckOutcome::Opens { name } if *name != ProviderVaultName::Unknown => {
                         Some(name)
                     }
-                    VaultCheckOutcome::Opens { .. }
-                    | VaultCheckOutcome::DoesNotOpen
-                    | VaultCheckOutcome::NoBackupPassword => None,
+                    VaultCheckOutcome::Opens { .. } | VaultCheckOutcome::DoesNotOpen => None,
                 })
         {
             named.name = name.clone();
@@ -365,7 +358,9 @@ impl PasskeyFingerprint<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{IdentityId, IdentityWords, ProviderVaultTime, StoreId, VaultCheck};
+    use crate::{
+        CheckedCredential, IdentityId, IdentityWords, ProviderVaultTime, StoreId, VaultCheck,
+    };
 
     struct Fixture;
 
@@ -451,7 +446,7 @@ mod tests {
             store: &str,
         ) -> anyhow::Result<CredentialCheckReport> {
             Ok(CredentialCheckReport {
-                credential: CheckedCredential::Passkey {
+                credential: CheckedCredential {
                     fingerprint: "passkey_a1b2c3d4e5f60708".to_owned(),
                 },
                 identities: vec![IdentityCheck {
@@ -733,44 +728,6 @@ mod tests {
         assert_eq!(
             choice.decisions,
             vec![IdentityDecision::Leave, IdentityDecision::AskToJoin]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn a_backup_password_names_a_vault_but_never_opens_its_identity() -> anyhow::Result<()> {
-        let other = Fixture::identity(OTHER, ProviderIdentityLog::Absent)?;
-        let vaults = [Fixture::vault(
-            OTHER_VAULT,
-            &other,
-            ProviderVaultAccess::Locked,
-        )?];
-        let mut password = Fixture::passkey_opening(&other, OTHER_VAULT)?;
-        password.credential = CheckedCredential::BackupPassword;
-        for checked in &mut password.identities {
-            checked.outcome = IdentityCheckOutcome::VaultsOnly;
-            checked.name = ProviderVaultName::Unknown;
-        }
-        let checks = [password];
-        let choices = ProviderIdentityChoices {
-            vaults: &vaults,
-            identities: &[],
-            checks: &checks,
-            session: IdentitySession::IdentityInUse,
-        }
-        .choices();
-
-        assert_eq!(
-            Fixture::at(&choices, 0)?.standing,
-            IdentityStanding::Unchecked
-        );
-        assert_eq!(
-            Fixture::first_vault_name(Fixture::at(&choices, 0)?),
-            Some(&ProviderVaultName::named("Family"))
-        );
-        assert_eq!(
-            Fixture::at(&choices, 0)?.identity.name,
-            ProviderVaultName::Unknown
         );
         Ok(())
     }

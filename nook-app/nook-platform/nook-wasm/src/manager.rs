@@ -351,18 +351,10 @@ impl NookVaultManager {
         }
         let records = self.vault.meta.to_stored_records();
         Ok(
-            nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
-                &records,
-                &self.vault.unlock,
-                &self.vault.password_entries,
-                VaultStoreIdentityRef::Assigned(self.vault.store_id.as_str()),
-                match &self.vault.vault_name {
+            nook_core::VaultRecordSet::serialize_yaml_with_name_architecture(&records, VaultStoreIdentityRef::Assigned(self.vault.store_id.as_str()), match &self.vault.vault_name {
                     VaultNameState::Unnamed => VaultNameRef::Unnamed,
                     VaultNameState::Named(name) => VaultNameRef::Named(name),
-                },
-                VaultVersionWrite::Initial,
-                &self.vault.architecture,
-            )?
+                }, VaultVersionWrite::Initial, &self.vault.architecture)?
             .into_inner(),
         )
     }
@@ -397,7 +389,7 @@ impl NookVaultManager {
         &mut self,
         content: &str,
     ) -> Result<(), NookError> {
-        let metadata = nook_core::VaultContent::new(content).capture_unlock()?;
+        let metadata = nook_core::VaultContent::new(content).capture_metadata()?;
         self.application
             .validate_session_access(metadata.architecture.vault_type)?;
         self.vault.unlock = metadata.unlock;
@@ -666,18 +658,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn capture_unlock_adopts_metadata_and_version() -> Result<(), NookError> {
+    fn capture_metadata_adopts_metadata_and_version() -> Result<(), NookError> {
         let mut manager = NookVaultManager::new();
         let store_id = nook_core::StoreId::generate()?;
-        let yaml = nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
-            &[],
-            &VaultUnlock::Keys,
-            &[],
-            VaultStoreIdentityRef::Assigned(store_id.as_str()),
-            VaultNameRef::Named("Captured"),
-            VaultVersionWrite::Initial,
-            &manager.vault.architecture,
-        )?
+        let yaml = nook_core::VaultRecordSet::serialize_yaml_with_name_architecture(&[], VaultStoreIdentityRef::Assigned(store_id.as_str()), VaultNameRef::Named("Captured"), VaultVersionWrite::Initial, &manager.vault.architecture)?
         .into_inner();
 
         manager.capture_vault_unlock(&yaml)?;

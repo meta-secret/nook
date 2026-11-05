@@ -26,32 +26,6 @@ impl From<VaultSecurityConflictCount> for usize {
     }
 }
 
-/// Number of password-unlock entries available for a vault.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct VaultPasswordEntryCount(usize);
-
-impl VaultPasswordEntryCount {
-    pub(crate) const fn is_zero(self) -> bool {
-        self.0 == 0
-    }
-
-    pub(crate) const fn is_nonzero(self) -> bool {
-        self.0 > 0
-    }
-}
-
-impl From<usize> for VaultPasswordEntryCount {
-    fn from(value: usize) -> Self {
-        Self(value)
-    }
-}
-
-impl From<VaultPasswordEntryCount> for usize {
-    fn from(value: VaultPasswordEntryCount) -> Self {
-        value.0
-    }
-}
-
 /// Number of configured vault synchronization providers.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct VaultSyncProviderCount(usize);

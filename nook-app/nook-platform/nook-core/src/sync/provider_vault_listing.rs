@@ -632,7 +632,7 @@ mod tests {
     fn syncing_vaults_come_first_then_openable_then_locked_most_recent_first() -> anyhow::Result<()>
     {
         let own = store("store_ownvault001")?;
-        let backed = store("store_backedvault")?;
+        let granted = store("store_grantedvlt1")?;
         let older = store("store_oldvault001")?;
         let newer = store("store_newvault001")?;
         let observation = |store_id: &StoreId, time: &str| -> anyhow::Result<_> {
@@ -647,12 +647,12 @@ mod tests {
             observations: vec![
                 observation(&older, "2023-01-01T00:00:00Z")?,
                 observation(&newer, "2025-01-01T00:00:00Z")?,
-                observation(&backed, "2019-01-01T00:00:00Z")?,
+                observation(&granted, "2019-01-01T00:00:00Z")?,
                 observation(&own, "2020-01-01T00:00:00Z")?,
             ],
             keys: ProviderVaultKeyholding {
                 identity_vaults: slice::from_ref(&own),
-                password_vaults: slice::from_ref(&backed),
+                granted_vaults: slice::from_ref(&granted),
                 session: crate::IdentitySession::IdentityInUse,
                 ..ProviderVaultKeyholding::NONE
             },
@@ -670,7 +670,7 @@ mod tests {
             ranked,
             [
                 (own, ProviderVaultAccess::Syncs),
-                (backed, ProviderVaultAccess::BackupPassword),
+                (granted, ProviderVaultAccess::Granted),
                 (newer, ProviderVaultAccess::Locked),
                 (older, ProviderVaultAccess::Locked),
             ]
@@ -702,12 +702,12 @@ mod tests {
             ]
         };
         let identity_vaults = [local.clone()];
-        let listed = |occupancy: LocalVaultOccupancy, password_vaults: &[StoreId]| {
+        let listed = |occupancy: LocalVaultOccupancy, granted_vaults: &[StoreId]| {
             let listing = ProviderVaultListingRequest {
                 observations: observations(),
                 keys: ProviderVaultKeyholding {
                     identity_vaults: &identity_vaults,
-                    password_vaults,
+                    granted_vaults,
                     session: crate::IdentitySession::IdentityInUse,
                     ..ProviderVaultKeyholding::NONE
                 },

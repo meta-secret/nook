@@ -332,7 +332,6 @@ mod tests {
                     VaultOperation::VaultImported {
                         source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
                         secrets: Vec::new(),
-                        password_entries: Vec::new(),
                     },
                     VaultOperation::JoinApproved {
                         device_id: identity.device_id().clone(),
@@ -426,7 +425,6 @@ mod tests {
                     secrets: Vec::new(),
                     members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
                     rotated_meta_records: EpochMetadataState::Replace(shares),
-                    password_entries: EpochPasswordState::Replace(Vec::new()),
                 }],
             })?;
             self.records.0.push(ExternalEventLogRecord {

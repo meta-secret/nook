@@ -16,8 +16,8 @@ use serde::Deserialize;
 )]
 pub use nook_auth2::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
-    DeviceSigningPublicKey, IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId,
-    Sha256Hex, SigningSeedHex, SymmetricKey, Url64EncodedString,
+    DeviceSigningPublicKey, IsoTimestamp, MemberLabel, OpaqueCiphertext, Sha256Hex, SigningSeedHex,
+    SymmetricKey, Url64EncodedString,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]

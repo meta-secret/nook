@@ -9,8 +9,9 @@ impl EventGraph {
     ///
     /// Policy:
     /// - `JoinRequested` — always allowed when self-signed (pending join).
-    /// - `JoinApproved` — allowed only for simple password self-enrol, i.e. when
-    ///   causal ancestry has no sentinel membership/share ops.
+    /// - `JoinApproved` — allowed only for Simple-vault self-enrolment by a
+    ///   vault key holder, i.e. when causal ancestry has no sentinel
+    ///   membership/share ops.
     /// - `SentinelParticipantEnrolled` — never self-signed; must be authorized.
     pub(super) fn is_self_signed_membership_event(&self, event: &VaultEvent) -> EventResult<bool> {
         if event.body.operations.is_empty() {
@@ -63,7 +64,7 @@ impl EventGraph {
         Ok(request_actor == event.body.actor_id)
     }
     /// True when causal ancestry proves Sentinel architecture and therefore
-    /// disqualifies simple password self-enrol via `JoinApproved`.
+    /// disqualifies Simple-vault self-enrolment via `JoinApproved`.
     fn ancestry_has_sentinel_architecture_evidence(&self, event: &VaultEvent) -> bool {
         let mut visited = BTreeSet::new();
         let mut stack = event.body.parents.clone();

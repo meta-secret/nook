@@ -253,17 +253,6 @@ impl From<bool> for VaultSyncIntent {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VaultPasswordActivity {
-    Idle,
-    Busy,
-}
-impl From<bool> for VaultPasswordActivity {
-    fn from(observed: bool) -> Self {
-        if observed { Self::Busy } else { Self::Idle }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VaultSyncChange {
     Unchanged,
     Changed,
@@ -290,17 +279,6 @@ impl From<bool> for VaultJoinApprovalWait {
         } else {
             Self::NotWaiting
         }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VaultPasswordPromptState {
-    Closed,
-    Open,
-}
-impl From<bool> for VaultPasswordPromptState {
-    fn from(observed: bool) -> Self {
-        if observed { Self::Open } else { Self::Closed }
     }
 }
 
