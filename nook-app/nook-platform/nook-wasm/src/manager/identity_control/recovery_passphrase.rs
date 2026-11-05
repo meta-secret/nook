@@ -12,11 +12,11 @@
 
 use crate::{TypedInput, TypedOutput};
 use nook_core::{
-    AppId, IdentityControlLog, IdentityControlState, IdentityId, IdentityInvitationBinding,
-    IdentityInvitationBindingRequest, IdentityRecoveryPassphraseView, PendingRecoveryPassphrase,
-    RecoveryPassphraseError, RecoveryPassphraseRecording, RecoveryPassphraseStart,
-    RecoveryPassphraseUse, RecoveryStrength, RecoveryWordCount, RecoveryWordPosition,
-    TypedRecoveryWords, VaultError,
+    AdoptedIdentityLabel, AppId, IdentityControlLog, IdentityControlState, IdentityId,
+    IdentityInvitationBinding, IdentityInvitationBindingRequest, IdentityRecoveryPassphraseView,
+    PendingRecoveryPassphrase, RecoveredKeyring, RecoveryPassphraseError,
+    RecoveryPassphraseRecording, RecoveryPassphraseStart, RecoveryPassphraseUse, RecoveryStrength,
+    RecoveryWordCount, RecoveryWordPosition, TypedRecoveryWords, VaultError,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -278,34 +278,44 @@ impl NookVaultManager {
             .into());
         }
         let member = self.own_identity_member_keys(&app_key).await?;
+        let device_signer = self.ensure_signing_identity().await?;
         let (log, mut events) = self.identity_log_at(&source, &identity_id).await?;
-        let approval = match (RecoveryPassphraseUse {
+        let recovered = match (RecoveryPassphraseUse {
             log: &log,
             recovery: &recovery,
             typed: &typed,
             member: &member,
+            device_signer: &device_signer,
             created_at: &Self::identity_event_time()?,
         })
         .approval()
         {
-            Ok(approval) => approval,
+            Ok(recovered) => recovered,
             Err(refusal) => return Ok(NookRecoveryWordsCheck::of_vault(refusal)?.encode()?),
         };
-        let event_id = approval.id()?;
-        let bytes = approval.serialize_storage_yaml()?;
-        self.identity_source(&source)
-            .await?
-            .put_identity_event(IdentityEventPut {
-                identity_id: &identity_id,
-                event_id: &event_id,
-                bytes: &bytes,
-            })
-            .await?;
-        events.push(bytes);
+        let location = self.identity_source(&source).await?;
+        for event in recovered.events() {
+            let event_id = event.id()?;
+            let bytes = event.serialize_storage_yaml()?;
+            location
+                .put_identity_event(IdentityEventPut {
+                    identity_id: &identity_id,
+                    event_id: &event_id,
+                    bytes: &bytes,
+                })
+                .await?;
+            events.push(bytes);
+        }
+        // The keyring's own name replaces the one this device picked.
+        let label = match &recovered {
+            RecoveredKeyring::Named { name, .. } => AdoptedIdentityLabel::Invited(name.as_str()),
+            RecoveredKeyring::Unnamed { .. } => AdoptedIdentityLabel::Kept,
+        };
         match Self::complete_join_from_log(IdentityJoinLog {
             identity_id: &identity_id,
             app_key: &app_key,
             events: &events,
+            label,
         })
         .await?
         {

@@ -273,8 +273,8 @@ pub use auth::identity_join::{
 pub use auth::identity_vault_pairing::{IdentityVaultPairingPlan, IdentityVaultPairingRequest};
 pub use auth::identity_words::IdentityWords;
 pub use auth::recovery_passphrase::{
-    PendingRecoveryPassphrase, RecoveryPassphraseRecording, RecoveryPassphraseStart,
-    RecoveryPassphraseUse,
+    PendingRecoveryPassphrase, RecoveredKeyring, RecoveredKeyringName, RecoveryPassphraseRecording,
+    RecoveryPassphraseStart, RecoveryPassphraseUse,
 };
 pub use auth::vault_meta_actions::{
     DeviceAuthorization, EventGraphAuthorizationProjection, EventGraphDeviceAccess,
@@ -356,8 +356,8 @@ pub use passkey_identity_addition::{
     AddedIdentitySelection, PasskeyIdentityAdded, PasskeyIdentityAddition,
 };
 pub use provider_identity_choice::{
-    IdentityDecision, IdentitySession, IdentitySetup, IdentityStanding, ProviderIdentityChoice,
-    ProviderIdentityChoices,
+    IdentityDecision, IdentityRecoveryOffer, IdentitySession, IdentitySetup, IdentityStanding,
+    ProviderIdentityChoice, ProviderIdentityChoices,
 };
 pub use provider_identity_join::{
     IdentityJoinRequestPlan, IdentityJoinRequestWrite, ProviderIdentityJoinRequest,
@@ -643,5 +643,5 @@ pub use nook_companion_core::ImportedExtensionEventLog;
 
 pub use nook_auth2::{
     RecoveryPassphraseError, RecoveryStrength, RecoveryWordCount, RecoveryWordPosition,
-    RecoveryWordSuggestions, TypedRecoveryWords,
+    RecoveryWordTyping, TypedRecoveryWords,
 };

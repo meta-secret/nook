@@ -50,7 +50,7 @@ pub struct IdentityControlInsertion {
 
 /// What a member may sign: an app key acts for the identity; a recovery
 /// passphrase may only approve a new app key or remove itself.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum MemberRole {
     App,
     Recovery,
@@ -342,7 +342,12 @@ impl IdentityControlLog {
                         role: approval.role,
                     });
                 member.actors.insert(approval.actor);
-                member.role = member.role.max(approval.role);
+                // An app admitted as a recovery passphrase keeps that role.
+                member.role = match (member.role, approval.role) {
+                    (MemberRole::App, MemberRole::App) => MemberRole::App,
+                    (MemberRole::Recovery, MemberRole::App | MemberRole::Recovery)
+                    | (MemberRole::App, MemberRole::Recovery) => MemberRole::Recovery,
+                };
             }
         }
         Ok(members)
@@ -512,12 +517,60 @@ impl IdentityControlLog {
             .values()
             .any(|member| member.actors.contains(&event.body.actor_id));
         match is_member {
-            true => Ok(Self::member_action_rejection(event, &members)),
+            true => match Self::member_action_rejection(event, &members) {
+                Some(reason) => Ok(Some(reason)),
+                None => self.revoked_recovery_rejection(id, event, &members),
+            },
             false => Ok(Some(format!(
                 "Identity actor {} was not an identity member in causal history",
                 event.body.actor_id
             ))),
         }
+    }
+
+    /// Why an event a recovery passphrase signed is refused although its
+    /// causal past still lists it: the log holds an authorized revocation of
+    /// that passphrase the event does not causally precede. A revoked
+    /// passphrase's words cannot add a device by building on heads from
+    /// before its removal.
+    fn revoked_recovery_rejection(
+        &self,
+        id: &EventId,
+        event: &IdentityEvent,
+        members: &BTreeMap<AppId, EffectiveMember>,
+    ) -> EventResult<Option<String>> {
+        let actor = &event.body.actor_id;
+        let Some((recovery, _)) = members.iter().find(|(_, member)| {
+            member.actors.contains(actor) && matches!(member.role, MemberRole::Recovery)
+        }) else {
+            return Ok(None);
+        };
+        let applicable = self.causal.applicable_ids();
+        for revocation_id in applicable {
+            if revocation_id == id || self.causal.is_ancestor(id, revocation_id) {
+                continue;
+            }
+            let Some(revocation) = self.events.get(revocation_id) else {
+                continue;
+            };
+            let revokes = revocation.body.operations.iter().any(|operation| {
+                matches!(operation, IdentityControlOperation::MemberRevoked { app_id } if app_id == recovery)
+            });
+            if !revokes {
+                continue;
+            }
+            // Only a revocation its signer was entitled to make counts.
+            let signer_was_member = self
+                .effective_members(&self.ancestry(&revocation.body.parents))?
+                .values()
+                .any(|member| member.actors.contains(&revocation.body.actor_id));
+            if signer_was_member {
+                return Ok(Some(format!(
+                    "Recovery passphrase {recovery} was removed by {revocation_id}, which this event does not precede"
+                )));
+            }
+        }
+        Ok(None)
     }
 
     fn quarantine_unauthorized(mut self) -> Self {

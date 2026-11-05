@@ -601,8 +601,28 @@ mod browser_tests {
                 .iter()
                 .any(|member| member.label == "Phone")
         );
+        // The phone never opened the vault, so it is on no vault roster; it
+        // still held the vault's DEK, so revoking it rotates the open vault.
+        let epoch_before = founder.manager.event_log.key_epoch.clone();
         Founder::js(founder.manager.revoke_identity_member(phone_id).await)?;
         assert_eq!(founder.snapshot().await?.members.len(), 1);
+        let epoch_after = founder.manager.event_log.key_epoch.clone();
+        assert_ne!(epoch_after, epoch_before);
+        let state =
+            IdentityControlState::project(&NookDatabase::load_identity_log(&identity_id).await?)?;
+        let rotated = state
+            .vault(&nook_core::StoreId::parse(&founder.store_id())?)
+            .ok_or_else(|| anyhow::anyhow!("the vault stays registered"))?;
+        assert_eq!(rotated.current_key_epoch.as_str(), epoch_after);
+        assert!(matches!(
+            rotated.current_dek_for(phone.app.app_id()),
+            nook_core::IdentityVaultDekLookup::NotGranted
+        ));
+        assert!(
+            rotated
+                .revoked_holders(&rotated.current_key_epoch)
+                .is_empty()
+        );
 
         // A fresh invite admits another installation.
         let tablet = Joiner::new()?;

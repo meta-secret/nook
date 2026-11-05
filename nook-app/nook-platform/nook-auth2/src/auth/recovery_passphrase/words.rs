@@ -321,6 +321,55 @@ impl RecoveryWordSuggestions<'_> {
     }
 }
 
+/// What a person has typed so far into a recovery words field. The word
+/// being typed is what follows the last separator, a space or a hyphen, as
+/// [`TypedRecoveryWords`] reads them.
+pub struct RecoveryWordTyping<'a> {
+    pub typed: &'a str,
+}
+
+impl RecoveryWordTyping<'_> {
+    /// Where the word being typed starts.
+    fn current_start(&self) -> usize {
+        self.typed
+            .char_indices()
+            .rev()
+            .find(|(_, character)| character.is_whitespace() || *character == HYPHEN)
+            .map_or(0, |(index, separator)| index + separator.len_utf8())
+    }
+
+    /// The word being typed; empty right after a separator.
+    #[must_use]
+    pub fn current(&self) -> &str {
+        self.typed.get(self.current_start()..).unwrap_or_default()
+    }
+
+    /// List words that start with the word being typed; none before one is
+    /// begun.
+    #[must_use]
+    pub fn suggestions(&self, limit: RecoveryWordCount) -> Vec<&'static str> {
+        RecoveryWordSuggestions {
+            prefix: self.current(),
+            limit,
+        }
+        .words()
+    }
+
+    /// The typed text with the word being typed replaced by the list word
+    /// `word`, and a space for the next one. A word not on the list is
+    /// refused.
+    pub fn complete(&self, word: &str) -> Result<String, RecoveryPassphraseError> {
+        let word = RecoveryWord::of(word.trim()).ok_or_else(|| {
+            RecoveryPassphraseError::UnknownWords(vec![UnknownRecoveryWord {
+                position: RecoveryWordPosition::at(0),
+                typed: TypedRecoveryWord(Zeroizing::new(word.to_owned())),
+            }])
+        })?;
+        let kept = self.typed.get(..self.current_start()).unwrap_or_default();
+        Ok(format!("{kept}{} ", word.text()))
+    }
+}
+
 /// How one separator-free chunk splits into list words.
 enum Segmentation {
     Words(Vec<RecoveryWord>),
@@ -519,6 +568,34 @@ mod tests {
             Err(RecoveryPassphraseError::WordCount { expected, typed })
                 if expected == RecoveryWordCount::STANDARD && u32::from(typed) == 3
         ));
+    }
+
+    #[test]
+    fn the_word_being_typed_follows_the_last_space_or_hyphen() -> Result<(), RecoveryPassphraseError>
+    {
+        let limit = RecoveryWordCount(3);
+        let typing = |typed| RecoveryWordTyping { typed };
+        assert_eq!(typing("Abandon zoo").current(), "zoo");
+        assert_eq!(typing("abandon-zoo").current(), "zoo");
+        assert_eq!(
+            typing("abandon-zoo").suggestions(limit),
+            vec!["zoo", "zoological", "zoologist"]
+        );
+        // Nothing is begun right after a separator.
+        assert_eq!(typing("abandon ").current(), "");
+        assert!(typing("abandon-").suggestions(limit).is_empty());
+        assert!(typing("").suggestions(limit).is_empty());
+        // Completing keeps what came before and readies the next word.
+        assert_eq!(
+            typing("abandon-zool").complete("zoology")?,
+            "abandon-zoology "
+        );
+        assert_eq!(typing("abando").complete("abandon")?, "abandon ");
+        assert!(matches!(
+            typing("abandon zo").complete("zoologyy"),
+            Err(RecoveryPassphraseError::UnknownWords(_))
+        ));
+        Ok(())
     }
 
     #[test]

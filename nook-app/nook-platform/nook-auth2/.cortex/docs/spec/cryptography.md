@@ -16,6 +16,9 @@ a manifest is not evidence that every feature uses that crate.
 - **age scrypt encryption**
   - **Implemented purpose:** Vault secret records keyed by random vault material
   - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/crypto/vault_crypto.rs`
+  - **Implemented purpose:** Keyring recovery passphrase seal over the recovery
+    member's keys
+  - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/auth/recovery_passphrase/seal.rs`
 - **AES-256-GCM**
   - **Implemented purpose:** Passkey-wrapped and PIN-wrapped local app encryption identities
   - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/auth/device_key_protection/protected_identity.rs`
@@ -73,6 +76,23 @@ a manifest is not evidence that every feature uses that crate.
   - Uses age scrypt with a uniformly random 256-bit vault key.
   - New-record programmatic work factor: `log_n = 10`.
   - Existing records retain their embedded work factor.
+- **Keyring recovery passphrase seal**
+  - Cipher: an age file whose only recipient is age scrypt, work factor
+    `log_n = 18`, armored.
+  - Passphrase: the generated words, lowercase, one space apart.
+  - Plaintext: the recovery member's age X25519 secret and its 32-byte Ed25519
+    signing seed.
+  - Unsealing caps the work factor at `18`; words that do not open the seal
+    fail closed with a typed error.
+  - Evidence: `nook-app/nook-platform/nook-auth2/src/auth/recovery_passphrase/seal.rs`.
+- **Keyring recovery passphrase words**
+  - List: the vendored Orchard Street Long List, 17,576 words, pinned by
+    SHA-256.
+  - Generation: `getrandom` 15-bit draws with rejection sampling, so every
+    word is equally likely.
+  - Length: `standard` four words (about 56 bits), `high` five words (about
+    70 bits).
+  - Evidence: `nook-app/nook-platform/nook-auth2/src/auth/recovery_passphrase/words.rs`.
 
 Tests may inject smaller work factors for bounded browser execution. Those test
 parameters are not the production defaults.

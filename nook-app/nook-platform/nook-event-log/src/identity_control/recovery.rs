@@ -516,4 +516,106 @@ mod tests {
         ));
         Ok(())
     }
+
+    #[test]
+    fn a_removed_recovery_passphrase_cannot_add_a_device_by_backdating() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let vault = Vault::register(&mut fixture)?;
+        let recovery = Recovery::new()?;
+        add_recovery(&mut fixture, &recovery, &[vault.opened()])?;
+
+        // The approval the words could sign while the passphrase was a member.
+        let before_removal = fixture.log.clone();
+        let opened = opened_by(
+            &fixture.state()?,
+            recovery.secret.app_key(),
+            &vault.store_id,
+        )?;
+        let device = Installation::new()?;
+        let approval = fixture
+            .state()?
+            .recovery_approval_operation(&IdentityRecoveryApproval {
+                recovery: recovery.app_id(),
+                member: &device.keys("Thief"),
+                vaults: &[OpenedVaultDek {
+                    store_id: &vault.store_id,
+                    key_epoch: &vault.epoch,
+                    keys: &opened,
+                }],
+            })?;
+        let backdated = before_removal.build_append(
+            vec![approval],
+            &recovery.installation().signing(&fixture.at),
+        )?;
+
+        // The passphrase is removed and the vault rotates.
+        let founder = fixture.founder();
+        let remove = fixture.state()?.revocation_operation(recovery.app_id())?;
+        fixture.append(&founder, vec![remove])?;
+        let rotated = VaultKeys::generate()?;
+        let rotated_epoch = epoch_id("after-backdating")?;
+        let rewrap = fixture.state()?.vault_rewrap_operation(&OpenedVaultDek {
+            store_id: &vault.store_id,
+            key_epoch: &rotated_epoch,
+            keys: &rotated,
+        })?;
+        fixture.append(&founder, vec![rewrap])?;
+
+        // Built on heads from before the removal, it still is refused.
+        let inserted = fixture.log.clone().insert(backdated)?;
+        assert!(matches!(
+            inserted.status,
+            IdentityEventInsertStatus::Quarantined { .. }
+        ));
+        let state = IdentityControlState::project(&inserted.log)?;
+        assert!(state.member(device.app.app_id()).is_none());
+        let registered = state
+            .vault(&vault.store_id)
+            .ok_or_else(|| anyhow::anyhow!("the vault stays registered"))?;
+        assert!(matches!(
+            registered.current_dek_for(device.app.app_id()),
+            IdentityVaultDekLookup::NotGranted
+        ));
+        assert!(
+            state
+                .members_missing_current_dek(&vault.store_id)
+                .iter()
+                .all(|member| &member.keys.app_id != device.app.app_id())
+        );
+
+        // In any delivery order: the backdated event first, the removal later.
+        let mut stored = inserted
+            .log
+            .storage_bytes()?
+            .into_iter()
+            .map(|(_, bytes)| bytes)
+            .collect::<Vec<EventStorageBytes>>();
+        stored.reverse();
+        let reversed =
+            IdentityControlLog::new(fixture.identity_id.clone()).union_storage_bytes(&stored)?;
+        assert!(
+            IdentityControlState::project(&reversed)?
+                .member(device.app.app_id())
+                .is_none()
+        );
+
+        // An approval made before the removal stays: the removal follows it.
+        let mut fixture = Fixture::new()?;
+        let recovery = Recovery::new()?;
+        add_recovery(&mut fixture, &recovery, &[])?;
+        let kept = Installation::new()?;
+        let approval = fixture
+            .state()?
+            .recovery_approval_operation(&IdentityRecoveryApproval {
+                recovery: recovery.app_id(),
+                member: &kept.keys("Phone"),
+                vaults: &[],
+            })?;
+        fixture.append(&recovery.installation(), vec![approval])?;
+        let founder = fixture.founder();
+        let remove = fixture.state()?.revocation_operation(recovery.app_id())?;
+        fixture.append(&founder, vec![remove])?;
+        assert!(fixture.state()?.member(kept.app.app_id()).is_some());
+        Ok(())
+    }
 }

@@ -15,65 +15,16 @@
 
 use nook_auth2::{
     AppId, AppKey, IsoTimestamp, MemberLabel, RecoveryPassphraseError, RecoveryPhrase,
-    RecoverySecret, RecoveryStrength, StoreId, TypedRecoveryWords, VaultKeys,
+    RecoverySecret, RecoveryStrength, TypedRecoveryWords,
 };
 use nook_event_log::{
-    EventError, EventId, IdentityControlLog, IdentityControlOperation, IdentityControlState,
-    IdentityEvent, IdentityEventInsertStatus, IdentityEventSigning, IdentityMemberKeys,
-    IdentityRecoveryAddition, IdentityRecoveryApproval, IdentityVaultDekLookup, OpenedVaultDek,
-    SigningIdentity,
+    EventError, IdentityControlLog, IdentityControlOperation, IdentityControlState, IdentityEvent,
+    IdentityEventInsertStatus, IdentityEventSigning, IdentityMemberKeys, IdentityNaming,
+    IdentityRecoveryAddition, IdentityRecoveryApproval, SigningIdentity,
 };
 
-use crate::errors::{VaultError, VaultResult};
-
-/// Every vault of an identity opened at its current epoch through one
-/// member's envelopes.
-struct OpenedIdentityVaults(Vec<OpenedIdentityVault>);
-
-struct OpenedIdentityVault {
-    store_id: StoreId,
-    key_epoch: EventId,
-    keys: VaultKeys,
-}
-
-impl OpenedIdentityVaults {
-    /// Open each vault with the member's own envelope; a vault it holds no
-    /// current envelope for fails closed.
-    fn open(state: &IdentityControlState, app_key: &AppKey) -> VaultResult<Self> {
-        state
-            .vaults
-            .iter()
-            .map(|vault| match vault.current_dek_for(app_key.app_id()) {
-                IdentityVaultDekLookup::Granted(dek) => Ok(OpenedIdentityVault {
-                    store_id: vault.store_id.clone(),
-                    key_epoch: vault.current_key_epoch.clone(),
-                    keys: VaultKeys {
-                        secrets_key: app_key.decrypt_envelope(&dek.secrets_key_ciphertext)?,
-                        members_key: app_key.decrypt_envelope(&dek.members_key_ciphertext)?,
-                    },
-                }),
-                IdentityVaultDekLookup::NotGranted => {
-                    Err(VaultError::Event(EventError::IdentityApprovalIncomplete {
-                        store_id: vault.store_id.as_str().to_owned(),
-                    }))
-                }
-            })
-            .collect::<VaultResult<Vec<_>>>()
-            .map(Self)
-    }
-
-    fn deks(&self) -> Vec<OpenedVaultDek<'_>> {
-        let Self(vaults) = self;
-        vaults
-            .iter()
-            .map(|vault| OpenedVaultDek {
-                store_id: &vault.store_id,
-                key_epoch: &vault.key_epoch,
-                keys: &vault.keys,
-            })
-            .collect()
-    }
-}
+use super::opened_identity_vaults::OpenedIdentityVaults;
+use crate::errors::VaultResult;
 
 /// The member keys a recovery secret publishes, under its label.
 struct RecoveryMemberKeys<'a> {
@@ -175,16 +126,85 @@ pub struct RecoveryPassphraseUse<'a> {
     pub typed: &'a TypedRecoveryWords,
     /// The new device's fresh app key.
     pub member: &'a IdentityMemberKeys,
+    /// The new device's own event signer, which re-seals the keyring's name.
+    pub device_signer: &'a SigningIdentity,
     pub created_at: &'a IsoTimestamp,
+}
+
+/// The keyring's name, as the recovery passphrase opened it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecoveredKeyringName(String);
+
+impl RecoveredKeyringName {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        let Self(name) = self;
+        name
+    }
+}
+
+/// What a recovery writes to the keyring's log, in order.
+#[derive(Debug, Clone)]
+pub enum RecoveredKeyring {
+    /// The keyring has a name: the recovery member's approval of the new
+    /// app key, then the new app key's naming that re-seals the name to
+    /// every member, itself included, so it reads the name with every other
+    /// device lost.
+    Named {
+        approval: IdentityEvent,
+        naming: IdentityEvent,
+        name: RecoveredKeyringName,
+    },
+    /// No member named the keyring: the approval alone.
+    Unnamed { approval: IdentityEvent },
+}
+
+impl RecoveredKeyring {
+    /// The events to write, in causal order.
+    #[must_use]
+    pub fn events(&self) -> Vec<&IdentityEvent> {
+        match self {
+            Self::Named {
+                approval, naming, ..
+            } => vec![approval, naming],
+            Self::Unnamed { approval } => vec![approval],
+        }
+    }
+}
+
+/// An event that must apply to the log it extends.
+struct AppliedAppend<'a> {
+    log: &'a IdentityControlLog,
+    event: &'a IdentityEvent,
+}
+
+impl AppliedAppend<'_> {
+    fn insert(&self) -> VaultResult<IdentityControlLog> {
+        let inserted = self
+            .log
+            .clone()
+            .insert(self.event.clone())
+            .map_err(|rejection| rejection.cause)?;
+        match inserted.status {
+            IdentityEventInsertStatus::Applied => Ok(inserted.log),
+            IdentityEventInsertStatus::Pending { .. }
+            | IdentityEventInsertStatus::Quarantined { .. }
+            | IdentityEventInsertStatus::Duplicate => Err(EventError::IdentityControlInvalid(
+                format!("the recovery event did not apply: {:?}", inserted.status),
+            )
+            .into()),
+        }
+    }
 }
 
 impl RecoveryPassphraseUse<'_> {
     /// Check the typed words against the list, unseal the recovery member's
     /// keys with them, open every vault, and sign the approval of the new app
-    /// key as the recovery member. Wrong words fail closed with
-    /// [`RecoveryPassphraseError::WrongWords`]; the approval must apply to
-    /// the log.
-    pub fn approval(&self) -> VaultResult<IdentityEvent> {
+    /// key as the recovery member. When the keyring is named, the recovery
+    /// member opens the name and the new app key re-seals it to every member.
+    /// Wrong words fail closed with [`RecoveryPassphraseError::WrongWords`];
+    /// every event must apply to the log.
+    pub fn approval(&self) -> VaultResult<RecoveredKeyring> {
         let state = IdentityControlState::project(self.log)?;
         let (member, recovery) = state.recovery_member(self.recovery).ok_or_else(|| {
             EventError::IdentityControlInvalid(format!(
@@ -204,32 +224,52 @@ impl RecoveryPassphraseUse<'_> {
             .into());
         }
         let vaults = OpenedIdentityVaults::open(&state, secret.app_key())?;
-        let approval = state.recovery_approval_operation(&IdentityRecoveryApproval {
+        let operation = state.recovery_approval_operation(&IdentityRecoveryApproval {
             recovery: self.recovery,
             member: self.member,
             vaults: &vaults.deks(),
         })?;
-        let event = self.log.build_append(
-            vec![approval],
+        let approval = self.log.build_append(
+            vec![operation],
             &IdentityEventSigning {
                 signing_key: signer.signing_key(),
                 created_at: self.created_at,
             },
         )?;
-        let inserted = self
-            .log
-            .clone()
-            .insert(event.clone())
-            .map_err(|rejection| rejection.cause)?;
-        match inserted.status {
-            IdentityEventInsertStatus::Applied => Ok(event),
-            IdentityEventInsertStatus::Pending { .. }
-            | IdentityEventInsertStatus::Quarantined { .. }
-            | IdentityEventInsertStatus::Duplicate => Err(EventError::IdentityControlInvalid(
-                format!("the recovery approval did not apply: {:?}", inserted.status),
-            )
-            .into()),
+        let approved = AppliedAppend {
+            log: self.log,
+            event: &approval,
         }
+        .insert()?;
+        let Some(sealed) = state.sealed_name_for(self.recovery) else {
+            return Ok(RecoveredKeyring::Unnamed { approval });
+        };
+        let name = secret.app_key().open_utf8(sealed)?.trim().to_owned();
+        if name.is_empty() {
+            return Ok(RecoveredKeyring::Unnamed { approval });
+        }
+        let naming = approved.build_append(
+            vec![
+                IdentityControlState::project(&approved)?.naming_operation(&IdentityNaming {
+                    name: &name,
+                    joining: None,
+                })?,
+            ],
+            &IdentityEventSigning {
+                signing_key: self.device_signer.signing_key(),
+                created_at: self.created_at,
+            },
+        )?;
+        AppliedAppend {
+            log: &approved,
+            event: &naming,
+        }
+        .insert()?;
+        Ok(RecoveredKeyring::Named {
+            approval,
+            naming,
+            name: RecoveredKeyringName(name),
+        })
     }
 }
 
@@ -238,12 +278,15 @@ mod tests {
     #![allow(clippy::too_many_lines)]
 
     use super::*;
+    use crate::VaultError;
     use crate::{
         IdentityGenesisRequest, IdentityRecoveryPassphraseView, IdentityVaultRegistration,
         ProviderIdentityLogEvents, VaultHolderRotation, VaultRevokedHolders,
     };
     use nook_auth2::IdentityId;
+    use nook_auth2::{StoreId, VaultKeys};
     use nook_event_log::IdentityMemberApprover;
+    use nook_event_log::{EventId, IdentityVaultDekLookup, OpenedVaultDek};
 
     struct Device {
         app: AppKey,
@@ -449,23 +492,45 @@ mod tests {
         // A vault registered after the passphrase reaches it too.
         let keyring = keyring.register_vault()?;
         let recovery = keyring.passphrase_id("Paper in the safe")?;
+        // The laptop names the keyring; the name is sealed to every member,
+        // the passphrase included.
+        let naming = keyring.state()?.naming_operation(&IdentityNaming {
+            name: "Personal",
+            joining: None,
+        })?;
+        let keyring = keyring.append(vec![naming])?;
 
         // Every device is lost; a new one reads the log from the provider.
         let provider_log = keyring.on_provider()?;
         let phone = Device::new()?;
-        let approval = RecoveryPassphraseUse {
+        let recovered = RecoveryPassphraseUse {
             log: &provider_log,
             recovery: &recovery,
             typed: &typed(&pending.words().concat()),
             member: &phone.keys("Phone"),
+            device_signer: &phone.signer,
             created_at: &keyring.at,
         }
         .approval()?;
-        let recovered = provider_log.insert(approval)?.log;
+        let RecoveredKeyring::Named { name, .. } = &recovered else {
+            anyhow::bail!("the named keyring is recovered with its name");
+        };
+        assert_eq!(name.as_str(), "Personal");
+        let recovered = recovered
+            .events()
+            .into_iter()
+            .try_fold(provider_log, |log, event| {
+                log.insert(event.clone()).map(|inserted| inserted.log)
+            })?;
         let state = IdentityControlState::project(&recovered)?;
+        // The phone reads the name with every other device lost.
+        let sealed = state
+            .sealed_name_for(phone.app.app_id())
+            .ok_or_else(|| anyhow::anyhow!("the name is sealed to the phone"))?;
+        assert_eq!(phone.app.open_utf8(sealed)?, "Personal");
         assert_eq!(state.vaults.len(), 3);
         let opened = OpenedIdentityVaults::open(&state, &phone.app)?;
-        let OpenedIdentityVaults(opened) = opened;
+        let opened = opened.vaults();
         for (store_id, keys) in &keyring.vaults {
             let vault = opened
                 .iter()
@@ -501,6 +566,7 @@ mod tests {
                 recovery: &recovery,
                 typed: &typed(words),
                 member: &phone.keys("Phone"),
+                device_signer: &phone.signer,
                 created_at: &keyring.at,
             }
             .approval()
@@ -533,6 +599,7 @@ mod tests {
                 recovery: keyring.laptop.app.app_id(),
                 typed: &typed(&words.join(" ")),
                 member: &phone.keys("Phone"),
+                device_signer: &phone.signer,
                 created_at: &keyring.at,
             }
             .approval()
@@ -543,6 +610,11 @@ mod tests {
                 .member(phone.app.app_id())
                 .is_none()
         );
+        // The right words recover an unnamed keyring with the approval alone.
+        assert!(matches!(
+            attempt(&words.join(" "))?,
+            RecoveredKeyring::Unnamed { .. }
+        ));
         Ok(())
     }
 
@@ -612,6 +684,7 @@ mod tests {
                 recovery: &recovery,
                 typed: &typed(&pending.words().join(" ")),
                 member: &phone.keys("Phone"),
+                device_signer: &phone.signer,
                 created_at: &keyring.at,
             }
             .approval()

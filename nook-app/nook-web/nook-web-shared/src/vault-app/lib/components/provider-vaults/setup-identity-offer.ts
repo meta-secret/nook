@@ -27,25 +27,15 @@ export type SetupRecovery =
     }
   | { readonly kind: SetupRecoveryKind.NotOffered };
 
-/** A keyring this browser may join whose log lists recovery passphrases:
- * one of them can let this browser in instead of a device. */
+/** Whether Rust offers recovering this keyring with one of its recovery
+ * passphrases: this browser may join it and its log lists one. */
 export function recoverableWithPassphrase(
   choice: ProviderIdentityChoice,
 ): boolean {
-  switch (choice.setup.kind) {
-    case "requestToJoin":
-    case "waiting":
-      break;
-    case "continue":
-    case "inUse":
-    case "unavailable":
-      return false;
-  }
-  const log = choice.identity.log;
-  switch (log.state) {
-    case "read":
-      return log.recoveryPassphrases > 0;
-    case "absent":
+  switch (choice.recovery) {
+    case "offered":
+      return true;
+    case "notOffered":
       return false;
   }
 }

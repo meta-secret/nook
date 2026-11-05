@@ -74,6 +74,8 @@ pub(super) struct IdentityJoinLog<'a> {
     pub(super) identity_id: &'a IdentityId,
     pub(super) app_key: &'a nook_core::AppKey,
     pub(super) events: &'a [EventStorageBytes],
+    /// The name the adopted local identity takes.
+    pub(super) label: nook_core::AdoptedIdentityLabel<'a>,
 }
 
 impl NookVaultManager {
@@ -104,6 +106,7 @@ impl NookVaultManager {
             identity_id,
             app_key,
             events,
+            label,
         } = join;
         let log = IdentityControlLog::new(identity_id.clone())
             .union_storage_bytes(events)
@@ -124,7 +127,7 @@ impl NookVaultManager {
                     NookDatabase::rebind_local_identity(KeyringDbRebindLocalIdentity {
                         local_identity_id: &local_identity_id,
                         replicated_identity_id: identity_id,
-                        label: nook_core::AdoptedIdentityLabel::Kept,
+                        label,
                     })
                     .await?;
                 }
@@ -265,6 +268,7 @@ impl NookVaultManager {
             identity_id: &identity_id,
             app_key: &app_key,
             events: &events,
+            label: nook_core::AdoptedIdentityLabel::Kept,
         })
         .await?;
         Ok(completion.encode()?)
@@ -302,6 +306,7 @@ impl NookVaultManager {
             identity_id: &identity_id,
             app_key: &app_key,
             events: &events,
+            label: nook_core::AdoptedIdentityLabel::Kept,
         })
         .await?
         {

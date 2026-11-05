@@ -97,6 +97,8 @@ The operation set is closed. Every operation is kebab-case tagged on the wire.
     vault in the same event, so the recovery member holds every vault's
     current DEK. Vaults registered later wrap to it like any member.
   - Several labelled recovery passphrases may coexist.
+  - It is part of identity event schema `1`. Nook has no released versions,
+    so it adds no migration and no compatibility branch.
 - **`member-join-denied`**
   - Answers a pending request without admitting its app key.
 - **`member-revoked`**
@@ -193,6 +195,11 @@ An event's actor must be an identity member in that event's causal past.
     causal past, with device `own`;
   - `member-revoked` of itself.
   - Any other operation it signs quarantines the whole event.
+- An event a recovery member signs is quarantined when the log holds an
+  authorized `member-revoked` of that recovery member that does not causally
+  follow the event. Removed words cannot add a device by building on heads
+  from before the removal, in any delivery order. App keys keep the plain
+  causal-past rule.
 - An unauthorized event is quarantined with every causal descendant.
 
 The projection applies the same rule over the whole applicable log, so the
@@ -391,6 +398,7 @@ Behavior-focused Rust tests cover the log in
   - `a_recovery_passphrase_approves_a_new_app_key_that_opens_every_vault`
   - `a_recovery_passphrase_signs_nothing_but_new_app_keys_and_its_own_removal`
   - `a_removed_recovery_passphrase_holds_the_vault_epoch_until_it_rotates`
+  - `a_removed_recovery_passphrase_cannot_add_a_device_by_backdating`
 - **Adding and recovering with a passphrase** (nook-core)
   - `a_passphrase_is_recorded_only_after_its_words_are_typed_back`
   - `a_new_device_recovers_the_keyring_and_opens_every_vault`

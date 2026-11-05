@@ -97,8 +97,9 @@ Canonical layout and field list: [auth-providers.md](auth-providers.md) §2.
 
 Types are Rust/Tsify (`StorageProvider`, `OAuthFileConfig`, …), not a separate
 hand-authored TypeScript interface. Provider credentials are **sync
-convenience**, not vault encryption. The master password and vault keys stay in
-the vault file.
+convenience**, not vault encryption. Vault keys open only through the
+identity: each app key unwraps its own DEK envelope, and the keyring recovery
+passphrase adds a new app key when every device is lost.
 
 ---
 
@@ -217,7 +218,8 @@ Device-key multi-device flows use the `auth:`, `joins:`, and `members:` sections
 
 ## 7. Security notes
 
-- Master password never leaves the browser; used only to unwrap vault keys in WASM.
+- App keys, DEKs, and recovery passphrase words never leave WASM; an app key
+  unwraps its vault DEK envelope there.
 - Sync provider tokens (GitHub PAT, OAuth) remain in `nook_auth` — compromise exposes encrypted blob access, not plaintext.
 - `store_id` mismatch between local and remote is a hard error — prevents accidental cross-vault overwrite.
 - Conflict resolution is explicit — Nook never silently merges diverged vaults.

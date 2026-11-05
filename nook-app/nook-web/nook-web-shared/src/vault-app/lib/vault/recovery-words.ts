@@ -1,5 +1,6 @@
 import {
-  suggest_recovery_words,
+  complete_recovery_word,
+  recovery_word_typing,
   type NookRecoveryWordsCheck,
   type RecoveryStrength,
 } from "$app-wasm";
@@ -151,26 +152,21 @@ export type RecoveryWordCompletion = {
   readonly word: string;
 };
 
-/** List words for the word being typed, which Rust picks. */
+/** List words for the word being typed. Rust reads the field: the word
+ * being typed follows the last space or hyphen. */
 export class RecoveryWordSuggestions {
   private static readonly limit = 6;
-
-  /** Where the word being typed starts: after the last space. */
-  private static start(typed: string): number {
-    return typed.search(/\S*$/);
-  }
 
   /** The list words that start with the word being typed; none before
    * one is begun. */
   static of(typed: string): readonly string[] {
-    const current = typed.slice(RecoveryWordSuggestions.start(typed));
-    if (!current) return [];
-    return suggest_recovery_words(current, RecoveryWordSuggestions.limit);
+    return recovery_word_typing(typed, RecoveryWordSuggestions.limit)
+      .suggestions;
   }
 
   /** The typed words with the one being typed replaced by `word`, ready
    * for the next. */
   static complete({ typed, word }: RecoveryWordCompletion): string {
-    return `${typed.slice(0, RecoveryWordSuggestions.start(typed))}${word} `;
+    return complete_recovery_word(typed, word);
   }
 }

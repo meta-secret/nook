@@ -16,15 +16,15 @@
 
 use nook_auth2::{
     AppId, AppKey, IdentityConnectionKey, IdentityDirectory, IdentityId, IdentityInvitationBinding,
-    IdentityInvitationBindingRequest, LocalIdentityLog, MultiDeviceError, StoreId, VaultKeys,
+    IdentityInvitationBindingRequest, LocalIdentityLog, MultiDeviceError,
 };
 use nook_event_log::{
-    EventError, EventId, IdentityApprovalRequest, IdentityControlOperation, IdentityControlState,
-    IdentityMemberAddition, IdentityMemberKeys, IdentityNaming, IdentityVaultDekLookup,
-    MemberDevice, OpenedVaultDek,
+    EventError, IdentityApprovalRequest, IdentityControlOperation, IdentityControlState,
+    IdentityMemberAddition, IdentityMemberKeys, IdentityNaming, MemberDevice,
 };
 
 use super::identity_control::ReplicatedIdentityStanding;
+use super::opened_identity_vaults::OpenedIdentityVaults;
 use crate::errors::VaultResult;
 
 /// A member's answer to one installation asking to join its identity.
@@ -47,50 +47,12 @@ impl IdentityJoinAnswer<'_> {
         Ok(())
     }
 
-    /// Every vault's current DEK, opened through the approver's envelope.
-    /// A vault the approver cannot open refuses the approval.
-    fn opened_vaults(&self) -> VaultResult<Vec<(StoreId, EventId, VaultKeys)>> {
-        self.state
-            .vaults
-            .iter()
-            .map(|vault| -> VaultResult<(StoreId, EventId, VaultKeys)> {
-                match vault.current_dek_for(self.approver.app_id()) {
-                    IdentityVaultDekLookup::Granted(dek) => Ok((
-                        vault.store_id.clone(),
-                        vault.current_key_epoch.clone(),
-                        VaultKeys {
-                            secrets_key: self
-                                .approver
-                                .decrypt_envelope(&dek.secrets_key_ciphertext)?,
-                            members_key: self
-                                .approver
-                                .decrypt_envelope(&dek.members_key_ciphertext)?,
-                        },
-                    )),
-                    IdentityVaultDekLookup::NotGranted => {
-                        Err(EventError::IdentityApprovalIncomplete {
-                            store_id: vault.store_id.as_str().to_owned(),
-                        }
-                        .into())
-                    }
-                }
-            })
-            .collect()
-    }
-
     /// Approve the request: admit the app key with every vault DEK wrapped
     /// to it, and re-seal the identity's name so the joiner reads it too.
     pub fn approval(&self) -> VaultResult<Vec<IdentityControlOperation>> {
         self.require_member()?;
-        let opened = self.opened_vaults()?;
-        let vaults = opened
-            .iter()
-            .map(|(store_id, key_epoch, keys)| OpenedVaultDek {
-                store_id,
-                key_epoch,
-                keys,
-            })
-            .collect::<Vec<_>>();
+        let opened = OpenedIdentityVaults::open(self.state, self.approver)?;
+        let vaults = opened.deks();
         let mut operations = vec![self.state.approval_operation(&IdentityApprovalRequest {
             app_id: self.app_id,
             vaults: &vaults,
@@ -137,15 +99,8 @@ impl IdentityMemberAdd<'_> {
             app_id: &self.member.app_id,
         };
         answer.require_member()?;
-        let opened = answer.opened_vaults()?;
-        let vaults = opened
-            .iter()
-            .map(|(store_id, key_epoch, keys)| OpenedVaultDek {
-                store_id,
-                key_epoch,
-                keys,
-            })
-            .collect::<Vec<_>>();
+        let opened = OpenedIdentityVaults::open(self.state, self.approver)?;
+        let vaults = opened.deks();
         let mut operations = vec![self.state.addition_operation(&IdentityMemberAddition {
             member: self.member,
             vaults: &vaults,
@@ -298,7 +253,9 @@ mod tests {
         AdoptedIdentityLabel, IdentityCreation, IdentityVaultKeyOpening, IsoTimestamp, MemberLabel,
         MemberLabelState, ReplicatedIdentityAdoption, ReplicatedIdentityMembership,
     };
+    use nook_auth2::{StoreId, VaultKeys};
     use nook_event_log::MemberVaultDek;
+    use nook_event_log::{EventId, IdentityVaultDekLookup, OpenedVaultDek};
 
     struct Device {
         app: AppKey,

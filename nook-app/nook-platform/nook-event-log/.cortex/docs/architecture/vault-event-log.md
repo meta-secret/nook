@@ -81,6 +81,14 @@ actor id must be the SHA-256 digest of that Ed25519 public key. The event
 signature must verify over the canonical body before a current-schema remote
 event enters the local event set.
 
+Vault passphrases are gone from the log. The `password-added`,
+`password-rotated`, and `password-removed` operations and the
+`password_entries` of checkpoints, genesis imports, and the YAML projection
+are removed with no migration: Nook has no released versions, and an event
+that still carries them no longer parses. The keyring recovery passphrase in
+the [identity control log](identity-control-log.md) is the only passphrase
+backup.
+
 Checkpoint and visibility rules:
 
 - An `epoch-checkpoint` persists `secrets`, `members_checkpoint_hash`, and the

@@ -23,7 +23,8 @@ use zeroize::{Zeroize, Zeroizing};
 pub use seal::{RecoverySealedSecret, RecoverySecret};
 pub use words::{
     RecoveryWord, RecoveryWordCount, RecoveryWordDraw, RecoveryWordPosition, RecoveryWordSample,
-    RecoveryWordSuggestions, TypedRecoveryWord, TypedRecoveryWords, UnknownRecoveryWord,
+    RecoveryWordSuggestions, RecoveryWordTyping, TypedRecoveryWord, TypedRecoveryWords,
+    UnknownRecoveryWord,
 };
 
 /// How many words a recovery passphrase has.

@@ -121,8 +121,8 @@ pub mod multi_device_api {
 pub use auth::recovery_passphrase::{
     RecoveryPassphraseError, RecoveryPhrase, RecoverySealedSecret, RecoverySecret,
     RecoveryStrength, RecoveryWord, RecoveryWordCount, RecoveryWordDraw, RecoveryWordPosition,
-    RecoveryWordSample, RecoveryWordSuggestions, TypedRecoveryWord, TypedRecoveryWords,
-    UnknownRecoveryWord,
+    RecoveryWordSample, RecoveryWordSuggestions, RecoveryWordTyping, TypedRecoveryWord,
+    TypedRecoveryWords, UnknownRecoveryWord,
 };
 pub use auth::sentinel_genesis::{
     CheckedSentinelGenesisDelivery, CheckedSentinelGenesisResponse, ReadySentinelGenesis,

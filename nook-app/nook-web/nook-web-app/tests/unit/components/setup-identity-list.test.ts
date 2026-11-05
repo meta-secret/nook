@@ -36,6 +36,7 @@ function choice({ id, standing, setup }: Listed): ProviderIdentityChoice {
     standing,
     decisions: [],
     setup,
+    recovery: 'notOffered',
     vaults: [],
   }
 }
@@ -73,7 +74,8 @@ const ELSEWHERE: Listed = {
   setup: { kind: 'unavailable' },
 }
 
-/** A keyring this browser may join whose log lists two recovery passphrases. */
+/** A keyring this browser may join whose log lists two recovery passphrases,
+ * so Rust offers recovering it. */
 const RECOVERABLE_ID = 'idn_recoverabl'
 function withRecoveryPassphrases(
   listed: ProviderIdentityChoice,
@@ -92,6 +94,7 @@ function withRecoveryPassphrases(
         join: 'notAsked',
       },
     },
+    recovery: 'offered',
   }
 }
 const RECOVERABLE = withRecoveryPassphrases(
@@ -102,7 +105,17 @@ const RECOVERABLE = withRecoveryPassphrases(
   }),
 )
 
+/** The listing every test renders unless it names its own. */
+const LISTED: readonly ProviderIdentityChoice[] = [
+  ...[MEMBER, LOCKED, ASKED, ELSEWHERE, KEY_MEMBER, IN_USE].map(choice),
+  RECOVERABLE,
+]
+
 class Listing {
+  constructor(
+    private readonly choices: readonly ProviderIdentityChoice[] = LISTED,
+  ) {}
+
   readonly vault = VaultStateTestFixture.create()
   readonly continued: string[] = []
   readonly asked: string[] = []
@@ -112,10 +125,7 @@ class Listing {
   render(working: string): void {
     const props: ComponentProps<typeof SetupIdentityList> = {
       vault: this.vault,
-      choices: [
-        ...[MEMBER, LOCKED, ASKED, ELSEWHERE, KEY_MEMBER, IN_USE].map(choice),
-        RECOVERABLE,
-      ],
+      choices: [...this.choices],
       working,
       onContinue: (picked: ProviderIdentityChoice) => {
         this.continued.push(picked.identity.identityId)
@@ -213,6 +223,17 @@ describe('setup lists each identity with the one action Rust decided', () => {
 })
 
 describe('setup offers recovering with a passphrase beside joining', () => {
+  test('only a keyring Rust offers to recover shows the action', () => {
+    // The log lists passphrases, but Rust did not offer recovering it.
+    const listing = new Listing([{ ...RECOVERABLE, recovery: 'notOffered' }])
+    listing.render('')
+    expect(
+      card(RECOVERABLE_ID).querySelectorAll(
+        '[data-testid="setup-identity-recover"]',
+      ),
+    ).toHaveLength(0)
+  })
+
   test('only a keyring whose log lists recovery passphrases offers it', async () => {
     const listing = new Listing()
     listing.render('')

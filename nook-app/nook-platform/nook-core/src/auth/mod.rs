@@ -8,6 +8,7 @@ pub(crate) mod identity_join;
 pub(crate) mod identity_vault_pairing;
 pub(crate) mod identity_words;
 pub(crate) mod multi_device;
+pub(crate) mod opened_identity_vaults;
 pub(crate) mod recovery_passphrase;
 pub(crate) mod vault_meta_actions;
 pub(crate) mod website_login_save;

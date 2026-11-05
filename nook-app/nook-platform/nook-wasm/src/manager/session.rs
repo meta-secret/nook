@@ -442,6 +442,31 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    fn locking_or_resetting_drops_a_recovery_passphrase_waiting_to_be_confirmed()
+    -> Result<(), JsError> {
+        let pending = || {
+            nook_core::PendingRecoveryPassphrase::begin(&nook_core::RecoveryPassphraseStart {
+                label: "Paper",
+                strength: nook_core::RecoveryStrength::Standard,
+            })
+        };
+        let mut manager = NookVaultManager::new();
+        manager.recovery_passphrase = CeremonyState::Active(pending()?);
+        manager.lock_device_identity();
+        assert!(matches!(
+            manager.recovery_passphrase,
+            CeremonyState::Inactive
+        ));
+        manager.recovery_passphrase = CeremonyState::Active(pending()?);
+        manager.reset_vault_session();
+        assert!(matches!(
+            manager.recovery_passphrase,
+            CeremonyState::Inactive
+        ));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
     fn ceremony_state_returns_active_sessions() -> Result<(), JsError> {
         let active = CeremonyState::Active(7_u8);
         assert_eq!(active.get("unused")?, &7);

@@ -239,6 +239,8 @@ impl NookVaultManager {
         self.pending_sentinel_genesis_request = CeremonyState::Inactive;
         self.sentinel_unlock = CeremonyState::Inactive;
         self.sync_outbox = SyncOutbox::Unbound;
+        // A shown recovery passphrase dies with the session.
+        self.recovery_passphrase = CeremonyState::Inactive;
     }
 
     /// Zeroize the active session and clear every Nook-owned browser database.
