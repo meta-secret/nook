@@ -124,13 +124,12 @@ page's one button applies the plan.
               <span class="nk-vault-icon" aria-hidden="true">
                 {@render decisionIcon(decision)}
               </span>
-              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span class="truncate text-sm font-medium">
-                  {text.decision(decision)}
-                </span>
-                <span class="truncate text-xs text-muted-foreground">
-                  {text.detail(decision)}
-                </span>
+              <span class="flex-none text-sm font-medium">
+                {text.decision(decision)}
+              </span>
+              <span class="nk-lead" aria-hidden="true"></span>
+              <span class="min-w-0 truncate text-xs text-muted-foreground">
+                {text.detail(decision)}
               </span>
               {#if picked}
                 <Check class="size-4 flex-none" aria-hidden="true" />

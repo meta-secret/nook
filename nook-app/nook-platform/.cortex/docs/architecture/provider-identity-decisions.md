@@ -257,7 +257,8 @@ accent, no pills.
 - **Decision:** one `nk-vault-row` per allowed decision, a way in.
   - Each row has an icon tile for what it uses: a passkey, written-down
     words, or a device.
-  - Its name sits over a muted line saying what it needs.
+  - One line holds its name, a dotted leader, and a muted note of what it
+    needs.
   - The picked row (`aria-pressed`) takes the selected row tone and a check
     at its end.
 - **Checks:** "Which passkey opens it?" is a quiet underlined link.
