@@ -178,9 +178,9 @@ decrypts in memory and changes nothing.
           case IdentityPlanOutcomeKind.AddedBeside:
             break
           // A join waits for a new key of its own; its ceremony asks, and
-          // Connect & sync waits for the identity that ceremony adopts.
+          // Connect & sync waits for the identity that ceremony adopts. Or
+          // a recovery passphrase's words are typed next; they connect.
           case IdentityPlanOutcomeKind.WaitsForKey:
-          // The words of a recovery passphrase are typed next; they connect.
           case IdentityPlanOutcomeKind.RecoveryWordsNext:
             return
         }
@@ -202,20 +202,19 @@ decrypts in memory and changes nothing.
   function decisionsFor(
     action: FirstRunIdentityAction,
   ): (choice: ProviderIdentityChoice) => readonly PlannedDecision[] {
-    const planned = (
-      choice: ProviderIdentityChoice,
-      decision: IdentityDecision,
-    ): readonly PlannedDecision[] => [{ choice, decision }]
     return (choice) => {
+      const planned = (
+        decision: IdentityDecision,
+      ): readonly PlannedDecision[] => [{ choice, decision }]
       switch (action) {
         case FirstRunIdentityAction.Continue:
           return choice.setup.kind === 'continue'
-            ? planned(choice, choice.setup.decision)
+            ? planned(choice.setup.decision)
             : []
         case FirstRunIdentityAction.AskToJoin:
-          return planned(choice, 'askToJoin')
+          return planned('askToJoin')
         case FirstRunIdentityAction.CheckJoin:
-          return planned(choice, 'finishJoining')
+          return planned('finishJoining')
       }
     }
   }

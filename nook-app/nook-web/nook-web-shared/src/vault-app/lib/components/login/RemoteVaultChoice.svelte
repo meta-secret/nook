@@ -109,8 +109,8 @@ identity decrypts in memory and changes nothing.
         case IdentityPlanOutcomeKind.AddedBeside:
           break
         // A join waits for a fresh key; its ceremony asks, then lists again.
+        // Or a recovery passphrase's words are typed next; they open it.
         case IdentityPlanOutcomeKind.WaitsForKey:
-        // A recovery passphrase's words are typed next; they open it.
         case IdentityPlanOutcomeKind.RecoveryWordsNext:
           return
       }

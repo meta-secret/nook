@@ -34,7 +34,7 @@ sync provider its own way.
     vault,
     join,
     connect,
-    working = $bindable(),
+    working = $bindable(false),
   }: {
     vault: VaultState
     join: IdentityJoinIntent

@@ -34,6 +34,9 @@ export type FirstRunRecoveryAttempt = {
   readonly connect: () => Promise<boolean>;
 };
 
+/** The keyring joined with the words, and how its page connects it. */
+type RecoveryJoin = Pick<FirstRunRecoveryAttempt, "join" | "connect">;
+
 enum RecoveryKeyKind {
   /** This browser's fresh key asks: Rust checked the words with it. */
   Checked = "checked",
@@ -124,11 +127,10 @@ export class FirstRunRecovery {
     switch (ran.value.kind) {
       case RecoveryKeyKind.InUse:
         return err(failure.because(I18N_KEYS.ErrorsIdentityJoinPasskeyInUse));
-      case RecoveryKeyKind.Checked:
-        return this.followed(
-          { join, connect },
-          recoveryWordsOutcome(ran.value.check),
-        );
+      case RecoveryKeyKind.Checked: {
+        const joined: RecoveryJoin = { join, connect };
+        return this.followed(joined, recoveryWordsOutcome(ran.value.check));
+      }
     }
   }
 
@@ -138,7 +140,7 @@ export class FirstRunRecovery {
    * not announced. */
   private async followed(
     ...[{ join, connect }, outcome]: readonly [
-      Pick<FirstRunRecoveryAttempt, "join" | "connect">,
+      RecoveryJoin,
       RecoveryWordsOutcome,
     ]
   ): Promise<Result<RecoveryWordsOutcome, IdentityPlanFailure>> {
