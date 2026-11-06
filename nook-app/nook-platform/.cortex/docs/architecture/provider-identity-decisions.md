@@ -14,6 +14,13 @@ decisions and applies them together. An S3 location is read the same way on
 first run and on the recovery screen, but its Sync page wizard lists no
 identities.
 
+On the recovery screen, Google Drive always lists its identities. GitHub,
+S3, iCloud, and a local folder list them when the location holds several
+vaults. A location holding one vault opens it for this browser's passkey,
+unless Rust offers recovering its keyring with a recovery passphrase. Then
+the keyring is listed too, so its words are offered beside its passkey. A
+vault the user already chose from that list opens.
+
 This record owns the rules and the identity operations behind them. The
 [identity architecture](identity-vault-architecture.md) owns identity, app key,
 and DEK ownership. The [provider listing](auth-providers.md#what-the-provider-already-holds)

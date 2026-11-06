@@ -194,6 +194,17 @@ pub struct ProviderIdentityChoices<'a> {
 }
 
 impl ProviderIdentityChoices<'_> {
+    /// Whether a keyring listed here can be recovered with one of its
+    /// recovery passphrases. A provider holding only one vault then shows
+    /// its keyring for the user's choice too, instead of opening that vault
+    /// for a passkey that may be lost with every device.
+    #[must_use]
+    pub fn recoverable_with_passphrase(&self) -> bool {
+        self.choices()
+            .iter()
+            .any(|choice| choice.recovery == IdentityRecoveryOffer::Offered)
+    }
+
     /// Every listed identity: the identities filing vaults in listing order,
     /// then each identity that files none, so it can be set up or joined as
     /// well.
@@ -645,6 +656,41 @@ mod tests {
             )?,
             vec![IdentityDecision::FinishJoining]
         );
+        Ok(())
+    }
+
+    /// One vault whose keyring lists a recovery passphrase waits for the
+    /// user's choice; one this browser already holds, or a keyring without a
+    /// passphrase, opens as before.
+    #[test]
+    fn a_listing_is_recoverable_with_a_passphrase_only_for_a_keyring_this_browser_may_join()
+    -> anyhow::Result<()> {
+        let recoverable = |count: u32, this_browser: bool| -> anyhow::Result<bool> {
+            let log = ProviderIdentityLog::Read {
+                devices: crate::ProviderLogCount::from(1),
+                newest_device: ProviderVaultTime::Unreported,
+                vaults: crate::ProviderLogCount::from(1),
+                recovery_passphrases: crate::ProviderLogCount::from(count),
+                this_browser,
+                join: ProviderIdentityJoin::NotAsked,
+            };
+            let other = Fixture::identity(OTHER, log)?;
+            let vaults = [Fixture::vault(
+                OTHER_VAULT,
+                &other,
+                ProviderVaultAccess::Unchecked,
+            )?];
+            Ok(ProviderIdentityChoices {
+                vaults: &vaults,
+                identities: &[],
+                checks: &[],
+                session: IdentitySession::NoIdentity,
+            }
+            .recoverable_with_passphrase())
+        };
+        assert!(recoverable(1, false)?);
+        assert!(!recoverable(0, false)?);
+        assert!(!recoverable(1, true)?);
         Ok(())
     }
 

@@ -85,7 +85,8 @@ export enum RecoveryDiscoveryKind {
 export type RecoveryDiscovery =
   | { kind: RecoveryDiscoveryKind.NotFound }
   | { kind: RecoveryDiscoveryKind.Found; summary: VaultRecoverySummary };
-/** What a provider being imported offers when it holds several vaults. */
+/** What a provider being imported offers for the user's choice: several
+ * vaults, or one whose keyring a recovery passphrase can open. */
 export type RemoteVaultChoiceList = {
   readonly vaults: readonly ProviderVaultSummary[];
   readonly identities: readonly FilingIdentity[];

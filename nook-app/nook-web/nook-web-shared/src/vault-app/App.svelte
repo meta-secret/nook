@@ -210,9 +210,9 @@
       }
       const found = discovered.value
       switch (found.kind) {
-        // Several vaults wait for the user's choice; the import continues
+        // The keyrings wait for the user's choice; the import continues
         // once one is chosen.
-        case StagedVaultDiscoveryKind.Several:
+        case StagedVaultDiscoveryKind.Choose:
           return
         case StagedVaultDiscoveryKind.NotFound:
           vault.errorMsg = vault.t(I18N_KEYS.AuthStorageExistingVaultNotFound)

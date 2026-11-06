@@ -4,7 +4,9 @@
 //! namespace subdirectory. Importing from it discovers those vaults; when
 //! there are several the user picks one from their summaries (created, last
 //! activity, event count, short id — never a decrypted name), and that
-//! choice holds for the following connect.
+//! choice holds for the following connect. A provider holding one vault
+//! whose keyring a recovery passphrase can open lists it for the choice
+//! too, so its words can be offered beside its passkey.
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
@@ -12,7 +14,10 @@
 )]
 
 use crate::{TypedInput, TypedOutput};
-use nook_core::{LocalVaultOccupancy, ProviderVaultSummary, StorageMode, StoreId};
+use nook_core::{
+    IdentitySession, LocalVaultOccupancy, ProviderIdentityChoices, ProviderVaultSummary,
+    StorageMode, StoreId,
+};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
@@ -32,9 +37,11 @@ pub enum NookRemoteVaultDiscovery {
     /// The one vault the import opens, already loaded into the session.
     #[serde(rename_all = "camelCase")]
     Found { store_id: String },
-    /// The provider holds several vaults; choose one and discover again.
+    /// The provider's keyrings wait for the user's choice: it holds several
+    /// vaults, or one whose keyring a recovery passphrase can open. Choose
+    /// one and discover again.
     #[serde(rename_all = "camelCase")]
-    Several {
+    Choose {
         vaults: Vec<ProviderVaultSummary>,
         /// Every identity the provider holds, for the recovery screen's
         /// cards.
@@ -42,18 +49,57 @@ pub enum NookRemoteVaultDiscovery {
     },
 }
 
+/// What discovering a location's one vault leads to.
+enum OneVaultDiscovery {
+    /// Its keyring waits for the user's choice, with the listing to show.
+    Choose(NookRemoteVaultDiscovery),
+    /// The vault opens for this browser's passkey.
+    Opens,
+}
+
 impl NookVaultManager {
-    /// The several vaults a location holds, summarized and related to the
-    /// local identity, with every identity it holds for the recovery
-    /// screen's cards. Discovery runs with no vault open.
-    async fn several_discovered_vaults(
+    /// The vaults a location holds, summarized and related to the local
+    /// identity, with every identity it holds for the recovery screen's
+    /// cards. Discovery runs with no vault open.
+    async fn listed_for_choice(
         location: OpenedLocation<'_>,
     ) -> Result<NookRemoteVaultDiscovery, NookError> {
         let listing = location.listing(&LocalVaultOccupancy::Closed).await?;
-        Ok(NookRemoteVaultDiscovery::Several {
+        Ok(NookRemoteVaultDiscovery::Choose {
             vaults: listing.vaults,
             identities: listing.identities,
         })
+    }
+
+    /// A location's one vault opens at once unless Rust offers recovering
+    /// its keyring with a recovery passphrase: then it is listed too. A
+    /// vault the user already chose from that list opens.
+    async fn one_vault_discovery(
+        chosen: &ChosenProviderVault,
+        location: OpenedLocation<'_>,
+    ) -> Result<OneVaultDiscovery, NookError> {
+        match chosen {
+            ChosenProviderVault::Chosen(_) => return Ok(OneVaultDiscovery::Opens),
+            ChosenProviderVault::Unchosen => {}
+        }
+        let listing = location.listing(&LocalVaultOccupancy::Closed).await?;
+        let recoverable = ProviderIdentityChoices {
+            vaults: &listing.vaults,
+            identities: &listing.identities,
+            checks: &[],
+            session: IdentitySession::NoIdentity,
+        }
+        .recoverable_with_passphrase();
+        if recoverable {
+            Ok(OneVaultDiscovery::Choose(
+                NookRemoteVaultDiscovery::Choose {
+                    vaults: listing.vaults,
+                    identities: listing.identities,
+                },
+            ))
+        } else {
+            Ok(OneVaultDiscovery::Opens)
+        }
     }
 }
 
@@ -75,14 +121,26 @@ impl NookVaultManager {
             match self.discover_provider_vault().await? {
                 VaultDiscovery::Empty => NookRemoteVaultDiscovery::Empty,
                 VaultDiscovery::Chosen => {
-                    self.sync_events_from_current_provider().await?;
-                    NookRemoteVaultDiscovery::Found {
-                        store_id: self.vault.store_id.clone(),
+                    let one = match &self.storage.provider {
+                        PreparedProvider::Remote(remote) => {
+                            Self::one_vault_discovery(&self.storage.chosen_vault, remote.location())
+                                .await?
+                        }
+                        PreparedProvider::ThisBrowser => OneVaultDiscovery::Opens,
+                    };
+                    match one {
+                        OneVaultDiscovery::Choose(listed) => listed,
+                        OneVaultDiscovery::Opens => {
+                            self.sync_events_from_current_provider().await?;
+                            NookRemoteVaultDiscovery::Found {
+                                store_id: self.vault.store_id.clone(),
+                            }
+                        }
                     }
                 }
                 VaultDiscovery::Several(_) => match &self.storage.provider {
                     PreparedProvider::Remote(remote) => {
-                        Self::several_discovered_vaults(remote.location()).await?
+                        Self::listed_for_choice(remote.location()).await?
                     }
                     PreparedProvider::ThisBrowser => NookRemoteVaultDiscovery::Empty,
                 },
@@ -102,13 +160,21 @@ impl NookVaultManager {
         let discovery = match self.discover_folder_vaults(handle_id).await? {
             VaultDiscovery::Empty => NookRemoteVaultDiscovery::Empty,
             VaultDiscovery::Chosen => {
-                self.sync_local_folder_provider(handle_id).await?;
-                NookRemoteVaultDiscovery::Found {
-                    store_id: self.vault.store_id.clone(),
+                let folder = OpenedLocation::LocalFolder(LocalFolderLocation {
+                    folder: LocalFolderHandles::current().open_folder(handle_id).await?,
+                });
+                match Self::one_vault_discovery(&self.storage.chosen_vault, folder).await? {
+                    OneVaultDiscovery::Choose(listed) => listed,
+                    OneVaultDiscovery::Opens => {
+                        self.sync_local_folder_provider(handle_id).await?;
+                        NookRemoteVaultDiscovery::Found {
+                            store_id: self.vault.store_id.clone(),
+                        }
+                    }
                 }
             }
             VaultDiscovery::Several(_) => {
-                Self::several_discovered_vaults(OpenedLocation::LocalFolder(LocalFolderLocation {
+                Self::listed_for_choice(OpenedLocation::LocalFolder(LocalFolderLocation {
                     folder: LocalFolderHandles::current().open_folder(handle_id).await?,
                 }))
                 .await?
@@ -212,14 +278,14 @@ mod tests {
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
-        let discovery = NookRemoteVaultDiscovery::Several {
+        let discovery = NookRemoteVaultDiscovery::Choose {
             vaults: listing.vaults,
             identities: listing.identities,
         };
         assert_eq!(
             serde_json::to_value(&discovery)?,
             serde_json::json!({
-                "state": "several",
+                "state": "choose",
                 "vaults": [{
                     "storeId": "store_abcdefghijk",
                     "shortId": "abcdefgh",
