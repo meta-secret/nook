@@ -3,15 +3,20 @@ import type { VaultDebugWindow } from '$lib/app/browser-lifecycle'
 import { expect, test, type Page } from './fixtures'
 import {
   addSecret,
+  answerPasskeyPromptBeforeJoin,
+  clearBrowserVault,
+  connectGoogleDriveGenesisDevice,
   connectS3InFirstRun,
   createFirstRunKey,
   createIsolatedContext,
   disableVaultIdleLock,
   dumpNookLogs,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  installGoogleOAuthMock,
   keepSecretOnS3,
   ManagePage,
   openIdentitiesPage,
+  openLoginProviderSetup,
   openManagePage,
   openVaultPage,
   pressIfReady,
@@ -22,10 +27,17 @@ import {
   uniqueS3KeyPrefix,
   uniqueSecretKey,
   UI_TIMEOUT_MS,
+  waitForGoogleOAuthSignedIn,
   waitForSecretOnDevice,
 } from './helpers'
 import type { S3KeptKeyring } from './helpers'
 import { LocalS3Identity } from '../../nook-web-extension/scripts/local-s3'
+import {
+  E2eSyncProviderId,
+  createSyncTarget,
+  installSyncRemote,
+  waitForSyncRemoteState,
+} from './sync-provider'
 
 const KEYRING_NAME = 'Recovered keyring'
 const PASSPHRASE_LABEL = 'Paper in the safe'
@@ -258,6 +270,99 @@ test.describe('keyring recovery passphrase', () => {
         PASSPHRASE_LABEL,
         { timeout: UI_TIMEOUT_MS },
       )
+    } finally {
+      await newContext.close()
+    }
+  })
+
+  test('on the recovery screen, a Google Drive keyring is recovered with its words', async ({
+    page,
+    browser,
+  }) => {
+    test.setTimeout(240_000)
+    const target = createSyncTarget(
+      '',
+      'recovery-words-drive',
+      E2eSyncProviderId.File,
+    )
+    await connectGoogleDriveGenesisDevice(
+      page,
+      target.pat,
+      target.repoName,
+      target.stub,
+    )
+    await disableVaultIdleLock(page)
+    const key = uniqueSecretKey('recovery-drive')
+    await addSecret(page, key, SECRET_VALUE)
+    await waitForSyncRemoteState(
+      target,
+      (snapshot) => snapshot.secretIds.length >= 1,
+    )
+    const words = await addRecoveryPassphrase(page)
+    // Sync now puts the passphrase in the keyring's log in the Nook folder.
+    await openManagePage(page, ManagePage.Devices)
+    const syncNow = page.getByTestId('identity-sync-now-btn')
+    await expect(syncNow).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await syncNow.click()
+    await expect(syncNow).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    // From here the first browser is lost: the new one reaches the keyring
+    // only through the Nook folder and the written-down words.
+
+    const newContext = await createIsolatedContext(browser)
+    try {
+      const device = await newContext.newPage()
+      await installSyncRemote(device, target)
+      await installGoogleOAuthMock(device, target.pat)
+      await device.goto('/app/')
+      await clearBrowserVault(device)
+      await device.reload()
+      await openLoginProviderSetup(device)
+      await device.getByTestId('provider-option-oauth-file').click()
+      await device.getByTestId('google-sign-in-btn').click()
+      await waitForGoogleOAuthSignedIn(device)
+
+      // The keyring offers its passkey, its words, or its devices; nothing
+      // starts picked, and there is no choice that does nothing.
+      const card = device.getByTestId('provider-identity')
+      await expect(card).toHaveCount(1, {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      const decisions = card.getByTestId('provider-identity-decision')
+      await expect(decisions).toHaveCount(3)
+      expect(
+        await decisions.evaluateAll((buttons) =>
+          buttons.map((button) => button.getAttribute('data-decision')),
+        ),
+      ).toEqual(['addToBrowser', 'recoverWithPassphrase', 'askToJoin'])
+      await expect(card.locator('[aria-pressed="true"]')).toHaveCount(0)
+
+      await card
+        .locator(
+          '[data-testid="provider-identity-decision"][data-decision="recoverWithPassphrase"]',
+        )
+        .click()
+      await device.getByTestId('connect-provider-btn').click()
+      // This browser makes its own key first; the words come next.
+      const recovery = device.getByTestId('keyring-recovery-words')
+      await answerPasskeyPromptBeforeJoin(device, recovery)
+      await expect(recovery).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      await expect(
+        device.getByTestId('first-run-recover-passphrase-label'),
+      ).toContainText(PASSPHRASE_LABEL, {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      await device.getByTestId('first-run-recover-words').fill(words)
+      await device.getByTestId('first-run-recover-submit').click()
+      await expect(recovery).toHaveCount(0, {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+
+      await disableVaultIdleLock(device)
+      await openVaultPage(device)
+      await waitForSecretOnDevice(device, key)
+      expect(await revealSecretValue(device, key)).toBe(SECRET_VALUE)
     } finally {
       await newContext.close()
     }

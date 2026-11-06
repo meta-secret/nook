@@ -5,9 +5,9 @@ import type {
 } from "$app-wasm";
 import { IdentityDirectoryLoader } from "$lib/components/identities/identity-directory-loader.svelte";
 import type { VaultState } from "$lib/vault.svelte";
-import { FirstRunActions } from "$lib/vault/first-run";
 import {
   FirstRunJoinKind,
+  KeyringRecoveryKind,
   type IdentityJoinIntent,
 } from "$lib/vault/identity-join-wait";
 import {
@@ -29,6 +29,9 @@ export type FirstRunRecoveryAttempt = {
   /** The recovery passphrase picked by its label. */
   readonly recoveryId: string;
   readonly words: string;
+  /** Connects the keyring's sync provider once this browser is in it;
+   * true when it connected. */
+  readonly connect: () => Promise<boolean>;
 };
 
 enum RecoveryKeyKind {
@@ -47,11 +50,13 @@ type RecoveryKey =
   | { readonly kind: RecoveryKeyKind.InUse };
 
 /**
- * First-run setup joining a keyring with one of its recovery passphrases.
- * The passkey or PIN step already made this browser's fresh key, so Rust
- * chooses that key, unseals the recovery key with the typed words, and
- * approves it; the join then finishes as an approved request does. Words
- * Rust refuses come back for the form; nothing is written for them.
+ * Joining a keyring on a sync provider with one of its recovery
+ * passphrases, in first-run setup or from a list of keyrings. This
+ * browser's fresh key exists already, so Rust chooses that key, unseals
+ * the recovery key with the typed words, and approves it; the join then
+ * finishes as an approved request does, and the page connects the
+ * provider its own way. Words Rust refuses come back for the form; nothing
+ * is written for them.
  */
 export class FirstRunRecovery {
   constructor(private readonly vault: VaultState) {}
@@ -82,6 +87,7 @@ export class FirstRunRecovery {
     join,
     recoveryId,
     words,
+    connect,
   }: FirstRunRecoveryAttempt): Promise<
     Result<RecoveryWordsOutcome, IdentityPlanFailure>
   > {
@@ -119,16 +125,22 @@ export class FirstRunRecovery {
       case RecoveryKeyKind.InUse:
         return err(failure.because(I18N_KEYS.ErrorsIdentityJoinPasskeyInUse));
       case RecoveryKeyKind.Checked:
-        return this.followed(join, recoveryWordsOutcome(ran.value.check));
+        return this.followed(
+          { join, connect },
+          recoveryWordsOutcome(ran.value.check),
+        );
     }
   }
 
   /** After accepted words: load the keyring as after an approved join,
-   * then connect its provider and end setup there. This browser is in the
-   * keyring either way; a load that failed stays said, and setup does not
-   * announce a recovery it did not finish. */
+   * then connect its provider. This browser is in the keyring either way;
+   * a load that failed stays said, and a recovery that did not finish is
+   * not announced. */
   private async followed(
-    ...[join, outcome]: readonly [IdentityJoinIntent, RecoveryWordsOutcome]
+    ...[{ join, connect }, outcome]: readonly [
+      Pick<FirstRunRecoveryAttempt, "join" | "connect">,
+      RecoveryWordsOutcome,
+    ]
   ): Promise<Result<RecoveryWordsOutcome, IdentityPlanFailure>> {
     switch (outcome.kind) {
       case RecoveryWordsOutcomeKind.Refused:
@@ -140,7 +152,8 @@ export class FirstRunRecovery {
     await new IdentityDirectoryLoader(vault).reload();
     const loaded = await vault.identityControl.followInviteJoin(join.label);
     vault.firstRunJoin = { kind: FirstRunJoinKind.None };
-    const connected = await new FirstRunActions(vault).connectProvider();
+    vault.keyringRecovery = { kind: KeyringRecoveryKind.None };
+    const connected = await connect();
     if (loaded.isErr()) {
       vault.errorMsg = vault.t(loaded.error.translationKey);
       return ok(outcome);

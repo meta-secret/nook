@@ -61,33 +61,29 @@ export type PlannedDecision = {
 };
 
 /**
- * The decisions picked on one page, one per identity. Every identity starts
- * at Leave as is; picking Leave again takes it out of the plan.
+ * The decisions picked on one page, at most one per identity. An identity
+ * nothing is picked for is left as it is; picking its decision again takes
+ * it out of the plan.
  */
 export class IdentityPlan {
   private picks = $state<readonly IdentityPick[]>([]);
 
-  decisionOf(choice: ProviderIdentityChoice): IdentityDecision {
-    const pick = this.picks.find(
-      (picked) => picked.identityId === choice.identity.identityId,
+  /** Whether this decision is picked for the identity. */
+  isPicked(pick: IdentityPick): boolean {
+    return this.picks.some(
+      (picked) =>
+        picked.identityId === pick.identityId &&
+        picked.decision === pick.decision,
     );
-    return pick ? pick.decision : "leave";
   }
 
+  /** Pick a decision for its identity, in place of any other; picking it
+   * again unpicks it. */
   decide(pick: IdentityPick): void {
     const others = this.picks.filter(
       (picked) => picked.identityId !== pick.identityId,
     );
-    switch (pick.decision) {
-      case "leave":
-        this.picks = others;
-        return;
-      case "addToBrowser":
-      case "addWithPasskeyInUse":
-      case "askToJoin":
-      case "finishJoining":
-        this.picks = [...others, pick];
-    }
+    this.picks = this.isPicked(pick) ? others : [...others, pick];
   }
 
   clear(): void {
@@ -101,18 +97,14 @@ export class IdentityPlan {
   ): readonly PlannedDecision[] {
     const planned: PlannedDecision[] = [];
     for (const choice of choices) {
-      const decision = this.decisionOf(choice);
-      switch (decision) {
-        case "leave":
-          continue;
-        case "addToBrowser":
-        case "addWithPasskeyInUse":
-        case "askToJoin":
-        case "finishJoining":
-          if (choice.decisions.includes(decision)) {
-            const entry: PlannedDecision = { choice, decision };
-            planned.push(entry);
-          }
+      for (const picked of this.picks) {
+        if (
+          picked.identityId === choice.identity.identityId &&
+          choice.decisions.includes(picked.decision)
+        ) {
+          const entry: PlannedDecision = { choice, decision: picked.decision };
+          planned.push(entry);
+        }
       }
     }
     return planned;
@@ -137,12 +129,12 @@ export class IdentityDecisionText {
   decision(decision: IdentityDecision): string {
     const vault = this.vault;
     switch (decision) {
-      case "leave":
-        return vault.t(I18N_KEYS.ProviderIdentitiesLeave);
       case "addToBrowser":
         return vault.identityInUse
           ? vault.t(I18N_KEYS.ProviderIdentitiesAdd)
           : vault.t(I18N_KEYS.ProviderIdentitiesRecover);
+      case "recoverWithPassphrase":
+        return vault.t(I18N_KEYS.RecoveryPassphraseRecoverAction);
       case "addWithPasskeyInUse":
         return vault.t(I18N_KEYS.ProviderIdentitiesAdd);
       case "askToJoin":

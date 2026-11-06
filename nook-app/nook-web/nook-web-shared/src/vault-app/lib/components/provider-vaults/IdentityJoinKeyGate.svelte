@@ -1,7 +1,8 @@
 <!--
 A join that waits for this browser's first protected key. The device
 protection gate runs over the page; once a key is unlocked, the join asks
-with it. Dismissing the gate leaves the join and asks nothing.
+with it, or a recovery passphrase's words are typed next. Dismissing the
+gate leaves the join and asks nothing.
 -->
 <script lang="ts">
   import { untrack } from 'svelte'
@@ -40,6 +41,7 @@ with it. Dismissing the gate leaves the join and asks nothing.
       case IdentityJoinAsked.Requested:
         await onRequested()
         return
+      case IdentityJoinAsked.RecoveryWordsNext:
       case IdentityJoinAsked.WaitsForDevice:
       case IdentityJoinAsked.WaitsForNewKey:
         return

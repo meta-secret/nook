@@ -67,7 +67,7 @@ function locked(): ProviderIdentityChoice {
       log: { state: 'absent' },
     },
     standing: { kind: 'unchecked' },
-    decisions: ['leave', 'addToBrowser', 'askToJoin'],
+    decisions: ['addToBrowser', 'askToJoin'],
     setup: { kind: 'requestToJoin' },
     recovery: 'notOffered',
     vaults: [],

@@ -2191,7 +2191,6 @@ pub const PROVIDER_IDENTITIES_FINISH_JOINING: &str = "provider_identities.finish
 pub const PROVIDER_IDENTITIES_JOIN_DENIED: &str = "provider_identities.join_denied";
 pub const PROVIDER_IDENTITIES_JOIN_FAILED: &str = "provider_identities.join_failed";
 pub const PROVIDER_IDENTITIES_JOIN_PENDING: &str = "provider_identities.join_pending";
-pub const PROVIDER_IDENTITIES_LEAVE: &str = "provider_identities.leave";
 pub const PROVIDER_IDENTITIES_NEW_IDENTITY_DETAIL: &str = "provider_identities.new_identity_detail";
 pub const PROVIDER_IDENTITIES_PLAN_ROW: &str = "provider_identities.plan_row";
 pub const PROVIDER_IDENTITIES_PLAN_TITLE: &str = "provider_identities.plan_title";

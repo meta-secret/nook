@@ -1,10 +1,12 @@
 <!--
 The identities a provider holds, one card each. Passkeys and devices belong
 to identities, so the identity is the only thing the user decides about:
-its card says whether it opens here and offers the decisions Rust allows as
-one segmented choice, Leave as is first. Vaults are never acted on here:
-the card names the identity and what its public log tells, nothing more.
-Picking a decision runs nothing; the page's one button applies the plan.
+its card says whether it opens here and offers what Rust allows doing
+with it as one segmented choice. Nothing starts picked: an identity left
+unpicked stays as it is, and pressing the picked decision again unpicks
+it. Vaults are never acted on here: the card names the identity and what
+its public log tells, nothing more. Picking a decision runs nothing; the
+page's one button applies the plan.
 -->
 <script lang="ts">
   import type { IdentityStanding, ProviderIdentityChoice } from '$app-wasm'
@@ -80,7 +82,7 @@ Picking a decision runs nothing; the page's one button applies the plan.
         <div
           class="grid border border-border/70"
           style:grid-template-columns={`repeat(${choice.decisions.length}, minmax(0, 1fr))`}
-          role="radiogroup"
+          role="group"
           aria-label={decisionsLabel(choice)}
           data-testid="provider-identity-decisions"
         >
@@ -89,11 +91,10 @@ Picking a decision runs nothing; the page's one button applies the plan.
               identityId: choice.identity.identityId,
               decision,
             }}
-            {@const picked = plan.decisionOf(choice) === decision}
+            {@const picked = plan.isPicked(pick)}
             <button
               type="button"
-              role="radio"
-              aria-checked={picked}
+              aria-pressed={picked}
               class={picked
                 ? 'min-h-9 bg-foreground px-2 text-xs font-medium text-background'
                 : 'min-h-9 px-2 text-xs text-muted-foreground hover:text-foreground disabled:opacity-60'}

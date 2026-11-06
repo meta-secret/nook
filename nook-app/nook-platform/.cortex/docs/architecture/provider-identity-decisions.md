@@ -25,8 +25,10 @@ owns what is read from the provider without a key.
   - Each listed identity gets one decision.
   - Vaults are never listed or acted on in this step; the card shows only
     the identity's vault count from its log.
-- **One decision per identity, mutually exclusive.**
-  - The decision defaults to **Leave as is** and can always return to it.
+- **At most one decision per identity, mutually exclusive.**
+  - Every decision does something; none is a "do nothing" choice.
+  - Nothing starts picked. An identity nothing is picked for stays as it is.
+  - Pressing the picked decision again unpicks it.
   - Nothing runs when a decision is picked.
 - **One action applies the plan** (with no identity in use).
   - The step's single button runs every picked decision, in listing order.
@@ -58,27 +60,37 @@ Rust decides each identity's standing and the decisions it allows.
   - No decision: its vaults open from that identity.
 - **Opens with a checked passkey** (a checked passkey re-derives a member
   app key)
-  - **Leave as is**
   - **Add to this browser:** the identity joins this browser's directory as
     its own identity, beside the one in use.
 - **Not on this browser** (nothing was checked)
-  - With no identity in use, as on the recovery screen: **Leave as is**,
-    **Recover it** (adding it; the passkey is tapped when the plan runs), or
+  - With no identity in use, as on the recovery screen: **Open with my
+    passkey** (adding it; the passkey is tapped when the plan runs) or
     **Ask to join**.
-  - With an identity in use: **Leave as is** or **Ask to join**.
+  - With an identity in use: **Ask to join**.
 - **Not opened by the checked passkeys**
-  - **Leave as is**
   - **Ask to join:** a join request to the identity's devices.
 - **Join requested** (the identity's log holds this browser's unanswered
   request)
   - No decision: a device of the identity answers it.
 - **Join denied** (a device denied this browser's request)
-  - **Leave as is**
   - **Ask to join** again.
 - **Join approved** (this browser's key is a member; the identity is not
   added here yet)
-  - **Leave as is**
   - **Finish joining:** add the identity to this browser.
+
+Where this browser may ask to join, or waits on a request it asked, and the
+identity's log lists a recovery passphrase, Rust also offers **Recover with
+passphrase**, before **Ask to join**.
+
+- Applying it stops the plan at that identity. Later decisions do not run.
+- This browser's fresh key comes first, as for asking: the device protection
+  gate, or a new local identity's key ceremony.
+- The words of one of its passphrases are typed next, in place of the list.
+- Once Rust accepts them, the identity is added here as after an approved
+  join, and the page connects the provider as its button does.
+- Back returns to the list and joins nothing.
+
+See [recover a keyring with a recovery passphrase](identity-vault-architecture.md#recover-a-keyring-with-a-recovery-passphrase).
 
 ## Setup action
 

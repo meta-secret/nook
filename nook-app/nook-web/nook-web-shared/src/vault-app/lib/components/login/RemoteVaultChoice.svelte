@@ -2,9 +2,10 @@
 A recovery provider's identities, one card each, on a browser with no
 identity in use. Rust decides what each identity allows: recover it with
 its passkey, ask one of its devices to let this browser join, or finish a
-join a device approved. Asking needs this browser's own protected key, so
-the device protection gate runs first when there is none. Picking a
-decision runs nothing; Apply runs the plan. Checking which passkey opens an
+join a device approved, or join it with one of its recovery passphrases,
+whose words are typed in place of the list. Asking and recovering need
+this browser's own protected key, so the device protection gate runs first
+when there is none. Picking a decision runs nothing; Apply runs the plan. Checking which passkey opens an
 identity decrypts in memory and changes nothing.
 -->
 <script lang="ts">
@@ -19,13 +20,18 @@ identity decrypts in memory and changes nothing.
     type IdentityChoicesRequest,
   } from '$lib/components/provider-vaults/identity-plan.svelte'
   import IdentityJoinKeyGate from '$lib/components/provider-vaults/IdentityJoinKeyGate.svelte'
+  import KeyringRecoveryWords from '$lib/components/provider-vaults/KeyringRecoveryWords.svelte'
   import {
     IdentityPlanActions,
     IdentityPlanOutcomeKind,
     type IdentityPlanRun,
   } from '$lib/vault/identity-plan-actions'
   import type { VaultState } from '$lib/vault.svelte'
-  import { IdentityJoinWaitKind } from '$lib/vault/identity-join-wait'
+  import {
+    IdentityJoinWaitKind,
+    KeyringRecoveryKind,
+    type IdentityJoinIntent,
+  } from '$lib/vault/identity-join-wait'
   import {
     AccessCheckActions,
     recoveryCheckTarget,
@@ -104,6 +110,8 @@ identity decrypts in memory and changes nothing.
           break
         // A join waits for a fresh key; its ceremony asks, then lists again.
         case IdentityPlanOutcomeKind.WaitsForKey:
+        // A recovery passphrase's words are typed next; they open it.
+        case IdentityPlanOutcomeKind.RecoveryWordsNext:
           return
       }
       if (recoveredVault) {
@@ -118,6 +126,27 @@ identity decrypts in memory and changes nothing.
     }
     await onApplied()
   }
+  /** Once a recovery passphrase let this browser in, the keyring's first
+   * vault opens, as one recovered by its passkey does. */
+  function connectRecovered(
+    join: IdentityJoinIntent,
+  ): () => Promise<boolean> {
+    return async () => {
+      const listed = choices.isOk() ? choices.value : []
+      const [recoveredVault] = listed
+        .filter((choice) => choice.identity.identityId === join.identityId)
+        .flatMap((choice) => choice.vaults)
+      if (recoveredVault) {
+        const chosen = vault.chooseRemoteVault(recoveredVault.storeId)
+        if (chosen.isErr()) {
+          vault.errorMsg = vault.t(chosen.error.translationKey)
+          return false
+        }
+      }
+      await onApplied()
+      return vault.errorMsg === ''
+    }
+  }
 </script>
 
 <section class="grid gap-3" data-testid="remote-vault-choice">
@@ -130,7 +159,13 @@ identity decrypts in memory and changes nothing.
       {vault.t(I18N_KEYS.FirstRunRestoreChooseVaultBody)}
     </p>
   </div>
-  {#if choices.isErr()}
+  {#if vault.keyringRecovery.kind === KeyringRecoveryKind.Words}
+    <KeyringRecoveryWords
+      {vault}
+      join={vault.keyringRecovery.join}
+      connect={connectRecovered(vault.keyringRecovery.join)}
+    />
+  {:else if choices.isErr()}
     <p class="text-xs text-destructive" role="alert">
       {vault.t(choices.error.translationKey)}
     </p>

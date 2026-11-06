@@ -173,9 +173,9 @@ describe('Recovery vault choice', () => {
     })
     const [familyCard, strangerCard] = view.getAllByTestId('provider-identity')
     expect(familyCard?.textContent).toContain('Family')
-    expect(decisionsOf(familyCard)).toEqual(['leave', 'addToBrowser'])
+    expect(decisionsOf(familyCard)).toEqual(['addToBrowser'])
     // The identity no passkey opened can only be asked to let this browser in.
-    expect(decisionsOf(strangerCard)).toEqual(['leave', 'askToJoin'])
+    expect(decisionsOf(strangerCard)).toEqual(['askToJoin'])
   })
 
   test('a keyring recovered with its passkey opens its vault next', async () => {
@@ -272,7 +272,7 @@ describe('Recovery vault choice', () => {
     ])
     const deniedCard = denied.view.getAllByTestId('provider-identity').at(-1)
     expect(deniedCard?.dataset.standing).toBe('joinDenied')
-    expect(decisionsOf(deniedCard)).toEqual(['leave', 'askToJoin'])
+    expect(decisionsOf(deniedCard)).toEqual(['askToJoin'])
 
     const approved = renderChoice([
       choice({
@@ -284,6 +284,6 @@ describe('Recovery vault choice', () => {
       .getAllByTestId('provider-identity')
       .at(-1)
     expect(approvedCard?.dataset.standing).toBe('joinApproved')
-    expect(decisionsOf(approvedCard)).toEqual(['leave', 'finishJoining'])
+    expect(decisionsOf(approvedCard)).toEqual(['finishJoining'])
   })
 })

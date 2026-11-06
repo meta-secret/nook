@@ -3,9 +3,10 @@
 //! Passkeys and devices belong to identities, not vaults, so a provider's
 //! vaults are grouped under the identity that files them and every decision
 //! is made per identity. Each identity gets a standing (whether it opens on
-//! this browser, and how) and the decisions that standing allows; **Leave as
-//! is** comes first and is the default. The checks run on the page name an
-//! identity and its vaults once they decrypted them.
+//! this browser, and how) and the decisions that standing allows. Each
+//! decision does something; an identity nobody decides about is left as it
+//! is. The checks run on the page name an identity and its vaults once they
+//! decrypted them.
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
@@ -97,14 +98,15 @@ impl IdentityStanding {
     }
 }
 
-/// One thing the user may decide about an identity.
+/// One thing the user may decide to do with an identity.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub enum IdentityDecision {
-    /// Change nothing; the default.
-    Leave,
     /// Add it to this browser as its own identity, proven by its passkey.
     AddToBrowser,
+    /// Join it with one of its recovery passphrases: this browser's fresh
+    /// key is let in by the typed words, not by one of its devices.
+    RecoverWithPassphrase,
     /// Ask one of its devices to let this browser join it.
     AskToJoin,
     /// Add the identity a device approved this browser's request for.
@@ -121,7 +123,7 @@ pub enum IdentityDecision {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum IdentitySetup {
     /// This browser's key is a member: setup finishes on the identity after
-    /// the decision that brings it here (**Leave** when it already is).
+    /// the decision that brings it here.
     Continue { decision: IdentityDecision },
     /// The identity in use here: nothing to set up.
     InUse,
@@ -141,7 +143,7 @@ pub enum IdentitySetup {
 pub struct ProviderIdentityChoice {
     pub identity: FilingIdentity,
     pub standing: IdentityStanding,
-    /// Empty when there is nothing to decide; otherwise **Leave** first.
+    /// What can be done with it; empty when there is nothing to do.
     pub decisions: Vec<IdentityDecision>,
     pub setup: IdentitySetup,
     /// Whether setup also offers recovering it with a recovery passphrase.
@@ -233,9 +235,9 @@ impl ProviderIdentityChoices<'_> {
         }
         for choice in &mut choices {
             choice.standing = self.standing(choice);
-            choice.decisions = self.decisions(&choice.standing);
             choice.setup = choice.standing.setup(self.session);
             choice.recovery = IdentityRecoveryOffer::of(choice.setup, choice.identity.log);
+            choice.decisions = self.decisions(&choice.standing, choice.recovery);
         }
         choices
     }
@@ -280,11 +282,17 @@ impl ProviderIdentityChoices<'_> {
         }
     }
 
-    /// What a standing allows, **Leave** first. Adding and merging need the
-    /// identity's passkey: one a check found, or, on a browser with no
-    /// identity yet, the passkey the user taps when the plan runs.
-    fn decisions(&self, standing: &IdentityStanding) -> Vec<IdentityDecision> {
-        match (standing, self.session) {
+    /// What a standing allows. Adding and merging need the identity's
+    /// passkey: one a check found, or, on a browser with no identity yet,
+    /// the passkey the user taps when the plan runs. An identity this
+    /// browser may join whose log lists a recovery passphrase can also be
+    /// joined with its words, before asking its devices.
+    fn decisions(
+        &self,
+        standing: &IdentityStanding,
+        recovery: IdentityRecoveryOffer,
+    ) -> Vec<IdentityDecision> {
+        let mut decisions = match (standing, self.session) {
             (
                 IdentityStanding::ThisBrowser
                 | IdentityStanding::OtherIdentityHere { .. }
@@ -292,21 +300,19 @@ impl ProviderIdentityChoices<'_> {
                 _,
             ) => Vec::new(),
             (IdentityStanding::JoinApproved, _) => {
-                vec![IdentityDecision::Leave, IdentityDecision::FinishJoining]
+                vec![IdentityDecision::FinishJoining]
             }
             (IdentityStanding::PasskeyInUse, _) => {
-                vec![IdentityDecision::Leave, IdentityDecision::AddWithPasskeyInUse]
+                vec![IdentityDecision::AddWithPasskeyInUse]
             }
             // A passkey that opens the identity completes it here: there
             // is nothing to merge.
             (IdentityStanding::OpenedByPasskey { .. }, _) => {
-                vec![IdentityDecision::Leave, IdentityDecision::AddToBrowser]
+                vec![IdentityDecision::AddToBrowser]
             }
-            (IdentityStanding::Unchecked, IdentitySession::NoIdentity) => vec![
-                IdentityDecision::Leave,
-                IdentityDecision::AddToBrowser,
-                IdentityDecision::AskToJoin,
-            ],
+            (IdentityStanding::Unchecked, IdentitySession::NoIdentity) => {
+                vec![IdentityDecision::AddToBrowser, IdentityDecision::AskToJoin]
+            }
             (
                 IdentityStanding::Unchecked | IdentityStanding::NotOpened,
                 IdentitySession::IdentityInUse,
@@ -314,9 +320,20 @@ impl ProviderIdentityChoices<'_> {
             | (IdentityStanding::NotOpened, IdentitySession::NoIdentity)
             // A denied request may be asked again.
             | (IdentityStanding::JoinDenied, _) => {
-                vec![IdentityDecision::Leave, IdentityDecision::AskToJoin]
+                vec![IdentityDecision::AskToJoin]
             }
+        };
+        match recovery {
+            IdentityRecoveryOffer::Offered => {
+                let before_asking = decisions
+                    .iter()
+                    .position(|decision| *decision == IdentityDecision::AskToJoin)
+                    .unwrap_or(decisions.len());
+                decisions.insert(before_asking, IdentityDecision::RecoverWithPassphrase);
+            }
+            IdentityRecoveryOffer::NotOffered => {}
         }
+        decisions
     }
 
     /// The short id of the first checked passkey that opened the identity.
@@ -552,6 +569,85 @@ mod tests {
         Ok(())
     }
 
+    /// A keyring whose log lists a recovery passphrase can be joined with its
+    /// words wherever this browser may join it, before asking its devices;
+    /// one without a passphrase, or one this browser finishes joining,
+    /// offers no words.
+    #[test]
+    fn a_keyring_with_a_passphrase_offers_recovering_with_its_words() -> anyhow::Result<()> {
+        let decisions = |count: u32,
+                         join: ProviderIdentityJoin,
+                         session: IdentitySession|
+         -> anyhow::Result<Vec<IdentityDecision>> {
+            let log = ProviderIdentityLog::Read {
+                devices: crate::ProviderLogCount::from(1),
+                newest_device: ProviderVaultTime::Unreported,
+                vaults: crate::ProviderLogCount::from(0),
+                recovery_passphrases: crate::ProviderLogCount::from(count),
+                this_browser: false,
+                join,
+            };
+            let identities = [Fixture::identity(OTHER, log)?];
+            let choices = ProviderIdentityChoices {
+                vaults: &[],
+                identities: &identities,
+                checks: &[],
+                session,
+            }
+            .choices();
+            Ok(Fixture::at(&choices, 0)?.decisions.clone())
+        };
+        assert_eq!(
+            decisions(
+                1,
+                ProviderIdentityJoin::NotAsked,
+                IdentitySession::NoIdentity
+            )?,
+            vec![
+                IdentityDecision::AddToBrowser,
+                IdentityDecision::RecoverWithPassphrase,
+                IdentityDecision::AskToJoin,
+            ]
+        );
+        assert_eq!(
+            decisions(
+                2,
+                ProviderIdentityJoin::Denied,
+                IdentitySession::IdentityInUse
+            )?,
+            vec![
+                IdentityDecision::RecoverWithPassphrase,
+                IdentityDecision::AskToJoin
+            ]
+        );
+        // A request waiting on its devices can still be let in by the words.
+        assert_eq!(
+            decisions(
+                1,
+                ProviderIdentityJoin::Requested,
+                IdentitySession::NoIdentity
+            )?,
+            vec![IdentityDecision::RecoverWithPassphrase]
+        );
+        assert_eq!(
+            decisions(
+                0,
+                ProviderIdentityJoin::NotAsked,
+                IdentitySession::NoIdentity
+            )?,
+            vec![IdentityDecision::AddToBrowser, IdentityDecision::AskToJoin]
+        );
+        assert_eq!(
+            decisions(
+                1,
+                ProviderIdentityJoin::Approved,
+                IdentitySession::NoIdentity
+            )?,
+            vec![IdentityDecision::FinishJoining]
+        );
+        Ok(())
+    }
+
     /// An identity the provider holds a log for but that files no vault
     /// there gets a card too, after the vault cards, which keep their order.
     #[test]
@@ -659,10 +755,7 @@ mod tests {
                 passkey: "a1b2c3d4".to_owned()
             }
         );
-        assert_eq!(
-            choice.decisions,
-            vec![IdentityDecision::Leave, IdentityDecision::AddToBrowser]
-        );
+        assert_eq!(choice.decisions, vec![IdentityDecision::AddToBrowser]);
         assert_eq!(choice.identity.name, ProviderVaultName::named("Personal"));
         assert_eq!(
             Fixture::first_vault_name(choice),
@@ -693,11 +786,7 @@ mod tests {
         );
         assert_eq!(
             Fixture::at(&choices, 0)?.decisions,
-            vec![
-                IdentityDecision::Leave,
-                IdentityDecision::AddToBrowser,
-                IdentityDecision::AskToJoin,
-            ]
+            vec![IdentityDecision::AddToBrowser, IdentityDecision::AskToJoin]
         );
         Ok(())
     }
@@ -726,7 +815,7 @@ mod tests {
         );
         assert_eq!(
             Fixture::at(&choices, 1)?.decisions,
-            vec![IdentityDecision::Leave, IdentityDecision::AskToJoin]
+            vec![IdentityDecision::AskToJoin]
         );
         Ok(())
     }
@@ -746,10 +835,7 @@ mod tests {
         let choice =
             Fixture::only_choice(ProviderIdentityJoin::Denied, IdentitySession::IdentityInUse)?;
         assert_eq!(choice.standing, IdentityStanding::JoinDenied);
-        assert_eq!(
-            choice.decisions,
-            vec![IdentityDecision::Leave, IdentityDecision::AskToJoin]
-        );
+        assert_eq!(choice.decisions, vec![IdentityDecision::AskToJoin]);
         Ok(())
     }
 
@@ -758,10 +844,7 @@ mod tests {
         for session in [IdentitySession::NoIdentity, IdentitySession::IdentityInUse] {
             let choice = Fixture::only_choice(ProviderIdentityJoin::Approved, session)?;
             assert_eq!(choice.standing, IdentityStanding::JoinApproved);
-            assert_eq!(
-                choice.decisions,
-                vec![IdentityDecision::Leave, IdentityDecision::FinishJoining]
-            );
+            assert_eq!(choice.decisions, vec![IdentityDecision::FinishJoining]);
         }
         Ok(())
     }
@@ -778,10 +861,7 @@ mod tests {
             assert_eq!(choice.standing, IdentityStanding::PasskeyInUse);
             assert_eq!(
                 choice.decisions,
-                vec![
-                    IdentityDecision::Leave,
-                    IdentityDecision::AddWithPasskeyInUse
-                ]
+                vec![IdentityDecision::AddWithPasskeyInUse]
             );
             assert_eq!(
                 choice.setup,
@@ -811,10 +891,7 @@ mod tests {
 
         let choice = Fixture::at(&choices, 0)?;
         assert_eq!(choice.standing, IdentityStanding::Unchecked);
-        assert_eq!(
-            choice.decisions,
-            vec![IdentityDecision::Leave, IdentityDecision::AskToJoin]
-        );
+        assert_eq!(choice.decisions, vec![IdentityDecision::AskToJoin]);
         Ok(())
     }
 

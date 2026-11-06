@@ -21,8 +21,10 @@ import {
 import {
   FirstRunJoinKind,
   IdentityJoinWaitKind,
+  KeyringRecoveryKind,
   type FirstRunJoin,
   type IdentityJoinWait,
+  type KeyringRecovery,
 } from "$lib/vault/identity-join-wait";
 import {
   S3KeyFormRequests,
@@ -196,4 +198,9 @@ export class VaultUiState {
   /** A join to an identity that waits for the fresh key it asks with: the
    * device protection gate, or a new local identity's key ceremony. */
   identityJoin = $state<IdentityJoinWait>({ kind: IdentityJoinWaitKind.Idle });
+  /** A keyring listed on a sync provider that this browser joins with one
+   * of its recovery passphrases: its words are typed next. */
+  keyringRecovery = $state.raw<KeyringRecovery>({
+    kind: KeyringRecoveryKind.None,
+  });
 }

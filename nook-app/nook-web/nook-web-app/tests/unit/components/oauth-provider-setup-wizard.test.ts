@@ -464,7 +464,7 @@ describe('Google Drive provider setup', () => {
     )
   })
 
-  test('on the recovery screen, picking a decision plans it, and Leave as is takes it back out', async () => {
+  test('on the recovery screen, picking a decision plans it, and pressing it again takes it back out', async () => {
     listVaults({
       root: 'found',
       listing: {
@@ -480,7 +480,7 @@ describe('Google Drive provider setup', () => {
     const join = await DecisionButtons.of(view, 'askToJoin')
     await fireEvent.click(join)
 
-    expect(join.getAttribute('aria-checked')).toBe('true')
+    expect(join.getAttribute('aria-pressed')).toBe('true')
     expect(
       view.getByTestId('provider-identity-plan-row').textContent,
     ).toContain(vault.t(I18N_KEYS.ProviderIdentitiesAskToJoin))
@@ -488,7 +488,8 @@ describe('Google Drive provider setup', () => {
       vault.t(I18N_KEYS.ProviderIdentitiesConnectApply),
     )
 
-    await fireEvent.click(await DecisionButtons.of(view, 'leave'))
+    await fireEvent.click(join)
+    expect(join.getAttribute('aria-pressed')).toBe('false')
     expect(view.queryAllByTestId('provider-identity-plan')).toHaveLength(0)
     expect(view.getByTestId('connect-provider-btn').textContent).toContain(
       vault.t(I18N_KEYS.AuthStorageConnectAndSync),
@@ -639,7 +640,7 @@ describe('Google Drive provider setup', () => {
       view
         .getAllByTestId('provider-identity-decision')
         .map((button) => button.dataset.decision),
-    ).toEqual(['leave', 'addToBrowser'])
+    ).toEqual(['addToBrowser'])
 
     await fireEvent.click(await DecisionButtons.of(view, 'addToBrowser'))
     await fireEvent.click(view.getByTestId('connect-provider-btn'))
@@ -732,7 +733,7 @@ describe('Google Drive provider setup', () => {
       view
         .getAllByTestId('provider-identity-decision')
         .map((button) => button.dataset.decision),
-    ).toEqual(['leave', 'askToJoin'])
+    ).toEqual(['askToJoin'])
   })
 
   test('says it found the existing Nook root and syncs beside its vaults', async () => {

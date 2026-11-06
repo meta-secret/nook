@@ -438,16 +438,14 @@ export class FirstRunActions {
   async continueOn({ choice, source }: FirstRunIdentity): Promise<void> {
     const vault = this.vault;
     if (choice.setup.kind !== "continue") return;
-    if (choice.setup.decision !== "leave") {
-      const run: IdentityPlanRun = {
-        source,
-        planned: [{ choice, decision: choice.setup.decision }],
-      };
-      const ran = await new IdentityPlanActions(vault).run(run);
-      if (ran.isErr()) {
-        vault.errorMsg = ran.error.message(vault);
-        return;
-      }
+    const run: IdentityPlanRun = {
+      source,
+      planned: [{ choice, decision: choice.setup.decision }],
+    };
+    const ran = await new IdentityPlanActions(vault).run(run);
+    if (ran.isErr()) {
+      vault.errorMsg = ran.error.message(vault);
+      return;
     }
     await this.connectProvider();
   }

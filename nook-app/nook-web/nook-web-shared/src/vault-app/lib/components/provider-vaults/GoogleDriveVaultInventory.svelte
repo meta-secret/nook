@@ -10,7 +10,9 @@ one, and connects.
 
 On the recovery screen, with no identity yet, each identity offers the
 decisions Rust allows; picking one runs nothing, and the step's button runs
-the plan, then Connect & sync. Checking which passkey opens an identity
+the plan, then Connect & sync. A keyring recovered with a passphrase stops
+the plan for its words, typed in place of the list; once they let this
+browser in, Connect & sync runs. Checking which passkey opens an identity
 decrypts in memory and changes nothing.
 -->
 <script lang="ts">
@@ -36,8 +38,10 @@ decrypts in memory and changes nothing.
     identityChoices,
     type IdentityChoicesFailure,
     type IdentityChoicesRequest,
+    type PlannedDecision,
   } from '$lib/components/provider-vaults/identity-plan.svelte'
   import IdentityJoinKeyGate from '$lib/components/provider-vaults/IdentityJoinKeyGate.svelte'
+  import KeyringRecoveryWords from '$lib/components/provider-vaults/KeyringRecoveryWords.svelte'
   import {
     IdentityPlanActions,
     IdentityPlanOutcomeKind,
@@ -46,7 +50,10 @@ decrypts in memory and changes nothing.
   import type { VaultState } from '$lib/vault.svelte'
   import { IdentityPages, type AddedKeyring } from '$lib/vault/identity-pages'
   import { VaultOAuthActions } from '$lib/vault/oauth'
-  import { IdentityJoinWaitKind } from '$lib/vault/identity-join-wait'
+  import {
+    IdentityJoinWaitKind,
+    KeyringRecoveryKind,
+  } from '$lib/vault/identity-join-wait'
   import {
     AccessCheckActions,
     AccessCheckTargetKind,
@@ -173,6 +180,8 @@ decrypts in memory and changes nothing.
           // A join waits for a new key of its own; its ceremony asks, and
           // Connect & sync waits for the identity that ceremony adopts.
           case IdentityPlanOutcomeKind.WaitsForKey:
+          // The words of a recovery passphrase are typed next; they connect.
+          case IdentityPlanOutcomeKind.RecoveryWordsNext:
             return
         }
       } finally {
@@ -188,20 +197,25 @@ decrypts in memory and changes nothing.
   /** The identity a setup action runs for; empty while none runs. */
   let workingOn = $state('')
 
-  /** The decision a picked setup action runs for one identity. */
-  function decisionFor(
+  /** What a picked setup action runs for one identity: Continue on one
+   * already here runs nothing before connecting. */
+  function decisionsFor(
     action: FirstRunIdentityAction,
-  ): (choice: ProviderIdentityChoice) => IdentityDecision {
+  ): (choice: ProviderIdentityChoice) => readonly PlannedDecision[] {
+    const planned = (
+      choice: ProviderIdentityChoice,
+      decision: IdentityDecision,
+    ): readonly PlannedDecision[] => [{ choice, decision }]
     return (choice) => {
       switch (action) {
         case FirstRunIdentityAction.Continue:
           return choice.setup.kind === 'continue'
-            ? choice.setup.decision
-            : 'leave'
+            ? planned(choice, choice.setup.decision)
+            : []
         case FirstRunIdentityAction.AskToJoin:
-          return 'askToJoin'
+          return planned(choice, 'askToJoin')
         case FirstRunIdentityAction.CheckJoin:
-          return 'finishJoining'
+          return planned(choice, 'finishJoining')
       }
     }
   }
@@ -215,7 +229,7 @@ decrypts in memory and changes nothing.
   function act(
     action: FirstRunIdentityAction,
   ): (choice: ProviderIdentityChoice) => Promise<void> {
-    const decide = decisionFor(action)
+    const decide = decisionsFor(action)
     return async (choice) => {
       workingOn = choice.identity.identityId
       try {
@@ -225,11 +239,15 @@ decrypts in memory and changes nothing.
         }
         const run: IdentityPlanRun = {
           source,
-          planned: [{ choice, decision: decide(choice) }],
+          planned: decide(choice),
         }
         const ran = await new IdentityPlanActions(vault).run(run)
         if (ran.isErr()) vault.errorMsg = ran.error.message(vault)
-        else if (ran.value.kind === IdentityPlanOutcomeKind.WaitsForKey) return
+        else if (
+          ran.value.kind === IdentityPlanOutcomeKind.WaitsForKey ||
+          ran.value.kind === IdentityPlanOutcomeKind.RecoveryWordsNext
+        )
+          return
         else if (ran.value.kind === IdentityPlanOutcomeKind.AddedBeside) {
           // The added keyring syncs in this account's Nook folder: the
           // sign-in is bound to it, then saved for that keyring.
@@ -261,6 +279,12 @@ decrypts in memory and changes nothing.
       ? vault.identityControl.view.snapshot.identityLabel
       : '',
   )
+
+  /** Connect & sync once a recovery passphrase let this browser in. */
+  async function connectRecovered(): Promise<boolean> {
+    await onConnect()
+    return vault.errorMsg === ''
+  }
 
   const button = $derived.by((): ConnectPlanButton => {
     const busy =
@@ -296,7 +320,13 @@ decrypts in memory and changes nothing.
   })
 </script>
 
-{#if inventory.kind === DriveVaultInventoryKind.Loading}
+{#if vault.keyringRecovery.kind === KeyringRecoveryKind.Words}
+  <KeyringRecoveryWords
+    {vault}
+    join={vault.keyringRecovery.join}
+    connect={connectRecovered}
+  />
+{:else if inventory.kind === DriveVaultInventoryKind.Loading}
   <p
     class="flex items-center gap-2 text-[11px] text-muted-foreground"
     role="status"
@@ -357,4 +387,6 @@ decrypts in memory and changes nothing.
 {#if setupMode && listedIdentities > 0}
   <OptionDivider {vault} />
 {/if}
-{@render connectButton(button)}
+{#if vault.keyringRecovery.kind === KeyringRecoveryKind.None}
+  {@render connectButton(button)}
+{/if}

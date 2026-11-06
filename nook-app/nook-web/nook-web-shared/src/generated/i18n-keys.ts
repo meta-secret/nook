@@ -1842,7 +1842,6 @@ export const I18N_KEYS = {
   ProviderIdentitiesJoinDenied: 'provider_identities.join_denied',
   ProviderIdentitiesJoinFailed: 'provider_identities.join_failed',
   ProviderIdentitiesJoinPending: 'provider_identities.join_pending',
-  ProviderIdentitiesLeave: 'provider_identities.leave',
   ProviderIdentitiesNewIdentityDetail: 'provider_identities.new_identity_detail',
   ProviderIdentitiesPlanRow: 'provider_identities.plan_row',
   ProviderIdentitiesPlanTitle: 'provider_identities.plan_title',

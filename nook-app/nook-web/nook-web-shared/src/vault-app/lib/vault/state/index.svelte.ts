@@ -62,6 +62,7 @@ const uiKeys = [
   "forgetEmptyVaultReplacement",
   "identityDirectory",
   "identityJoin",
+  "keyringRecovery",
 ] as const satisfies readonly (keyof VaultUiState)[];
 
 const providerKeys = [
@@ -225,6 +226,7 @@ class VaultStateSlicesImplementation {
   declare forgetEmptyVaultReplacement: VaultUiState["forgetEmptyVaultReplacement"];
   declare identityDirectory: VaultUiState["identityDirectory"];
   declare identityJoin: VaultUiState["identityJoin"];
+  declare keyringRecovery: VaultUiState["keyringRecovery"];
 
   declare providers: VaultProviderState["providers"];
   declare providersLoaded: VaultProviderState["providersLoaded"];
