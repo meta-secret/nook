@@ -645,11 +645,16 @@ describe('Google Drive provider setup', () => {
         .getAllByTestId('provider-identity-decision')
         .map((button) => button.dataset.decision),
     ).toEqual(['addToBrowser'])
+    const choose = vi
+      .spyOn(vault, 'chooseRemoteVault')
+      .mockReturnValue(ok(true))
 
     await fireEvent.click(await DecisionButtons.of(view, 'addToBrowser'))
     await fireEvent.click(view.getByTestId('connect-provider-btn'))
 
     await vi.waitFor(() => expect(onConnect).toHaveBeenCalledOnce())
+    // The recovered keyring's vault opens next, not the folder's whole list.
+    expect(choose).toHaveBeenCalledWith('store_othervault1')
     expect(run).toHaveBeenCalledOnce()
     const call = run.mock.calls.at(0)
     if (!call) throw new Error('the plan did not run')

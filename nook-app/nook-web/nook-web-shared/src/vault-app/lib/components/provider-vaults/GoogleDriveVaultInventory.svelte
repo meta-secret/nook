@@ -53,6 +53,7 @@ decrypts in memory and changes nothing.
   import {
     IdentityJoinWaitKind,
     KeyringRecoveryKind,
+    type IdentityJoinIntent,
   } from '$lib/vault/identity-join-wait'
   import {
     AccessCheckActions,
@@ -160,6 +161,12 @@ decrypts in memory and changes nothing.
   async function runPlan(): Promise<void> {
     if (planned.length > 0) {
       working = true
+      // A keyring the plan brings here opens its vault next.
+      const brought = planned.find(
+        (entry) =>
+          entry.decision === 'addToBrowser' ||
+          entry.decision === 'finishJoining',
+      )
       try {
         const source: NookProviderSource = {
           kind: 'remote',
@@ -175,6 +182,9 @@ decrypts in memory and changes nothing.
         plan.clear()
         switch (ran.value.kind) {
           case IdentityPlanOutcomeKind.Applied:
+            if (brought && !chooseVaultOf(brought.choice.identity.identityId))
+              return
+            break
           case IdentityPlanOutcomeKind.AddedBeside:
             break
           // A join waits for a new key of its own; its ceremony asks, and
@@ -279,10 +289,34 @@ decrypts in memory and changes nothing.
       : '',
   )
 
-  /** Connect & sync once a recovery passphrase let this browser in. */
-  async function connectRecovered(): Promise<boolean> {
-    await onConnect()
-    return vault.errorMsg === ''
+  /** The vault Connect & sync opens for a keyring just brought here: the
+   * first the folder files under it. Unchosen, a folder holding several
+   * keyrings would list them all again instead of opening it. False when
+   * the choice was refused, which is said. */
+  function chooseVaultOf(identityId: string): boolean {
+    const listed = choices.isOk() ? choices.value : []
+    const [first] = listed
+      .filter((choice) => choice.identity.identityId === identityId)
+      .flatMap((choice) => choice.vaults)
+    if (!first) return true
+    const chosen = vault.chooseRemoteVault(first.storeId)
+    if (chosen.isErr()) {
+      vault.errorMsg = vault.t(chosen.error.translationKey)
+      return false
+    }
+    return true
+  }
+
+  /** Once a recovery passphrase let this browser in, its keyring's vault
+   * opens through Connect & sync. */
+  function connectRecovered(
+    join: IdentityJoinIntent,
+  ): () => Promise<boolean> {
+    return async () => {
+      if (!chooseVaultOf(join.identityId)) return false
+      await onConnect()
+      return vault.errorMsg === ''
+    }
   }
 
   const button = $derived.by((): ConnectPlanButton => {
@@ -323,7 +357,7 @@ decrypts in memory and changes nothing.
   <KeyringRecoveryWords
     {vault}
     join={vault.keyringRecovery.join}
-    connect={connectRecovered}
+    connect={connectRecovered(vault.keyringRecovery.join)}
   />
 {:else if inventory.kind === DriveVaultInventoryKind.Loading}
   <p
