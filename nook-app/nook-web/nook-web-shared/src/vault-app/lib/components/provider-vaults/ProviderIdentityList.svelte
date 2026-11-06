@@ -1,15 +1,25 @@
 <!--
 The identities a provider holds, one card each. Passkeys and devices belong
 to identities, so the identity is the only thing the user decides about:
-its card says whether it opens here and offers what Rust allows doing
-with it as one segmented choice. Nothing starts picked: an identity left
-unpicked stays as it is, and pressing the picked decision again unpicks
-it. Vaults are never acted on here: the card names the identity and what
+its card says whether it opens here and lists what Rust allows doing
+with it, one row per way in, each saying what it needs. Nothing starts
+picked: an identity left unpicked stays as it is, and pressing the picked
+row again unpicks it. Vaults are never acted on here: the card names the identity and what
 its public log tells, nothing more. Picking a decision runs nothing; the
 page's one button applies the plan.
 -->
 <script lang="ts">
-  import type { IdentityStanding, ProviderIdentityChoice } from '$app-wasm'
+  import {
+    Check,
+    Fingerprint,
+    MonitorSmartphone,
+    ScrollText,
+  } from '@lucide/svelte'
+  import type {
+    IdentityDecision,
+    IdentityStanding,
+    ProviderIdentityChoice,
+  } from '$app-wasm'
   import IdentityCardHeader from '$lib/components/provider-vaults/IdentityCardHeader.svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
@@ -67,6 +77,17 @@ page's one button applies the plan.
   }
 </script>
 
+<!-- What a way in uses: a passkey, written-down words, or a device. -->
+{#snippet decisionIcon(decision: IdentityDecision)}
+  {#if decision === 'recoverWithPassphrase'}
+    <ScrollText class="size-4" />
+  {:else if decision === 'askToJoin' || decision === 'finishJoining'}
+    <MonitorSmartphone class="size-4" />
+  {:else}
+    <Fingerprint class="size-4" />
+  {/if}
+{/snippet}
+
 <div class="space-y-3" data-testid="provider-identity-list">
   {#each choices as choice (choice.identity.identityId)}
     {@const standing = choice.standing}
@@ -80,8 +101,7 @@ page's one button applies the plan.
       <IdentityCardHeader {vault} {choice} />
       {#if choice.decisions.length > 0}
         <div
-          class="grid border border-border/70"
-          style:grid-template-columns={`repeat(${choice.decisions.length}, minmax(0, 1fr))`}
+          class="grid"
           role="group"
           aria-label={decisionsLabel(choice)}
           data-testid="provider-identity-decisions"
@@ -95,15 +115,26 @@ page's one button applies the plan.
             <button
               type="button"
               aria-pressed={picked}
-              class={picked
-                ? 'min-h-9 bg-foreground px-2 text-xs font-medium text-background'
-                : 'min-h-9 px-2 text-xs text-muted-foreground hover:text-foreground disabled:opacity-60'}
+              class="nk-vault-row disabled:opacity-60"
               data-testid="provider-identity-decision"
               data-decision={decision}
               {disabled}
               onclick={() => plan.decide(pick)}
             >
-              {text.decision(decision)}
+              <span class="nk-vault-icon" aria-hidden="true">
+                {@render decisionIcon(decision)}
+              </span>
+              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span class="truncate text-sm font-medium">
+                  {text.decision(decision)}
+                </span>
+                <span class="truncate text-xs text-muted-foreground">
+                  {text.detail(decision)}
+                </span>
+              </span>
+              {#if picked}
+                <Check class="size-4 flex-none" aria-hidden="true" />
+              {/if}
             </button>
           {/each}
         </div>

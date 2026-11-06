@@ -143,4 +143,21 @@ export class IdentityDecisionText {
         return vault.t(I18N_KEYS.ProviderIdentitiesFinishJoining);
     }
   }
+
+  /** What one decision needs from the user, under its name. */
+  detail(decision: IdentityDecision): string {
+    const vault = this.vault;
+    switch (decision) {
+      case "addToBrowser":
+        return vault.t(I18N_KEYS.ProviderIdentitiesPasskeyDetail);
+      case "addWithPasskeyInUse":
+        return vault.t(I18N_KEYS.ProviderIdentitiesPasskeyInUseDetail);
+      case "recoverWithPassphrase":
+        return vault.t(I18N_KEYS.ProviderIdentitiesWordsDetail);
+      case "askToJoin":
+        return vault.t(I18N_KEYS.ProviderIdentitiesAskToJoinDetail);
+      case "finishJoining":
+        return vault.t(I18N_KEYS.ProviderIdentitiesFinishJoiningDetail);
+    }
+  }
 }

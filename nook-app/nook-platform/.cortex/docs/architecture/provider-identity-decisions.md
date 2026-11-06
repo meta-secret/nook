@@ -53,7 +53,7 @@ owns what is read from the provider without a key.
 **Prohibited:** offer "Import as a separate vault" on one vault row while the
 same identity offers "Ask to join".
 
-**Required:** the identity offers one segmented decision. The step's copy
+**Required:** the identity offers one list of ways in. The step's copy
 speaks of identities, never of vaults.
 
 ## Decisions by standing
@@ -254,9 +254,12 @@ accent, no pills.
 - **Header:** the identity's name or words, and one tag, success toned when
   it opens: its standing on the recovery screen, its setup tag in setup. Below it, one spec line of public log facts: its
   device and vault counts.
-- **Decision:** a square, hairline-framed segmented control, one segment per
-  allowed decision. The picked segment is inverted (foreground fill); the
-  others are muted text.
+- **Decision:** one `nk-vault-row` per allowed decision, a way in.
+  - Each row has an icon tile for what it uses: a passkey, written-down
+    words, or a device.
+  - Its name sits over a muted line saying what it needs.
+  - The picked row (`aria-pressed`) takes the selected row tone and a check
+    at its end.
 - **Checks:** "Which passkey opens it?" is a quiet underlined link.
 - **Plan:** a subpanel head, "What will happen", over one line per picked
   decision.

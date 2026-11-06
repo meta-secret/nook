@@ -478,6 +478,10 @@ describe('Google Drive provider setup', () => {
     const { view, vault } = renderWizard(signedInDrive())
 
     const join = await DecisionButtons.of(view, 'askToJoin')
+    // Each way in says what it needs, under its name.
+    expect(join.textContent).toContain(
+      vault.t(I18N_KEYS.ProviderIdentitiesAskToJoinDetail),
+    )
     await fireEvent.click(join)
 
     expect(join.getAttribute('aria-pressed')).toBe('true')
