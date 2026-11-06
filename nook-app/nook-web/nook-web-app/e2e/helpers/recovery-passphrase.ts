@@ -144,17 +144,19 @@ export async function readSecretOfVault(
   }
 }
 
-/** On the recovery screen, the one keyring a sync provider lists offers its
+/** On the recovery screen, the keyring filing the kept vault offers its
  * passkey, its words, and its devices, with nothing picked and no choice
  * that does nothing. Recovering with its words makes this browser's key
  * first, then the words let it in: the step's button is pressed to apply. */
 export async function recoverListedKeyringWithWords(
   device: Page,
-  ...[apply, words]: readonly [Locator, string]
+  ...[kept, apply, words]: readonly [KeptVault, Locator, string]
 ): Promise<void> {
   try {
-    const card = device.getByTestId('provider-identity')
-    await expect(card).toHaveCount(1, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    const card = device.locator(
+      `[data-testid="provider-identity"][data-store-ids~="${kept.storeId}"]`,
+    )
+    await expect(card).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     const decisions = card.getByTestId('provider-identity-decision')
     await expect(decisions).toHaveCount(3)
     expect(

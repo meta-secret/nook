@@ -82,6 +82,19 @@ test.describe('recovering a keyring with its passphrase on every sync provider',
       'recovery-words-drive',
       E2eSyncProviderId.File,
     )
+    // The Nook folder holds another keyring too: the recovered one must
+    // open its own vault, not the folder's list of keyrings.
+    await connectGoogleDriveGenesisDevice(
+      page,
+      target.pat,
+      target.repoName,
+      target.stub,
+    )
+    await keepSecret(page, 'recovery-drive-other')
+    await waitForSyncRemoteState(
+      target,
+      (snapshot) => snapshot.secretIds.length >= 1,
+    )
     await connectGoogleDriveGenesisDevice(
       page,
       target.pat,
@@ -91,7 +104,7 @@ test.describe('recovering a keyring with its passphrase on every sync provider',
     const kept = await keepSecret(page, 'recovery-drive')
     await waitForSyncRemoteState(
       target,
-      (snapshot) => snapshot.secretIds.length >= 1,
+      (snapshot) => snapshot.secretIds.length >= 2,
     )
     const words = await addRecoveryPassphrase(page)
     await syncKeyringNow(page)
@@ -107,6 +120,7 @@ test.describe('recovering a keyring with its passphrase on every sync provider',
       await waitForGoogleOAuthSignedIn(device)
       await recoverListedKeyringWithWords(
         device,
+        kept,
         device.getByTestId('connect-provider-btn'),
         words,
       )
@@ -137,6 +151,7 @@ test.describe('recovering a keyring with its passphrase on every sync provider',
       })
       await recoverListedKeyringWithWords(
         device,
+        kept,
         device.getByTestId('remote-vault-choice-apply'),
         words,
       )
@@ -173,6 +188,7 @@ test.describe('recovering a keyring with its passphrase on every sync provider',
       await device.getByTestId('connect-provider-btn').click()
       await recoverListedKeyringWithWords(
         device,
+        kept,
         device.getByTestId('remote-vault-choice-apply'),
         words,
       )
@@ -220,6 +236,7 @@ test.describe('recovering a keyring with its passphrase on every sync provider',
       await device.getByTestId('login-connect-local-folder-btn').click()
       await recoverListedKeyringWithWords(
         device,
+        kept,
         device.getByTestId('remote-vault-choice-apply'),
         words,
       )
