@@ -139,7 +139,8 @@ test.describe('recovering a keyring with its passphrase on every sync provider',
     })
     const kept: KeptVault = { storeId: await openStoreId(page), ...secret }
     const words = await addRecoveryPassphrase(page)
-    await syncKeyringNow(page)
+    // S3 receives the passphrase with the keyring's log at once, as the
+    // first-run recovery spec shows; no manual sync is needed.
 
     const newContext = await createIsolatedContext(browser)
     try {

@@ -28,6 +28,7 @@ import {
   type IdentityPlanRun,
 } from '$lib/vault/identity-plan-actions'
 import { IdentityActionOutcome } from '$lib/vault/identity-control.svelte'
+import { StagedVaultDiscoveryKind } from '$lib/vault/provider-connection'
 import { NewIdentityStage } from '$lib/vault/state/ui.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
@@ -272,6 +273,32 @@ describe('recovering a keyring with a passphrase from an identity plan', () => {
     })
     expect(session.requested).toEqual([])
     expect(session.vault.identityJoin.kind).toBe(IdentityJoinWaitKind.Idle)
+  })
+
+  test('a key made on the recovery screen stages its provider again before the words', async () => {
+    const session = new JoinSession('current-key').unlocked()
+    const staged = vi
+      .spyOn(session.vault, 'discoverStagedVault')
+      .mockResolvedValue(ok({ kind: StagedVaultDiscoveryKind.Choose }))
+    const current = {
+      source: { kind: 'currentProvider' },
+      identityId: IDENTITY,
+      label: LABEL,
+    } satisfies WaitingIdentityJoin['join']
+    const wait: WaitingIdentityJoin = {
+      kind: IdentityJoinWaitKind.Device,
+      join: current,
+      purpose: IdentityJoinPurpose.Recover,
+    }
+
+    const resumed = await new IdentityJoinActions(session.vault).resume(wait)
+
+    expect(resumed._unsafeUnwrap()).toBe(IdentityJoinAsked.RecoveryWordsNext)
+    expect(staged).toHaveBeenCalledOnce()
+    expect(session.vault.keyringRecovery).toEqual({
+      kind: KeyringRecoveryKind.Words,
+      join: current,
+    })
   })
 
   test('a key that belongs to an identity waits for a new identity of its own first', async () => {

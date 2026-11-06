@@ -247,6 +247,8 @@ export class IdentityJoinActions {
     wait: WaitingIdentityJoin,
   ): Promise<Result<IdentityJoinAsked, IdentityPlanFailure>> {
     this.vault.identityJoin = { kind: IdentityJoinWaitKind.Idle };
+    const staged = await this.restage(wait);
+    if (staged.isErr()) return err(staged.error);
     const asked = await this.joinFor(wait);
     if (asked.isErr()) return asked;
     switch (asked.value) {
@@ -270,6 +272,29 @@ export class IdentityJoinActions {
       case IdentityJoinAsked.WaitsForDevice:
         return err(new IdentityPlanFailure(IdentityPlanFailureKind.Join));
     }
+  }
+
+  /** Making the key started this browser's own session, which drops the
+   * provider the page staged: a join read through the staged provider
+   * stages it again first. One the page names opens itself. */
+  private async restage(
+    wait: WaitingIdentityJoin,
+  ): Promise<Result<true, IdentityPlanFailure>> {
+    switch (wait.join.source.kind) {
+      case "remote":
+        return ok(true);
+      case "currentProvider":
+        break;
+    }
+    const failure = new IdentityPlanFailure(
+      wait.purpose === IdentityJoinPurpose.Ask
+        ? IdentityPlanFailureKind.Join
+        : IdentityPlanFailureKind.Recover,
+    );
+    const staged = await this.vault.discoverStagedVault();
+    if (staged.isErr())
+      return err(failure.because(staged.error.translationKey));
+    return ok(true);
   }
 
   /** What the waiting join does with its key. */

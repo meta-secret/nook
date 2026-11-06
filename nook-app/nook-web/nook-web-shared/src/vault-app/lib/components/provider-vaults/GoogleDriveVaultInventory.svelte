@@ -30,7 +30,11 @@ decrypts in memory and changes nothing.
   import SetupIdentityList from '$lib/components/provider-vaults/SetupIdentityList.svelte'
   import OptionDivider from '$lib/components/provider-vaults/OptionDivider.svelte'
   import { SetupRecoveryKind } from '$lib/components/provider-vaults/setup-identity-offer'
-  import { FirstRunIdentityAction } from '$lib/vault/first-run'
+  import {
+    FirstRunActions,
+    FirstRunIdentityAction,
+    ProviderFolderBinding,
+  } from '$lib/vault/first-run'
   import { IdentityControlViewKind } from '$lib/vault/identity-control.svelte'
   import {
     IdentityDecisionText,
@@ -53,7 +57,6 @@ decrypts in memory and changes nothing.
   import {
     IdentityJoinWaitKind,
     KeyringRecoveryKind,
-    type IdentityJoinIntent,
   } from '$lib/vault/identity-join-wait'
   import {
     AccessCheckActions,
@@ -307,16 +310,13 @@ decrypts in memory and changes nothing.
     return true
   }
 
-  /** Once a recovery passphrase let this browser in, its keyring's vault
-   * opens through Connect & sync. */
-  function connectRecovered(
-    join: IdentityJoinIntent,
-  ): () => Promise<boolean> {
-    return async () => {
-      if (!chooseVaultOf(join.identityId)) return false
-      await onConnect()
-      return vault.errorMsg === ''
-    }
+  /** Once a recovery passphrase let this browser in, Drive is saved for
+   * its keyring as setup saves it: the Nook folder is bound, the keyring's
+   * log syncs, and the vault it granted opens beside its card. */
+  function connectRecovered(): Promise<boolean> {
+    return new FirstRunActions(vault).connectProviderWith(
+      ProviderFolderBinding.DriveFolder,
+    )
   }
 
   const button = $derived.by((): ConnectPlanButton => {
@@ -357,7 +357,7 @@ decrypts in memory and changes nothing.
   <KeyringRecoveryWords
     {vault}
     join={vault.keyringRecovery.join}
-    connect={connectRecovered(vault.keyringRecovery.join)}
+    connect={connectRecovered}
   />
 {:else if inventory.kind === DriveVaultInventoryKind.Loading}
   <p

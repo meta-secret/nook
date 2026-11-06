@@ -30,8 +30,11 @@ identity decrypts in memory and changes nothing.
   import {
     IdentityJoinWaitKind,
     KeyringRecoveryKind,
-    type IdentityJoinIntent,
   } from '$lib/vault/identity-join-wait'
+  import {
+    FirstRunActions,
+    ProviderFolderBinding,
+  } from '$lib/vault/first-run'
   import {
     AccessCheckActions,
     recoveryCheckTarget,
@@ -126,26 +129,13 @@ identity decrypts in memory and changes nothing.
     }
     await onApplied()
   }
-  /** Once a recovery passphrase let this browser in, the keyring's first
-   * vault opens, as one recovered by its passkey does. */
-  function connectRecovered(
-    join: IdentityJoinIntent,
-  ): () => Promise<boolean> {
-    return async () => {
-      const listed = choices.isOk() ? choices.value : []
-      const [recoveredVault] = listed
-        .filter((choice) => choice.identity.identityId === join.identityId)
-        .flatMap((choice) => choice.vaults)
-      if (recoveredVault) {
-        const chosen = vault.chooseRemoteVault(recoveredVault.storeId)
-        if (chosen.isErr()) {
-          vault.errorMsg = vault.t(chosen.error.translationKey)
-          return false
-        }
-      }
-      await onApplied()
-      return vault.errorMsg === ''
-    }
+  /** Once a recovery passphrase let this browser in, the provider is saved
+   * for its keyring as setup saves it: the keyring's log syncs, and the
+   * vault it granted opens beside its card. The location names itself. */
+  function connectRecovered(): Promise<boolean> {
+    return new FirstRunActions(vault).connectProviderWith(
+      ProviderFolderBinding.Named,
+    )
   }
 </script>
 
@@ -163,7 +153,7 @@ identity decrypts in memory and changes nothing.
     <KeyringRecoveryWords
       {vault}
       join={vault.keyringRecovery.join}
-      connect={connectRecovered(vault.keyringRecovery.join)}
+      connect={connectRecovered}
     />
   {:else if choices.isErr()}
     <p class="text-xs text-destructive" role="alert">
