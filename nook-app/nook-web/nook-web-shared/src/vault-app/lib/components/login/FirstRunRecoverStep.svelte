@@ -13,6 +13,10 @@ joins the keyring and setup ends on it, as after an approved join.
   import { FirstRunActions } from '$lib/vault/first-run'
   import type { IdentityJoinIntent } from '$lib/vault/identity-join-wait'
   import { FirstRunStage } from '$lib/vault/state/ui.svelte'
+  import {
+    RecoveryWordsLeaveKind,
+    type RecoveryWordsLeave,
+  } from '$lib/components/recovery-passphrase/recovery-passphrase-state'
 
   let { vault, join }: { vault: VaultState; join: IdentityJoinIntent } =
     $props()
@@ -20,6 +24,8 @@ joins the keyring and setup ends on it, as after an approved join.
   const actions = $derived(new FirstRunActions(vault))
   let working = $state(false)
   const busy = $derived(working || vault.isVerifying)
+  // Setup's own Back above the step leaves the words.
+  const leave: RecoveryWordsLeave = { kind: RecoveryWordsLeaveKind.Elsewhere }
 </script>
 
 <section
@@ -63,6 +69,7 @@ joins the keyring and setup ends on it, as after an approved join.
     {vault}
     {join}
     connect={() => actions.connectProvider()}
+    {leave}
     bind:working
   />
 </section>

@@ -2,14 +2,17 @@
 A keyring listed on a sync provider, recovered with one of its recovery
 passphrases: this browser's fresh key exists, so its words are typed here
 in place of the list. Accepted, the page connects the provider its own way;
-Back returns to the list and joins nothing.
+choosing another way returns to the list and joins nothing.
 -->
 <script lang="ts">
   import { onDestroy } from 'svelte'
   import { Lock } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import RecoveryWordsForm from '$lib/components/recovery-passphrase/RecoveryWordsForm.svelte'
-  import FirstRunBackLink from '$lib/components/login/FirstRunBackLink.svelte'
+  import {
+    RecoveryWordsLeaveKind,
+    type RecoveryWordsLeave,
+  } from '$lib/components/recovery-passphrase/recovery-passphrase-state'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     KeyringRecoveryKind,
@@ -29,6 +32,12 @@ Back returns to the list and joins nothing.
   } = $props()
 
   let working = $state(false)
+  const leave: RecoveryWordsLeave = {
+    kind: RecoveryWordsLeaveKind.Beside,
+    onLeave: () => {
+      vault.keyringRecovery = { kind: KeyringRecoveryKind.None }
+    },
+  }
 
   // Leaving the page leaves the recovery: the list shows when it returns.
   onDestroy(() => {
@@ -37,12 +46,6 @@ Back returns to the list and joins nothing.
 </script>
 
 <section class="grid gap-4" data-testid="keyring-recovery-words">
-  <FirstRunBackLink
-    {vault}
-    testId="keyring-recovery-back"
-    disabled={working || vault.isVerifying}
-    onBack={() => (vault.keyringRecovery = { kind: KeyringRecoveryKind.None })}
-  />
   <div class="space-y-1">
     <p class="text-sm font-medium text-foreground">
       {vault.t(I18N_KEYS.RecoveryPassphraseRecoverTitle)}
@@ -62,5 +65,5 @@ Back returns to the list and joins nothing.
       {join.label}
     </p>
   </div>
-  <RecoveryWordsForm {vault} {join} {connect} bind:working />
+  <RecoveryWordsForm {vault} {join} {connect} {leave} bind:working />
 </section>

@@ -1992,6 +1992,7 @@ export const I18N_KEYS = {
   RecoveryPassphraseRecoverLoadFailed: 'recovery_passphrase.recover_load_failed',
   RecoveryPassphraseRecoverLoading: 'recovery_passphrase.recover_loading',
   RecoveryPassphraseRecoverNone: 'recovery_passphrase.recover_none',
+  RecoveryPassphraseRecoverOtherWay: 'recovery_passphrase.recover_other_way',
   RecoveryPassphraseRecoverSubmit: 'recovery_passphrase.recover_submit',
   RecoveryPassphraseRecoverSubmitting: 'recovery_passphrase.recover_submitting',
   RecoveryPassphraseRecoverTitle: 'recovery_passphrase.recover_title',

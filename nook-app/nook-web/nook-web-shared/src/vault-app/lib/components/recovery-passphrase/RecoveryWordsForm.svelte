@@ -29,11 +29,16 @@ sync provider its own way.
     recoveryList,
     type RecoveryList,
   } from '$lib/components/login/first-run-recover-state'
+  import {
+    RecoveryWordsLeaveKind,
+    type RecoveryWordsLeave,
+  } from '$lib/components/recovery-passphrase/recovery-passphrase-state'
 
   let {
     vault,
     join,
     connect,
+    leave,
     working = $bindable(false),
   }: {
     vault: VaultState
@@ -41,6 +46,8 @@ sync provider its own way.
     /** Connects the keyring's sync provider once the words let this
      * browser in; true when it connected. */
     connect: () => Promise<boolean>
+    /** How the user leaves the words without recovering. */
+    leave: RecoveryWordsLeave
     /** True while the words are checked and the keyring set up. */
     working: boolean
   } = $props()
@@ -179,9 +186,14 @@ sync provider its own way.
       </div>
     {:else}
       {#each passphrases as passphrase (passphrase.id)}
-        <p class="nk-spec" data-testid="first-run-recover-passphrase-label">
-          {passphrase.label}
-        </p>
+        <div class="grid gap-1">
+          <p class="nk-label">
+            {vault.t(I18N_KEYS.RecoveryPassphraseRecoverChoose)}
+          </p>
+          <p class="nk-spec" data-testid="first-run-recover-passphrase-label">
+            {passphrase.label}
+          </p>
+        </div>
       {/each}
     {/if}
     <RecoveryWordsInput
@@ -194,7 +206,7 @@ sync provider its own way.
       testId="first-run-recover-words"
       onedit={() => (slip = { kind: RecoveryWordsSlipKind.Clear })}
     />
-    <div>
+    <div class="flex flex-wrap items-center gap-2">
       <Button
         type="submit"
         data-testid="first-run-recover-submit"
@@ -207,6 +219,18 @@ sync provider its own way.
           {vault.t(I18N_KEYS.RecoveryPassphraseRecoverSubmit)}
         {/if}
       </Button>
+      {#if leave.kind === RecoveryWordsLeaveKind.Beside}
+        {@const onLeave = leave.onLeave}
+        <Button
+          type="button"
+          variant="ghost"
+          data-testid="recover-words-leave"
+          disabled={busy}
+          onclick={onLeave}
+        >
+          {vault.t(I18N_KEYS.RecoveryPassphraseRecoverOtherWay)}
+        </Button>
+      {/if}
     </div>
   </form>
 {/if}

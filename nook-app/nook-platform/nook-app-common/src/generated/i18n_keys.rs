@@ -2374,6 +2374,7 @@ pub const RECOVERY_PASSPHRASE_RECOVER_FAILED: &str = "recovery_passphrase.recove
 pub const RECOVERY_PASSPHRASE_RECOVER_LOAD_FAILED: &str = "recovery_passphrase.recover_load_failed";
 pub const RECOVERY_PASSPHRASE_RECOVER_LOADING: &str = "recovery_passphrase.recover_loading";
 pub const RECOVERY_PASSPHRASE_RECOVER_NONE: &str = "recovery_passphrase.recover_none";
+pub const RECOVERY_PASSPHRASE_RECOVER_OTHER_WAY: &str = "recovery_passphrase.recover_other_way";
 pub const RECOVERY_PASSPHRASE_RECOVER_SUBMIT: &str = "recovery_passphrase.recover_submit";
 pub const RECOVERY_PASSPHRASE_RECOVER_SUBMITTING: &str = "recovery_passphrase.recover_submitting";
 pub const RECOVERY_PASSPHRASE_RECOVER_TITLE: &str = "recovery_passphrase.recover_title";

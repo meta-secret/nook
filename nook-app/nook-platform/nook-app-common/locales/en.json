@@ -2532,6 +2532,7 @@
     "recover_none": "This keyring has no recovery passphrase.",
     "recover_submit": "Recover",
     "recover_submitting": "Recovering…",
+    "recover_other_way": "Choose another way",
     "recover_failed": "Recovery did not finish.",
     "recovered": "{identity} recovered on this device"
   },

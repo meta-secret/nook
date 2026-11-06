@@ -95,7 +95,8 @@ passphrase**, before **Ask to join**.
 - The words of one of its passphrases are typed next, in place of the list.
 - Once Rust accepts them, the identity is added here as after an approved
   join, and the page connects the provider as its button does.
-- Back returns to the list and joins nothing.
+- **Choose another way**, a quiet action beside **Recover**, returns to
+  the list and joins nothing.
 
 See [recover a keyring with a recovery passphrase](identity-vault-architecture.md#recover-a-keyring-with-a-recovery-passphrase).
 
