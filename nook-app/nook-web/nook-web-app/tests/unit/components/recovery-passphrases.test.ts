@@ -220,7 +220,7 @@ describe('recovery passphrases on the keyring', () => {
     const fixture = new KeyringFixture([])
     const cancelled = vi
       .spyOn(fixture.vault.identityControl, 'cancelRecoveryPassphrase')
-      .mockImplementation(() => {})
+      .mockResolvedValue()
     fixture.render()
     await fixture.generate()
 

@@ -428,10 +428,14 @@ export class IdentityControlModel {
     }
   }
 
-  /** Drop the pending recovery passphrase and its words. */
-  cancelRecoveryPassphrase(): void {
-    const manager = this.vault.admitManager();
-    if (manager.isOk()) manager.value.cancel_recovery_passphrase();
+  /** Drop the pending recovery passphrase and its words. It waits its turn
+   * like every manager call: a flow closing while its accepted words still
+   * reach the mounts must not touch the manager under that sync. */
+  async cancelRecoveryPassphrase(): Promise<void> {
+    const cancelled = await this.withManager(async (manager) =>
+      manager.cancel_recovery_passphrase(),
+    );
+    if (cancelled.isErr()) log.warn("recovery passphrase cancel failed");
   }
 
   /** Remove a recovery passphrase: its words stop adding devices, and every
