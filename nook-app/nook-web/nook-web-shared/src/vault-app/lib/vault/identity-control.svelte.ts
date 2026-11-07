@@ -607,15 +607,11 @@ export class IdentityControlModel {
       manager.identity_vault_provider(providers, storeId),
     );
     if (row.isErr()) return err(row.error);
-    let args: NookStorageConnection;
-    try {
-      args = this.vault.providerWasmArgs(row.value);
-    } catch (failure) {
-      return err(new NativeVaultStorageFailure(failure));
-    }
     const pageSize = this.vault.secretPageSize;
+    // Rust reads the vault through the row: a local folder's records come
+    // from the folder, any other row opens its connection.
     const page = await this.withManager((manager) =>
-      manager.connect_identity_vault(args, storeId, pageSize),
+      manager.connect_identity_vault_by_row(row.value, storeId, pageSize),
     );
     if (page.isErr()) return err(page.error);
     return this.completeVaultConnect(page.value);

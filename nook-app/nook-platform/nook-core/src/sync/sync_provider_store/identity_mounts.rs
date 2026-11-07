@@ -11,7 +11,9 @@ use nook_event_log::{
     EventLogLocation, IdentityMountTarget, IdentityProviderMount, ProviderMountId,
 };
 
-use crate::{ProviderRows, StorageProvider};
+use crate::{
+    LocalFolderHandleId, ProviderRows, StorageConnection, StorageProvider, StoredProvider,
+};
 
 /// Whether a provider row can carry an identity's control log.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,6 +41,17 @@ pub enum ProviderVaultPlacement {
     Mounted(EventLogLocation),
     /// This browser's own store holds the vault.
     ThisBrowser,
+}
+
+/// Where a vault the identity granted is read when it opens through a row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IdentityVaultReach {
+    /// The manager opens the vault through the row's connection.
+    Connection(StorageConnection),
+    /// A local folder is a copy of a browser's store, not a connection: a
+    /// browser that holds none of the vault reads its records from the
+    /// folder this handle reopens.
+    FolderRecords(LocalFolderHandleId),
 }
 
 /// The first row that replicates a vault, if a row does.
@@ -76,6 +89,20 @@ impl StorageProvider {
                 | IdentityMountTarget::ICloud { .. }
                 | IdentityMountTarget::S3(_),
             ) => DeviceJoinReach::OtherDevices,
+        }
+    }
+
+    /// How a vault the identity granted opens through this row.
+    #[must_use]
+    pub fn identity_vault_reach(&self) -> IdentityVaultReach {
+        match &self.provider {
+            StoredProvider::LocalFolder(folder) => {
+                IdentityVaultReach::FolderRecords(folder.handle_id.clone())
+            }
+            StoredProvider::Local {}
+            | StoredProvider::Github(_)
+            | StoredProvider::OauthFile(_)
+            | StoredProvider::S3(_) => IdentityVaultReach::Connection(self.storage_connection()),
         }
     }
 
@@ -176,11 +203,12 @@ mod tests {
     use nook_event_log::{EventLogLocation, IdentityMountTarget, S3MountTarget};
 
     use super::{
-        DeviceJoinReach, IdentityMountCapability, ProviderRowLookup, ProviderVaultPlacement,
+        DeviceJoinReach, IdentityMountCapability, IdentityVaultReach, ProviderRowLookup,
+        ProviderVaultPlacement,
     };
     use crate::{
-        ProviderRows, ProviderVaultScope, S3Connection, S3ConnectionDraft, S3KeyPrefix,
-        StorageProvider, StoredProvider,
+        LocalFolderHandleId, ProviderRows, ProviderVaultScope, S3Connection, S3ConnectionDraft,
+        S3KeyPrefix, StorageConnection, StorageProvider, StoredProvider,
     };
 
     fn local(id: &str, store_id: &StoreId) -> StorageProvider {
@@ -225,6 +253,35 @@ mod tests {
             assert_eq!(
                 StorageProvider::fixture("cloud", provider).device_join_reach(),
                 DeviceJoinReach::OtherDevices
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn a_granted_vault_opens_from_a_local_folder_s_own_records() -> anyhow::Result<()> {
+        let folder = StorageProvider::fixture("folder", StoredProvider::local_folder_fixture()?);
+        assert_eq!(
+            folder.identity_vault_reach(),
+            IdentityVaultReach::FolderRecords(LocalFolderHandleId::try_from(
+                "handle-1".to_owned()
+            )?)
+        );
+        let store_id = StoreId::generate()?;
+        assert_eq!(
+            local("local", &store_id).identity_vault_reach(),
+            IdentityVaultReach::Connection(StorageConnection::Local)
+        );
+        for provider in [
+            StoredProvider::github_fixture()?,
+            StoredProvider::google_drive_fixture()?,
+            StoredProvider::icloud_fixture()?,
+            StoredProvider::s3_fixture()?,
+        ] {
+            let row = StorageProvider::fixture("cloud", provider);
+            assert_eq!(
+                row.identity_vault_reach(),
+                IdentityVaultReach::Connection(row.storage_connection())
             );
         }
         Ok(())

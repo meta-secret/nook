@@ -16,18 +16,17 @@ test('a granted vault keeps its keyring busy until it has opened', async () => {
     ProviderRowFixture.unscoped('keyring-provider'),
   )
   vi.spyOn(manager, 'identity_vault_provider').mockReturnValue(row)
-  vi.spyOn(vault, 'providerWasmArgs').mockReturnValue({ mode: 'local' })
   let refuse: (failure: Error) => void = () => {}
   const opening = new Promise<NookSecretPage>((_, reject) => {
     refuse = reject
   })
-  vi.spyOn(manager, 'connect_identity_vault').mockReturnValue(opening)
+  vi.spyOn(manager, 'connect_identity_vault_by_row').mockReturnValue(opening)
   vault.openManager(manager)
   VaultStateTestFixture.runStorageImmediately(vault)
 
   const opened = vault.identityControl.openVault('store_latervault1')
   await vi.waitFor(() => {
-    expect(manager.connect_identity_vault).toHaveBeenCalledOnce()
+    expect(manager.connect_identity_vault_by_row).toHaveBeenCalledOnce()
   })
   // The keyring's rows and Open read this: a second press cannot queue
   // another open while this one runs.

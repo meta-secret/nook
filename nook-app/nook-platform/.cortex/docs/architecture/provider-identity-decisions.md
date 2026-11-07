@@ -98,9 +98,8 @@ passphrase**, before **Ask to join**.
 - The words of one of its passphrases are typed next, in place of the list.
 - Once Rust accepts them, the identity is added here as after an approved
   join, and the page connects the provider as its button does.
-- A local folder is a copy of the browser's store, not a mount a vault
-  opens from, so its keyring's vault is imported, as after a passkey
-  recovery.
+- A local folder is a copy of a browser's store, not a connection, so the
+  vault the keyring granted opens from the folder's own records.
 - **Choose another way**, a quiet action beside **Recover**, returns to
   the list and joins nothing.
 
