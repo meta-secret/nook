@@ -7,6 +7,7 @@ pub(crate) mod passkey_identity_addition;
 pub(crate) mod provider_identity_choice;
 pub(crate) mod provider_identity_join;
 pub(crate) mod provider_identity_log;
+pub(crate) mod provider_identity_recovery;
 pub(crate) mod provider_vault_access;
 pub(crate) mod provider_vault_join;
 pub(crate) mod provider_vault_listing;

@@ -48,8 +48,8 @@ pub use enrollment::{
     SharedEnrollmentAudience, SharedGrantProviderSelection,
 };
 pub use identity_mounts::{
-    DeviceJoinReach, IdentityMountCapability, ProviderReplicationTarget, ProviderRowLookup,
-    ProviderVaultPlacement,
+    DeviceJoinReach, IdentityMountCapability, IdentityVaultReach, ProviderReplicationTarget,
+    ProviderRowLookup, ProviderVaultPlacement,
 };
 pub use keyring_providers::AppProviderShare;
 pub use persistence::*;

@@ -115,7 +115,7 @@ saved in the keyring. Cancel, or leaving the page, drops the pending one.
         return
       case RecoveryAddKind.Writing:
       case RecoveryAddKind.Confirming:
-        vault.identityControl.cancelRecoveryPassphrase()
+        void vault.identityControl.cancelRecoveryPassphrase()
     }
   })
 </script>

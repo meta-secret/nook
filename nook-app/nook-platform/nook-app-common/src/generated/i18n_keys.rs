@@ -2182,21 +2182,27 @@ pub const PROVIDER_IDENTITIES_ADDED_HERE: &str = "provider_identities.added_here
 pub const PROVIDER_IDENTITIES_APPLY: &str = "provider_identities.apply";
 pub const PROVIDER_IDENTITIES_APPLYING: &str = "provider_identities.applying";
 pub const PROVIDER_IDENTITIES_ASK_TO_JOIN: &str = "provider_identities.ask_to_join";
+pub const PROVIDER_IDENTITIES_ASK_TO_JOIN_DETAIL: &str = "provider_identities.ask_to_join_detail";
 pub const PROVIDER_IDENTITIES_CHOICES_FAILED: &str = "provider_identities.choices_failed";
 pub const PROVIDER_IDENTITIES_CONNECT_APPLY: &str = "provider_identities.connect_apply";
 pub const PROVIDER_IDENTITIES_DECISIONS_LABEL: &str = "provider_identities.decisions_label";
 pub const PROVIDER_IDENTITIES_FAILED_BECAUSE: &str = "provider_identities.failed_because";
 pub const PROVIDER_IDENTITIES_FINISH_JOIN_FAILED: &str = "provider_identities.finish_join_failed";
 pub const PROVIDER_IDENTITIES_FINISH_JOINING: &str = "provider_identities.finish_joining";
+pub const PROVIDER_IDENTITIES_FINISH_JOINING_DETAIL: &str =
+    "provider_identities.finish_joining_detail";
 pub const PROVIDER_IDENTITIES_JOIN_DENIED: &str = "provider_identities.join_denied";
 pub const PROVIDER_IDENTITIES_JOIN_FAILED: &str = "provider_identities.join_failed";
 pub const PROVIDER_IDENTITIES_JOIN_PENDING: &str = "provider_identities.join_pending";
-pub const PROVIDER_IDENTITIES_LEAVE: &str = "provider_identities.leave";
 pub const PROVIDER_IDENTITIES_NEW_IDENTITY_DETAIL: &str = "provider_identities.new_identity_detail";
+pub const PROVIDER_IDENTITIES_PASSKEY_DETAIL: &str = "provider_identities.passkey_detail";
+pub const PROVIDER_IDENTITIES_PASSKEY_IN_USE_DETAIL: &str =
+    "provider_identities.passkey_in_use_detail";
 pub const PROVIDER_IDENTITIES_PLAN_ROW: &str = "provider_identities.plan_row";
 pub const PROVIDER_IDENTITIES_PLAN_TITLE: &str = "provider_identities.plan_title";
 pub const PROVIDER_IDENTITIES_RECOVER: &str = "provider_identities.recover";
 pub const PROVIDER_IDENTITIES_SET_UP_HERE: &str = "provider_identities.set_up_here";
+pub const PROVIDER_IDENTITIES_WORDS_DETAIL: &str = "provider_identities.words_detail";
 pub const PROVIDER_PICKER_CAPABILITY_PERSONAL_ONLY: &str =
     "provider_picker.capability_personal_only";
 pub const PROVIDER_PICKER_CAPABILITY_PERSONAL_SHARED: &str =
@@ -2368,6 +2374,7 @@ pub const RECOVERY_PASSPHRASE_RECOVER_FAILED: &str = "recovery_passphrase.recove
 pub const RECOVERY_PASSPHRASE_RECOVER_LOAD_FAILED: &str = "recovery_passphrase.recover_load_failed";
 pub const RECOVERY_PASSPHRASE_RECOVER_LOADING: &str = "recovery_passphrase.recover_loading";
 pub const RECOVERY_PASSPHRASE_RECOVER_NONE: &str = "recovery_passphrase.recover_none";
+pub const RECOVERY_PASSPHRASE_RECOVER_OTHER_WAY: &str = "recovery_passphrase.recover_other_way";
 pub const RECOVERY_PASSPHRASE_RECOVER_SUBMIT: &str = "recovery_passphrase.recover_submit";
 pub const RECOVERY_PASSPHRASE_RECOVER_SUBMITTING: &str = "recovery_passphrase.recover_submitting";
 pub const RECOVERY_PASSPHRASE_RECOVER_TITLE: &str = "recovery_passphrase.recover_title";

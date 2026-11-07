@@ -59,6 +59,18 @@ export async function connectS3InFirstRun(
   await page.getByTestId('first-run-s3-connect').click()
 }
 
+/** On the recovery screen's provider picker, pick S3 and connect the local
+ * server with the location's prefix and fixture key. */
+export async function connectS3OnRecoveryScreen(
+  page: Page,
+  location: E2eS3Location,
+): Promise<void> {
+  await page.getByTestId('provider-option-s3').click()
+  await expect(page.getByTestId('s3-setup')).toBeVisible()
+  await fillS3Connection(page, location)
+  await page.getByTestId('connect-provider-btn').click()
+}
+
 /** On an unlocked identity that keeps its vaults on this browser only, add
  * S3 from its card's protection checklist: the copy step opens the provider
  * picker, and S3 connects the local server with the location's key. */

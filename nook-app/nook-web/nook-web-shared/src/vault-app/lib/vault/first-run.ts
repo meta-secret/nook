@@ -155,6 +155,15 @@ enum FirstRunProviderBinding {
   NothingToBind = "nothing-to-bind",
 }
 
+/** What the provider a keyring was just brought here through needs before
+ * it is saved. */
+export enum ProviderFolderBinding {
+  /** Google Drive opens or creates its Nook folder. */
+  DriveFolder = "drive-folder",
+  /** An S3 location, a repository, or a picked folder names it already. */
+  Named = "named",
+}
+
 /**
  * First-run setup, identity first: the passkey makes this browser's key, the
  * sync provider shows the identities that key is a member of or may join,
@@ -438,16 +447,14 @@ export class FirstRunActions {
   async continueOn({ choice, source }: FirstRunIdentity): Promise<void> {
     const vault = this.vault;
     if (choice.setup.kind !== "continue") return;
-    if (choice.setup.decision !== "leave") {
-      const run: IdentityPlanRun = {
-        source,
-        planned: [{ choice, decision: choice.setup.decision }],
-      };
-      const ran = await new IdentityPlanActions(vault).run(run);
-      if (ran.isErr()) {
-        vault.errorMsg = ran.error.message(vault);
-        return;
-      }
+    const run: IdentityPlanRun = {
+      source,
+      planned: [{ choice, decision: choice.setup.decision }],
+    };
+    const ran = await new IdentityPlanActions(vault).run(run);
+    if (ran.isErr()) {
+      vault.errorMsg = ran.error.message(vault);
+      return;
     }
     await this.connectProvider();
   }
@@ -525,9 +532,21 @@ export class FirstRunActions {
    * to do next (its pages, Import, the identity's own management). A step
    * that fails keeps setup where it is, with its error. */
   async connectProvider(): Promise<boolean> {
+    switch (this.syncSource()) {
+      case FirstRunSyncSource.GoogleDrive:
+        return this.connectProviderWith(ProviderFolderBinding.DriveFolder);
+      case FirstRunSyncSource.S3:
+        return this.connectProviderWith(ProviderFolderBinding.Named);
+    }
+  }
+
+  /** Connect the provider a keyring was just brought here through, outside
+   * setup too: the recovery screen ends a passphrase recovery the same way.
+   * The binding says whether its folder is opened first. */
+  async connectProviderWith(binding: ProviderFolderBinding): Promise<boolean> {
     const vault = this.vault;
     vault.errorMsg = "";
-    const bound = await this.bindProvider();
+    const bound = await this.bindProvider(binding);
     if (bound.isErr()) {
       vault.errorMsg = vault.t(bound.error.translationKey);
       return false;
@@ -558,17 +577,17 @@ export class FirstRunActions {
 
   /** Google Drive opens or creates its Nook folder before the provider is
    * saved; an S3 location names everything already. */
-  private async bindProvider(): Promise<
-    Result<FirstRunProviderBinding, OAuthFailure>
-  > {
-    switch (this.syncSource()) {
-      case FirstRunSyncSource.GoogleDrive: {
+  private async bindProvider(
+    binding: ProviderFolderBinding,
+  ): Promise<Result<FirstRunProviderBinding, OAuthFailure>> {
+    switch (binding) {
+      case ProviderFolderBinding.DriveFolder: {
         const folder = await new VaultOAuthActions(
           this.vault,
         ).connectGoogleVaultFolder();
         return folder.map(() => FirstRunProviderBinding.FolderBound);
       }
-      case FirstRunSyncSource.S3:
+      case ProviderFolderBinding.Named:
         return ok(FirstRunProviderBinding.NothingToBind);
     }
   }

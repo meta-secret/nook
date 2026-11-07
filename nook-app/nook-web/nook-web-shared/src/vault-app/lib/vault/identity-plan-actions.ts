@@ -12,7 +12,9 @@ import {
 import { IdentityDirectoryLoader } from "$lib/components/identities/identity-directory-loader.svelte";
 import type { VaultState } from "$lib/vault.svelte";
 import {
+  IdentityJoinPurpose,
   IdentityJoinWaitKind,
+  KeyringRecoveryKind,
   type IdentityJoinIntent,
   type WaitingIdentityJoin,
 } from "$lib/vault/identity-join-wait";
@@ -29,11 +31,16 @@ export enum IdentityPlanOutcomeKind {
   /** Every decision ran, and an identity was added beside the one in use,
    * which stays selected: nothing is set up for the one in use. */
   AddedBeside = "added-beside",
+  /** This browser's fresh key exists for a keyring recovered with a
+   * passphrase: its words are typed next, and the page connects once they
+   * let this browser in. Decisions after it have not run. */
+  RecoveryWordsNext = "recovery-words-next",
 }
 
 export type IdentityPlanOutcome =
   | { readonly kind: IdentityPlanOutcomeKind.Applied }
   | { readonly kind: IdentityPlanOutcomeKind.AddedBeside }
+  | { readonly kind: IdentityPlanOutcomeKind.RecoveryWordsNext }
   | {
       readonly kind: IdentityPlanOutcomeKind.WaitsForKey;
       readonly wait: WaitingIdentityJoin;
@@ -142,9 +149,13 @@ export class IdentityManagerCalls {
   }
 }
 
+/** What a join did with this browser's key. */
 export enum IdentityJoinAsked {
   /** The request is in the identity's log at the provider. */
   Requested = "requested",
+  /** The fresh key exists: the identity's recovery words are typed next.
+   * Nothing was asked of its devices. */
+  RecoveryWordsNext = "recovery-words-next",
   /** No key is unlocked here yet. */
   WaitsForDevice = "waits-for-device",
   /** The key in use belongs to an identity; Rust staged a new one. */
@@ -186,6 +197,36 @@ export class IdentityJoinActions {
     return new IdentityManagerCalls(this.vault).run(call);
   }
 
+  /** Join with a recovery passphrase: when the unlocked key is fresh, the
+   * keyring's words are typed next; otherwise say which key the join waits
+   * for. Rust checks the words with that key, never before it exists. */
+  async recover(
+    join: IdentityJoinIntent,
+  ): Promise<Result<IdentityJoinAsked, IdentityPlanFailure>> {
+    const vault = this.vault;
+    if (!vault.deviceProtectionReady)
+      return ok(IdentityJoinAsked.WaitsForDevice);
+    const call: ManagerCall<IdentityJoinAsked> = {
+      failure: new IdentityPlanFailure(IdentityPlanFailureKind.Recover),
+      run: async (manager) => {
+        const start = await manager.begin_identity_join(
+          join.identityId,
+          join.label,
+        );
+        switch (start) {
+          case "current-key":
+            return IdentityJoinAsked.RecoveryWordsNext;
+          case "new-key-staged":
+            return IdentityJoinAsked.WaitsForNewKey;
+        }
+      },
+    };
+    const ready = await new IdentityManagerCalls(vault).run(call);
+    if (ready.isOk() && ready.value === IdentityJoinAsked.RecoveryWordsNext)
+      vault.keyringRecovery = { kind: KeyringRecoveryKind.Words, join };
+    return ready;
+  }
+
   /** Hand the join to the ceremony of the key it waits for. */
   waitFor(wait: WaitingIdentityJoin): void {
     const vault = this.vault;
@@ -199,23 +240,29 @@ export class IdentityJoinActions {
     }
   }
 
-  /** The key the join waited for exists now: ask with it. A key that still
-   * cannot ask stops the join instead of starting another ceremony. */
+  /** The key the join waited for exists now: ask with it, or type the
+   * recovery words next. A key that still cannot join stops the join
+   * instead of starting another ceremony. */
   async resume(
     wait: WaitingIdentityJoin,
   ): Promise<Result<IdentityJoinAsked, IdentityPlanFailure>> {
     this.vault.identityJoin = { kind: IdentityJoinWaitKind.Idle };
-    const asked = await this.ask(wait.join);
+    const staged = await this.restage(wait);
+    if (staged.isErr()) return err(staged.error);
+    const asked = await this.joinFor(wait);
     if (asked.isErr()) return asked;
     switch (asked.value) {
       case IdentityJoinAsked.Requested:
         this.announce();
+        return asked;
+      case IdentityJoinAsked.RecoveryWordsNext:
         return asked;
       case IdentityJoinAsked.WaitsForNewKey:
         if (wait.kind === IdentityJoinWaitKind.Device) {
           const next: WaitingIdentityJoin = {
             kind: IdentityJoinWaitKind.NewKey,
             join: wait.join,
+            purpose: wait.purpose,
           };
           this.waitFor(next);
           return asked;
@@ -224,6 +271,41 @@ export class IdentityJoinActions {
         return err(new IdentityPlanFailure(IdentityPlanFailureKind.Join));
       case IdentityJoinAsked.WaitsForDevice:
         return err(new IdentityPlanFailure(IdentityPlanFailureKind.Join));
+    }
+  }
+
+  /** Making the key started this browser's own session, which drops the
+   * provider the page staged: a join read through the staged provider
+   * stages it again first. One the page names opens itself. */
+  private async restage(
+    wait: WaitingIdentityJoin,
+  ): Promise<Result<true, IdentityPlanFailure>> {
+    switch (wait.join.source.kind) {
+      case "remote":
+        return ok(true);
+      case "currentProvider":
+        break;
+    }
+    const failure = new IdentityPlanFailure(
+      wait.purpose === IdentityJoinPurpose.Ask
+        ? IdentityPlanFailureKind.Join
+        : IdentityPlanFailureKind.Recover,
+    );
+    const staged = await this.vault.discoverStagedVault();
+    if (staged.isErr())
+      return err(failure.because(staged.error.translationKey));
+    return ok(true);
+  }
+
+  /** What the waiting join does with its key. */
+  private joinFor(
+    wait: WaitingIdentityJoin,
+  ): Promise<Result<IdentityJoinAsked, IdentityPlanFailure>> {
+    switch (wait.purpose) {
+      case IdentityJoinPurpose.Ask:
+        return this.ask(wait.join);
+      case IdentityJoinPurpose.Recover:
+        return this.recover(wait.join);
     }
   }
 
@@ -315,6 +397,7 @@ export class IdentityPlanActions {
           outcome = ran.value;
           continue;
         case IdentityPlanOutcomeKind.WaitsForKey:
+        case IdentityPlanOutcomeKind.RecoveryWordsNext:
           return ran;
       }
     }
@@ -332,8 +415,6 @@ export class IdentityPlanActions {
     const calls = new IdentityManagerCalls(this.vault);
     const joins = new IdentityJoinActions(this.vault);
     switch (decision) {
-      case "leave":
-        return ok(applied);
       case "addToBrowser": {
         const add: ManagerCall<IdentityPlanOutcome> = {
           failure: new IdentityPlanFailure(IdentityPlanFailureKind.Add),
@@ -370,11 +451,35 @@ export class IdentityPlanActions {
       case "askToJoin": {
         const asked = await joins.ask(join);
         if (asked.isErr()) return err(asked.error);
-        const waiting: AskedJoin = { asked: asked.value, join };
+        const waiting: AskedJoin = {
+          asked: asked.value,
+          join,
+          purpose: IdentityJoinPurpose.Ask,
+        };
         const outcome = this.waiting(waiting);
         switch (outcome.kind) {
           case IdentityPlanOutcomeKind.Applied:
             joins.announce();
+            break;
+          case IdentityPlanOutcomeKind.RecoveryWordsNext:
+            break;
+          case IdentityPlanOutcomeKind.WaitsForKey:
+            joins.waitFor(outcome.wait);
+        }
+        return ok(outcome);
+      }
+      case "recoverWithPassphrase": {
+        const ready = await joins.recover(join);
+        if (ready.isErr()) return err(ready.error);
+        const waiting: AskedJoin = {
+          asked: ready.value,
+          join,
+          purpose: IdentityJoinPurpose.Recover,
+        };
+        const outcome = this.waiting(waiting);
+        switch (outcome.kind) {
+          case IdentityPlanOutcomeKind.Applied:
+          case IdentityPlanOutcomeKind.RecoveryWordsNext:
             break;
           case IdentityPlanOutcomeKind.WaitsForKey:
             joins.waitFor(outcome.wait);
@@ -397,20 +502,22 @@ export class IdentityPlanActions {
     }
   }
 
-  /** Whether an asked join waits for a key, and which. */
-  private waiting({ asked, join }: AskedJoin): AskedJoinOutcome {
+  /** Whether a join waits for a key, and which. */
+  private waiting({ asked, join, purpose }: AskedJoin): AskedJoinOutcome {
     switch (asked) {
       case IdentityJoinAsked.Requested:
         return { kind: IdentityPlanOutcomeKind.Applied };
+      case IdentityJoinAsked.RecoveryWordsNext:
+        return { kind: IdentityPlanOutcomeKind.RecoveryWordsNext };
       case IdentityJoinAsked.WaitsForDevice:
         return {
           kind: IdentityPlanOutcomeKind.WaitsForKey,
-          wait: { kind: IdentityJoinWaitKind.Device, join },
+          wait: { kind: IdentityJoinWaitKind.Device, join, purpose },
         };
       case IdentityJoinAsked.WaitsForNewKey:
         return {
           kind: IdentityPlanOutcomeKind.WaitsForKey,
-          wait: { kind: IdentityJoinWaitKind.NewKey, join },
+          wait: { kind: IdentityJoinWaitKind.NewKey, join, purpose },
         };
     }
   }
@@ -432,4 +539,5 @@ type AskedJoinOutcome = Exclude<
 type AskedJoin = {
   readonly asked: IdentityJoinAsked;
   readonly join: IdentityJoinIntent;
+  readonly purpose: IdentityJoinPurpose;
 };

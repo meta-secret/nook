@@ -14,6 +14,16 @@ decisions and applies them together. An S3 location is read the same way on
 first run and on the recovery screen, but its Sync page wizard lists no
 identities.
 
+On the recovery screen:
+
+- Google Drive always lists its identities.
+- GitHub, S3, iCloud, and a local folder list them when the location holds
+  several vaults.
+- A location holding one vault opens it for this browser's passkey, unless
+  Rust offers recovering its keyring with a recovery passphrase. Then the
+  keyring is listed too, so its words are offered beside its passkey.
+- A vault the user already chose from that list opens.
+
 This record owns the rules and the identity operations behind them. The
 [identity architecture](identity-vault-architecture.md) owns identity, app key,
 and DEK ownership. The [provider listing](auth-providers.md#what-the-provider-already-holds)
@@ -25,8 +35,10 @@ owns what is read from the provider without a key.
   - Each listed identity gets one decision.
   - Vaults are never listed or acted on in this step; the card shows only
     the identity's vault count from its log.
-- **One decision per identity, mutually exclusive.**
-  - The decision defaults to **Leave as is** and can always return to it.
+- **At most one decision per identity, mutually exclusive.**
+  - Every decision does something; none is a "do nothing" choice.
+  - Nothing starts picked. An identity nothing is picked for stays as it is.
+  - Pressing the picked decision again unpicks it.
   - Nothing runs when a decision is picked.
 - **One action applies the plan** (with no identity in use).
   - The step's single button runs every picked decision, in listing order.
@@ -44,7 +56,7 @@ owns what is read from the provider without a key.
 **Prohibited:** offer "Import as a separate vault" on one vault row while the
 same identity offers "Ask to join".
 
-**Required:** the identity offers one segmented decision. The step's copy
+**Required:** the identity offers one list of ways in. The step's copy
 speaks of identities, never of vaults.
 
 ## Decisions by standing
@@ -58,27 +70,40 @@ Rust decides each identity's standing and the decisions it allows.
   - No decision: its vaults open from that identity.
 - **Opens with a checked passkey** (a checked passkey re-derives a member
   app key)
-  - **Leave as is**
   - **Add to this browser:** the identity joins this browser's directory as
     its own identity, beside the one in use.
 - **Not on this browser** (nothing was checked)
-  - With no identity in use, as on the recovery screen: **Leave as is**,
-    **Recover it** (adding it; the passkey is tapped when the plan runs), or
+  - With no identity in use, as on the recovery screen: **Open with my
+    passkey** (adding it; the passkey is tapped when the plan runs) or
     **Ask to join**.
-  - With an identity in use: **Leave as is** or **Ask to join**.
+  - With an identity in use: **Ask to join**.
 - **Not opened by the checked passkeys**
-  - **Leave as is**
   - **Ask to join:** a join request to the identity's devices.
 - **Join requested** (the identity's log holds this browser's unanswered
   request)
   - No decision: a device of the identity answers it.
 - **Join denied** (a device denied this browser's request)
-  - **Leave as is**
   - **Ask to join** again.
 - **Join approved** (this browser's key is a member; the identity is not
   added here yet)
-  - **Leave as is**
   - **Finish joining:** add the identity to this browser.
+
+Where this browser may ask to join, or waits on a request it asked, and the
+identity's log lists a recovery passphrase, Rust also offers **Recover with
+passphrase**, before **Ask to join**.
+
+- Applying it stops the plan at that identity. Later decisions do not run.
+- This browser's fresh key comes first, as for asking: the device protection
+  gate, or a new local identity's key ceremony.
+- The words of one of its passphrases are typed next, in place of the list.
+- Once Rust accepts them, the identity is added here as after an approved
+  join, and the page connects the provider as its button does.
+- A local folder is a copy of a browser's store, not a connection, so the
+  vault the keyring granted opens from the folder's own records.
+- **Choose another way**, a quiet action beside **Recover**, returns to
+  the list and joins nothing.
+
+See [recover a keyring with a recovery passphrase](identity-vault-architecture.md#recover-a-keyring-with-a-recovery-passphrase).
 
 ## Setup action
 
@@ -235,9 +260,13 @@ accent, no pills.
 - **Header:** the identity's name or words, and one tag, success toned when
   it opens: its standing on the recovery screen, its setup tag in setup. Below it, one spec line of public log facts: its
   device and vault counts.
-- **Decision:** a square, hairline-framed segmented control, one segment per
-  allowed decision. The picked segment is inverted (foreground fill); the
-  others are muted text.
+- **Decision:** one `nk-vault-row` per allowed decision, a way in.
+  - Each row has an icon tile for what it uses: a passkey, written-down
+    words, or a device.
+  - One line holds its name, a dotted leader, and a muted note of what it
+    needs.
+  - The picked row (`aria-pressed`) takes the selected row tone and a check
+    at its end.
 - **Checks:** "Which passkey opens it?" is a quiet underlined link.
 - **Plan:** a subpanel head, "What will happen", over one line per picked
   decision.

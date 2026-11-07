@@ -8,16 +8,18 @@
 
 use crate::{TypedInput, TypedOutput};
 use nook_core::{
-    AuthProvidersSnapshot, EventId, IdentityControlState, IdentityNameStatus,
+    AuthProvidersSnapshot, EventId, EventLogLocation, IdentityControlState, IdentityNameStatus,
     IdentityVaultEpochAction, IdentityVaultEpochStatus, IdentityVaultKeyOpening,
-    IdentityVaultRegistration, MultiDeviceError, OpenedVaultDek, ProviderRows, SecretTypeFilter,
-    StorageProvider, StoreId, SymmetricKey, VaultHolderRotation, VaultKeys, VaultMetaState,
-    VaultOperation, VaultRevocationDue, VaultRevokedHolders, VaultType,
+    IdentityVaultReach, IdentityVaultRegistration, MultiDeviceError, OpenedVaultDek, ProviderRows,
+    SecretTypeFilter, StorageConnection, StorageProvider, StoreId, SymmetricKey,
+    VaultHolderRotation, VaultKeys, VaultMetaState, VaultOperation, VaultRevocationDue,
+    VaultRevokedHolders, VaultType,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 use crate::manager::NookExternalEventLogRecords;
 use crate::manager::NookVaultManager;
+use crate::manager::event_log::ExternalEventLogRecord;
 use crate::manager::event_log::SecurityEpochRotationFailure;
 use crate::manager::verified_access::VerifiedVaultAccessFlow;
 use crate::{NookDatabase, NookError, NookSecretPage};
@@ -158,10 +160,53 @@ impl NookVaultManager {
         page_limit: u32,
     ) -> Result<NookSecretPage, JsError> {
         let connection = connection.decode()?;
+        self.open_identity_vault_through(&connection, &store_id, page_limit)
+            .await
+    }
+
+    /// Open a vault of the current identity through the saved row that
+    /// replicates it, as [`Self::connect_identity_vault`] does. A local
+    /// folder is no connection: its records are read from the folder, as
+    /// [`Self::connect_identity_vault_from_records`] reads handed-over ones.
+    #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects `connect_identity_vault_by_row` paging values through JavaScript Number scalars"
+        )
+    )]
+    pub async fn connect_identity_vault_by_row(
+        &mut self,
+        provider: &tsify::Ts<StorageProvider>,
+        store_id: String,
+        page_limit: u32,
+    ) -> Result<NookSecretPage, JsError> {
+        match provider.decode()?.identity_vault_reach() {
+            IdentityVaultReach::Connection(connection) => {
+                self.open_identity_vault_through(&connection, &store_id, page_limit)
+                    .await
+            }
+            IdentityVaultReach::FolderRecords(handle_id) => {
+                let location = EventLogLocation::Vault(StoreId::parse(&store_id)?);
+                let records =
+                    Self::read_external_local_folder_records(handle_id.as_str(), &location).await?;
+                self.open_identity_vault_from_records(&store_id, records, page_limit)
+                    .await
+            }
+        }
+    }
+
+    async fn open_identity_vault_through(
+        &mut self,
+        connection: &StorageConnection,
+        store_id: &str,
+        page_limit: u32,
+    ) -> Result<NookSecretPage, JsError> {
         drop(self.status.tx.send("CONNECT_START".to_owned()));
-        let store_id = StoreId::parse(&store_id)?;
+        let store_id = StoreId::parse(store_id)?;
         self.reset_vault_session();
-        self.prepare_storage(&connection).await?;
+        self.prepare_storage(connection).await?;
         let keys = self.enter_identity_vault(&store_id).await?;
         let (event_log_remote, records) = self.load_vault_records("", true).await?;
         let opening = IdentityVaultOpening {
@@ -192,15 +237,25 @@ impl NookVaultManager {
         records: NookExternalEventLogRecords,
         page_limit: u32,
     ) -> Result<NookSecretPage, JsError> {
+        self.open_identity_vault_from_records(&store_id, records.0, page_limit)
+            .await
+    }
+
+    async fn open_identity_vault_from_records(
+        &mut self,
+        store_id: &str,
+        records: Vec<ExternalEventLogRecord>,
+        page_limit: u32,
+    ) -> Result<NookSecretPage, JsError> {
         drop(self.status.tx.send("CONNECT_START".to_owned()));
-        let store_id = StoreId::parse(&store_id)?;
+        let store_id = StoreId::parse(store_id)?;
         self.reset_vault_session();
         self.prepare_storage(&nook_core::StorageConnection::Local)
             .await?;
         let keys = self.enter_identity_vault(&store_id).await?;
         // The records name their vault; they must be this one's.
         self.vault.store_id = String::new();
-        self.sync_external_event_log_records(records.0).await?;
+        self.sync_external_event_log_records(records).await?;
         if self.vault.store_id != store_id.as_str() {
             self.reset_vault_session();
             return Err(NookError::Database(

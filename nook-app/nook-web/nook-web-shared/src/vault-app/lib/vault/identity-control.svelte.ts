@@ -428,10 +428,14 @@ export class IdentityControlModel {
     }
   }
 
-  /** Drop the pending recovery passphrase and its words. */
-  cancelRecoveryPassphrase(): void {
-    const manager = this.vault.admitManager();
-    if (manager.isOk()) manager.value.cancel_recovery_passphrase();
+  /** Drop the pending recovery passphrase and its words. It waits its turn
+   * like every manager call: a flow closing while its accepted words still
+   * reach the mounts must not touch the manager under that sync. */
+  async cancelRecoveryPassphrase(): Promise<void> {
+    const cancelled = await this.withManager(async (manager) =>
+      manager.cancel_recovery_passphrase(),
+    );
+    if (cancelled.isErr()) log.warn("recovery passphrase cancel failed");
   }
 
   /** Remove a recovery passphrase: its words stop adding devices, and every
@@ -603,15 +607,11 @@ export class IdentityControlModel {
       manager.identity_vault_provider(providers, storeId),
     );
     if (row.isErr()) return err(row.error);
-    let args: NookStorageConnection;
-    try {
-      args = this.vault.providerWasmArgs(row.value);
-    } catch (failure) {
-      return err(new NativeVaultStorageFailure(failure));
-    }
     const pageSize = this.vault.secretPageSize;
+    // Rust reads the vault through the row: a local folder's records come
+    // from the folder, any other row opens its connection.
     const page = await this.withManager((manager) =>
-      manager.connect_identity_vault(args, storeId, pageSize),
+      manager.connect_identity_vault_by_row(row.value, storeId, pageSize),
     );
     if (page.isErr()) return err(page.error);
     return this.completeVaultConnect(page.value);

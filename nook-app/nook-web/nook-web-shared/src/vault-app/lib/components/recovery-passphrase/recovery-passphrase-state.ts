@@ -58,3 +58,18 @@ export function recoveryManagement(
       return RecoveryManagement.Unavailable;
   }
 }
+
+export enum RecoveryWordsLeaveKind {
+  /** The page around the words has its own way back. */
+  Elsewhere = "elsewhere",
+  /** A quiet action beside Recover leaves the words for another way in. */
+  Beside = "beside",
+}
+
+/** How the user leaves the recovery words without recovering. */
+export type RecoveryWordsLeave =
+  | { readonly kind: RecoveryWordsLeaveKind.Elsewhere }
+  | {
+      readonly kind: RecoveryWordsLeaveKind.Beside;
+      readonly onLeave: () => void;
+    };

@@ -60,7 +60,7 @@ const ASKED: Listed = {
 const KEY_MEMBER: Listed = {
   id: 'idn_keymemberab',
   standing: { kind: 'thisBrowser' },
-  setup: { kind: 'continue', decision: 'leave' },
+  setup: { kind: 'continue', decision: 'finishJoining' },
 }
 /** With an identity in use, that identity. */
 const IN_USE: Listed = {

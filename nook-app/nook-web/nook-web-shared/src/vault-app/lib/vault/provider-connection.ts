@@ -36,23 +36,24 @@ const log = browserLogRuntime.createLogger("vault-provider-connection");
 
 export enum StagedVaultDiscoveryKind {
   Found = "found",
-  /** The provider holds several vaults; the choices wait on the state. */
-  Several = "several",
+  /** The provider's keyrings wait on the state for the user's choice:
+   * several vaults, or one whose keyring a recovery passphrase can open. */
+  Choose = "choose",
   NotFound = "not-found",
 }
 
 /** What the provider being set up holds, as staged discovery found it. */
 export type StagedVaultDiscovery =
   | { readonly kind: StagedVaultDiscoveryKind.Found; readonly storeId: string }
-  | { readonly kind: StagedVaultDiscoveryKind.Several }
+  | { readonly kind: StagedVaultDiscoveryKind.Choose }
   | { readonly kind: StagedVaultDiscoveryKind.NotFound };
 
 class StagedVaultDiscoveries {
   static readonly NOT_FOUND: StagedVaultDiscovery = {
     kind: StagedVaultDiscoveryKind.NotFound,
   };
-  static readonly SEVERAL: StagedVaultDiscovery = {
-    kind: StagedVaultDiscoveryKind.Several,
+  static readonly CHOOSE: StagedVaultDiscovery = {
+    kind: StagedVaultDiscoveryKind.Choose,
   };
 }
 
@@ -210,7 +211,7 @@ export class ProviderConnectionActions {
     }
   }
 
-  /** Several vaults wait on the state for the user's choice. */
+  /** The provider's keyrings wait on the state for the user's choice. */
   private adoptDiscovery(
     discovered: NookRemoteVaultDiscovery,
   ): StagedVaultDiscovery {
@@ -222,9 +223,9 @@ export class ProviderConnectionActions {
           kind: StagedVaultDiscoveryKind.Found,
           storeId: discovered.storeId,
         };
-      case "several":
+      case "choose":
         state.remoteVaultChoices = new RemoteVaultChoices(discovered);
-        return StagedVaultDiscoveries.SEVERAL;
+        return StagedVaultDiscoveries.CHOOSE;
       case "empty":
         state.remoteVaultChoices = RemoteVaultChoices.NONE;
         return StagedVaultDiscoveries.NOT_FOUND;

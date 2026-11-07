@@ -14,7 +14,9 @@ import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import type { PlannedDecision } from '$lib/components/provider-vaults/identity-plan.svelte'
 import { IdentityDirectoryLoader } from '$lib/components/identities/identity-directory-loader.svelte'
 import {
+  IdentityJoinPurpose,
   IdentityJoinWaitKind,
+  KeyringRecoveryKind,
   type WaitingIdentityJoin,
 } from '$lib/vault/identity-join-wait'
 import {
@@ -26,6 +28,7 @@ import {
   type IdentityPlanRun,
 } from '$lib/vault/identity-plan-actions'
 import { IdentityActionOutcome } from '$lib/vault/identity-control.svelte'
+import { StagedVaultDiscoveryKind } from '$lib/vault/provider-connection'
 import { NewIdentityStage } from '$lib/vault/state/ui.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
@@ -63,7 +66,7 @@ function family(decisions: IdentityDecision[]): ProviderIdentityChoice {
 
 function plan(decision: IdentityDecision): IdentityPlanRun {
   const planned: PlannedDecision = {
-    choice: family(['leave', decision]),
+    choice: family([decision]),
     decision,
   }
   return { source: SOURCE, planned: [planned] }
@@ -122,6 +125,7 @@ describe('asking to join from an identity plan', () => {
     const wait: WaitingIdentityJoin = {
       kind: IdentityJoinWaitKind.Device,
       join: { source: SOURCE, identityId: IDENTITY, label: LABEL },
+      purpose: IdentityJoinPurpose.Ask,
     }
     expect(ran._unsafeUnwrap()).toEqual({
       kind: IdentityPlanOutcomeKind.WaitsForKey,
@@ -166,6 +170,7 @@ describe('asking to join from an identity plan', () => {
     const wait: WaitingIdentityJoin = {
       kind: IdentityJoinWaitKind.Device,
       join: { source: SOURCE, identityId: IDENTITY, label: LABEL },
+      purpose: IdentityJoinPurpose.Ask,
     }
     session.vault.identityJoin = wait
 
@@ -181,6 +186,7 @@ describe('asking to join from an identity plan', () => {
     const wait: WaitingIdentityJoin = {
       kind: IdentityJoinWaitKind.NewKey,
       join: { source: SOURCE, identityId: IDENTITY, label: LABEL },
+      purpose: IdentityJoinPurpose.Ask,
     }
     session.vault.identityJoin = wait
 
@@ -205,6 +211,111 @@ describe('asking to join from an identity plan', () => {
     expect(ran._unsafeUnwrapErr().translationKey).toBe(
       I18N_KEYS.ProviderIdentitiesJoinFailed,
     )
+  })
+})
+
+describe('recovering a keyring with a passphrase from an identity plan', () => {
+  const join = { source: SOURCE, identityId: IDENTITY, label: LABEL }
+
+  test('a browser with no protected key makes one before the words', async () => {
+    const session = new JoinSession('current-key')
+
+    const ran = await new IdentityPlanActions(session.vault).run(
+      plan('recoverWithPassphrase'),
+    )
+
+    const wait: WaitingIdentityJoin = {
+      kind: IdentityJoinWaitKind.Device,
+      join,
+      purpose: IdentityJoinPurpose.Recover,
+    }
+    expect(ran._unsafeUnwrap()).toEqual({
+      kind: IdentityPlanOutcomeKind.WaitsForKey,
+      wait,
+    })
+    expect(session.vault.identityJoin).toEqual(wait)
+    expect(session.vault.keyringRecovery.kind).toBe(KeyringRecoveryKind.None)
+  })
+
+  test('a fresh unlocked key goes to the words, asking no device', async () => {
+    const session = new JoinSession('current-key').unlocked()
+
+    const ran = await new IdentityPlanActions(session.vault).run(
+      plan('recoverWithPassphrase'),
+    )
+
+    expect(ran._unsafeUnwrap().kind).toBe(
+      IdentityPlanOutcomeKind.RecoveryWordsNext,
+    )
+    expect(session.vault.keyringRecovery).toEqual({
+      kind: KeyringRecoveryKind.Words,
+      join,
+    })
+    expect(session.requested).toEqual([])
+    expect(session.vault.identityJoin.kind).toBe(IdentityJoinWaitKind.Idle)
+  })
+
+  test('the gate made a key: the words come next, and no device is asked', async () => {
+    const session = new JoinSession('current-key').unlocked()
+    const wait: WaitingIdentityJoin = {
+      kind: IdentityJoinWaitKind.Device,
+      join,
+      purpose: IdentityJoinPurpose.Recover,
+    }
+    session.vault.identityJoin = wait
+
+    const resumed = await new IdentityJoinActions(session.vault).resume(wait)
+
+    expect(resumed._unsafeUnwrap()).toBe(IdentityJoinAsked.RecoveryWordsNext)
+    expect(session.vault.keyringRecovery).toEqual({
+      kind: KeyringRecoveryKind.Words,
+      join,
+    })
+    expect(session.requested).toEqual([])
+    expect(session.vault.identityJoin.kind).toBe(IdentityJoinWaitKind.Idle)
+  })
+
+  test('a key made on the recovery screen stages its provider again before the words', async () => {
+    const session = new JoinSession('current-key').unlocked()
+    const staged = vi
+      .spyOn(session.vault, 'discoverStagedVault')
+      .mockResolvedValue(ok({ kind: StagedVaultDiscoveryKind.Choose }))
+    const current = {
+      source: { kind: 'currentProvider' },
+      identityId: IDENTITY,
+      label: LABEL,
+    } satisfies WaitingIdentityJoin['join']
+    const wait: WaitingIdentityJoin = {
+      kind: IdentityJoinWaitKind.Device,
+      join: current,
+      purpose: IdentityJoinPurpose.Recover,
+    }
+
+    const resumed = await new IdentityJoinActions(session.vault).resume(wait)
+
+    expect(resumed._unsafeUnwrap()).toBe(IdentityJoinAsked.RecoveryWordsNext)
+    expect(staged).toHaveBeenCalledOnce()
+    expect(session.vault.keyringRecovery).toEqual({
+      kind: KeyringRecoveryKind.Words,
+      join: current,
+    })
+  })
+
+  test('a key that belongs to an identity waits for a new identity of its own first', async () => {
+    const session = new JoinSession('new-key-staged').unlocked()
+
+    const ran = await new IdentityPlanActions(session.vault).run(
+      plan('recoverWithPassphrase'),
+    )
+
+    expect(ran._unsafeUnwrap().kind).toBe(IdentityPlanOutcomeKind.WaitsForKey)
+    expect(session.vault.identityJoin).toEqual({
+      kind: IdentityJoinWaitKind.NewKey,
+      join,
+      purpose: IdentityJoinPurpose.Recover,
+    })
+    expect(session.vault.newIdentity).toBe(NewIdentityStage.Key)
+    expect(session.vault.keyringRecovery.kind).toBe(KeyringRecoveryKind.None)
   })
 })
 
