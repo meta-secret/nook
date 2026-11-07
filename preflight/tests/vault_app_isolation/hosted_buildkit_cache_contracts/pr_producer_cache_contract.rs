@@ -14,8 +14,12 @@ impl<'a> PrProducerCacheContract<'a> {
     }
 
     pub(super) fn assert_contract(&self) -> anyhow::Result<()> {
+        self.assert_workflow_fanout()?;
+        self.assert_producer_graph()
+    }
+
+    fn assert_workflow_fanout(&self) -> anyhow::Result<()> {
         let pr = self.root.read(".github/workflows/pr.yml");
-        let bake = self.root.read("nook-app/ci/pr.docker-bake.hcl");
         let tasks = self.root.read("nook-app/ci/pr.yml");
         assert_eq!(pr.matches("    runs-on:").count(), 5);
         assert_eq!(pr.matches("Connect trusted persistent BuildKit").count(), 2);
@@ -69,6 +73,12 @@ impl<'a> PrProducerCacheContract<'a> {
             .find("uses: ./.github/actions/nook-pr-preview")
             .context("missing preview")?;
         assert!(validation < publish);
+        Ok(())
+    }
+
+    fn assert_producer_graph(&self) -> anyhow::Result<()> {
+        let bake = self.root.read("nook-app/ci/pr.docker-bake.hcl");
+        let tasks = self.root.read("nook-app/ci/pr.yml");
         let join = tasks
             .split_once("  ci:pr:validate:\n")
             .and_then(|(_, rest)| rest.split_once("\n  ci:pr:checks:"))
@@ -117,12 +127,18 @@ impl<'a> PrProducerCacheContract<'a> {
         let product = self
             .root
             .read("nook-app/nook-platform/docker/rust/base/Dockerfile");
-        let wasm_dependencies = product
-            .split_once("FROM chef-deps AS builder-wasm-deps")
-            .and_then(|(_, tail)| tail.split_once("FROM builder-wasm-deps AS builder-core-deps"))
-            .context("WASM build dependencies must be separate from native test dependencies")?
-            .0;
+        let (wasm_dependencies, _) = product
+            .split_once("FROM platform-manifests AS builder-wasm-deps")
+            .and_then(|(_, tail)| tail.split_once("FROM platform-manifests AS builder-core-deps"))
+            .context("WASM build dependencies must be separate from native test dependencies")?;
         assert!(!wasm_dependencies.contains("cargo build --tests"));
+        assert!(wasm_dependencies.contains(
+            "cargo build --locked --release --target wasm32-unknown-unknown --workspace"
+        ));
+        assert!(wasm_dependencies.contains(
+            "cargo clippy --locked --release --target wasm32-unknown-unknown --workspace"
+        ));
+        assert!(product.contains("FROM builder-debug AS pr-rust-verify"));
         let proof = self.root.read("infra/tasks/pr-cache.yml");
         assert!(proof.contains("bake-cache:prove-pr:"));
         assert!(proof.contains("for temperature in cold warm"));

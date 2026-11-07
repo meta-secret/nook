@@ -8,6 +8,7 @@ import {
 import { BuildkitPlainLogTelemetry } from "./buildkit-plain-log-telemetry.mjs";
 import { CacheScopeTelemetry } from "./cache-scope-telemetry.mjs";
 import { CacheTelemetryValidator } from "./cache-telemetry-validator.mjs";
+import { SccachePublicationStatus } from "./cache-telemetry-contracts.mjs";
 import { resolveSccacheFallback } from "./cache-telemetry-fallback.mjs";
 import { OrderedConcurrentMapper } from "./ordered-concurrent-mapper.mjs";
 import { CacheTelemetryJobSummary } from "./cache-telemetry-job-summary.mjs";
@@ -252,6 +253,7 @@ export class CacheTelemetry {
     ) {
       throw new Error("sccache report has invalid publication_status");
     }
+    new CacheTelemetryValidator().validateSccacheStorageCounters(report);
     /** @type {SccacheReport} */
     const normalized = {
       stage: normalizedStage,
@@ -274,7 +276,17 @@ export class CacheTelemetry {
         report.cache_write_errors,
       ),
       cache_writes: CacheTelemetry.nonNegativeInteger(report.cache_writes),
+      local_hits: CacheTelemetry.nonNegativeInteger(report.local_hits),
+      remote_hits: CacheTelemetry.nonNegativeInteger(report.remote_hits),
+      local_writes: CacheTelemetry.nonNegativeInteger(report.local_writes),
       remote_writes: CacheTelemetry.nonNegativeInteger(report.remote_writes),
+      local_write_errors: CacheTelemetry.nonNegativeInteger(
+        report.local_write_errors,
+      ),
+      remote_write_errors: CacheTelemetry.nonNegativeInteger(
+        report.remote_write_errors,
+      ),
+      local_backfills: CacheTelemetry.nonNegativeInteger(report.local_backfills),
       compile_failures: CacheTelemetry.nonNegativeInteger(
         report.compile_failures,
       ),
@@ -302,7 +314,13 @@ export class CacheTelemetry {
       cache_errors: 0,
       cache_write_errors: 0,
       cache_writes: 0,
+      local_hits: 0,
+      remote_hits: 0,
+      local_writes: 0,
       remote_writes: 0,
+      local_write_errors: 0,
+      remote_write_errors: 0,
+      local_backfills: 0,
       compile_failures: 0,
       measurement: "sum_of_zero_based_run_snapshots",
       fallback: { state: "active", reason: "none" },
@@ -334,7 +352,13 @@ export class CacheTelemetry {
       summary.cache_errors += report.cache_errors;
       summary.cache_write_errors += report.cache_write_errors;
       summary.cache_writes += report.cache_writes;
+      summary.local_hits += report.local_hits;
+      summary.remote_hits += report.remote_hits;
+      summary.local_writes += report.local_writes;
       summary.remote_writes += report.remote_writes;
+      summary.local_write_errors += report.local_write_errors;
+      summary.remote_write_errors += report.remote_write_errors;
+      summary.local_backfills += report.local_backfills;
       summary.compile_failures += report.compile_failures;
     }
     if (terminalReports.length > 0) {
@@ -349,13 +373,19 @@ export class CacheTelemetry {
       )
         ? "authoritative"
         : "backend_incomplete";
-      summary.publication_status =
+      switch (
         summary.client_side &&
         summary.cache_errors === 0 &&
         summary.cache_write_errors === 0 &&
-        summary.cache_writes === 0
-          ? "pending_verification"
-          : "counters_observed";
+        summary.remote_writes === 0
+      ) {
+        case true:
+          summary.publication_status = SccachePublicationStatus.Pending;
+          break;
+        case false:
+          summary.publication_status = SccachePublicationStatus.Observed;
+          break;
+      }
     }
     summary.snapshots = terminalReports;
     return {
@@ -739,7 +769,7 @@ export class CacheTelemetry {
       rawBuildLog,
     );
     return {
-      schema_version: 2,
+      schema_version: 3,
       github: {
         run_id: String(runId),
         run_attempt: CacheTelemetry.nonNegativeInteger(runAttempt, 1),
@@ -770,7 +800,7 @@ export class CacheTelemetry {
     environment = process.env,
   }) {
     return {
-      schema_version: 2,
+      schema_version: 3,
       github: {
         run_id: String(runId),
         run_attempt: CacheTelemetry.nonNegativeInteger(runAttempt, 1),
@@ -830,6 +860,7 @@ export class CacheTelemetry {
           `buildx_history_unavailable: ${CacheTelemetry.errorMessage(error)}`,
         );
       }
+      // Buildx history baselines retain their separate counter-free format.
       CacheTelemetry.writeJson(output, {
         schema_version: 2,
         refs,

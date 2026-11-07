@@ -26,6 +26,12 @@ class SplitBuildLogFixture {
       cache_write_errors: 0,
       cache_writes: misses,
       remote_writes: misses,
+      local_hits: 0,
+      remote_hits: hits,
+      local_writes: 0,
+      local_write_errors: 0,
+      remote_write_errors: 0,
+      local_backfills: 0,
       compile_failures: 0,
     });
   }

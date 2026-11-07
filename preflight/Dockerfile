@@ -1,60 +1,25 @@
 # syntax=registry.dev.nokey.sh/docker/dockerfile:1.27.0@sha256:bde3983e9c939224420ddaf6b784cc30e09b035a4dea01f581230c50809f372e
 
-# Reuses the shared rust-base Bake target (pinned Rust, sccache, cargo-chef).
-# Dependency cooks stay cacheable across source-only preflight edits.
-
-FROM rust-base AS chef
-
-ENV CARGO_TARGET_DIR=/meta-secret/preflight-target
-WORKDIR /meta-secret/nook/preflight
-COPY preflight/Cargo.toml preflight/Cargo.lock ./
-RUN mkdir -p src \
-    && printf '\n' > src/lib.rs
-# cargo-chef currently copies the package edition onto every generated target,
-# which Cargo now deprecates. Keep the package edition and strip only those
-# redundant target fields before the dependency cook consumes the recipe.
-RUN <<'EOF'
-set -eu
-cargo chef prepare --recipe-path recipe.json
-jq '
-  .skeleton.manifests |= map(
-    .contents |= (
-      reduce (split("\n")[]) as $line
-        ({section: null, lines: []};
-         if $line == "[package]" then
-           .section = "package" | .lines += [$line]
-         elif ($line == "[lib]" or ($line | startswith("[["))) then
-           .section = "target" | .lines += [$line]
-         elif .section == "target" and $line == "edition = \"2024\"" then
-           .
-         else
-           .lines += [$line]
-         end)
-      | .lines | join("\n")
-    )
-  )
-' recipe.json > recipe.normalized.json
-mv recipe.normalized.json recipe.json
-EOF
+# Reuses the shared rust-base Bake target (pinned Rust and disk/S3 sccache).
+# Real manifests and dummy roots keep dependency layers independent of source.
 
 FROM rust-base AS deps
 
 ENV CARGO_TARGET_DIR=/meta-secret/preflight-target
 WORKDIR /meta-secret/nook/preflight
-COPY --from=chef /meta-secret/nook/preflight/recipe.json recipe.json
 COPY preflight/Cargo.toml preflight/Cargo.lock ./
 RUN mkdir -p src \
     && printf '\n' > src/lib.rs
-RUN --network=default cargo fetch --locked
+RUN --network=default RUSTC_WRAPPER= cargo fetch --locked
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo chef cook --recipe-path recipe.json \
+    cargo build --quiet --locked \
     && mkdir -p tests \
     && printf '#[test]\nfn dependency_warmup() {}\n' > tests/core_ownership.rs \
     && cargo clippy --quiet --locked --all-targets -- -D warnings \
     && cargo test --quiet --locked --test core_ownership --no-run \
     && rm -rf tests \
-    && nook-sccache-report preflight-chef
+    && nook-sccache-report --finish preflight-dependencies
 
 # Prewarm the coverage-instrumented dependency graph against dummy crate roots.
 # The final coverage run receives the complete repository as runtime input, so
@@ -66,7 +31,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo llvm-cov clean --workspace \
     && eval "$(CARGO_TARGET_DIR=/meta-secret/preflight-target/llvm-cov-target cargo llvm-cov show-env --sh)" \
     && CARGO_TARGET_DIR=/meta-secret/preflight-target/llvm-cov-target cargo test --locked -p nook-preflight --no-run \
-    && nook-sccache-report preflight-coverage-dependencies
+    && nook-sccache-report --finish preflight-coverage-dependencies
 
 FROM deps AS build
 
@@ -77,20 +42,27 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     find src tests -type f -name '*.rs' -exec touch {} + \
     && cargo fmt --check \
     && cargo clippy --quiet --offline --locked --all-targets -- -D warnings \
-    && nook-sccache-report preflight-build
+    && nook-sccache-report --finish preflight-build
 
 FROM build AS test
 
 # Test-only dependency warming must not be reachable from PR verification.
 COPY --from=coverage-deps /meta-secret/preflight-target/llvm-cov-target /meta-secret/preflight-target/llvm-cov-target
 COPY --from=repository-source / /meta-secret/nook
+# Remove the dummy workspace coverage outputs after both independent imports.
+# Preserve instrumented dependencies and the real build's ordinary artifacts.
+RUN RUSTC_WRAPPER= cargo clean --offline --locked --workspace --profile dev --target-dir /meta-secret/preflight-target/llvm-cov-target
+# Resolve the fixture's independent lockfile before its offline coverage build.
+RUN --network=default RUSTC_WRAPPER= cargo fetch --locked --manifest-path /meta-secret/nook/infra/sim/compiler-cache/Cargo.toml
 ENV NOOK_REPO_ROOT=/meta-secret/nook
 ENV NOOK_REPOSITORY_SOURCE_CONTEXT=1
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     floor="$(jq -er '.package_lines_percent["nook-preflight"] | numbers' /meta-secret/nook/nook-app/nook-platform/nook-core/coverage-floor.json)" \
-    && cargo llvm-cov test --locked --no-clean -p nook-preflight --fail-under-lines "$floor" \
-    && nook-sccache-report preflight-test-and-coverage
+    && cargo llvm-cov test --locked --no-clean -p nook-preflight --fail-under-lines "$floor" --no-fail-fast \
+    && compiler_fixture_floor="$(jq -er '.package_lines_percent["nook-compiler-cache-proof"] | numbers' /meta-secret/nook/nook-app/nook-platform/nook-core/coverage-floor.json)" \
+    && CARGO_TARGET_DIR=/meta-secret/compiler-cache-target CARGO_LLVM_COV_TARGET_DIR=/meta-secret/compiler-cache-target/llvm-cov-target cargo llvm-cov test --offline --locked --manifest-path /meta-secret/nook/infra/sim/compiler-cache/Cargo.toml -p nook-compiler-cache-proof --fail-under-lines "$compiler_fixture_floor" --no-fail-fast \
+    && nook-sccache-report --finish preflight-test-and-coverage
 
 # Policy uses the same compiled preflight graph as product validation. Rust,
 # including Cargo metadata discovery and formatter fixtures, stays in BuildKit.
@@ -128,6 +100,7 @@ FROM policy-tools AS policy-source
 ARG LOOM_OWNERSHIP_FROM
 COPY --from=repository-source / /meta-secret/nook
 COPY --from=repository-git /git /meta-secret/nook/.git
+RUN find preflight/src preflight/tests -type f -name '*.rs' -exec touch {} +
 # The ignored library is absent from fresh checkouts. Initialize it through the
 # official released command before Loom reads its roles and skills.
 RUN <<'EOF'
@@ -178,7 +151,8 @@ ENV GITHUB_EVENT_PATH=/tmp/policy-event.json \
 FROM policy-source AS loom-verify
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    task loom:verify
+    task loom:verify \
+    && nook-sccache-report --finish loom-verify-1
 
 # The PR verification solve checks tooling without compiling/running test binaries.
 FROM policy-source AS pr-verification
@@ -188,7 +162,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && task loom:format:check \
     && task loom:module-experts:validate \
     && task loom:structural-experts:validate \
-    && task loom:cortex-audit
+    && task loom:cortex-audit \
+    && nook-sccache-report --finish pr-verification-1
 
 FROM loom-verify AS repository-policy
 RUN task preflight:format-contract \

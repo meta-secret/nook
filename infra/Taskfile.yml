@@ -119,6 +119,10 @@ includes:
     taskfile: tasks/pr-cache.yml
     dir: ..
     flatten: true
+  compiler-cache:
+    taskfile: tasks/compiler-cache.yml
+    dir: ..
+    flatten: true
   webhook-ingress:
     taskfile: tasks/webhook-ingress.yml
     dir: ..

@@ -211,18 +211,44 @@ fn content_scan_candidate(path: &Path) -> bool {
         ) || (extension == "rs" && !test_source))
 }
 
-fn prohibited_content() -> &'static Result<RegexSet, regex::Error> {
-    static PATTERNS: OnceLock<Result<RegexSet, regex::Error>> = OnceLock::new();
-    PATTERNS.get_or_init(|| {
-        RegexSet::new([
-            r"(?i)(?:^|[^a-z0-9_])(?:python|pypy|micropython|jython|ironpython|ipython)[0-9.]*\b",
-            r"(?i)\b(?:pyo3|pyodide|rustpython|cpython)\b",
-            r#"(?i)(?:^|[\s;&|(\[])(?:pip[0-9]*|pipx)(?:["',\s]+|-\s+)+(?:-[^\s]+[\s]+)*(?:install|run)\b"#,
-            r#"(?i)(?:^|[\s;&|(\[])uv["',\s]+(?:-[^\s]+[\s]+)*(?:add|build|export|init|lock|pip|publish|python|remove|run|sync|tool|tree|venv)\b"#,
-            r#"(?i)(?:>|>>)\s*["']?[^"';&|<>\s]+(?:\.py|\.pyi|\.pyw|\.pyz|\.pex)\b"#,
-            r"(?im)^\s*(?:async\s+)?def\s+[a-z_]\w*\s*\([^)]*\)\s*:",
-        ])
-    })
+struct RepositoryLanguagePolicy {
+    patterns: RegexSet,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum ContentPolicyDecision {
+    Allowed,
+    Prohibited,
+}
+
+impl RepositoryLanguagePolicy {
+    fn compiled() -> anyhow::Result<&'static Self> {
+        static POLICY: OnceLock<Result<RepositoryLanguagePolicy, regex::Error>> = OnceLock::new();
+        POLICY
+            .get_or_init(|| {
+                RegexSet::new([
+                    r"(?i)(?:^|[^a-z0-9_])(?:python|pypy|micropython|jython|ironpython|ipython)[0-9.]*\b",
+                    r"(?i)\b(?:pyo3|pyodide|rustpython|cpython)\b",
+                    r#"(?i)(?:^|[\s;&|(\[])(?:pip[0-9]*|pipx)(?:["',\s]+|-\s+)+(?:-[^\s]+[\s]+)*(?:install|run)\b"#,
+                    r#"(?i)(?:^|[\s;&|(\[])uv["',\s]+(?:-[^\s]+[\s]+)*(?:add|build|export|init|lock|pip|publish|python|remove|run|sync|tool|tree|venv)\b"#,
+                    r#"(?i)(?:>|>>)\s*["']?[^"';&|<>\s]+(?:\.py|\.pyi|\.pyw|\.pyz|\.pex)\b"#,
+                    // A bare dollar-prefixed first parameter belongs to jq, while
+                    // dollar signs and semicolons remain valid inside defaults.
+                    r"(?im)^\s*(?:async\s+)?def\s+[a-z_]\w*\s*\(\s*(?:[^)\s$][^)]*)?\)\s*:",
+                ])
+                .map(|patterns| Self { patterns })
+            })
+            .as_ref()
+            .map_err(|error| anyhow::anyhow!("invalid repository language pattern: {error}"))
+    }
+
+    fn classify(&self, source: &str) -> ContentPolicyDecision {
+        if self.patterns.is_match(source) {
+            ContentPolicyDecision::Prohibited
+        } else {
+            ContentPolicyDecision::Allowed
+        }
+    }
 }
 
 fn repository_language_violations(
@@ -230,9 +256,7 @@ fn repository_language_violations(
     source_context: bool,
 ) -> anyhow::Result<Vec<String>> {
     let mut violations = Vec::new();
-    let patterns = prohibited_content()
-        .as_ref()
-        .map_err(|error| anyhow::anyhow!("invalid repository language pattern: {error}"))?;
+    let policy = RepositoryLanguagePolicy::compiled()?;
 
     for path in repository_paths(root, source_context)? {
         let relative = path.strip_prefix(root).unwrap_or(&path);
@@ -257,14 +281,86 @@ fn repository_language_violations(
                 relative.display()
             )
         })?;
-        if patterns.is_match(source) {
-            violations.push(format!(
+        match policy.classify(source) {
+            ContentPolicyDecision::Allowed => (),
+            ContentPolicyDecision::Prohibited => violations.push(format!(
                 "{}: prohibited runtime, dependency, or script reference",
                 relative.display()
-            ));
+            )),
         }
     }
     Ok(violations)
+}
+
+#[test]
+fn jq_dollar_parameter_definitions_are_allowed() -> anyhow::Result<()> {
+    let policy = RepositoryLanguagePolicy::compiled()?;
+    for source in [
+        "def measured_level($backend):",
+        "def level_count($backend; $counter):",
+        "def storage_count($backend; $counter; $single):",
+        "  def measured_level(  $backend  ): count_values;",
+        "def measured_level(\n\t\n  $backend\n): count_values;",
+        "\n\tdef storage_count(\n  $backend;\n  $counter;\n  $single\n): count_values;",
+    ] {
+        assert_eq!(
+            policy.classify(source),
+            ContentPolicyDecision::Allowed,
+            "jq dollar parameters must remain accepted: {source}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn ordinary_async_and_variadic_definitions_remain_prohibited() -> anyhow::Result<()> {
+    let policy = RepositoryLanguagePolicy::compiled()?;
+    for source in [
+        "def gather():",
+        "def gather( \t ):",
+        "def gather(\n\t\n):",
+        "async def gather():",
+        "def gather(value):",
+        "  def gather(value):",
+        "async def gather(value):",
+        "def gather(*args):",
+        "def gather(**kwargs):",
+        "async def gather(*args, **kwargs):",
+        "def gather(value, /, *args, fallback=None, **kwargs):",
+        "def gather(π):",
+        r#"def gather(value="$backend") :"#,
+        "def gather(value=';'):",
+        r#"def gather(value="$backend; $counter"):"#,
+        r#"async def gather(value="$;", *args, **kwargs):"#,
+        r#"def gather(value="\"$;"):"#,
+        r#"def gather(value: str = "$;"):"#,
+        "def gather(\n  value='$',\n  marker=';'\n):",
+        "def gather(\n  # currency $;\n  value\n):",
+    ] {
+        assert_eq!(
+            policy.classify(source),
+            ContentPolicyDecision::Prohibited,
+            "valid prohibited definitions must still be detected: {source}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn jq_parameters_do_not_exempt_other_prohibited_content() -> anyhow::Result<()> {
+    let policy = RepositoryLanguagePolicy::compiled()?;
+    for source in [
+        r#"def measured_level($backend): "python3";"#,
+        "def level_count($backend; $counter): .; # pip install package",
+        r#"def storage_count($backend; $counter; $single): "> build.py";"#,
+    ] {
+        assert_eq!(
+            policy.classify(source),
+            ContentPolicyDecision::Prohibited,
+            "jq parameters must not exempt another prohibited reference: {source}"
+        );
+    }
+    Ok(())
 }
 
 #[test]

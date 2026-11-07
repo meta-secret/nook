@@ -75,7 +75,7 @@ rust_ecosystem_policy_tools_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-policy-tools-v5${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=10m",
 ] : []
 
-// Proptest/Insta/Loom compile layers on top of rust-platform (source over cooked deps).
+// Proptest/Insta/Loom compile layers on top of rust-platform (source over warmed deps).
 // Falls back through the trusted complete native source graph so PR-isolated
 // deps/base cannot orphan the deterministic toolchain graph. Omit rust-base:
 // the source graph's mode=max export embeds it.
@@ -102,7 +102,7 @@ rust_ecosystem_kani_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 
 // Product native deps. Exact dependency scopes remain the narrowest restore for
 // isolated publishers. Main's complete mode=max source graph embeds the same
-// current cooks, so dependency-only readers use it instead of a stale parallel
+// current dependency builds, so dependency-only readers use it instead of a stale parallel
 // deps publication. v4 leaves thin and implicit-compression indexes behind.
 rust_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v4:buildcache,ignore-error=true",
@@ -113,10 +113,10 @@ rust_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-deps-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=10m",
 ] : []
 
-// WASM chef cooks. Prefer own deps scopes. Never import shorter rust-base or
-// native rust-deps: those short-chain and orphan cook RUNs. Longer source-v3
-// indexes embed the cook layers (mode=max), so they are a soft fallback when
-// the fingerprinted deps scope is still empty after a cook-input rotation.
+// WASM Cargo dependency builds. Prefer own deps scopes. Never import shorter
+// rust-base or native rust-deps: those short-chain and orphan dependency RUNs.
+// Longer source-v3 indexes embed the dependency layers (mode=max), so they are
+// a soft fallback when the dependency scope is empty after an input change.
 rust_wasm_deps_write_scope = "nook-rust-wasm-deps-v6${GHA_CACHE_SCOPE_SUFFIX}"
 
 rust_wasm_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
@@ -134,7 +134,7 @@ rust_wasm_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 // v4 leaves thin and implicit-compression indexes behind.
 // A present exact or Main source graph is imported alone. Listing rust-deps in
 // the same solve can select that shorter parent and orphan crate COPY+RUN
-// layers. Cold fallback keeps source-free cooks only while Main source is absent.
+// layers. Cold fallback keeps source-free dependency builds while Main source is absent.
 rust_native_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-native-source-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v4:buildcache,ignore-error=true",
@@ -149,7 +149,7 @@ rust_native_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 // WASM source layers restore their own scope plus wasm-deps. Do not import
 // rust-base or native rust-deps here: those shorter parents orphan source RUNs.
 // A present exact or Main source graph is imported alone. Cold fallback keeps
-// source-free WASM cooks only while Main source is absent.
+// source-free WASM dependency builds only while Main source is absent.
 rust_wasm_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-source-v3:buildcache,ignore-error=true",
@@ -293,9 +293,12 @@ target "rust-ecosystem-deterministic" {
 
 target "rust-kani" {
   context    = "."
-  dockerfile = rust_base_dockerfile
+  dockerfile = "nook-app/nook-platform/docker/rust/ecosystem/kani/Dockerfile"
   target     = "rust-kani"
   platforms  = ["linux/amd64"]
+  contexts = {
+    rust-base = "target:rust-base"
+  }
   cache-from = rust_ecosystem_kani_cache_from
   cache-to   = rust_ecosystem_kani_cache_to
   output     = ["type=cacheonly"]

@@ -163,6 +163,7 @@ impl RepositoryFixture {
             "bake-cache",
             "kubernetes-cache",
             "pr-cache",
+            "compiler-cache",
             "webhook-ingress",
         ];
         for domain in expected_domains {

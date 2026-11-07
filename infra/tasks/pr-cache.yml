@@ -39,7 +39,7 @@ tasks:
           exit 1
         fi
         dylint_dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[[^]]*dylint-deps 3\/3\] RUN .*/\1/p' "$output/warm-checks.log" | head -n 1)"
-        dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[[^]]*chef-deps 2\/2\] RUN .*/\1/p' "$output/warm-checks.log" | head -n 1)"
+        dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[[^]]*cargo-deps 2\/2\] RUN .*/\1/p' "$output/warm-checks.log" | head -n 1)"
         test -n "$dylint_dependency_vertex"
         test -n "$dependency_vertex"
         grep -qx "$dylint_dependency_vertex CACHED" "$output/warm-checks.log"
@@ -48,8 +48,8 @@ tasks:
           echo 'Warm verification unexpectedly rebuilt Dylint product dependencies' >&2
           exit 1
         fi
-        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-chef-wasm-release$' "$output/warm-checks.log"; then
-          echo 'Warm verification unexpectedly recooked WASM dependencies' >&2
+        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-wasm-release$' "$output/warm-checks.log"; then
+          echo 'Warm verification unexpectedly rebuilt WASM dependencies' >&2
           exit 1
         fi
         grep -q ' CACHED' "$output/warm-checks.log"

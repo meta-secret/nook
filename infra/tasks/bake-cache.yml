@@ -342,8 +342,8 @@ tasks:
           /llvm-cov clean --workspace/ { coverage_clean = NR }; /llvm-cov show-env --sh\)/ { coverage_env = NR }
           /llvm-cov show-env --sh --target wasm32-unknown-unknown/ { browser_coverage_env = NR }
           /test --release -p nook-wasm --no-run/ { coverage_deps = NR }; /test --target wasm32-unknown-unknown --release -p nook-wasm .* --no-run/ { browser_coverage_deps = NR }
-          /^FROM builder-wasm-node-deps AS builder-wasm-handoff$/ { source_join = NR }
-          /nook-sccache-report wasm-node-test-and-coverage/ { coverage_execution = NR }
+          /^FROM builder-wasm-test-base AS builder-wasm-handoff$/ { source_join = NR }
+          /nook-sccache-report --finish wasm-node-test-and-coverage/ { coverage_execution = NR }
           END {
             exit !(node_deps < os_tools && os_tools < browser_tools &&
               browser_tools < coverage_clean && coverage_clean < coverage_env && coverage_env < coverage_deps && coverage_deps < browser_coverage_env &&
@@ -361,7 +361,7 @@ tasks:
           /COPY nook-app\/nook-platform\/dylint\/nook-domain-api\/ dylint\/nook-domain-api\// {
             lint_copy = NR
           }
-          /nook-sccache-report rust-dylint-self-test/ { self_test = NR }
+          /nook-sccache-report --finish rust-dylint-self-test/ { self_test = NR }
           /COPY nook-app\/nook-platform\/ nook-app\/nook-platform\// && !product_copy {
             product_copy = NR
           }

@@ -6,6 +6,7 @@ import {
   BuildkitCacheExportByteMeasurementStatus,
   BuildkitCacheExportByteUnavailableReason,
 } from "./buildkit-cache-export-telemetry.mjs";
+import { SccacheStorageCounter } from "./cache-telemetry-contracts.mjs";
 
 /** Owns admission of cache telemetry received from workflow artifacts. */
 export class CacheTelemetryValidator {
@@ -115,8 +116,8 @@ export class CacheTelemetryValidator {
    */
   validate(record, expected = {}) {
     if (!this.isRecord(record)) throw new Error("telemetry record is required");
-    if (record.schema_version !== 2)
-      throw new Error("telemetry schema_version must be 2");
+    if (record.schema_version !== 3)
+      throw new Error("telemetry schema_version must be 3");
     const github = record.github;
     if (!this.isRecord(github))
       throw new Error("telemetry github context is required");
@@ -221,6 +222,7 @@ export class CacheTelemetryValidator {
       "remote_writes",
       "compile_failures",
     ]);
+    this.validateSccacheStorageCounters(candidate);
     this.validateOptionalRate(candidate, "hit_rate_percent", "sccache");
     if (candidate.measurement !== "sum_of_zero_based_run_snapshots")
       throw new Error("telemetry sccache.measurement is invalid");
@@ -233,6 +235,15 @@ export class CacheTelemetryValidator {
       throw new Error("telemetry sccache.fallback is invalid");
     if (!Array.isArray(candidate.snapshots))
       throw new Error("telemetry sccache.snapshots must be an array");
+  }
+
+  /** @param {Record<string, unknown>} candidate */
+  validateSccacheStorageCounters(candidate) {
+    this.validateCounters(
+      "sccache storage",
+      candidate,
+      Object.values(SccacheStorageCounter),
+    );
   }
 
   /** @param {unknown} candidate */

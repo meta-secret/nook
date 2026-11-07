@@ -139,6 +139,7 @@ impl RustEcosystemFixture {
             "nook-app/nook-platform/docker/rust/base/Dockerfile",
             "nook-app/nook-platform/docker/rust/ecosystem/policy/Dockerfile",
             "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile",
+            "nook-app/nook-platform/docker/rust/ecosystem/kani/Dockerfile",
         ]
         .into_iter()
         .map(|path| root.read(path))
@@ -560,6 +561,7 @@ fn rust_ecosystem_dockerfiles_keep_split_toolchain_ownership() -> anyhow::Result
         "CARGO_AUDIT_SHA256=",
         "CARGO_FUZZ_SHA256=",
         "cargo install cargo-dylint",
+        "KANI_VERSION=",
     ] {
         assert!(
             !fixture.rust_base_dockerfile.contains(forbidden),
@@ -732,7 +734,10 @@ fn rust_ecosystem_build_cache_lineage_stays_owned_by_each_leaf() -> anyhow::Resu
                 .rust_bake
                 .matches("rust-base = \"target:rust-base\"")
                 .count()
-                == 4
+                == 5
+            && fixture.rust_bake.contains(
+                "nook-app/nook-platform/docker/rust/ecosystem/kani/Dockerfile",
+            )
             && fixture.rust_bake.contains("target \"rust-base-publish\"")
             && fixture.docker_tasks.contains("rust-base-publish")
             && !fixture.docker_tasks.contains("cache-from=\"")

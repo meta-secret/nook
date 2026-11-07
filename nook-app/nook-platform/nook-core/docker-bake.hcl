@@ -1,4 +1,4 @@
-// nook-core build targets: cargo-chef dependency cache + native verify warm-up.
+// nook-core build targets: plain Cargo dependency layers + native verify warm-up.
 // Native dependency warm-up on top of builder-wasm-deps (nextest/clippy/coverage graphs).
 // The selected builder caches this linux/amd64 lineage locally; hosted CI also restores the Rust Zot refs.
 
@@ -28,7 +28,7 @@ target "builder-core-deps-input-publish" {
   inherits = ["builder-core-deps-restore"]
 }
 
-// Shared platform source overlay on cooked deps. Product leaves resolve this
+// Shared platform source overlay on warmed deps. Product leaves resolve this
 // internal stage from the same Dockerfile, preserving one stable cache lineage.
 target "rust-platform" {
   inherits   = ["_sccache"]
