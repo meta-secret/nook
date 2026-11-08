@@ -101,8 +101,8 @@ export function firstRunKeyDiagram({
 
 /** Which sync provider the diagram's provider box stands for. */
 export enum FirstRunSyncDiagramProvider {
-  /** None is chosen yet: the box is "Sync provider", drawn with the marks of
-   * the cloud storage it can be, so it reads as one. */
+  /** None is chosen yet: the box is captioned "Your cloud storage" and drawn
+   * with the marks of the services it can be. */
   Any = "any",
   GoogleDrive = "google-drive",
   ICloud = "icloud",
@@ -118,7 +118,7 @@ function providerBox(
     case FirstRunSyncDiagramProvider.Any:
       return {
         icons: [GoogleDriveMark, ICloudMark],
-        label: vault.t(I18N_KEYS.JoinNodeProvider),
+        label: vault.t(I18N_KEYS.FirstRunSyncDiagramCloud),
       };
     case FirstRunSyncDiagramProvider.GoogleDrive:
       return {

@@ -46,14 +46,14 @@ describe('first-run diagrams', () => {
     expect(nodes.map((node) => node.label)).toContain('Google Drive')
   })
 
-  test('before a provider is chosen, its box shows the cloud storage it can be', () => {
+  test('before a provider is chosen, its box is your cloud storage, drawn with the services it can be', () => {
     const request: FirstRunSyncDiagramRequest = {
       vault: VaultStateTestFixture.create(),
       provider: FirstRunSyncDiagramProvider.Any,
     }
     const provider = firstRunSyncDiagram(request).nodes[1]
 
-    expect(provider?.label).toBe('Sync provider')
+    expect(provider?.label).toBe('Your cloud storage')
     expect(provider?.icons).toEqual([GoogleDriveMark, ICloudMark])
   })
 

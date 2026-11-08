@@ -100,11 +100,9 @@ A line of text stays only for a requirement, a consequence, or a promise.
 - **Passkey** ("One passkey opens it all"): the diagram says
   what it is for. A new passkey, or one made for Nook before, makes this
   browser's key. Back returns to Start.
-- **Sync provider**: before sign-in, one line says it is cloud storage the
-  person already uses, like Google Drive or iCloud, that carries the encrypted
-  vaults to their other devices; a small diagram (This device → Sync provider
-  ← Your other devices, the provider box drawn with the Google Drive and
-  iCloud marks) shows it. Google
+- **Sync provider**: before sign-in, no line of text: a small diagram (This
+  device —syncs→ Your cloud storage ←syncs— Your other devices, the cloud box
+  drawn with the Google Drive and iCloud marks) says what it is for. Google
   Drive signs in, and Nook lists the identities in its Nook folder. Each card has the one action Rust decides from this
   browser's key ([setup action](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md#setup-action)):
   - **Continue** when the key is a member: the identity is added here and

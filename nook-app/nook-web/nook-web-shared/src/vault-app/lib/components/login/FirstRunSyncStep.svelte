@@ -261,11 +261,11 @@ its location lists, its keyrings show the same way.
         connected ? I18N_KEYS.FirstRunSyncChooseTitle : I18N_KEYS.FirstRunSyncTitle,
       )}
     </h1>
-    <p class="text-sm text-pretty text-muted-foreground">
-      {vault.t(
-        connected ? I18N_KEYS.FirstRunSyncChooseBody : I18N_KEYS.FirstRunSyncBody,
-      )}
-    </p>
+    {#if connected}
+      <p class="text-sm text-pretty text-muted-foreground">
+        {vault.t(I18N_KEYS.FirstRunSyncChooseBody)}
+      </p>
+    {/if}
   </div>
 
   {#if !connected}
