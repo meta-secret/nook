@@ -2337,7 +2337,7 @@
     "diagram_unlocks": "unlocks",
     "diagram_opens": "opens",
     "sync_title": "Add a sync provider",
-    "sync_body": "Your encrypted vaults reach your other devices through it.",
+    "sync_body": "Cloud storage you already use, like Google Drive or iCloud. It carries your encrypted vaults to your other devices.",
     "sync_diagram_label": "How a sync provider reaches your other devices",
     "sync_diagram_devices": "Your other devices",
     "sync_diagram_syncs": "syncs",

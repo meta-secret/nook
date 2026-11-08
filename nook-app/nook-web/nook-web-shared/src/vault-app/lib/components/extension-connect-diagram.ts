@@ -23,14 +23,14 @@ export function extensionConnectDiagram({
     testId: "extension-connect-diagram",
     nodes: [
       {
-        icon: Puzzle,
+        icons: [Puzzle],
         label: vault.t(I18N_KEYS.ExtensionConsentDiagramExtension),
         testId: "extension-connect-diagram-extension",
         current: true,
         arrow: { kind: FirstRunDiagramArrowKind.Start },
       },
       {
-        icon: KeyRound,
+        icons: [KeyRound],
         label: keyring,
         testId: "extension-connect-diagram-keyring",
         current: false,
@@ -40,7 +40,7 @@ export function extensionConnectDiagram({
         },
       },
       {
-        icon: Vault,
+        icons: [Vault],
         label: vault.t(I18N_KEYS.ExtensionConsentDiagramVaults),
         testId: "extension-connect-diagram-vaults",
         current: false,

@@ -1,6 +1,7 @@
 <!--
 A setup step drawn small: a row of boxes joined by arrows, the one the step
 is about filled in. A word on each arrow says what one box does to the next.
+A box standing for a kind of service shows the marks of those services.
 The steps say what they are for with it instead of a paragraph.
 -->
 <script lang="ts">
@@ -54,7 +55,11 @@ The steps say what they are for with it instead of a paragraph.
       data-testid={box.testId}
       {...box.current ? { 'aria-current': 'step' } : {}}
     >
-      <box.icon class="size-5" aria-hidden="true" />
+      <span class="flex items-center gap-1" aria-hidden="true">
+        {#each box.icons as Icon, index (index)}
+          <Icon class={box.icons.length > 1 ? 'size-4' : 'size-5'} />
+        {/each}
+      </span>
     </span>
     <span
       class="w-24 shrink-0 text-center text-[11px] leading-tight {box.current

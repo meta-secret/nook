@@ -1,6 +1,5 @@
 import type { Component } from "svelte";
 import {
-  Cloud,
   Fingerprint,
   Laptop,
   KeyRound,
@@ -9,6 +8,8 @@ import {
 } from "@lucide/svelte";
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
+import GoogleDriveMark from "../provider-marks/GoogleDriveMark.svelte";
+import ICloudMark from "../provider-marks/ICloudMark.svelte";
 
 /** How the arrow leading up to a box points. */
 export enum FirstRunDiagramArrowKind {
@@ -28,9 +29,14 @@ export type FirstRunDiagramArrow =
   | { readonly kind: FirstRunDiagramArrowKind.Forward; readonly label: string }
   | { readonly kind: FirstRunDiagramArrowKind.Back; readonly label: string };
 
+/** An icon or service mark the diagram sizes. */
+export type FirstRunDiagramIcon = Component<{ class: string }>;
+
 /** One box of a setup step's diagram. */
 export type FirstRunDiagramNode = {
-  readonly icon: Component;
+  /** What the box shows: one icon, or the marks of the services it stands
+   * for, side by side. */
+  readonly icons: readonly [FirstRunDiagramIcon, ...FirstRunDiagramIcon[]];
   readonly label: string;
   readonly testId: string;
   /** The box this step is about; it is filled in. */
@@ -63,14 +69,14 @@ export function firstRunKeyDiagram({
     testId: "first-run-key-diagram",
     nodes: [
       {
-        icon: Fingerprint,
+        icons: [Fingerprint],
         label: vault.t(I18N_KEYS.FirstRunDiagramPasskey),
         testId: "first-run-diagram-passkey",
         current: true,
         arrow: { kind: FirstRunDiagramArrowKind.Start },
       },
       {
-        icon: KeyRound,
+        icons: [KeyRound],
         label: identity || vault.t(I18N_KEYS.FirstRunDiagramIdentity),
         testId: "first-run-diagram-identity",
         current: false,
@@ -80,7 +86,7 @@ export function firstRunKeyDiagram({
         },
       },
       {
-        icon: Vault,
+        icons: [Vault],
         label: vault.t(I18N_KEYS.FirstRunDiagramVaults),
         testId: "first-run-diagram-vaults",
         current: false,
@@ -93,10 +99,43 @@ export function firstRunKeyDiagram({
   };
 }
 
+/** Which sync provider the diagram's provider box stands for. */
+export enum FirstRunSyncDiagramProvider {
+  /** None is chosen yet: the box is "Sync provider", drawn with the marks of
+   * the cloud storage it can be, so it reads as one. */
+  Any = "any",
+  GoogleDrive = "google-drive",
+  ICloud = "icloud",
+}
+
+type ProviderBox = Pick<FirstRunDiagramNode, "icons" | "label">;
+
+function providerBox(
+  vault: VaultState,
+  provider: FirstRunSyncDiagramProvider,
+): ProviderBox {
+  switch (provider) {
+    case FirstRunSyncDiagramProvider.Any:
+      return {
+        icons: [GoogleDriveMark, ICloudMark],
+        label: vault.t(I18N_KEYS.JoinNodeProvider),
+      };
+    case FirstRunSyncDiagramProvider.GoogleDrive:
+      return {
+        icons: [GoogleDriveMark],
+        label: vault.t(I18N_KEYS.ProviderPickerGoogleDrive),
+      };
+    case FirstRunSyncDiagramProvider.ICloud:
+      return {
+        icons: [ICloudMark],
+        label: vault.t(I18N_KEYS.ProviderPickerIcloud),
+      };
+  }
+}
+
 export type FirstRunSyncDiagramRequest = {
   readonly vault: VaultState;
-  /** The provider's box: its name, or "Sync provider" before one is chosen. */
-  readonly provider: string;
+  readonly provider: FirstRunSyncDiagramProvider;
 };
 
 /** This device and its other devices each sync with the provider, which is
@@ -105,20 +144,21 @@ export function firstRunSyncDiagram({
   vault,
   provider,
 }: FirstRunSyncDiagramRequest): FirstRunDiagramView {
+  const box = providerBox(vault, provider);
   return {
     label: vault.t(I18N_KEYS.FirstRunSyncDiagramLabel),
     testId: "first-run-sync-diagram",
     nodes: [
       {
-        icon: MonitorSmartphone,
+        icons: [MonitorSmartphone],
         label: vault.t(I18N_KEYS.JoinThisDevice),
         testId: "first-run-sync-diagram-here",
         current: false,
         arrow: { kind: FirstRunDiagramArrowKind.Start },
       },
       {
-        icon: Cloud,
-        label: provider,
+        icons: box.icons,
+        label: box.label,
         testId: "first-run-sync-diagram-provider",
         current: true,
         arrow: {
@@ -127,7 +167,7 @@ export function firstRunSyncDiagram({
         },
       },
       {
-        icon: Laptop,
+        icons: [Laptop],
         label: vault.t(I18N_KEYS.FirstRunSyncDiagramDevices),
         testId: "first-run-sync-diagram-devices",
         current: false,
@@ -150,14 +190,13 @@ export function firstRunRecoveryDiagram(
     testId: "first-run-recovery-diagram",
     nodes: [
       {
-        icon: Cloud,
-        label: vault.t(I18N_KEYS.JoinNodeProvider),
+        ...providerBox(vault, FirstRunSyncDiagramProvider.Any),
         testId: "first-run-recovery-diagram-provider",
         current: true,
         arrow: { kind: FirstRunDiagramArrowKind.Start },
       },
       {
-        icon: Fingerprint,
+        icons: [Fingerprint],
         label: vault.t(I18N_KEYS.FirstRunDiagramPasskey),
         testId: "first-run-recovery-diagram-passkey",
         current: false,
@@ -167,7 +206,7 @@ export function firstRunRecoveryDiagram(
         },
       },
       {
-        icon: Vault,
+        icons: [Vault],
         label: vault.t(I18N_KEYS.FirstRunDiagramVaults),
         testId: "first-run-recovery-diagram-vaults",
         current: false,
