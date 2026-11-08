@@ -6,7 +6,13 @@ join) sit between the hero and the cards.
 -->
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte'
-  import { FolderKey, Plus, RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import {
+    CloudDownload,
+    FolderKey,
+    Plus,
+    RefreshCw,
+    ShieldCheck,
+  } from '@lucide/svelte'
   import { VaultWorkspaceActions } from '$lib/vault/ui'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
@@ -55,6 +61,7 @@ join) sit between the hero and the cards.
     onUnlockVault,
     onManageVault,
     onNewIdentity,
+    onRecoverIdentity,
     onUseIdentity,
     onCardsShown = () => {},
     onClosePanels = () => {},
@@ -88,6 +95,9 @@ join) sit between the hero and the cards.
     /** One of a vault's own pages, from its panel beside the card. */
     onManageVault?: (target: IdentitySectionTarget) => void
     onNewIdentity: () => void
+    /** Bring in a keyring kept on a sync provider: recover it with its
+     * passkey, or ask one of its devices to let this browser join. */
+    onRecoverIdentity: () => void
     onUseIdentity: (target: IdentityVaultTarget) => void
     /** Whether identity cards are on screen; the login screen then leaves
      * vault access to them instead of its own storage sheet. */
@@ -448,6 +458,22 @@ join) sit between the hero and the cards.
           <ShieldCheck class="size-4" aria-hidden="true" />
           <span class="hidden sm:inline"
             >{vault.t(I18N_KEYS.AccessCheckOpen)}</span
+          >
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          class="shrink-0 text-muted-foreground"
+          data-testid="identity-recover"
+          aria-label={vault.t(I18N_KEYS.WorkspaceRecoverIdentityDescription)}
+          title={vault.t(I18N_KEYS.WorkspaceRecoverIdentityDescription)}
+          disabled={busy}
+          onclick={onRecoverIdentity}
+        >
+          <CloudDownload class="size-4" aria-hidden="true" />
+          <span class="hidden sm:inline"
+            >{vault.t(I18N_KEYS.WorkspaceRecoverIdentityTitle)}</span
           >
         </Button>
         <Button

@@ -172,8 +172,9 @@ test.describe('sync conflict resolution', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    await page.getByTestId('identity-new-vault').click()
-    await page.getByTestId('login-import-vault-btn').click()
+    // Keyrings, not vaults, come from a sync provider: the keyrings page
+    // recovers one.
+    await page.getByTestId('identity-recover').click()
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
     await page.getByTestId('login-back-to-get-started').click()
     await expect(page.getByTestId('identity-vault-row').first()).toBeVisible()

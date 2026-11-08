@@ -266,7 +266,9 @@
     newVaultOpen = true
   }
 
-  function importExistingVault(): void {
+  /** Recover a keyring kept on a sync provider: the restore page lists the
+   * provider's keyrings beside the cards. */
+  function recoverKeyring(): void {
     newVaultOpen = false
     vault.beginExistingVaultOpen()
     vault.vaultImportOpen = true
@@ -603,7 +605,6 @@
     {isVerifying}
     {isInitializing}
     onCreateVault={onCreateDeviceVault}
-    onImportVault={importExistingVault}
     onClose={() => (newVaultOpen = false)}
   />
 {/snippet}
@@ -845,6 +846,7 @@
     onUnlock={() => unlockIdentity()}
     onLock={lockIdentity}
     onNewIdentity={newIdentity}
+    onRecoverIdentity={recoverKeyring}
     onUseIdentity={(target: IdentityVaultTarget) =>
       void identitySwitch.use(target.identityId)}
     onCardsShown={(shown: boolean) => (identityCardsShown = shown)}

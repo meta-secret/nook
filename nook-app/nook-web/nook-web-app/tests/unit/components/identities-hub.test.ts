@@ -33,6 +33,7 @@ describe('identities hub', () => {
       vault,
       onOpenVault: vi.fn(),
       onNewIdentity: vi.fn(),
+      onRecoverIdentity: vi.fn(),
       onUseIdentity: vi.fn(),
     } satisfies ComponentProps<typeof IdentitiesHub>
     vi.useFakeTimers()
