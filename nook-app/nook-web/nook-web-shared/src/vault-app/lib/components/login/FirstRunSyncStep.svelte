@@ -10,7 +10,13 @@ its location lists, its keyrings show the same way.
 <script lang="ts">
   import { tick, untrack } from 'svelte'
   import { ok, type Result } from 'neverthrow'
-  import { Archive, ArrowRight, Plus, RefreshCw } from '@lucide/svelte'
+  import {
+    Archive,
+    ArrowRight,
+    MonitorSmartphone,
+    Plus,
+    RefreshCw,
+  } from '@lucide/svelte'
   import GoogleDriveMark from '$lib/components/provider-marks/GoogleDriveMark.svelte'
   import {
     provider_draft_label,
@@ -451,11 +457,14 @@ its location lists, its keyrings show the same way.
   <div class="flex justify-center">
     <Button
       type="button"
+      class="min-w-44 bg-accent/50 text-foreground hover:bg-accent"
       variant="ghost"
+      size="sm"
       data-testid="first-run-sync-skip"
       disabled={busy}
       onclick={() => actions.nameNew(FirstRunPlace.ThisBrowser)}
     >
+      <MonitorSmartphone class="size-4" aria-hidden="true" />
       {vault.t(I18N_KEYS.FirstRunSyncSkip)}
     </Button>
   </div>
