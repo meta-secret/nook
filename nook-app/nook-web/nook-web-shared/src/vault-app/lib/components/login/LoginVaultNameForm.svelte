@@ -2,6 +2,7 @@
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { RefreshCw, ShieldCheck } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
+  import type { Snippet } from 'svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import { VaultNameHint } from './login-vault-name-form'
 
@@ -15,6 +16,7 @@
     testId = 'login-create-device-vault-btn',
     hint = VaultNameHint.Shown,
     onCreate,
+    beside,
   }: {
     vault: VaultState
     isVerifying: boolean
@@ -23,6 +25,9 @@
     testId?: string
     hint?: VaultNameHint
     onCreate: (label: string) => void | Promise<void>
+    /** Another answer to the same question, beside the submit button: a
+     * quieter control such as Not now. */
+    beside?: Snippet
   } = $props()
 
   let vaultName = $state('')
@@ -68,22 +73,25 @@
     {/if}
   </div>
 
-  <Button
-    type="button"
-    class="nk-go w-full sm:w-auto sm:min-w-[180px]"
-    data-testid={testId}
-    disabled={isBusy || !canSubmit}
-    onclick={() => void handleSubmit()}
-  >
-    {#if isVerifying}
-      <RefreshCw class="size-4 animate-spin" />
-      {vault.t(I18N_KEYS.LoginCreatingVault)}
-    {:else if isInitializing}
-      <RefreshCw class="size-4 animate-spin" />
-      {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
-    {:else}
-      <ShieldCheck class="size-4" />
-      {submitLabel}
-    {/if}
-  </Button>
+  <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+    <Button
+      type="button"
+      class="nk-go w-full sm:w-auto sm:min-w-[180px]"
+      data-testid={testId}
+      disabled={isBusy || !canSubmit}
+      onclick={() => void handleSubmit()}
+    >
+      {#if isVerifying}
+        <RefreshCw class="size-4 animate-spin" />
+        {vault.t(I18N_KEYS.LoginCreatingVault)}
+      {:else if isInitializing}
+        <RefreshCw class="size-4 animate-spin" />
+        {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
+      {:else}
+        <ShieldCheck class="size-4" />
+        {submitLabel}
+      {/if}
+    </Button>
+    {@render beside?.()}
+  </div>
 </div>
