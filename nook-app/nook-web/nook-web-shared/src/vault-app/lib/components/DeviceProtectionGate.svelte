@@ -246,9 +246,8 @@
             <div class="h-px flex-1 bg-border"></div>
           </div>
           <Button
-            class="mx-auto flex text-foreground/80 hover:bg-accent/50 hover:text-foreground"
-            variant="ghost"
-            size="sm"
+            class="mx-auto flex min-w-48"
+            variant="outline"
             disabled={vault.isVerifying}
             data-testid="device-protection-create-new-choice"
             onclick={() => {
@@ -400,9 +399,8 @@
               <div class="h-px flex-1 bg-border"></div>
             </div>
             <Button
-              class="mx-auto flex text-foreground/80 hover:bg-accent/50 hover:text-foreground"
-              variant="ghost"
-              size="sm"
+              class="mx-auto flex min-w-48"
+              variant="outline"
               disabled={vault.isVerifying}
               data-testid="device-protection-use-existing-choice"
               onclick={() =>
