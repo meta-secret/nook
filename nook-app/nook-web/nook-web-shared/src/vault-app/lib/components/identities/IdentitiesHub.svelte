@@ -57,6 +57,8 @@ join) sit between the hero and the cards.
     onClosePanels = () => {},
     currentHealth,
     onManageSection,
+    onInstallExtension,
+    onOpenExtensionPanel,
     overview,
     overviewOpen = false,
     onLock = () => {},
@@ -93,11 +95,16 @@ join) sit between the hero and the cards.
      * when another panel opens there. */
     onClosePanels?: () => void
     /** How the unlocked identity is protected; its card offers the
-     * checklist until both protections are done, and a step opens its page
+     * checklist until every row is done, and a step opens its page
      * through `onManageSection`. */
     currentHealth?: NookIdentityHealth
     /** Open one of the current identity's pages from Manage on its card. */
     onManageSection?: (target: IdentitySectionTarget) => void
+    /** Open the browser extension's install page: a checklist step. */
+    onInstallExtension?: () => void
+    /** Open the installed extension's side panel to connect it: a
+     * checklist step. */
+    onOpenExtensionPanel?: () => void
     /** The current identity's overview, shown beside its card. */
     overview?: Snippet
     /** The current identity's overview is open. */
@@ -491,12 +498,23 @@ join) sit between the hero and the cards.
                   health: currentHealth,
                   onProtect: (action: NookIdentityNextStep) => {
                     const page = protectionStepPage(action)
-                    if (page.kind === ProtectionStepPageKind.Done) return
-                    const target: IdentitySectionTarget = {
-                      ...targetFor(card.identityId),
-                      section: page.section,
+                    switch (page.kind) {
+                      case ProtectionStepPageKind.Done:
+                        return
+                      case ProtectionStepPageKind.InstallExtension:
+                        onInstallExtension?.()
+                        return
+                      case ProtectionStepPageKind.ExtensionPanel:
+                        onOpenExtensionPanel?.()
+                        return
+                      case ProtectionStepPageKind.Page: {
+                        const target: IdentitySectionTarget = {
+                          ...targetFor(card.identityId),
+                          section: page.section,
+                        }
+                        onManageSection(target)
+                      }
                     }
-                    onManageSection(target)
                   },
                 }
               : {}}

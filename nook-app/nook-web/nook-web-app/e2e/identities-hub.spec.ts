@@ -114,7 +114,7 @@ test.describe('identities hub', () => {
     await expect(page.getByTestId('login-gate')).toBeVisible()
     await expect(
       current.getByTestId('identity-protection-toggle'),
-    ).toContainText('0 of 2 done')
+    ).toContainText('0 of 3 done')
     await current.getByTestId('identity-protection-toggle').click()
     await expect(page.getByTestId('identity-protection-risk')).toContainText(
       'Only this browser has your vaults',

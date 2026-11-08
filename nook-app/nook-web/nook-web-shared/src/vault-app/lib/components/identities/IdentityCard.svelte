@@ -132,10 +132,10 @@ panel sits inside the card, which then spans the full row.
   const managesHere = $derived(Boolean(onManageSection) && !preview && live)
   const addsVault = $derived(canAddVault && live)
   let protectionOpen = $state(false)
-  /** The checklist row shows while the unlocked identity is at risk, and
-   * leaves once both protections are done. */
+  /** The checklist row shows while the unlocked identity has a step left,
+   * and leaves once every row is done, the browser extension's included. */
   const protection = $derived(
-    live && !preview && health && onProtect && !health.isProtected
+    live && !preview && health && onProtect && !health.isComplete
       ? health
       : false,
   )

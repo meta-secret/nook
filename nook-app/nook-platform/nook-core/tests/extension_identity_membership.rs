@@ -9,7 +9,8 @@
 //! without a sync provider.
 
 use nook_core::{
-    AdoptedIdentityLabel, AppKey, EventId, IdentityConnectionKey, IdentityConnectionKeyRequest,
+    AdoptedIdentityLabel, BrowserExtensionInstallation, BrowserExtensionMembership,
+    IdentityExtensionStep, IdentityProtectionTaskState, AppKey, EventId, IdentityConnectionKey, IdentityConnectionKeyRequest,
     IdentityControlLog, IdentityControlOperation, IdentityControlSnapshot,
     IdentityControlSnapshotRequest, IdentityControlStanding, IdentityControlState,
     IdentityCreation, IdentityDirectory, IdentityEvent, IdentityEventInsertStatus,
@@ -365,9 +366,35 @@ fn the_extension_runs_in_the_web_apps_browser_so_it_adds_no_device() -> anyhow::
         device_join_provider_count: 1_usize.into(),
         device_count: snapshot.device_count.into(),
         stored_item_count: 3_usize.into(),
+        extension_installation: BrowserExtensionInstallation::Installed,
+        extension_membership: snapshot.extension_on_this_device,
     });
     assert_eq!(health.stage, IdentityHealthStage::CopyKept);
     assert_eq!(health.next_step, IdentityNextStep::AddDevice);
+    // The joined extension is the one checklist row already done.
+    assert!(matches!(
+        health.checklist.extension,
+        IdentityExtensionStep::Offered(step) if step.state == IdentityProtectionTaskState::Done
+    ));
+    Ok(())
+}
+
+#[test]
+fn the_web_app_sees_when_its_browser_extension_has_joined() -> anyhow::Result<()> {
+    let mut family = WebIdentity::found()?;
+    assert_eq!(
+        family.snapshot_for(&family.founder)?.extension_on_this_device,
+        BrowserExtensionMembership::NotJoined
+    );
+
+    let mut extension = Extension::new();
+    let key = extension.protect()?;
+    family.add(&key)?;
+
+    assert_eq!(
+        family.snapshot_for(&family.founder)?.extension_on_this_device,
+        BrowserExtensionMembership::Joined
+    );
     Ok(())
 }
 

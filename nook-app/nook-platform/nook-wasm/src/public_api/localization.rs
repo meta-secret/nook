@@ -1,7 +1,8 @@
 use crate::types::NookAppLocale;
 use crate::{
     NookAuthenticationOutcomeObservation, NookAuthenticationOutcomeVerdict,
-    NookAuthenticationPageObservations, NookAuthenticationWorkflowMatch, NookIdentityHealth,
+    NookAuthenticationPageObservations, NookAuthenticationWorkflowMatch,
+    NookBrowserExtensionInstallation, NookBrowserExtensionMembership, NookIdentityHealth,
 };
 use crate::{TypedInput, TypedOutput};
 use nook_core::AuthenticationWorkflowMatch;
@@ -96,12 +97,16 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
     device_join_provider_count: u32,
     device_count: u32,
     stored_item_count: u32,
+    extension_installation: NookBrowserExtensionInstallation,
+    extension_membership: NookBrowserExtensionMembership,
 ) -> NookIdentityHealth {
     NookIdentityHealth::from_core(IdentityHealth::assess(IdentityHealthAssessment {
         copy_provider_count: (copy_provider_count as usize).into(),
         device_join_provider_count: (device_join_provider_count as usize).into(),
         device_count: (device_count as usize).into(),
         stored_item_count: (stored_item_count as usize).into(),
+        extension_installation: extension_installation.to_core(),
+        extension_membership: extension_membership.to_core(),
     }))
 }
 

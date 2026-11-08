@@ -1628,12 +1628,20 @@ pub const IDENTITY_PROTECTION_ACTION_ADD_ANOTHER_SYNC: &str =
 pub const IDENTITY_PROTECTION_ACTION_ADD_CLOUD: &str = "identity_protection.action_add_cloud";
 pub const IDENTITY_PROTECTION_ACTION_ADD_DEVICE: &str = "identity_protection.action_add_device";
 pub const IDENTITY_PROTECTION_ACTION_ADD_SYNC: &str = "identity_protection.action_add_sync";
+pub const IDENTITY_PROTECTION_ACTION_CONNECT_EXTENSION: &str =
+    "identity_protection.action_connect_extension";
+pub const IDENTITY_PROTECTION_ACTION_INSTALL_EXTENSION: &str =
+    "identity_protection.action_install_extension";
 pub const IDENTITY_PROTECTION_COPY_TITLE: &str = "identity_protection.copy_title";
 pub const IDENTITY_PROTECTION_COPY_WHY: &str = "identity_protection.copy_why";
 pub const IDENTITY_PROTECTION_DEVICE_BLOCKED: &str = "identity_protection.device_blocked";
 pub const IDENTITY_PROTECTION_DEVICE_TITLE: &str = "identity_protection.device_title";
 pub const IDENTITY_PROTECTION_DEVICE_WHY: &str = "identity_protection.device_why";
 pub const IDENTITY_PROTECTION_DONE: &str = "identity_protection.done";
+pub const IDENTITY_PROTECTION_EXTENSION_CONNECT_WHY: &str =
+    "identity_protection.extension_connect_why";
+pub const IDENTITY_PROTECTION_EXTENSION_TITLE: &str = "identity_protection.extension_title";
+pub const IDENTITY_PROTECTION_EXTENSION_WHY: &str = "identity_protection.extension_why";
 pub const IDENTITY_PROTECTION_PANEL_TITLE: &str = "identity_protection.panel_title";
 pub const IDENTITY_PROTECTION_RISK_LOCAL: &str = "identity_protection.risk_local";
 pub const IDENTITY_PROTECTION_RISK_ONE_DEVICE: &str = "identity_protection.risk_one_device";

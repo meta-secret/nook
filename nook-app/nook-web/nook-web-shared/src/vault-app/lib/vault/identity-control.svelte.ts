@@ -6,6 +6,7 @@ import {
 } from "$lib/runtime/storage-failure";
 import {
   generate_password,
+  NookBrowserExtensionMembership,
   type AuthProvidersSnapshot,
   type IdentityControlSnapshot,
   type IdentityVaultView,
@@ -147,6 +148,19 @@ export class IdentityControlModel {
   deviceCount(vaultRosterCount: number): number {
     const snapshot = this.snapshot;
     return snapshot === false ? vaultRosterCount : snapshot.deviceCount;
+  }
+
+  /** Whether a browser extension on this device has joined the identity,
+   * as nook-core projects it; none has before the log is projected. */
+  extensionMembership(): NookBrowserExtensionMembership {
+    const snapshot = this.snapshot;
+    if (snapshot === false) return NookBrowserExtensionMembership.NotJoined;
+    switch (snapshot.extensionOnThisDevice) {
+      case "joined":
+        return NookBrowserExtensionMembership.Joined;
+      case "notJoined":
+        return NookBrowserExtensionMembership.NotJoined;
+    }
   }
 
   newPassphrase(): string {

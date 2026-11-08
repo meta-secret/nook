@@ -7,6 +7,14 @@
 //! The assessment names the stage reached, the single next step, how firmly
 //! to ask for it, and the checklist of both protections with what each still
 //! needs.
+//!
+//! After the protections, the checklist offers the browser extension where
+//! the host app can run it: it fills passwords from the identity's vaults on
+//! websites. It protects nothing, so it never changes the stage, the next
+//! step, or the nudge.
+
+use serde::{Deserialize, Serialize};
+use tsify::Tsify;
 
 /// How far an identity is protected against loss.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,6 +36,10 @@ pub enum IdentityNextStep {
     AddCloudProvider,
     /// Let a second device open the identity.
     AddDevice,
+    /// Install the browser extension in this browser.
+    InstallExtension,
+    /// Let the installed browser extension join the identity.
+    ConnectExtension,
     /// Nothing is missing.
     Done,
 }
@@ -43,13 +55,17 @@ pub enum IdentityNudge {
     Urge,
 }
 
-/// One loss an identity is protected against, in the order they are built.
+/// One task of the identity's checklist, in the order they are offered: the
+/// two losses it is protected against, then the browser extension.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IdentityProtectionTask {
     /// A sync provider keeps a copy: clearing this browser loses nothing.
     CopyOutsideBrowser,
     /// Another device opens the identity: losing this one loses nothing.
     SecondDevice,
+    /// The browser extension joins the identity: Nook fills passwords from
+    /// its vaults on websites.
+    BrowserExtension,
 }
 
 /// Where one protection task stands.
@@ -74,8 +90,51 @@ pub struct IdentityProtectionStep {
     pub action: IdentityNextStep,
 }
 
-/// Every protection task, in order, finished ones included.
-pub type IdentityProtectionChecklist = [IdentityProtectionStep; 2];
+/// Whether the host app offers the browser extension in this browser, and
+/// whether it is installed there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BrowserExtensionInstallation {
+    /// The app has no extension, or this browser cannot run it.
+    NotOffered,
+    NotInstalled,
+    Installed,
+}
+
+/// Whether a browser extension on this device is a member of the identity.
+/// The extension joins as an app beside the web app, on the same device.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub enum BrowserExtensionMembership {
+    Joined,
+    NotJoined,
+}
+
+/// The browser extension's place in the checklist.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdentityExtensionStep {
+    /// The app does not offer the extension here: no row.
+    NotOffered,
+    Offered(IdentityProtectionStep),
+}
+
+/// Every checklist task, in order, finished ones included: both protections,
+/// then the browser extension where it is offered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IdentityProtectionChecklist {
+    pub protections: [IdentityProtectionStep; 2],
+    pub extension: IdentityExtensionStep,
+}
+
+impl IdentityProtectionChecklist {
+    /// The rows in order, the extension's last where it is offered.
+    pub fn steps(&self) -> impl Iterator<Item = IdentityProtectionStep> + '_ {
+        let extension: &[IdentityProtectionStep] = match &self.extension {
+            IdentityExtensionStep::NotOffered => &[],
+            IdentityExtensionStep::Offered(step) => std::slice::from_ref(step),
+        };
+        self.protections.iter().chain(extension).copied()
+    }
+}
 
 /// Stored items at which a browser-only identity is urged to keep a copy.
 const URGE_AT_STORED_ITEMS: usize = 10;
@@ -92,6 +151,10 @@ pub struct IdentityHealthAssessment {
     pub device_count: crate::EnrolledDeviceCount,
     /// Items stored in the open vault.
     pub stored_item_count: crate::SecretRecordCount,
+    /// Whether this browser has the extension the app offers.
+    pub extension_installation: BrowserExtensionInstallation,
+    /// Whether an extension on this device has joined the identity.
+    pub extension_membership: BrowserExtensionMembership,
 }
 
 /// Where an identity stands and what to ask for next.
@@ -111,6 +174,8 @@ impl IdentityHealth {
             device_join_provider_count,
             device_count,
             stored_item_count,
+            extension_installation,
+            extension_membership,
         } = request;
         let stage = if copy_provider_count.is_zero() {
             IdentityHealthStage::LocalOnly
@@ -181,19 +246,55 @@ impl IdentityHealth {
                 action: IdentityNextStep::AddDevice,
             }
         };
+        let extension = match (extension_installation, extension_membership) {
+            (BrowserExtensionInstallation::NotOffered, _) => IdentityExtensionStep::NotOffered,
+            (BrowserExtensionInstallation::NotInstalled, _) => {
+                IdentityExtensionStep::Offered(IdentityProtectionStep {
+                    task: IdentityProtectionTask::BrowserExtension,
+                    state: IdentityProtectionTaskState::Open,
+                    action: IdentityNextStep::InstallExtension,
+                })
+            }
+            (BrowserExtensionInstallation::Installed, BrowserExtensionMembership::NotJoined) => {
+                IdentityExtensionStep::Offered(IdentityProtectionStep {
+                    task: IdentityProtectionTask::BrowserExtension,
+                    state: IdentityProtectionTaskState::Open,
+                    action: IdentityNextStep::ConnectExtension,
+                })
+            }
+            (BrowserExtensionInstallation::Installed, BrowserExtensionMembership::Joined) => {
+                IdentityExtensionStep::Offered(IdentityProtectionStep {
+                    task: IdentityProtectionTask::BrowserExtension,
+                    state: IdentityProtectionTaskState::Done,
+                    action: IdentityNextStep::Done,
+                })
+            }
+        };
         Self {
             stage,
             next_step,
             nudge,
-            checklist: [copy, second_device],
+            checklist: IdentityProtectionChecklist {
+                protections: [copy, second_device],
+                extension,
+            },
         }
     }
 
-    /// Every task is done: the identity survives both losses.
+    /// Both protections are done: the identity survives both losses.
     #[must_use]
     pub fn is_protected(&self) -> bool {
         self.checklist
+            .protections
             .iter()
+            .all(|step| step.state == IdentityProtectionTaskState::Done)
+    }
+
+    /// Every row of the checklist is done, the extension's included.
+    #[must_use]
+    pub fn is_complete(&self) -> bool {
+        self.checklist
+            .steps()
             .all(|step| step.state == IdentityProtectionTaskState::Done)
     }
 }
@@ -203,11 +304,26 @@ mod tests {
     use super::*;
 
     fn assess(copies: usize, joinable: usize, apps: usize, items: usize) -> IdentityHealth {
+        with_extension(
+            [copies, joinable, apps, items],
+            BrowserExtensionInstallation::NotOffered,
+            BrowserExtensionMembership::NotJoined,
+        )
+    }
+
+    fn with_extension(
+        counts: [usize; 4],
+        installation: BrowserExtensionInstallation,
+        membership: BrowserExtensionMembership,
+    ) -> IdentityHealth {
+        let [copies, joinable, apps, items] = counts;
         IdentityHealth::assess(IdentityHealthAssessment {
             copy_provider_count: copies.into(),
             device_join_provider_count: joinable.into(),
             device_count: apps.into(),
             stored_item_count: items.into(),
+            extension_installation: installation,
+            extension_membership: membership,
         })
     }
 
@@ -286,7 +402,7 @@ mod tests {
         let health = assess(0, 0, 1, 0);
 
         assert_eq!(
-            health.checklist,
+            health.checklist.protections,
             [
                 step(
                     IdentityProtectionTask::CopyOutsideBrowser,
@@ -308,7 +424,7 @@ mod tests {
         let health = assess(1, 0, 1, 5);
 
         assert_eq!(
-            health.checklist,
+            health.checklist.protections,
             [
                 step(
                     IdentityProtectionTask::CopyOutsideBrowser,
@@ -329,7 +445,7 @@ mod tests {
         let health = assess(1, 1, 1, 5);
 
         assert_eq!(
-            health.checklist[0],
+            health.checklist.protections[0],
             step(
                 IdentityProtectionTask::CopyOutsideBrowser,
                 IdentityProtectionTaskState::Done,
@@ -338,7 +454,7 @@ mod tests {
             "until a second device joins, the kept copy offers another provider"
         );
         assert_eq!(
-            health.checklist[1],
+            health.checklist.protections[1],
             step(
                 IdentityProtectionTask::SecondDevice,
                 IdentityProtectionTaskState::Open,
@@ -355,7 +471,7 @@ mod tests {
         assert!(health.is_protected());
         assert_eq!(health.next_step, IdentityNextStep::Done);
         assert_eq!(
-            health.checklist[0].action,
+            health.checklist.protections[0].action,
             IdentityNextStep::Done,
             "a second device ends the offer of another provider"
         );
@@ -365,8 +481,113 @@ mod tests {
     fn removing_the_last_provider_reopens_only_the_copy() {
         let health = assess(0, 0, 2, 5);
 
-        assert_eq!(health.checklist[0].state, IdentityProtectionTaskState::Open);
-        assert_eq!(health.checklist[1].state, IdentityProtectionTaskState::Done);
+        assert_eq!(health.checklist.protections[0].state, IdentityProtectionTaskState::Open);
+        assert_eq!(health.checklist.protections[1].state, IdentityProtectionTaskState::Done);
         assert!(!health.is_protected());
+    }
+
+    #[test]
+    fn an_app_without_the_extension_lists_only_the_protections() {
+        let health = assess(1, 1, 2, 5);
+
+        assert_eq!(health.checklist.extension, IdentityExtensionStep::NotOffered);
+        assert_eq!(health.checklist.steps().count(), 2);
+        assert!(health.is_complete());
+    }
+
+    #[test]
+    fn a_browser_without_the_extension_is_asked_to_install_it_last() {
+        let health = with_extension(
+            [0, 0, 1, 0],
+            BrowserExtensionInstallation::NotInstalled,
+            BrowserExtensionMembership::NotJoined,
+        );
+
+        let tasks: Vec<_> = health.checklist.steps().map(|step| step.task).collect();
+        assert_eq!(
+            tasks,
+            [
+                IdentityProtectionTask::CopyOutsideBrowser,
+                IdentityProtectionTask::SecondDevice,
+                IdentityProtectionTask::BrowserExtension,
+            ]
+        );
+        assert_eq!(
+            health.checklist.extension,
+            IdentityExtensionStep::Offered(step(
+                IdentityProtectionTask::BrowserExtension,
+                IdentityProtectionTaskState::Open,
+                IdentityNextStep::InstallExtension,
+            ))
+        );
+    }
+
+    #[test]
+    fn an_installed_extension_that_has_not_joined_is_asked_to_connect() {
+        let health = with_extension(
+            [0, 0, 1, 0],
+            BrowserExtensionInstallation::Installed,
+            BrowserExtensionMembership::NotJoined,
+        );
+
+        assert_eq!(
+            health.checklist.extension,
+            IdentityExtensionStep::Offered(step(
+                IdentityProtectionTask::BrowserExtension,
+                IdentityProtectionTaskState::Open,
+                IdentityNextStep::ConnectExtension,
+            ))
+        );
+    }
+
+    #[test]
+    fn the_extension_never_changes_how_the_identity_is_protected() {
+        let without = assess(0, 0, 1, 12);
+        let with = with_extension(
+            [0, 0, 1, 12],
+            BrowserExtensionInstallation::NotInstalled,
+            BrowserExtensionMembership::NotJoined,
+        );
+
+        assert_eq!(with.stage, without.stage);
+        assert_eq!(with.next_step, IdentityNextStep::AddSyncProvider);
+        assert_eq!(with.nudge, without.nudge);
+        assert_eq!(with.checklist.protections, without.checklist.protections);
+    }
+
+    #[test]
+    fn a_protected_identity_is_complete_only_once_the_extension_has_joined() {
+        let waiting = with_extension(
+            [1, 1, 2, 5],
+            BrowserExtensionInstallation::Installed,
+            BrowserExtensionMembership::NotJoined,
+        );
+        assert!(waiting.is_protected());
+        assert!(!waiting.is_complete());
+
+        let joined = with_extension(
+            [1, 1, 2, 5],
+            BrowserExtensionInstallation::Installed,
+            BrowserExtensionMembership::Joined,
+        );
+        assert!(joined.is_complete());
+    }
+
+    #[test]
+    fn a_joined_extension_that_was_removed_from_this_browser_asks_to_install_again() {
+        let health = with_extension(
+            [1, 1, 2, 5],
+            BrowserExtensionInstallation::NotInstalled,
+            BrowserExtensionMembership::Joined,
+        );
+
+        assert_eq!(
+            health.checklist.extension,
+            IdentityExtensionStep::Offered(step(
+                IdentityProtectionTask::BrowserExtension,
+                IdentityProtectionTaskState::Open,
+                IdentityNextStep::InstallExtension,
+            ))
+        );
     }
 }

@@ -67,6 +67,7 @@ class MembershipManager {
           members: [],
           devices: [],
           deviceCount: 0,
+          extensionOnThisDevice: 'notJoined',
           joinRequests: [],
           vaults: [],
           mounts: [],

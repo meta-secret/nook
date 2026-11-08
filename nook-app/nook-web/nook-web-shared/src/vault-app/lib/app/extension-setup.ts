@@ -1,6 +1,8 @@
 import { extensionConnectionBrowser } from "$lib/extension/connect";
 
+import { NookBrowserExtensionInstallation } from "$app-wasm";
 import {
+  ExtensionSetupStatus,
   type ExtensionSetupState,
   extensionInstallationBrowser,
 } from "$lib/extension/install";
@@ -68,3 +70,21 @@ class ExtensionSetupBrowser {
 }
 
 export const extensionSetupBrowser = new ExtensionSetupBrowser(globalThis);
+
+/** What the identity checklist knows of the extension in this browser: the
+ * app does not offer it here, or it is installed or not. */
+export function extensionInstallationFor(
+  offer: ExtensionSetupOffer,
+): NookBrowserExtensionInstallation {
+  switch (offer.kind) {
+    case ExtensionSetupOfferKind.Hidden:
+      return NookBrowserExtensionInstallation.NotOffered;
+    case ExtensionSetupOfferKind.Visible:
+      switch (offer.setup.status) {
+        case ExtensionSetupStatus.Installed:
+          return NookBrowserExtensionInstallation.Installed;
+        case ExtensionSetupStatus.NotInstalled:
+          return NookBrowserExtensionInstallation.NotInstalled;
+      }
+  }
+}

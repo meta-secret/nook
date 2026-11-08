@@ -134,7 +134,8 @@ pub use google_authenticator_import::{
     GoogleAuthenticatorMigrationInput, GoogleAuthenticatorMigrationQrCodeCount,
 };
 pub use identity_health::{
-    IdentityHealth, IdentityHealthAssessment, IdentityHealthStage, IdentityNextStep, IdentityNudge,
+    BrowserExtensionInstallation, BrowserExtensionMembership, IdentityExtensionStep, IdentityHealth,
+    IdentityHealthAssessment, IdentityHealthStage, IdentityNextStep, IdentityNudge,
     IdentityProtectionChecklist, IdentityProtectionStep, IdentityProtectionTask,
     IdentityProtectionTaskState,
 };

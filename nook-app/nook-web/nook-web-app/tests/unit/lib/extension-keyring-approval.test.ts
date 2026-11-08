@@ -96,6 +96,7 @@ function keyringSnapshot(
     ],
     devices: [],
     deviceCount: 1,
+    extensionOnThisDevice: 'notJoined',
     joinRequests: [],
     vaults: storeIds.map((storeId) => ({
       storeId,

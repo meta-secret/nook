@@ -26,7 +26,10 @@ band, the scrolling page and the status line.
     ExtensionConnectIntentKind,
     type ExtensionConnectIntent,
   } from '$lib/app/route-state'
-  import { type ExtensionSetupOffer } from '$lib/app/extension-setup'
+  import {
+    extensionSetupBrowser,
+    type ExtensionSetupOffer,
+  } from '$lib/app/extension-setup'
   import {
     configured_vault_application_supports_extension,
     type NookIdentityHealth,
@@ -533,6 +536,13 @@ band, the scrolling page and the status line.
       onNewIdentity={newIdentity}
       onUseIdentity={useIdentity}
       currentHealth={identityHealth}
+      {...SUPPORTS_EXTENSION
+        ? {
+            onInstallExtension: () =>
+              void extensionSetupBrowser.openExtensionInstaller(),
+            onOpenExtensionPanel: onExtensionOpenPanel,
+          }
+        : {}}
       overview={identityOverview}
       overviewOpen={!consentPending && section === WorkspaceSection.Overview}
       {...consentPending ? { requestPanel: extensionConsent } : {}}

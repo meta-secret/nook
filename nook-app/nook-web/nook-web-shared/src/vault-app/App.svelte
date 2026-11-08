@@ -29,6 +29,7 @@
     ExtensionSetupOfferModel,
     type ExtensionSetupOfferSource,
   } from '$lib/app/extension-setup-offer.svelte'
+  import { extensionInstallationFor } from '$lib/app/extension-setup'
   import {
     APP_SHELL_WIDTH,
     APP_VERSION,
@@ -76,17 +77,6 @@
   function setSecretsAddOpen(open: boolean): void {
     secretsAddOpen = open
   }
-  /** Day-2 health of the identity: a copy elsewhere, then a second device. */
-  const identityHealth = $derived(
-    assess_identity_health(
-      vault.syncProviders.length,
-      vault.syncProviders.filter((provider) =>
-        provider_carries_device_join(provider),
-      ).length,
-      vault.identityControl.deviceCount(vault.vaultMembers.length),
-      vault.secretTotal,
-    ),
-  )
   let colorMode = $state<ColorMode>(browserColorMode.systemColorMode())
   let followsSystemColorMode = $state(true)
   let pendingVaultCreationState = $state<VaultCreationQueue>({
@@ -115,6 +105,20 @@
   }
   const extensionSetupOffer = new ExtensionSetupOfferModel(
     extensionSetupOfferSource,
+  )
+  /** Day-2 health of the identity: a copy elsewhere, then a second device,
+   * then the browser extension where this app offers it. */
+  const identityHealth = $derived(
+    assess_identity_health(
+      vault.syncProviders.length,
+      vault.syncProviders.filter((provider) =>
+        provider_carries_device_join(provider),
+      ).length,
+      vault.identityControl.deviceCount(vault.vaultMembers.length),
+      vault.secretTotal,
+      extensionInstallationFor(extensionSetupOffer.browser),
+      vault.identityControl.extensionMembership(),
+    ),
   )
   $effect(() => {
     if (!vault.isAuthenticated || !('window' in globalThis)) return

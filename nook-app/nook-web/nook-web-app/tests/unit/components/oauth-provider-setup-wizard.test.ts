@@ -163,6 +163,7 @@ function useIdentity(vault: VaultState): void {
     ],
     devices: [],
     deviceCount: 1,
+    extensionOnThisDevice: 'notJoined',
     joinRequests: [],
     vaults: [],
     mounts: [],

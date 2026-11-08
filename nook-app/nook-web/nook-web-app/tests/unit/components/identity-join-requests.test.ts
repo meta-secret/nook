@@ -54,6 +54,7 @@ function identityWith(requests: IdentityJoinRequestView[]): VaultState {
     ],
     devices: [],
     deviceCount: 1,
+    extensionOnThisDevice: 'notJoined',
     joinRequests: requests,
     vaults: [],
     mounts: [],

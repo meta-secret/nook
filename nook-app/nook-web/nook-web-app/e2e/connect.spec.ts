@@ -75,7 +75,7 @@ test.describe('vault connect flow', () => {
     await openOpenVaultPanel(page)
     await expect(page.getByTestId('vault-extension-install')).toBeVisible()
     const protection = page.getByTestId('identity-protection-toggle')
-    await expect(protection).toContainText('0 of 2 done')
+    await expect(protection).toContainText('0 of 3 done')
     await protection.click()
     await expect(page.getByTestId('identity-protection-risk')).toContainText(
       'Only this browser has your vaults',

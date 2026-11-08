@@ -1,7 +1,11 @@
 import { fireEvent, render, within } from '@testing-library/svelte'
 import type { ComponentProps } from 'svelte'
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest'
-import initNookWasm, { assess_identity_health } from '$app-wasm'
+import initNookWasm, {
+  assess_identity_health,
+  NookBrowserExtensionInstallation,
+  NookBrowserExtensionMembership,
+} from '$app-wasm'
 import { type StorageProvider } from '$lib/auth/providers'
 import { ProviderRowFixture } from '../provider-fixtures'
 import { ok } from 'neverthrow'
@@ -44,7 +48,14 @@ function renderPanel(
   const onAddSyncProvider = vi.fn()
   const props = {
     vault,
-    health: assess_identity_health(0, providers.length, 1, 3),
+    health: assess_identity_health(
+      0,
+      providers.length,
+      1,
+      3,
+      NookBrowserExtensionInstallation.NotOffered,
+      NookBrowserExtensionMembership.NotJoined,
+    ),
     onOpen,
     onAddSyncProvider,
   } satisfies ComponentProps<typeof IdentityPanel>
@@ -148,6 +159,7 @@ describe('identity panel devices', () => {
           { apps: other, current: false },
         ],
         deviceCount: 2,
+        extensionOnThisDevice: 'notJoined',
         joinRequests: [],
         vaults: [],
         mounts: [],

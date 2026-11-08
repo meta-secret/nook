@@ -20,6 +20,11 @@ export type ExtensionSetupOfferSource = {
  */
 export class ExtensionSetupOfferModel {
   offer = $state<ExtensionSetupOffer>({ kind: ExtensionSetupOfferKind.Hidden });
+  /** The extension in this browser whether or not a vault is open: the
+   * keyring's checklist offers it from the card. */
+  browser = $state<ExtensionSetupOffer>({
+    kind: ExtensionSetupOfferKind.Hidden,
+  });
 
   private readonly vault: VaultState;
   private readonly supported: boolean;
@@ -30,10 +35,12 @@ export class ExtensionSetupOfferModel {
   }
 
   refresh(): void {
-    this.offer =
-      this.supported && this.vault.isAuthenticated
-        ? extensionSetupBrowser.loadExtensionSetupOffer()
-        : { kind: ExtensionSetupOfferKind.Hidden };
+    this.browser = this.supported
+      ? extensionSetupBrowser.loadExtensionSetupOffer()
+      : { kind: ExtensionSetupOfferKind.Hidden };
+    this.offer = this.vault.isAuthenticated
+      ? this.browser
+      : { kind: ExtensionSetupOfferKind.Hidden };
   }
 
   /** Refresh now and whenever the extension's presence changes; returns the

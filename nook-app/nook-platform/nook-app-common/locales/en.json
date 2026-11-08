@@ -2437,9 +2437,9 @@
     "later": "Later"
   },
   "identity_protection": {
-    "row_title": "Protect this keyring",
+    "row_title": "Set up this keyring",
     "row_progress": "{done} of {total} done",
-    "panel_title": "Protect {identity}",
+    "panel_title": "Set up {identity}",
     "risk_local": "Only this browser has your vaults. Clearing site data or losing this device deletes them.",
     "risk_one_device": "A copy is kept, but only this device can open it. Lose the device and you lose your vaults.",
     "copy_title": "Keep a copy outside this browser",
@@ -2447,9 +2447,14 @@
     "device_title": "Add a second device",
     "device_why": "Losing this device loses nothing.",
     "device_blocked": "After the copy: the new device joins through it.",
+    "extension_title": "Add the browser extension",
+    "extension_why": "Nook fills passwords for you on websites.",
+    "extension_connect_why": "Installed: connect it to this keyring.",
     "action_add_sync": "Add a sync provider",
     "action_add_cloud": "Add a cloud sync provider",
     "action_add_device": "Add a device",
+    "action_install_extension": "Install extension",
+    "action_connect_extension": "Connect extension",
     "action_add_another_sync": "Add another provider",
     "done": "Done"
   },
