@@ -273,8 +273,8 @@ pub use auth::identity_join::{
 pub use auth::identity_vault_pairing::{IdentityVaultPairingPlan, IdentityVaultPairingRequest};
 pub use auth::identity_words::IdentityWords;
 pub use auth::recovery_passphrase::{
-    PendingRecoveryPassphrase, RecoveredKeyring, RecoveredKeyringName, RecoveryPassphraseRecording,
-    RecoveryPassphraseStart, RecoveryPassphraseUse,
+    PendingRecoveryPassphrase, RecoveredKeyring, RecoveredKeyringLabel, RecoveredKeyringName,
+    RecoveryPassphraseRecording, RecoveryPassphraseStart, RecoveryPassphraseUse,
 };
 pub use auth::vault_meta_actions::{
     DeviceAuthorization, EventGraphAuthorizationProjection, EventGraphDeviceAccess,

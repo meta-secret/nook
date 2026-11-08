@@ -12,11 +12,11 @@
 
 use crate::{TypedInput, TypedOutput};
 use nook_core::{
-    AdoptedIdentityLabel, AppId, IdentityControlLog, IdentityControlState, IdentityId,
-    IdentityInvitationBinding, IdentityInvitationBindingRequest, IdentityRecoveryPassphraseView,
-    PendingRecoveryPassphrase, RecoveredKeyring, RecoveryPassphraseError,
-    RecoveryPassphraseRecording, RecoveryPassphraseStart, RecoveryPassphraseUse, RecoveryStrength,
-    RecoveryWordCount, RecoveryWordPosition, TypedRecoveryWords, VaultError,
+    AppId, IdentityControlLog, IdentityControlState, IdentityId, IdentityInvitationBinding,
+    IdentityInvitationBindingRequest, IdentityRecoveryPassphraseView, PendingRecoveryPassphrase,
+    RecoveryPassphraseError, RecoveryPassphraseRecording, RecoveryPassphraseStart,
+    RecoveryPassphraseUse, RecoveryStrength, RecoveryWordCount, RecoveryWordPosition,
+    TypedRecoveryWords, VaultError,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -306,16 +306,14 @@ impl NookVaultManager {
                 .await?;
             events.push(bytes);
         }
-        // The keyring's own name replaces the one this device picked.
-        let label = match &recovered {
-            RecoveredKeyring::Named { name, .. } => AdoptedIdentityLabel::Invited(name.as_str()),
-            RecoveredKeyring::Unnamed { .. } => AdoptedIdentityLabel::Kept,
-        };
+        // The keyring's own name replaces the one this device picked. A
+        // device that already is a member writes nothing and joins from the
+        // log as it stands.
         match Self::complete_join_from_log(IdentityJoinLog {
             identity_id: &identity_id,
             app_key: &app_key,
             events: &events,
-            label,
+            label: recovered.adopted_label(),
         })
         .await?
         {

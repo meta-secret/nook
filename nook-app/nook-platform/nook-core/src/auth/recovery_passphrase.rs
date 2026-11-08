@@ -14,8 +14,8 @@
 )]
 
 use nook_auth2::{
-    AppId, AppKey, IsoTimestamp, MemberLabel, RecoveryPassphraseError, RecoveryPhrase,
-    RecoverySecret, RecoveryStrength, TypedRecoveryWords,
+    AdoptedIdentityLabel, AppId, AppKey, IsoTimestamp, MemberLabel, RecoveryPassphraseError,
+    RecoveryPhrase, RecoverySecret, RecoveryStrength, TypedRecoveryWords,
 };
 use nook_event_log::{
     EventError, IdentityControlLog, IdentityControlOperation, IdentityControlState, IdentityEvent,
@@ -23,6 +23,7 @@ use nook_event_log::{
     IdentityRecoveryAddition, IdentityRecoveryApproval, SigningIdentity,
 };
 
+use super::identity_join::IdentityJoinProgress;
 use super::opened_identity_vaults::OpenedIdentityVaults;
 use crate::errors::VaultResult;
 
@@ -143,6 +144,14 @@ impl RecoveredKeyringName {
     }
 }
 
+/// The keyring's name as the recovery passphrase opens it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RecoveredKeyringLabel {
+    Named(RecoveredKeyringName),
+    /// No member named the keyring.
+    Unnamed,
+}
+
 /// What a recovery writes to the keyring's log, in order.
 #[derive(Debug, Clone)]
 pub enum RecoveredKeyring {
@@ -157,6 +166,10 @@ pub enum RecoveredKeyring {
     },
     /// No member named the keyring: the approval alone.
     Unnamed { approval: IdentityEvent },
+    /// This device's app key already is a member, as when it joined with a
+    /// passkey before: the words opened the passphrase, and nothing is
+    /// written.
+    AlreadyMember { label: RecoveredKeyringLabel },
 }
 
 impl RecoveredKeyring {
@@ -168,6 +181,23 @@ impl RecoveredKeyring {
                 approval, naming, ..
             } => vec![approval, naming],
             Self::Unnamed { approval } => vec![approval],
+            Self::AlreadyMember { .. } => Vec::new(),
+        }
+    }
+
+    /// The local identity's name once the device joins: the keyring's own
+    /// name when it has one.
+    #[must_use]
+    pub fn adopted_label(&self) -> AdoptedIdentityLabel<'_> {
+        match self {
+            Self::Named { name, .. }
+            | Self::AlreadyMember {
+                label: RecoveredKeyringLabel::Named(name),
+            } => AdoptedIdentityLabel::Invited(name.as_str()),
+            Self::Unnamed { .. }
+            | Self::AlreadyMember {
+                label: RecoveredKeyringLabel::Unnamed,
+            } => AdoptedIdentityLabel::Kept,
         }
     }
 }
@@ -202,8 +232,10 @@ impl RecoveryPassphraseUse<'_> {
     /// keys with them, open every vault, and sign the approval of the new app
     /// key as the recovery member. When the keyring is named, the recovery
     /// member opens the name and the new app key re-seals it to every member.
-    /// Wrong words fail closed with [`RecoveryPassphraseError::WrongWords`];
-    /// every event must apply to the log.
+    /// When the new app key already is a member, the checked words write
+    /// nothing. Wrong words fail closed with
+    /// [`RecoveryPassphraseError::WrongWords`]; every event must apply to the
+    /// log.
     pub fn approval(&self) -> VaultResult<RecoveredKeyring> {
         let state = IdentityControlState::project(self.log)?;
         let (member, recovery) = state.recovery_member(self.recovery).ok_or_else(|| {
@@ -223,6 +255,15 @@ impl RecoveryPassphraseUse<'_> {
             )
             .into());
         }
+        let label = RecoveryNameOpening {
+            state: &state,
+            recovery: self.recovery,
+            secret: &secret,
+        }
+        .label()?;
+        if IdentityJoinProgress::of(&state, &self.member.app_id) == IdentityJoinProgress::Approved {
+            return Ok(RecoveredKeyring::AlreadyMember { label });
+        }
         let vaults = OpenedIdentityVaults::open(&state, secret.app_key())?;
         let operation = state.recovery_approval_operation(&IdentityRecoveryApproval {
             recovery: self.recovery,
@@ -241,17 +282,13 @@ impl RecoveryPassphraseUse<'_> {
             event: &approval,
         }
         .insert()?;
-        let Some(sealed) = state.sealed_name_for(self.recovery) else {
+        let RecoveredKeyringLabel::Named(name) = label else {
             return Ok(RecoveredKeyring::Unnamed { approval });
         };
-        let name = secret.app_key().open_utf8(sealed)?.trim().to_owned();
-        if name.is_empty() {
-            return Ok(RecoveredKeyring::Unnamed { approval });
-        }
         let naming = approved.build_append(
             vec![
                 IdentityControlState::project(&approved)?.naming_operation(&IdentityNaming {
-                    name: &name,
+                    name: name.as_str(),
                     joining: None,
                 })?,
             ],
@@ -268,7 +305,26 @@ impl RecoveryPassphraseUse<'_> {
         Ok(RecoveredKeyring::Named {
             approval,
             naming,
-            name: RecoveredKeyringName(name),
+            name,
+        })
+    }
+}
+
+/// The recovery member opens the keyring's name sealed to it.
+struct RecoveryNameOpening<'a> {
+    state: &'a IdentityControlState,
+    recovery: &'a AppId,
+    secret: &'a RecoverySecret,
+}
+
+impl RecoveryNameOpening<'_> {
+    fn label(&self) -> VaultResult<RecoveredKeyringLabel> {
+        let Some(sealed) = self.state.sealed_name_for(self.recovery) else {
+            return Ok(RecoveredKeyringLabel::Unnamed);
+        };
+        Ok(match self.secret.app_key().open_utf8(sealed)?.trim() {
+            "" => RecoveredKeyringLabel::Unnamed,
+            name => RecoveredKeyringLabel::Named(RecoveredKeyringName(name.to_owned())),
         })
     }
 }
@@ -615,6 +671,53 @@ mod tests {
             attempt(&words.join(" "))?,
             RecoveredKeyring::Unnamed { .. }
         ));
+        Ok(())
+    }
+
+    #[test]
+    fn a_device_that_already_is_a_member_recovers_with_its_words_and_writes_nothing()
+    -> anyhow::Result<()> {
+        let (keyring, pending) = Keyring::founded()?.add_passphrase("Paper in the safe")?;
+        let recovery = keyring.passphrase_id("Paper in the safe")?;
+        let naming = keyring.state()?.naming_operation(&IdentityNaming {
+            name: "Personal",
+            joining: None,
+        })?;
+        let keyring = keyring.append(vec![naming])?;
+        // The laptop's app key already is a member, as after a passkey join.
+        let provider_log = keyring.on_provider()?;
+        let attempt = |words: &str| {
+            RecoveryPassphraseUse {
+                log: &provider_log,
+                recovery: &recovery,
+                typed: &typed(words),
+                member: &keyring.laptop.keys("Laptop"),
+                device_signer: &keyring.laptop.signer,
+                created_at: &keyring.at,
+            }
+            .approval()
+        };
+        // Its words are still checked.
+        let other = RecoveryPhrase::generate(RecoveryStrength::Standard)?;
+        assert!(matches!(
+            attempt(&other.words().join(" ")),
+            Err(VaultError::RecoveryPassphrase(
+                RecoveryPassphraseError::WrongWords
+            ))
+        ));
+        let recovered = attempt(&pending.words().join(" "))?;
+        let RecoveredKeyring::AlreadyMember { label } = &recovered else {
+            anyhow::bail!("a member recovers without a new approval: {recovered:?}");
+        };
+        assert_eq!(
+            label,
+            &RecoveredKeyringLabel::Named(RecoveredKeyringName("Personal".to_owned()))
+        );
+        assert!(recovered.events().is_empty());
+        assert_eq!(
+            recovered.adopted_label(),
+            AdoptedIdentityLabel::Invited("Personal")
+        );
         Ok(())
     }
 
