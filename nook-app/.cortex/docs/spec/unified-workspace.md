@@ -80,9 +80,10 @@ Simple and unified apps. Sentinel is never offered.
 The identity is settled before any vault exists. The step bar counts
 Passkey, Sync provider, Identity, and Vault. Each step is one centred column
 with a short title. A diagram appears once per new idea, in place of a
-paragraph: Your passkey → Your identity → Your vaults on the Passkey step,
-This device → Sync provider ← Your other devices on the Sync step. A line of
-text stays only for a requirement, a consequence, or a promise.
+paragraph: Your passkey —unlocks→ Your identity —opens→ Your vaults on the
+Passkey step, This device —syncs→ Sync provider ←syncs— Your other devices on
+the Sync step. A short verb on each arrow says what one box does to the next.
+A line of text stays only for a requirement, a consequence, or a promise.
 
 - **Start**: "Create your identity" and one Create identity button, with no
   subtitle: the Passkey step explains the passkey. Under an "or", the other paths are equal rows, each an

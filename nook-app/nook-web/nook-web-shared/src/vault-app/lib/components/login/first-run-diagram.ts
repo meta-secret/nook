@@ -11,13 +11,22 @@ import { I18N_KEYS } from "../../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 
 /** How the arrow leading up to a box points. */
-export enum FirstRunDiagramArrow {
-  /** The box before leads to this one; the first box has no arrow. */
+export enum FirstRunDiagramArrowKind {
+  /** The first box: nothing leads up to it. */
+  Start = "start",
+  /** The box before leads to this one. */
   Forward = "forward",
   /** This box leads back to the one before, as devices do to their sync
    * provider. */
   Back = "back",
 }
+
+/** The arrow leading up to a box, with the word written on it that says what
+ * the one box does to the other. */
+export type FirstRunDiagramArrow =
+  | { readonly kind: FirstRunDiagramArrowKind.Start }
+  | { readonly kind: FirstRunDiagramArrowKind.Forward; readonly label: string }
+  | { readonly kind: FirstRunDiagramArrowKind.Back; readonly label: string };
 
 /** One box of a setup step's diagram. */
 export type FirstRunDiagramNode = {
@@ -58,21 +67,27 @@ export function firstRunKeyDiagram({
         label: vault.t(I18N_KEYS.FirstRunDiagramPasskey),
         testId: "first-run-diagram-passkey",
         current: true,
-        arrow: FirstRunDiagramArrow.Forward,
+        arrow: { kind: FirstRunDiagramArrowKind.Start },
       },
       {
         icon: KeyRound,
         label: identity || vault.t(I18N_KEYS.FirstRunDiagramIdentity),
         testId: "first-run-diagram-identity",
         current: false,
-        arrow: FirstRunDiagramArrow.Forward,
+        arrow: {
+          kind: FirstRunDiagramArrowKind.Forward,
+          label: vault.t(I18N_KEYS.FirstRunDiagramUnlocks),
+        },
       },
       {
         icon: Vault,
         label: vault.t(I18N_KEYS.FirstRunDiagramVaults),
         testId: "first-run-diagram-vaults",
         current: false,
-        arrow: FirstRunDiagramArrow.Forward,
+        arrow: {
+          kind: FirstRunDiagramArrowKind.Forward,
+          label: vault.t(I18N_KEYS.FirstRunDiagramOpens),
+        },
       },
     ],
   };
@@ -99,21 +114,27 @@ export function firstRunSyncDiagram({
         label: vault.t(I18N_KEYS.JoinThisDevice),
         testId: "first-run-sync-diagram-here",
         current: false,
-        arrow: FirstRunDiagramArrow.Forward,
+        arrow: { kind: FirstRunDiagramArrowKind.Start },
       },
       {
         icon: Cloud,
         label: provider,
         testId: "first-run-sync-diagram-provider",
         current: true,
-        arrow: FirstRunDiagramArrow.Forward,
+        arrow: {
+          kind: FirstRunDiagramArrowKind.Forward,
+          label: vault.t(I18N_KEYS.FirstRunSyncDiagramSyncs),
+        },
       },
       {
         icon: Laptop,
         label: vault.t(I18N_KEYS.FirstRunSyncDiagramDevices),
         testId: "first-run-sync-diagram-devices",
         current: false,
-        arrow: FirstRunDiagramArrow.Back,
+        arrow: {
+          kind: FirstRunDiagramArrowKind.Back,
+          label: vault.t(I18N_KEYS.FirstRunSyncDiagramSyncs),
+        },
       },
     ],
   };
@@ -133,21 +154,27 @@ export function firstRunRecoveryDiagram(
         label: vault.t(I18N_KEYS.JoinNodeProvider),
         testId: "first-run-recovery-diagram-provider",
         current: true,
-        arrow: FirstRunDiagramArrow.Forward,
+        arrow: { kind: FirstRunDiagramArrowKind.Start },
       },
       {
         icon: Fingerprint,
         label: vault.t(I18N_KEYS.FirstRunDiagramPasskey),
         testId: "first-run-recovery-diagram-passkey",
         current: false,
-        arrow: FirstRunDiagramArrow.Forward,
+        arrow: {
+          kind: FirstRunDiagramArrowKind.Forward,
+          label: vault.t(I18N_KEYS.FirstRunRestoreDiagramRecoverWith),
+        },
       },
       {
         icon: Vault,
         label: vault.t(I18N_KEYS.FirstRunDiagramVaults),
         testId: "first-run-recovery-diagram-vaults",
         current: false,
-        arrow: FirstRunDiagramArrow.Forward,
+        arrow: {
+          kind: FirstRunDiagramArrowKind.Forward,
+          label: vault.t(I18N_KEYS.FirstRunDiagramOpens),
+        },
       },
     ],
   };

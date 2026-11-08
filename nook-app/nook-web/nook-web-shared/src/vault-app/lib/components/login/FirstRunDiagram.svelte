@@ -1,18 +1,49 @@
 <!--
 A setup step drawn small: a row of boxes joined by arrows, the one the step
-is about filled in. The steps say what they are for with it instead of a
-paragraph.
+is about filled in. A word on each arrow says what one box does to the next.
+The steps say what they are for with it instead of a paragraph.
 -->
 <script lang="ts">
   import { ChevronLeft, ChevronRight } from '@lucide/svelte'
   import {
-    FirstRunDiagramArrow,
+    FirstRunDiagramArrowKind,
+    type FirstRunDiagramArrow,
     type FirstRunDiagramNode,
     type FirstRunDiagramView,
   } from './first-run-diagram'
 
+  type LabelledArrow = Exclude<
+    FirstRunDiagramArrow,
+    { readonly kind: FirstRunDiagramArrowKind.Start }
+  >
+
   let { diagram }: { diagram: FirstRunDiagramView } = $props()
 </script>
+
+{#snippet link(arrow: LabelledArrow)}
+  <span
+    class="relative mt-[1.375rem] flex min-w-6 flex-1 -translate-y-1/2 items-center text-muted-foreground"
+  >
+    <span
+      class="absolute inset-x-0 bottom-full mb-1 text-center text-[10px] leading-tight"
+    >
+      {arrow.label}
+    </span>
+    {#if arrow.kind === FirstRunDiagramArrowKind.Back}
+      <ChevronLeft class="-mr-1 size-3.5" aria-hidden="true" />
+      <span
+        class="h-px flex-1 border-t border-dashed border-border"
+        aria-hidden="true"
+      ></span>
+    {:else}
+      <span
+        class="h-px flex-1 border-t border-dashed border-border"
+        aria-hidden="true"
+      ></span>
+      <ChevronRight class="-ml-1 size-3.5" aria-hidden="true" />
+    {/if}
+  </span>
+{/snippet}
 
 {#snippet node(box: FirstRunDiagramNode)}
   <div class="flex w-11 flex-col items-center gap-2">
@@ -40,20 +71,9 @@ paragraph.
   aria-label={diagram.label}
   data-testid={diagram.testId}
 >
-  {#each diagram.nodes as box, index (box.testId)}
-    {#if index > 0}
-      <span
-        class="mt-[1.375rem] flex min-w-6 flex-1 -translate-y-1/2 items-center text-muted-foreground"
-        aria-hidden="true"
-      >
-        {#if box.arrow === FirstRunDiagramArrow.Back}
-          <ChevronLeft class="-mr-1 size-3.5" />
-          <span class="h-px flex-1 border-t border-dashed border-border"></span>
-        {:else}
-          <span class="h-px flex-1 border-t border-dashed border-border"></span>
-          <ChevronRight class="-ml-1 size-3.5" />
-        {/if}
-      </span>
+  {#each diagram.nodes as box (box.testId)}
+    {#if box.arrow.kind !== FirstRunDiagramArrowKind.Start}
+      {@render link(box.arrow)}
     {/if}
     {@render node(box)}
   {/each}
