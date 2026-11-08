@@ -2329,7 +2329,6 @@
     "step_vault": "Сейф",
     "back": "Назад",
     "protect_title": "Один ключ доступа открывает всё",
-    "protect_body": "Без пароля. Без сервера Nook.",
     "diagram_label": "Как ключ доступа открывает ваши сейфы",
     "diagram_passkey": "Ваш ключ доступа",
     "diagram_identity": "Ваша связка ключей",

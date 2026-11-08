@@ -1177,7 +1177,6 @@ export const I18N_KEYS = {
   FirstRunPathAddDevice: 'first_run.path_add_device',
   FirstRunPathCheck: 'first_run.path_check',
   FirstRunPathRecover: 'first_run.path_recover',
-  FirstRunProtectBody: 'first_run.protect_body',
   FirstRunProtectTitle: 'first_run.protect_title',
   FirstRunRestoreBody: 'first_run.restore_body',
   FirstRunRestoreChooseVault: 'first_run.restore_choose_vault',

@@ -1,6 +1,6 @@
 <!--
 First step of setup: a new passkey, or one made for Nook before, makes this
-browser's key. One line and a small diagram say what it is for: the passkey
+browser's key. A small diagram says what it is for: the passkey
 opens the identity, which holds the vaults. No vault exists yet; the sync
 provider comes next and shows the identities that key belongs to.
 -->
@@ -53,9 +53,6 @@ provider comes next and shows the identities that key belongs to.
     >
       {vault.t(I18N_KEYS.FirstRunProtectTitle)}
     </h1>
-    <p class="text-sm text-pretty text-muted-foreground">
-      {vault.t(I18N_KEYS.FirstRunProtectBody)}
-    </p>
   </div>
 
   <FirstRunDiagram {diagram} />

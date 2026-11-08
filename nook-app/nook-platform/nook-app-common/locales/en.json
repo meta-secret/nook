@@ -2329,7 +2329,6 @@
     "step_vault": "Vault",
     "back": "Back",
     "protect_title": "One passkey opens it all",
-    "protect_body": "No password. No Nook server.",
     "diagram_label": "How your passkey opens your vaults",
     "diagram_passkey": "Your passkey",
     "diagram_identity": "Your keyring",

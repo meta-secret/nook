@@ -96,10 +96,9 @@ text stays only for a requirement, a consequence, or a promise.
   [identity decisions](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md)
   record describes. A link below checks which passkey opens what, before
   anything is recovered.
-- **Passkey** ("One passkey opens it all"): the diagram says what it is for,
-  and one line makes the promise: no password, no Nook server. A new
-  passkey, or one made for Nook before, makes this browser's key. Back
-  returns to Start.
+- **Passkey** ("One passkey opens it all"): the diagram says
+  what it is for. A new passkey, or one made for Nook before, makes this
+  browser's key. Back returns to Start.
 - **Sync provider**: before sign-in, one line and a small diagram (This
   device → Sync provider ← Your other devices) say what it is for. Google
   Drive signs in, and Nook lists the identities in its Nook folder. Each card has the one action Rust decides from this

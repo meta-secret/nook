@@ -1432,7 +1432,6 @@ pub const FIRST_RUN_OR: &str = "first_run.or";
 pub const FIRST_RUN_PATH_ADD_DEVICE: &str = "first_run.path_add_device";
 pub const FIRST_RUN_PATH_CHECK: &str = "first_run.path_check";
 pub const FIRST_RUN_PATH_RECOVER: &str = "first_run.path_recover";
-pub const FIRST_RUN_PROTECT_BODY: &str = "first_run.protect_body";
 pub const FIRST_RUN_PROTECT_TITLE: &str = "first_run.protect_title";
 pub const FIRST_RUN_RESTORE_BODY: &str = "first_run.restore_body";
 pub const FIRST_RUN_RESTORE_CHOOSE_VAULT: &str = "first_run.restore_choose_vault";
