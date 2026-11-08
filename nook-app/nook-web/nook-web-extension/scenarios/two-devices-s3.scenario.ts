@@ -10,6 +10,7 @@ import { firstPage } from './dev-browser'
 import {
   expectBothDevicesCounted,
   expectDevicesGrouped,
+  expectJourney,
   expectUnlockedKeyringCountsBothDevices,
   issueInvite,
   joinWithInvite,
@@ -28,7 +29,9 @@ import {
 // carrying its S3 key; the second opens the invite, protects its own key
 // with a PIN, joins, opens the vault, and reopens and unlocks too. Every
 // step's console and app logs are audited on both devices; any error fails
-// the scenario. Both windows stay open, the keyring's checklist done.
+// the scenario. The second device's set-up journey then waits only for its
+// own extension, which it pairs. Both windows stay open, the keyring's
+// set-up journey done on each.
 test('two devices on one S3 keyring, the second joined from an invite', async () => {
   await runScenario(async (devices) => {
     const first = await devices.open('first-device')
@@ -58,6 +61,20 @@ test('two devices on one S3 keyring, the second joined from an invite', async ()
     await devices.step('first device: reload and unlock', () =>
       reloadAndUnlockWithPin(vault),
     )
+    await devices.step(
+      'first device: set-up journey leads with a second device',
+      () =>
+        expectJourney(vault, {
+          keyringName: 'S3 keyring',
+          progress: '2 of 3 done',
+          steps: [
+            ['copy', 'done'],
+            ['device', 'open'],
+            ['extension', 'done'],
+          ],
+          lead: 'Add a device',
+        }),
+    )
     let invite = ''
     await devices.step('first device: invite issued', async () => {
       invite = await issueInvite(vault)
@@ -74,8 +91,38 @@ test('two devices on one S3 keyring, the second joined from an invite', async ()
     await devices.step('first device: keyring counts both devices', () =>
       expectBothDevicesCounted(vault, 'S3 keyring'),
     )
-    await devices.step('second device: keyring counts both devices', () =>
-      expectBothDevicesCounted(joiner, 'S3 keyring'),
+    await devices.step(
+      'second device: set-up journey waits only for its extension',
+      async () => {
+        await expectJourney(joiner, {
+          keyringName: 'S3 keyring',
+          progress: '2 of 3 done',
+          steps: [
+            ['copy', 'done'],
+            ['device', 'done'],
+            ['extension', 'open'],
+          ],
+          lead: 'Connect extension',
+        })
+        if (process.env.LOOK_OUT) {
+          await joiner
+            .getByTestId('identity-protection-toggle')
+            .click()
+          await joiner
+            .getByTestId('identity-card-protection')
+            .screenshot({ path: `${process.env.LOOK_OUT}/second-journey.png` })
+          await joiner.getByTestId('identity-protection-close').click()
+        }
+      },
+    )
+    await devices.step('second device: extension PIN', () =>
+      protectExtensionWithPin(second),
+    )
+    await devices.step('second device: extension paired', () =>
+      pairExtension(second, joiner),
+    )
+    await devices.step('second device: set-up journey done', () =>
+      expectUnlockedKeyringCountsBothDevices(joiner, 'S3 keyring'),
     )
     await devices.step('first device: apps grouped by device', async () => {
       await expectDevicesGrouped(vault)

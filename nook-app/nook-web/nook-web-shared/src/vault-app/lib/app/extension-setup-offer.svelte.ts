@@ -35,11 +35,14 @@ export class ExtensionSetupOfferModel {
   }
 
   refresh(): void {
-    this.browser = this.supported
+    // Runs inside an effect: it writes both offers and reads neither back,
+    // or the effect would depend on its own writes.
+    const browser: ExtensionSetupOffer = this.supported
       ? extensionSetupBrowser.loadExtensionSetupOffer()
       : { kind: ExtensionSetupOfferKind.Hidden };
+    this.browser = browser;
     this.offer = this.vault.isAuthenticated
-      ? this.browser
+      ? browser
       : { kind: ExtensionSetupOfferKind.Hidden };
   }
 
