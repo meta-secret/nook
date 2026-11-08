@@ -180,12 +180,12 @@ identity may enroll.
     snapshots. A retained public app ID is identity scope, not unlock proof.
   - Load each local identity's vault-access rows from only its own app-scoped
     descriptive profiles.
-- **Existing-vault import:**
-  - Start from the provider listing in
-    [auth-providers.md](auth-providers.md#what-the-provider-already-holds):
-    another identity's vault is imported as a separate vault or requested,
-    by how this device can open it.
-  - If the authorized app key already belongs to an identity, add the imported
+- **Vaults that arrive with a keyring:**
+  - A provider's vaults reach this browser only with their recovered or
+    joined keyring, as
+    [recover a keyring from a sync provider](#recover-a-keyring-from-a-sync-provider)
+    states. No vault is imported on its own.
+  - If the authorized app key already belongs to an identity, add the arriving
     vault grant to that identity rather than synthesizing a duplicate owner.
   - Reject the roster snapshot if its event index names a missing event or an
     invalid event ID.
@@ -503,6 +503,40 @@ of the same identity without replication.
 
 **Required:** add the provider on **Identity → Sync**. The row replicates the
 identity log and both vaults.
+
+### Recover a keyring from a sync provider
+
+A sync provider keeps keyrings, not vaults. Each remote mount belongs to one
+identity (a keyring in the UI). It replicates that identity's control log and
+the event log of every vault the identity owns. A browser therefore reaches a
+provider's vaults only through their keyring.
+
+- **Ways in:** each keyring a provider lists offers one of two.
+  - **Recover it:** a passkey re-derives a member app key, or a
+    [recovery passphrase](#recover-a-keyring-with-a-recovery-passphrase)
+    approves this device's fresh key.
+  - **Ask to join:** a member device approves this device's fresh key.
+- **Vaults:** they come with the keyring and open through it.
+  - Each Simple vault self-enrolls on its first open.
+  - A Sentinel vault keeps [its ceremony](#keep-sentinel-vaults-on-their-ceremony).
+- **Never per vault:** a vault is never imported, opened, or recovered from a
+  provider on its own. Provider recovery is never a step of creating a vault.
+- **Entry points:** **Recover keyring** on the keyrings page and **Recover
+  from a sync provider** on first run open the provider restore, titled
+  **Recover your keyring**. It lists the provider's keyrings. **New vault**
+  only creates a vault.
+
+The [identity decisions](provider-identity-decisions.md) record owns each
+listed keyring's decisions. The
+[provider listing](auth-providers.md#what-the-provider-already-holds) owns
+what is read from the provider without a key.
+
+**Prohibited:** offer **Import from sync provider** or **Open an existing
+vault** beside **New vault**, or describe provider recovery as restoring,
+importing, or opening one vault.
+
+**Required:** **New vault** creates a vault. A provider's vaults reach this
+browser when their keyring is recovered or joined.
 
 ## Browser extension boundary
 

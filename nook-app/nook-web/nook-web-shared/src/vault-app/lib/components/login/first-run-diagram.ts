@@ -180,8 +180,9 @@ export function firstRunSyncDiagram({
   };
 }
 
-/** Recovery: the sync provider, filled in, holds the vaults the passkey
- * opens. */
+/** Recovery: the sync provider, filled in, keeps the keyring, and the
+ * keyring's passkey unlocks it. Providers keep keyrings, not vaults: the
+ * vaults come with the keyring. */
 export function firstRunRecoveryDiagram(
   vault: VaultState,
 ): FirstRunDiagramView {
@@ -196,23 +197,23 @@ export function firstRunRecoveryDiagram(
         arrow: { kind: FirstRunDiagramArrowKind.Start },
       },
       {
+        icons: [KeyRound],
+        label: vault.t(I18N_KEYS.FirstRunDiagramIdentity),
+        testId: "first-run-recovery-diagram-keyring",
+        current: false,
+        arrow: {
+          kind: FirstRunDiagramArrowKind.Forward,
+          label: vault.t(I18N_KEYS.FirstRunRestoreDiagramKeeps),
+        },
+      },
+      {
         icons: [Fingerprint],
         label: vault.t(I18N_KEYS.FirstRunDiagramPasskey),
         testId: "first-run-recovery-diagram-passkey",
         current: false,
         arrow: {
-          kind: FirstRunDiagramArrowKind.Forward,
-          label: vault.t(I18N_KEYS.FirstRunRestoreDiagramRecoverWith),
-        },
-      },
-      {
-        icons: [Vault],
-        label: vault.t(I18N_KEYS.FirstRunDiagramVaults),
-        testId: "first-run-recovery-diagram-vaults",
-        current: false,
-        arrow: {
-          kind: FirstRunDiagramArrowKind.Forward,
-          label: vault.t(I18N_KEYS.FirstRunDiagramOpens),
+          kind: FirstRunDiagramArrowKind.Back,
+          label: vault.t(I18N_KEYS.FirstRunDiagramUnlocks),
         },
       },
     ],

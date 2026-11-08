@@ -56,10 +56,11 @@ manager imports keep "identities" for their person and address items.
   opening from their rows (which starts key recovery). Local vaults no card lists, or every local vault when the
   identity directory cannot be read, are listed on their own so they always
   open.
-- **New vault** on the current identity's card creates a vault for it.
+- **New vault** on the current identity's card only creates a vault for it.
   **New identity** starts the new-identity flow (below). Beside it, a
   quieter **Check access** opens the check of which identity a passkey
-  opens; the header carries no such button.
+  opens, and **Recover keyring** opens [recovery](#recovery); the header
+  carries no such button.
 - A browser extension asking to connect is answered beside the current
   identity's card, never on a page of its own. While locked, that panel
   unlocks the identity; once unlocked, the approval itself (the extension
@@ -149,9 +150,12 @@ passphrase-protected code, so joining shows no sign-in.
 ### Recovery
 
 For a browser with no device left that has the identity: pick the sync
-provider that holds the vault, then unlock with a passkey synced to this
-device. If another device still has the
-identity, joining from it is the path instead.
+provider that keeps the identity, then recover it with a passkey synced to
+this device or a recovery passphrase. Its vaults come with it. If another
+device still has the identity, joining from it is the path instead. A sync
+provider keeps identities, not vaults, as
+[recover a keyring from a sync provider](../../../nook-platform/.cortex/docs/architecture/identity-vault-architecture.md#recover-a-keyring-from-a-sync-provider)
+states.
 
 ### New identity
 

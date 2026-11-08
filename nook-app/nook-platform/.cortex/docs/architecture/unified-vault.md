@@ -180,10 +180,10 @@ stateDiagram-v2
   GetStarted --> Passkey: confirm Simple create
   Passkey --> CreateLocal: device protection ready
   Passkey --> Unlock: authorize existing vault
-  GetStarted --> ConnectProvider: cloud provider
+  GetStarted --> ConnectProvider: recover identity
   CreateLocal --> Vault: session unlocked
   ConnectProvider --> Reconcile: remote exists
-  ConnectProvider --> Vault: import / pull existing
+  ConnectProvider --> Vault: identity recovered or joined
   Unlock --> Vault: device keys
   Vault --> Passkey: Lock (clear session + device identity)
   Passkey --> LoginGate
@@ -196,21 +196,23 @@ stateDiagram-v2
    passkey. Passkey/device protection runs when the user confirms Simple create,
    or first when unlocking an existing local vault. Then load the local cache.
    **Exception:** opening `#enroll=` on an empty browser is join/onboarding for
-   an existing vault — skip create landing, require device protection, then show
+   an existing identity — skip create landing, require device protection, then show
    Finish device onboarding with the invite code.
 2. **First visit / GetStarted:** after the public site selects Simple or
-   Sentinel, the isolated app presents **Create a new vault** and **Open an
-   existing vault** as sibling intents. Creation either creates a Simple vault
-   locally (after deferred passkey) or starts Sentinel genesis without storage
-   until the vault is atomically created. Opening connects a sync provider to
-   import an existing vault of the app's fixed type. Setup first lists the
-   vaults the provider holds without decrypting them, as
+   Sentinel, the isolated app settles the identity first: create one, join
+   one, or recover one from a sync provider. Creation either creates a Simple
+   vault locally (after deferred passkey) or starts Sentinel genesis without
+   storage until the vault is atomically created. Recovery lists the
+   identities the provider keeps without decrypting them, as
    [auth-providers.md](auth-providers.md#what-the-provider-already-holds)
-   describes. See [sentinel-genesis.md](sentinel-genesis.md).
+   describes. Their vaults come with the recovered or joined identity; see
+   [recover a keyring from a sync provider](identity-vault-architecture.md#recover-a-keyring-from-a-sync-provider)
+   and [sentinel-genesis.md](sentinel-genesis.md).
 3. **Lock** (`VaultState.lockVault`) clears in-memory secrets and the device
    identity; user returns through the passkey gate
    ([vault-session-and-lock.md](vault-session-and-lock.md)).
-4. **After unlock**, sync providers in Settings replicate the **current** vault (`store_id`).
+4. **After unlock**, sync providers on Identity → Sync replicate the identity's
+   control log and **every** vault it owns.
 
 Device-key multi-device flows use the `auth:`, `joins:`, and `members:` sections.
 

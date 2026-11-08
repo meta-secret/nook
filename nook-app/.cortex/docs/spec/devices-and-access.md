@@ -156,8 +156,11 @@ It is never shown as stored on one physical laptop.
   - Require a verified signing key for every member in new Simple-vault genesis.
   - Require every stored event's computed ID to match its index and row key.
   - Validate the event index before writing a new event row.
-  - Attach an imported vault to the identity that already owns the authorized
-    app key instead of synthesizing duplicate identity ownership.
+  - Attach an arriving vault grant to the identity that already owns the
+    authorized app key instead of synthesizing duplicate identity ownership.
+    Vaults arrive only with their identity, as
+    [recover a keyring from a sync provider](../../../nook-platform/.cortex/docs/architecture/identity-vault-architecture.md#recover-a-keyring-from-a-sync-provider)
+    states.
 - **Simple genesis marker:** Use `pending_simple_genesis_v1`.
   - Store `storeId`, `identityId`, `createdAt`, and `eventState`.
   - Make the marker durable before event creation and resume it after reload.

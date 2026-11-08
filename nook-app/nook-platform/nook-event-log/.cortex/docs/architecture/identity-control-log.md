@@ -277,10 +277,12 @@ so replicas converge by set union. `PlacedNamespace` owns the layout.
 
 - **Discovery**
   - `EventLogNamespaceKind` lists the identities or vaults a target holds.
-  - Recovering from a provider lists its vault namespaces and asks which vault
-    to open when there are several. Each choice shows the summary that
+  - Recovering from a provider lists the identities it keeps, each with one
+    decision, as
+    [identity decisions](../../../../.cortex/docs/architecture/provider-identity-decisions.md)
+    describe. Their vault namespaces feed the summary that
     [provider vault listing](vault-event-log.md#provider-vault-listing)
-    describes.
+    describes; no vault is opened on its own.
 - **Identity sync**
   - List each mount's identity namespace, fetch missing events, validate them,
     and union them locally.

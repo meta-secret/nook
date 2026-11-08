@@ -246,19 +246,23 @@ revocation operations update that public projection. After quorum reconstructs
 `members_key`, Rust rebuilds the canonical encrypted `members:` rows from the
 retained roster; event replay therefore never silently discards Sentinel members.
 
-## Sync and Import
+## Sync and Access
 
-Sync is a post-genesis backup/replication concern for both vault types:
+Sync is a post-genesis backup/replication concern for both vault types. A
+vault reaches another browser only with its recovered or joined identity, as
+[recover a keyring from a sync provider](identity-vault-architecture.md#recover-a-keyring-from-a-sync-provider)
+states:
 
-- **Simple import:** fetch the encrypted vault, then use an enrolled device key
+- **Simple access:** fetch the encrypted vault, then use an enrolled device key
   or supported simple-vault recovery/enrollment path.
-- **Sentinel import:** fetch the encrypted vault and roster/share ciphertext, then
+- **Sentinel access:** fetch the encrypted vault and roster/share ciphertext, then
   require an enrolled participant share plus a valid quorum ceremony. Provider
   credentials alone grant storage access, not Sentinel access.
 
-Import and creation are separate top-level workflows. Import detects the vault
-type from validated metadata and routes to the matching access ceremony. Sentinel
-genesis itself does not require a provider.
+Identity recovery and vault creation are separate top-level workflows. Opening
+a vault that arrived with the identity detects its type from validated
+metadata and routes to the matching access ceremony. Sentinel genesis itself
+does not require a provider.
 
 ## Relationship to SLIP-0039 Recovery
 

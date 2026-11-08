@@ -49,13 +49,16 @@ individual provider connection; it does not alter the vault's cryptographic
 access model. Google Drive and iCloud invites always use the credential-free
 shared grant, whatever the vault's `replication_type`.
 
-## Creation and Import UX
+## Creation and Recovery UX
 
-Creation and import are separate top-level workflows. Empty-device get started
-uses the **Landing → Sentinel** handoff: **name the vault first**, then choose
-exactly one of Simple create or Sentinel create. Participants join only through
-an owner-issued invitation URL. Sync-provider import remains a secondary
-“already have a vault” action, not a third create intent.
+Vault creation and identity recovery are separate top-level workflows.
+Empty-device get started uses the **Landing → Sentinel** handoff: **name the
+vault first**, then choose exactly one of Simple create or Sentinel create.
+Participants join only through an owner-issued invitation URL. A sync
+provider keeps identities, not vaults. Recovering an identity from one is a
+secondary action, not a third create intent, and its vaults come with it, as
+[recover a keyring from a sync provider](identity-vault-architecture.md#recover-a-keyring-from-a-sync-provider)
+states.
 
 - **Landing handoff (empty device)**
   - **Choice or state:** Vault name
@@ -125,9 +128,10 @@ device-key envelope for the initiating device. The vault is immediately
 openable on that device. Sync providers are optional and can be connected later
 as backup/replica targets.
 
-Importing a Simple vault retrieves encrypted data first, then uses an existing
-device envelope, an identity invite code or approved join request, or the
-keyring recovery passphrase. Provider
+Opening a Simple vault that arrives with a recovered or joined identity
+retrieves its encrypted data first, then uses an existing device envelope, an
+identity invite code or approved join request, or the keyring recovery
+passphrase. Provider
 credentials grant storage access only.
 
 ## Sentinel Lifecycle

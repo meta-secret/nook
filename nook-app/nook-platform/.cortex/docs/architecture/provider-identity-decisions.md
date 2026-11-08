@@ -26,7 +26,8 @@ On the recovery screen:
 
 This record owns the rules and the identity operations behind them. The
 [identity architecture](identity-vault-architecture.md) owns identity, app key,
-and DEK ownership. The [provider listing](auth-providers.md#what-the-provider-already-holds)
+and DEK ownership, and the rule that a provider keeps keyrings, not vaults
+([recover a keyring from a sync provider](identity-vault-architecture.md#recover-a-keyring-from-a-sync-provider)). The [provider listing](auth-providers.md#what-the-provider-already-holds)
 owns what is read from the provider without a key.
 
 ## Rules
