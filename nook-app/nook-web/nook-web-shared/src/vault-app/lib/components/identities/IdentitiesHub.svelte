@@ -24,7 +24,10 @@ join) sit between the hero and the cards.
     type DeviceRecoveryRequest,
   } from '$lib/components/device-recovery'
   import { IdentityCards } from './identity-cards.svelte'
-  import { ProtectionStepPageKind, protectionStepPage } from './protection-step'
+  import {
+    takeProtectionStep,
+    type ProtectionStepRequest,
+  } from './protection-step'
   import {
     configured_vault_application,
     VaultApplication,
@@ -57,8 +60,6 @@ join) sit between the hero and the cards.
     onClosePanels = () => {},
     currentHealth,
     onManageSection,
-    onInstallExtension,
-    onOpenExtensionPanel,
     overview,
     overviewOpen = false,
     onLock = () => {},
@@ -100,11 +101,6 @@ join) sit between the hero and the cards.
     currentHealth?: NookIdentityHealth
     /** Open one of the current identity's pages from Manage on its card. */
     onManageSection?: (target: IdentitySectionTarget) => void
-    /** Open the browser extension's install page: a checklist step. */
-    onInstallExtension?: () => void
-    /** Open the installed extension's side panel to connect it: a
-     * checklist step. */
-    onOpenExtensionPanel?: () => void
     /** The current identity's overview, shown beside its card. */
     overview?: Snippet
     /** The current identity's overview is open. */
@@ -497,24 +493,18 @@ join) sit between the hero and the cards.
               ? {
                   health: currentHealth,
                   onProtect: (action: NookIdentityNextStep) => {
-                    const page = protectionStepPage(action)
-                    switch (page.kind) {
-                      case ProtectionStepPageKind.Done:
-                        return
-                      case ProtectionStepPageKind.InstallExtension:
-                        onInstallExtension?.()
-                        return
-                      case ProtectionStepPageKind.ExtensionPanel:
-                        onOpenExtensionPanel?.()
-                        return
-                      case ProtectionStepPageKind.Page: {
+                    const step: ProtectionStepRequest = {
+                      action,
+                      vault,
+                      openSection: (section: WorkspaceSection) => {
                         const target: IdentitySectionTarget = {
                           ...targetFor(card.identityId),
-                          section: page.section,
+                          section,
                         }
                         onManageSection(target)
-                      }
+                      },
                     }
+                    takeProtectionStep(step)
                   },
                 }
               : {}}

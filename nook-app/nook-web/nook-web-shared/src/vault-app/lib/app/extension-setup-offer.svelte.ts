@@ -55,13 +55,16 @@ export class ExtensionSetupOfferModel {
     );
   }
 
-  /** Pair this vault from its page; Devices owns install and its errors. */
   /** Show the connected extension's side panel beside this vault, or say
    * why it did not open. */
   async openSidePanel(): Promise<void> {
-    if (await extensionSetupBrowser.openExtensionSidePanel()) return;
-    this.vault.errorMsg = this.vault.t(
-      I18N_KEYS.ExtensionSetupVaultPanelFailed,
-    );
+    await showExtensionSidePanel(this.vault);
   }
+}
+
+/** Show the installed extension's side panel in this window, where it
+ * connects and unlocks, or say why it did not open. */
+export async function showExtensionSidePanel(vault: VaultState): Promise<void> {
+  if (await extensionSetupBrowser.openExtensionSidePanel()) return;
+  vault.errorMsg = vault.t(I18N_KEYS.ExtensionSetupVaultPanelFailed);
 }
