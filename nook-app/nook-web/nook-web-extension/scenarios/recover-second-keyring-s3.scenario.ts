@@ -157,7 +157,7 @@ test('a browser with its own keyring recovers a second keyring and opens its vau
         )
         await expect(away).toHaveAttribute('data-state', 'unavailable')
         await away.click()
-        await joiner.getByTestId('vault-panel-open-away').click()
+        await joiner.getByTestId('vault-panel-open').click()
         await expect(joiner.getByTestId('vault-panel')).toBeVisible()
         await expect(joiner).toHaveURL(/\/vault$/)
         // Background work after the open (the next sync, the extension

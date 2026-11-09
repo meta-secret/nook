@@ -315,11 +315,9 @@ export async function reloadAndUnlockWithPin(page: Page): Promise<void> {
   // The unlocked keyring keeps its vault selected but closed: its row opens
   // the vault panel, whose Open enters the vault.
   await page.getByTestId('identity-vault-row').first().click()
-  const open = page
-    .getByTestId('vault-panel-open')
-    .or(page.getByTestId('vault-panel-open-away'))
-    .first()
-  await open.click()
+  // A vault not on this browser opens from the provider as its row is
+  // picked; the panel's Open vault then goes into it.
+  await page.getByTestId('vault-panel-open').click()
   await expect(page.getByTestId('vault-panel')).toBeVisible()
 }
 

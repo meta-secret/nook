@@ -49,7 +49,6 @@ extension), usable once it is open.
     onUseIdentity,
     onManage,
     onDelete,
-    onOpenAway,
     onClose,
   }: {
     vault: VaultState
@@ -75,9 +74,6 @@ extension), usable once it is open.
     /** Delete a vault this browser does not hold from the identity everywhere;
      * offered only while the identity is unlocked. */
     onDelete?: () => Promise<void>
-    /** Bring the vault from the identity's sync provider and open it;
-     * offered only while the identity is unlocked. */
-    onOpenAway?: () => Promise<void>
     onClose: () => void
   } = $props()
 
@@ -372,30 +368,15 @@ extension), usable once it is open.
     </section>
   {:else}
     <section class="grid w-full max-w-md gap-4" data-testid="vault-panel-away">
-      {#if onOpenAway}
-        <button
-          type="button"
-          class="nk-identity-menu-item nk-plate nk-identity-menu-lead group w-full py-3"
-          data-testid="vault-panel-open-away"
-          disabled={busy}
-          onclick={() => void onOpenAway()}
+      <!-- A vault of the unlocked keyring opens in place as its row is
+        picked: the panel says so until it shows the open vault. -->
+      {#if busy}
+        <p
+          class="text-sm text-pretty text-muted-foreground"
+          data-testid="vault-panel-opening"
         >
-          <span class="nk-vault-icon size-10" aria-hidden="true">
-            <FolderOpen class="size-4" />
-          </span>
-          <span class="flex min-w-0 flex-1 flex-col">
-            <span class="truncate text-[0.9375rem] font-medium text-foreground"
-              >{vault.t(I18N_KEYS.WorkspaceVaultPanelOpen)}</span
-            >
-            <span class="truncate text-xs text-muted-foreground"
-              >{vault.t(I18N_KEYS.WorkspaceVaultPanelOpenAwayHint)}</span
-            >
-          </span>
-          <ArrowRight
-            class="size-4 flex-none text-muted-foreground transition-transform group-hover:translate-x-0.5"
-            aria-hidden="true"
-          />
-        </button>
+          {vault.t(I18N_KEYS.WorkspaceVaultPanelOpening)}
+        </p>
       {:else}
         <p class="text-sm text-pretty text-muted-foreground">
           {vault.t(I18N_KEYS.WorkspaceVaultPanelAway)}

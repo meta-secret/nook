@@ -197,7 +197,7 @@ test('a fresh device recovers an S3 keyring by asking to join it', async () => {
         )
         await expect(away).toHaveAttribute('data-state', 'unavailable')
         await away.click()
-        await joiner.getByTestId('vault-panel-open-away').click()
+        await joiner.getByTestId('vault-panel-open').click()
         await expect(joiner.getByTestId('vault-panel')).toBeVisible()
         await expect(joiner.getByTestId('identities-hub')).toHaveCount(0)
         expect(await openStoreId(joiner)).toBe(laterStoreId)

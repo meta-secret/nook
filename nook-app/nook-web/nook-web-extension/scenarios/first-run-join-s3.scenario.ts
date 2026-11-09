@@ -72,7 +72,6 @@ test('first run joins an S3 keyring and its vault opens from the panel', async (
         )
         // Opened by setup: not offered from the provider again.
         await expect(row).toHaveAttribute('data-state', 'open')
-        await expect(joiner.getByTestId('vault-panel-open-away')).toHaveCount(0)
         await joiner.getByTestId('vault-panel-open').click()
         await expect(
           joiner

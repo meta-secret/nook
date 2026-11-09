@@ -121,17 +121,20 @@ export async function expectIdentityMembers(
     .toBe(true)
 }
 
-/** The joined app opens the vault its invite granted, from that vault's row
- * on the identity's card. */
+/** The joined app opens the vault its invite granted from that vault's row
+ * on the identity's card: the row opens it from the sync provider in place,
+ * and the panel's Open vault goes into it. */
 export async function openVaultAfterIdentityJoin(page: Page): Promise<void> {
   const awayRow = page
     .locator('[data-testid="identity-vault-row"][data-state="unavailable"]')
     .first()
-  const openVault = page.getByTestId('vault-panel-open-away')
+  const openVault = page.getByTestId('vault-panel-open')
   try {
     await expect(awayRow).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    // Every unlock starts a new idle tracker; keep the e2e idle lock off.
+    await keepVaultIdleLockDisabled(page)
     await awayRow.click()
     await expect(openVault).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -149,8 +152,6 @@ export async function openVaultAfterIdentityJoin(page: Page): Promise<void> {
     await dumpNookLogs(page, 'openVaultAfterIdentityJoin')
     throw error
   }
-  // Every unlock starts a new idle tracker; keep the e2e idle lock off.
-  await keepVaultIdleLockDisabled(page)
   await openVault.click()
   await waitForVaultUnlocked(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
   await disableVaultIdleLock(page)

@@ -215,7 +215,12 @@ panel sits inside the card, which then spans the full row.
     closeOthers()
     vault.vaultPanelStoreId = storeId
     const row = card.vaults.find((candidate) => candidate.storeId === storeId)
-    if (row?.state === IdentityVaultRowState.Unavailable) return
+    if (row?.state === IdentityVaultRowState.Unavailable) {
+      // The unlocked keyring opens it from its sync provider right here:
+      // the panel shows the open vault, with no second Open step.
+      if (live) void openAwayVault(storeId)
+      return
+    }
     // An unlocked identity opens its vault in place with no prompt, so the
     // panel offers the vault's own actions straight away.
     if (live && row?.state === IdentityVaultRowState.Available && onUnlockVault)
@@ -263,8 +268,14 @@ panel sits inside the card, which then spans the full row.
   }
 
   /** A vault of the unlocked identity this browser does not hold opens from
-   * its sync provider, with the key the identity granted this browser. */
+   * its sync provider, with the key the identity granted this browser, in
+   * place: the keyrings page stays, with the open vault's panel beside its
+   * card. */
   async function openAwayVault(storeId: string): Promise<void> {
+    // Settled before the open: once it opens, this page may give way to
+    // the workspace, which keeps the keyrings page and this panel.
+    vault.openSection(WorkspaceSection.Identities)
+    vault.vaultPanelStoreId = storeId
     const opened = await vault.identityControl.openVault(storeId)
     if (opened.isErr()) vault.errorMsg = vault.t(opened.error.translationKey)
   }
@@ -660,7 +671,6 @@ panel sits inside the card, which then spans the full row.
         {...live && vaultOpenRow.state === IdentityVaultRowState.Unavailable
           ? {
               onDelete: () => deleteAwayVault(vaultOpenRow.storeId),
-              onOpenAway: () => openAwayVault(vaultOpenRow.storeId),
             }
           : {}}
         onClose={() => (vault.vaultPanelStoreId = '')}

@@ -2045,7 +2045,7 @@
     "vault_getting_access": "Getting access",
     "vault_panel_open": "Open vault",
     "vault_panel_open_hint": "See and edit its secrets",
-    "vault_panel_open_away_hint": "From your sync provider",
+    "vault_panel_opening": "Opening it from your sync provider…",
     "vault_panel_unlock_passkey": "Unlock with passkey",
     "vault_panel_unlock_pin": "Unlock with PIN",
     "vault_panel_manage_locked": "Available after unlocking",

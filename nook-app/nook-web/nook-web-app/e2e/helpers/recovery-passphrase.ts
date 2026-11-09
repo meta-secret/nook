@@ -68,7 +68,8 @@ export async function openStoreId(page: Page): Promise<string> {
 
 /** Open one of the keyring's vaults from its row on the hub: one this
  * browser holds unlocks and opens from its panel; one only granted to it
- * opens from the panel's away action, through the keyring's provider. */
+ * opens from the keyring's provider as its row is picked, then from its
+ * panel. */
 async function openKeyringVault(device: Page, storeId: string): Promise<void> {
   await openIdentitiesPage(device)
   const row = device.locator(
@@ -77,7 +78,6 @@ async function openKeyringVault(device: Page, storeId: string): Promise<void> {
   await expect(row).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click()
   const controls = [
-    device.getByTestId('vault-panel-open-away'),
     device.getByTestId('vault-panel-unlock'),
     device.getByTestId('vault-panel-open'),
   ]
