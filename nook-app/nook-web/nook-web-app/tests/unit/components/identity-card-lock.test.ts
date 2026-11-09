@@ -228,6 +228,20 @@ describe('identity card width beside a vault panel', () => {
 })
 
 describe('a vault of the unlocked keyring that is not on this browser', () => {
+  /** The same card once the vault opened from its provider. */
+  function openCard(): IdentityCardView {
+    return {
+      ...card(IdentityCardStatus.Unlocked),
+      vaults: [
+        {
+          storeId: 'store-qwe',
+          label: 'Travel',
+          state: IdentityVaultRowState.Open,
+        },
+      ],
+    }
+  }
+
   function renderAway(status: IdentityCardStatus) {
     const vault = VaultStateTestFixture.create()
     const view: IdentityCardView = {
@@ -263,8 +277,12 @@ describe('a vault of the unlocked keyring that is not on this browser', () => {
       WorkspaceSection.Identities,
     )
     expect(vault.vaultPanelStoreId).toBe('store-qwe')
-    // No second Open step from the provider.
-    expect(view.queryByTestId('vault-panel-open-away')).not.toBeTruthy()
+    // No panel for it until it is open: no Open step from the provider.
+    expect(view.queryByTestId('vault-panel-beside')).not.toBeTruthy()
+
+    await view.rerender({ card: openCard() })
+    expect(view.getByTestId('vault-panel-beside')).toBeTruthy()
+    expect(view.getByTestId('vault-panel-open')).toBeTruthy()
   })
 
   test('a failed open says why', async () => {
@@ -278,5 +296,7 @@ describe('a vault of the unlocked keyring that is not on this browser', () => {
     await tick()
 
     expect(vault.errorMsg).not.toBe('')
+    expect(vault.vaultPanelStoreId).toBe('')
+    expect(view.queryByTestId('vault-panel-beside')).not.toBeTruthy()
   })
 })

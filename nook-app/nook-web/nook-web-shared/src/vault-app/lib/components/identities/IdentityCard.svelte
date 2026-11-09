@@ -193,8 +193,14 @@ panel sits inside the card, which then spans the full row.
    * what belongs to that vault alone. Kept on the vault state, so the
    * panel stays open while the vault unlocks. */
   const vaultOpenId = $derived(vault.vaultPanelStoreId)
+  // A vault not on this browser has no panel: picking it opens it, and the
+  // panel shows once it is open.
   const vaultOpenRow = $derived(
-    card.vaults.find((row) => row.storeId === vaultOpenId),
+    card.vaults.find(
+      (row) =>
+        row.storeId === vaultOpenId &&
+        row.state !== IdentityVaultRowState.Unavailable,
+    ),
   )
   /** A panel beside the card: the card spreads across its whole row. */
   const spread = $derived(
@@ -262,7 +268,7 @@ panel sits inside the card, which then spans the full row.
   })
 
   /** A vault this browser does not hold opens only on the unlocked
-   * identity, which can delete it everywhere. */
+   * identity, from its sync provider. */
   function rowDisabled(row: IdentityVaultRow): boolean {
     return busy || (row.state === IdentityVaultRowState.Unavailable && !live)
   }
@@ -277,13 +283,12 @@ panel sits inside the card, which then spans the full row.
     vault.openSection(WorkspaceSection.Identities)
     vault.vaultPanelStoreId = storeId
     const opened = await vault.identityControl.openVault(storeId)
-    if (opened.isErr()) vault.errorMsg = vault.t(opened.error.translationKey)
+    if (opened.isErr()) {
+      vault.errorMsg = vault.t(opened.error.translationKey)
+      vault.vaultPanelStoreId = ''
+    }
   }
 
-  async function deleteAwayVault(storeId: string): Promise<void> {
-    const deleted = await vault.identityControl.deleteVaultEverywhere(storeId)
-    if (deleted.isOk()) vault.vaultPanelStoreId = ''
-  }
 </script>
 
 {#snippet panelRow(
@@ -668,11 +673,6 @@ panel sits inside the card, which then spans the full row.
           }
           onManageVault?.(target)
         }}
-        {...live && vaultOpenRow.state === IdentityVaultRowState.Unavailable
-          ? {
-              onDelete: () => deleteAwayVault(vaultOpenRow.storeId),
-            }
-          : {}}
         onClose={() => (vault.vaultPanelStoreId = '')}
       />
     </div>

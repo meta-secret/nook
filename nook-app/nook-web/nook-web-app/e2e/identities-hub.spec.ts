@@ -285,7 +285,8 @@ test.describe('an identity without a vault', () => {
       page.getByText(
         enLocale.provider_identities.set_up_here.replace('{identity}', 'Solo'),
       ),
-    ).toBeVisible()
+      // Said once the keyring's log is synced to Drive.
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     await expect(page.getByTestId('authenticated-shell')).toHaveCount(0)
     await solo.getByTestId('identity-overview-toggle').click()
     await expect(

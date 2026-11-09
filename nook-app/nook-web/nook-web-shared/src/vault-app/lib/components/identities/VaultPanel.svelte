@@ -16,7 +16,6 @@ extension), usable once it is open.
     Lock,
     PencilLine,
     RefreshCw,
-    Trash2,
     UserRoundCheck,
     X,
   } from '@lucide/svelte'
@@ -48,7 +47,6 @@ extension), usable once it is open.
     onUnlock,
     onUseIdentity,
     onManage,
-    onDelete,
     onClose,
   }: {
     vault: VaultState
@@ -71,55 +69,31 @@ extension), usable once it is open.
     onUseIdentity: () => void
     /** One of this open vault's pages. */
     onManage: (section: WorkspaceSection) => void
-    /** Delete a vault this browser does not hold from the identity everywhere;
-     * offered only while the identity is unlocked. */
-    onDelete?: () => Promise<void>
     onClose: () => void
   } = $props()
 
   const label = $derived(row.label || vault.t(I18N_KEYS.WorkspaceVaultFallback))
   const open = $derived(row.state === IdentityVaultRowState.Open)
   const dormant = $derived(row.state === IdentityVaultRowState.Dormant)
-  const reachable = $derived(row.state !== IdentityVaultRowState.Unavailable)
   /** Access to the vault is being set up: its key is read and the vault
    * decrypted with it, which takes a few seconds for a large vault. */
   const gettingAccess = $derived(
-    !open && reachable && !dormant && vault.isVerifying,
+    !open && !dormant && vault.isVerifying,
   )
   /** Why the last unlock did not finish (a cancelled passkey, a wrong PIN),
    * beside the button that retries it. */
   const unlockError = $derived(
-    !open && reachable && !dormant ? vault.errorMsg : '',
+    !open && !dormant ? vault.errorMsg : '',
   )
   /** When this browser's key cannot be unlocked, resetting it is offered
    * here, where the unlock failed. */
   const recovery = $derived.by(() => {
-    if (open || !reachable || dormant) return DeviceRecoveryKind.None
+    if (open || dormant) return DeviceRecoveryKind.None
     const request: DeviceRecoveryRequest = {
       status: vault.deviceProtectionStatus,
       unlockFailed: Boolean(unlockError),
     }
     return new DeviceRecoveryOffer(request).kind
-  })
-
-  /** Deleting a vault this browser does not hold, confirmed by its name. */
-  let confirmingDelete = $state(false)
-  let deleteName = $state('')
-  let deleting = $state(false)
-
-  async function deleteEverywhere(): Promise<void> {
-    if (!onDelete) return
-    deleting = true
-    await onDelete()
-    deleting = false
-  }
-
-  const deleteConfirmText = $derived.by(() => {
-    const request: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.VaultAdminDeleteConfirm,
-      replacements: { vault: label },
-    }
-    return vault.t(request)
   })
 
   /** Renaming an open vault, in place of its name. */
@@ -255,9 +229,7 @@ extension), usable once it is open.
           ? vault.t(I18N_KEYS.WorkspaceVaultOpen)
           : gettingAccess
             ? vault.t(I18N_KEYS.WorkspaceVaultGettingAccess)
-            : reachable
-              ? vault.t(I18N_KEYS.WorkspaceStatusLocked)
-              : vault.t(I18N_KEYS.WorkspaceVaultUnavailable)}
+            : vault.t(I18N_KEYS.WorkspaceStatusLocked)}
       />
       <button
         type="button"
@@ -298,7 +270,7 @@ extension), usable once it is open.
         aria-hidden="true"
       />
     </button>
-  {:else if reachable}
+  {:else}
     <section class="grid w-full max-w-md gap-4" data-testid="vault-panel-key">
       {#if dormant}
         <p class="text-sm text-pretty text-muted-foreground">{dormantHint}</p>
@@ -366,145 +338,68 @@ extension), usable once it is open.
         {/if}
       {/if}
     </section>
-  {:else}
-    <section class="grid w-full max-w-md gap-4" data-testid="vault-panel-away">
-      <!-- A vault of the unlocked keyring opens in place as its row is
-        picked: the panel says so until it shows the open vault. -->
-      {#if busy}
-        <p
-          class="text-sm text-pretty text-muted-foreground"
-          data-testid="vault-panel-opening"
-        >
-          {vault.t(I18N_KEYS.WorkspaceVaultPanelOpening)}
-        </p>
-      {:else}
-        <p class="text-sm text-pretty text-muted-foreground">
-          {vault.t(I18N_KEYS.WorkspaceVaultPanelAway)}
-        </p>
-      {/if}
-      {#if onDelete}
-        {#if confirmingDelete}
-          <div
-            class="nk-banner grid gap-3 border-l-destructive bg-destructive/5 p-4"
-            data-testid="vault-panel-delete-confirmation"
-          >
-            <p class="text-sm text-pretty text-foreground">
-              {deleteConfirmText}
-            </p>
-            <input
-              class="h-10 w-full border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-foreground/50"
-              aria-label={vault.t(I18N_KEYS.VaultAdminDeleteName)}
-              placeholder={label}
-              data-testid="vault-panel-delete-name"
-              disabled={deleting}
-              bind:value={deleteName}
-            />
-            <div class="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                data-testid="vault-panel-delete-confirm"
-                disabled={busy || deleting || deleteName.trim() !== label}
-                onclick={() => void deleteEverywhere()}
-              >
-                <Trash2 class="size-3.5" />
-                {vault.t(I18N_KEYS.VaultAdminDeleteConfirmButton)}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                data-testid="vault-panel-delete-cancel"
-                disabled={deleting}
-                onclick={() => {
-                  confirmingDelete = false
-                  deleteName = ''
-                }}
-              >
-                {vault.t(I18N_KEYS.CommonCancel)}
-              </Button>
-            </div>
-          </div>
-        {:else}
-          <Button
-            type="button"
-            variant="outline"
-            class="h-11 w-full text-destructive hover:text-destructive"
-            data-testid="vault-panel-delete"
-            disabled={busy}
-            onclick={() => (confirmingDelete = true)}
-          >
-            <Trash2 class="size-4" />
-            {vault.t(I18N_KEYS.VaultAdminDelete)}
-          </Button>
-        {/if}
-      {/if}
-    </section>
   {/if}
 
-  {#if reachable}
-    <section class="grid gap-3 border-t border-border pt-5">
-      <header class="flex items-baseline justify-between gap-3">
-        <h3
-          class="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground"
+  <section class="grid gap-3 border-t border-border pt-5">
+    <header class="flex items-baseline justify-between gap-3">
+      <h3
+        class="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground"
+      >
+        {vault.t(I18N_KEYS.WorkspaceVaultPanelManage)}
+      </h3>
+      {#if !open}
+        <span class="text-xs text-muted-foreground">
+          {gettingAccess
+            ? vault.t(I18N_KEYS.WorkspaceVaultPanelManageSoon)
+            : vault.t(I18N_KEYS.WorkspaceVaultPanelManageLocked)}
+        </span>
+      {/if}
+    </header>
+    <div class="grid gap-2 sm:grid-cols-2" data-testid="vault-panel-manage">
+      {#each manageItems as item (item.section)}
+        <button
+          type="button"
+          class="nk-identity-menu-item nk-plate disabled:cursor-default disabled:opacity-45"
+          data-testid={item.testId}
+          disabled={busy || !open}
+          onclick={() => onManage(item.section)}
         >
-          {vault.t(I18N_KEYS.WorkspaceVaultPanelManage)}
-        </h3>
-        {#if !open}
-          <span class="text-xs text-muted-foreground">
-            {gettingAccess
-              ? vault.t(I18N_KEYS.WorkspaceVaultPanelManageSoon)
-              : vault.t(I18N_KEYS.WorkspaceVaultPanelManageLocked)}
+          <span class="nk-vault-icon" aria-hidden="true">
+            <Download class="size-4" />
           </span>
-        {/if}
-      </header>
-      <div class="grid gap-2 sm:grid-cols-2" data-testid="vault-panel-manage">
-        {#each manageItems as item (item.section)}
-          <button
-            type="button"
-            class="nk-identity-menu-item nk-plate disabled:cursor-default disabled:opacity-45"
-            data-testid={item.testId}
-            disabled={busy || !open}
-            onclick={() => onManage(item.section)}
-          >
-            <span class="nk-vault-icon" aria-hidden="true">
-              <Download class="size-4" />
-            </span>
-            <span class="flex min-w-0 flex-1 flex-col">
-              <span class="flex min-w-0 items-baseline gap-2">
-                <span class="truncate text-sm font-medium text-foreground"
-                  >{item.title}</span
-                >
-                {#if item.count}
-                  <span
-                    class="font-mono text-[11px] text-muted-foreground"
-                    data-testid="{item.testId}-count">{item.count}</span
-                  >
-                {/if}
-              </span>
-              <span
-                class="truncate text-xs text-muted-foreground"
-                data-testid="{item.testId}-hint">{item.hint}</span
+          <span class="flex min-w-0 flex-1 flex-col">
+            <span class="flex min-w-0 items-baseline gap-2">
+              <span class="truncate text-sm font-medium text-foreground"
+                >{item.title}</span
               >
+              {#if item.count}
+                <span
+                  class="font-mono text-[11px] text-muted-foreground"
+                  data-testid="{item.testId}-count">{item.count}</span
+                >
+              {/if}
             </span>
-            {#if open}
-              <ChevronRight
-                class="size-4 flex-none text-muted-foreground opacity-60"
-                aria-hidden="true"
-              />
-            {:else}
-              <Lock
-                class="size-3.5 flex-none text-muted-foreground"
-                aria-hidden="true"
-              />
-            {/if}
-          </button>
-        {/each}
-        {#if open && extension}
-          {@render extension()}
-        {/if}
-      </div>
-    </section>
-  {/if}
+            <span
+              class="truncate text-xs text-muted-foreground"
+              data-testid="{item.testId}-hint">{item.hint}</span
+            >
+          </span>
+          {#if open}
+            <ChevronRight
+              class="size-4 flex-none text-muted-foreground opacity-60"
+              aria-hidden="true"
+            />
+          {:else}
+            <Lock
+              class="size-3.5 flex-none text-muted-foreground"
+              aria-hidden="true"
+            />
+          {/if}
+        </button>
+      {/each}
+      {#if open && extension}
+        {@render extension()}
+      {/if}
+    </div>
+  </section>
 </div>
