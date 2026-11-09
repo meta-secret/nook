@@ -84,6 +84,7 @@ function source(authenticated: boolean): IdentityCardSource {
       { storeId: 'store_b', label: 'Family photos' },
     ],
     currentLogVaults: [],
+    awayVaultNames: new Map(),
     openStoreId: authenticated ? 'store_a' : '',
     authenticated,
     identityUnlocked: authenticated,
@@ -139,6 +140,7 @@ describe('identity card projection', () => {
     const withLog: IdentityCardSource = {
       ...source(true),
       currentLogVaults: ['store_a', 'store_away'],
+      awayVaultNames: new Map(),
     }
     const [current, workCard] = new IdentityCardProjection(withLog).cards
     expect(current?.vaults).toContainEqual({
@@ -158,6 +160,7 @@ describe('identity card projection', () => {
     const justOpened: IdentityCardSource = {
       ...source(true),
       currentLogVaults: ['store_away'],
+      awayVaultNames: new Map(),
       openStoreId: 'store_away',
     }
     const [current] = new IdentityCardProjection(justOpened).cards
@@ -165,6 +168,27 @@ describe('identity card projection', () => {
       storeId: 'store_away',
       label: 'store_away',
       state: IdentityVaultRowState.Open,
+    })
+  })
+
+  test('a vault this browser does not hold shows the name read from its provider, or its id until then', () => {
+    const withNames: IdentityCardSource = {
+      ...source(true),
+      currentLogVaults: ['store_a', 'store_away', 'store_unread'],
+      awayVaultNames: new Map([
+        ['store_away', { state: 'named', name: 'Travel' }],
+      ]),
+    }
+    const [current] = new IdentityCardProjection(withNames).cards
+    expect(current?.vaults).toContainEqual({
+      storeId: 'store_away',
+      label: 'Travel',
+      state: IdentityVaultRowState.Unavailable,
+    })
+    expect(current?.vaults).toContainEqual({
+      storeId: 'store_unread',
+      label: 'store_unread',
+      state: IdentityVaultRowState.Unavailable,
     })
   })
 
@@ -235,6 +259,7 @@ describe('IdentityCardProjection vault ownership', () => {
         { storeId: 'store_new', label: 'Fresh' },
       ],
       currentLogVaults: [],
+      awayVaultNames: new Map(),
       openStoreId: '',
       authenticated: false,
       identityUnlocked: false,
@@ -263,6 +288,7 @@ describe('IdentityCardProjection vault ownership', () => {
         { storeId: 'store_orphan', label: 'Orphan' },
       ],
       currentLogVaults: [],
+      awayVaultNames: new Map(),
       openStoreId: '',
       authenticated: false,
       identityUnlocked: false,
@@ -291,6 +317,7 @@ describe('IdentityCardProjection vault ownership', () => {
       identities: [elsewhere],
       localVaults: [{ storeId: 'store_orphan', label: 'Orphan' }],
       currentLogVaults: [],
+      awayVaultNames: new Map(),
       openStoreId: '',
       authenticated: false,
       identityUnlocked: false,
@@ -335,6 +362,7 @@ describe('IdentityCardProjection vault ownership', () => {
       ],
       localVaults: [{ storeId: 'store_a', label: 'Personal vault' }],
       currentLogVaults: [],
+      awayVaultNames: new Map(),
       openStoreId: '',
       authenticated: false,
       identityUnlocked: false,
@@ -377,6 +405,7 @@ describe('IdentityCardProjection current identity vaults', () => {
         { storeId: 'store_new', label: 'Fresh' },
       ],
       currentLogVaults: ['store_t', 'store_away'],
+      awayVaultNames: new Map(),
       openStoreId: 'store_t',
       authenticated: true,
       identityUnlocked: true,
@@ -393,6 +422,7 @@ describe('IdentityCardProjection current identity vaults', () => {
       identities: [work],
       localVaults: [{ storeId: 'store_w', label: 'Acme' }],
       currentLogVaults: [],
+      awayVaultNames: new Map(),
       openStoreId: '',
       authenticated: false,
       identityUnlocked: false,

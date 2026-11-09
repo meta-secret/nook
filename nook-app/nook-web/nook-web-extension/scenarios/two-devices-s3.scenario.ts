@@ -166,6 +166,9 @@ test('two devices on one S3 keyring, the second joined from an invite', async ()
           `[data-testid="identity-vault-row"][data-store-id="${laterStoreId}"]`,
         )
         await expect(away).toHaveAttribute('data-state', 'unavailable')
+        // Its name, read from S3 with the key the keyring granted, before
+        // it is opened here.
+        await expect(away).toContainText('Later')
         await away.click()
         await joiner.getByTestId('vault-panel-open').click()
         await expect(joiner.getByTestId('vault-panel')).toBeVisible()

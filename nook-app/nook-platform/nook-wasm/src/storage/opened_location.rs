@@ -9,7 +9,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use nook_core::{EventStorageBytes, IdentityId, ProviderVaultListing};
+use nook_core::{EventStorageBytes, IdentityId, LocalEventWrite, ProviderVaultListing, StoreId};
 
 use super::github_events::GitHubRepository;
 use super::icloud::ICloudLocation;
@@ -38,6 +38,20 @@ impl OpenedLocation<'_> {
             Self::ICloud(location) => location.contents().await,
             Self::S3(location) => location.contents().await,
             Self::LocalFolder(location) => location.contents().await,
+        }
+    }
+
+    /// One vault's events, read without its keys.
+    pub(crate) async fn listed_vault_events(
+        &self,
+        store_id: &StoreId,
+    ) -> Result<Vec<LocalEventWrite>, NookError> {
+        match self {
+            Self::Github(location) => location.listed_vault_events(store_id).await,
+            Self::GoogleDrive(location) => location.listed_vault_events(store_id).await,
+            Self::ICloud(location) => location.listed_vault_events(store_id).await,
+            Self::S3(location) => location.listed_vault_events(store_id).await,
+            Self::LocalFolder(location) => location.listed_vault_events(store_id).await,
         }
     }
 

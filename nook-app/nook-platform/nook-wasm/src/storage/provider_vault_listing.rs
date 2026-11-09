@@ -114,6 +114,25 @@ pub(crate) trait ProviderLocation {
             .collect())
     }
 
+    /// One vault's events, read without its keys, from the namespace that
+    /// holds it; a vault the location does not hold yet is an error.
+    async fn listed_vault_events(
+        &self,
+        store_id: &StoreId,
+    ) -> Result<Vec<LocalEventWrite>, NookError> {
+        let Some(vault) = self
+            .vaults()
+            .await?
+            .into_iter()
+            .find(|vault| &vault.store_id == store_id)
+        else {
+            return Err(NookError::Database(
+                "This vault is not at its sync provider yet.".to_owned(),
+            ));
+        };
+        self.events(&vault.namespace).await
+    }
+
     /// One observation per vault namespace. A vault listed twice, under two
     /// identities or duplicated by hand, fails closed, as sync does.
     async fn observations(&self) -> Result<Vec<ProviderVaultObservation>, NookError> {

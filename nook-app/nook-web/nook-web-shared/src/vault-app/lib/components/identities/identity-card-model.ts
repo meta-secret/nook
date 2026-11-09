@@ -2,6 +2,7 @@ import type { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 import {
   DeviceAccessProtectionKind,
   NookIdentityLocalAccessKind,
+  type ProviderVaultName,
 } from "$app-wasm";
 import type { IdentityDirectoryEntry } from "$lib/components/devices-access/identity-directory-view";
 
@@ -78,6 +79,8 @@ export type IdentityCardSource = {
   /** Store ids the current identity's control log lists, stored here or
    * not; empty until the log is read. */
   readonly currentLogVaults: readonly string[];
+  /** Names read for those of them this browser does not hold. */
+  readonly awayVaultNames: ReadonlyMap<string, ProviderVaultName>;
   /** The open vault's store id, or empty when no vault session is open. */
   readonly openStoreId: string;
   readonly authenticated: boolean;
@@ -315,8 +318,9 @@ export class IdentityCardProjection {
         };
         const row: IdentityVaultRow = {
           storeId,
-          // Names live inside the vault: one never stored here shows its id.
-          label: localLabel ? localLabel : storeId,
+          // Names live inside the vault: one never stored here shows the name
+          // read from its provider, or its id until then.
+          label: localLabel ? localLabel : this.awayLabel(storeId),
           state: this.vaultState(stateRequest),
         };
         rows.push(row);
@@ -346,6 +350,11 @@ export class IdentityCardProjection {
       }
     }
     return rows;
+  }
+
+  private awayLabel(storeId: string): string {
+    const name = this.source.awayVaultNames.get(storeId);
+    return name?.state === "named" ? name.name : storeId;
   }
 
   private vaultState({

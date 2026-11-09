@@ -105,7 +105,8 @@ pub struct KnownVaultName {
 }
 
 /// What a listed vault is called. Its name is encrypted under the vault's
-/// own key, so only a vault this browser holds can be named here.
+/// own key, so only a vault this browser holds, or one its keyring granted
+/// it the key to, can be named here.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", rename_all = "camelCase")]
 pub enum ProviderVaultName {

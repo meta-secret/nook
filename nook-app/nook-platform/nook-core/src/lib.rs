@@ -411,17 +411,17 @@ pub use sync_provider_store::{
     StoredProvider,
 };
 pub use validation::{
-    DEFAULT_GITHUB_REPO_NAME, DriveEventParent, GithubPat,
-    GithubPatMask, GithubRepoName, GoogleDriveFolderId, ICloudShareRole, ICloudShareTargetId,
-    ICloudSharedTarget, OAuthFilePreset, OauthAccessToken, ProviderKind, ProviderSetupNameRequest,
-    ProviderTargetKey, S3AccessKey, S3Connection, S3ConnectionDraft, S3DraftField,
-    S3DraftFieldError, S3DraftValidation, S3EndpointService, S3KeyDraft, S3KnownService,
-    S3Location, S3ServiceGuide, StorageMode,
+    DEFAULT_GITHUB_REPO_NAME, DriveEventParent, GithubPat, GithubPatMask, GithubRepoName,
+    GoogleDriveFolderId, ICloudShareRole, ICloudShareTargetId, ICloudSharedTarget, OAuthFilePreset,
+    OauthAccessToken, ProviderKind, ProviderSetupNameRequest, ProviderTargetKey, S3AccessKey,
+    S3Connection, S3ConnectionDraft, S3DraftField, S3DraftFieldError, S3DraftValidation,
+    S3EndpointService, S3KeyDraft, S3KnownService, S3Location, S3ServiceGuide, StorageMode,
 };
 pub use vault::passkey_device_hint::PasskeyDeviceHint;
 pub use vault_access_check::{
-    CheckedCredential, CheckedVaultEvents, CredentialCheckReport, IdentityCheck,
-    IdentityCheckOutcome, PasskeyAccessCheck, VaultCheck, VaultCheckOutcome,
+    CheckedCredential, CheckedVaultEvents, CredentialCheckReport, GrantedVaultEvents,
+    GrantedVaultNameRead, IdentityCheck, IdentityCheckOutcome, PasskeyAccessCheck, VaultCheck,
+    VaultCheckOutcome,
 };
 pub use vault_access_diagnostics::{
     DiagnosticEpoch, ProjectionDiagnosticInput, VaultAccessDiagnosticRequest,
@@ -438,10 +438,10 @@ pub use vault_architecture::{
 pub use vault_client_policy::{
     ActiveVaultStore, DeviceIdentityInitializationMode, DeviceProtectionStatus,
     InvalidDeviceProtectionStatus, JoinEnrollmentState, ProviderSyncFailureHandling,
-    ProviderSyncFreshness, ProviderSyncVisibility,
-    SentinelVaultUnlockState, UnauthenticatedSyncDecision, VaultAccessObservation,
-    VaultClientPolicy, VaultConnectGateDecision, VaultConnectProbeDecision, VaultEditDecision,
-    VaultEditMessage, VaultEditTranslation, VaultStorageSyncDecision, VaultSwitchDecision,
+    ProviderSyncFreshness, ProviderSyncVisibility, SentinelVaultUnlockState,
+    UnauthenticatedSyncDecision, VaultAccessObservation, VaultClientPolicy,
+    VaultConnectGateDecision, VaultConnectProbeDecision, VaultEditDecision, VaultEditMessage,
+    VaultEditTranslation, VaultStorageSyncDecision, VaultSwitchDecision,
     VaultSyncTimerStartDecision, VaultSyncTimerTickDecision,
 };
 pub use vault_connect::{
@@ -607,14 +607,12 @@ pub use nook_companion_core::BackupCodeCandidatePresence;
 
 pub use vault_client_policy::{
     AddProviderPromptState, DeviceProtectionReadiness, EditBlockMessageRequest,
-    EditBlockReasonRequest, EditsBlockedRequest,
-    LocalVaultPresence, ManualSyncHasTargetRequest, ProviderSetupState,
-    RemoteVaultCredentialPresence,
-    ShouldAutoConnectAfterApprovalRequest, ShouldAutoUnlockRequest,
-    ShouldShowLoginVaultPickerRequest, ShouldSyncFromProvidersRequest, SyncActivityVisibleRequest,
-    UnauthenticatedSyncDecisionRequest, VaultAuthenticationState, VaultConnectProbeDecisionRequest,
-    VaultFanOutSyncState, VaultIdleExpiration, VaultInviteActivity,
-    VaultJoinApprovalWait, VaultProviderSyncState, VaultSaveActivity,
+    EditBlockReasonRequest, EditsBlockedRequest, LocalVaultPresence, ManualSyncHasTargetRequest,
+    ProviderSetupState, RemoteVaultCredentialPresence, ShouldAutoConnectAfterApprovalRequest,
+    ShouldAutoUnlockRequest, ShouldShowLoginVaultPickerRequest, ShouldSyncFromProvidersRequest,
+    SyncActivityVisibleRequest, UnauthenticatedSyncDecisionRequest, VaultAuthenticationState,
+    VaultConnectProbeDecisionRequest, VaultFanOutSyncState, VaultIdleExpiration,
+    VaultInviteActivity, VaultJoinApprovalWait, VaultProviderSyncState, VaultSaveActivity,
     VaultSecretCreationPermission, VaultSelectionState, VaultSessionLockIntent,
     VaultStorageSyncDecisionRequest, VaultSwitchTargetRequest, VaultSyncActivity, VaultSyncChange,
     VaultSyncIntent, VaultSyncTimerStartDecisionRequest, VaultSyncTimerTickDecisionRequest,

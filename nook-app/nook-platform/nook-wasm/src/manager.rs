@@ -42,6 +42,7 @@ mod event_log;
 mod genesis;
 mod identity;
 mod identity_control;
+mod keyring_discovery;
 mod local_identity;
 mod login_fill;
 mod login_save;
@@ -50,7 +51,6 @@ mod multi_device;
 mod passkeys;
 mod personal_fill;
 mod prepared_provider;
-mod keyring_discovery;
 mod search_catalog;
 mod secrets;
 mod self_enrollment;
@@ -80,9 +80,8 @@ pub(in crate::manager) use prepared_provider::{
     PreparedProvider, PreparedRemote, ProviderPreparation, ProviderSwitch,
 };
 pub(in crate::manager) use session::{
-    CeremonyState, EventLogSessionState, OutboxTarget, SearchCatalogRestore,
-    SearchCatalogState, StorageSession, SyncOutbox, VaultCryptoState, VaultNameState,
-    VaultSessionState,
+    CeremonyState, EventLogSessionState, OutboxTarget, SearchCatalogRestore, SearchCatalogState,
+    StorageSession, SyncOutbox, VaultCryptoState, VaultNameState, VaultSessionState,
 };
 
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultArchitecture, NookVaultMember};

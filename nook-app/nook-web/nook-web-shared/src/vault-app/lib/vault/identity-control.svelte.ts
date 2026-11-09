@@ -15,6 +15,7 @@ import {
   type NookStorageConnection,
   type NookVaultManager,
   type PasswordGenerationOptions,
+  type ProviderVaultName,
   type NookRecoveryWords,
   type NookRecoveryWordsCheck,
   type RecoveryStrength,
@@ -123,6 +124,12 @@ export class IdentityControlModel {
   /** Remote provider rows that carry this identity's control log. */
   mounts = $state<StorageProvider[]>([]);
   busy = $state(false);
+  /** Names of this identity's vaults this browser does not hold, read
+   * once each from the provider that replicates them with the key the
+   * identity granted this browser. A vault not read, or never named, shows
+   * its id. */
+  awayVaultNames = $state<ReadonlyMap<string, ProviderVaultName>>(new Map());
+  private readonly namesInFlight = new Set<string>();
 
   constructor(private readonly vault: VaultState) {}
 
@@ -213,6 +220,56 @@ export class IdentityControlModel {
   forgetIdentity(): void {
     this.view = { kind: IdentityControlViewKind.Loading };
     this.mounts = [];
+    this.awayVaultNames = new Map();
+    this.namesInFlight.clear();
+  }
+
+  /** Read the names of the identity's granted vaults this browser does not
+   * hold and has not read yet. A read that fails is logged, the vault
+   * keeps showing its id, and the next read of the identity tries again;
+   * nothing opens, and the open vault stays. */
+  async readAwayVaultNames(held: ReadonlySet<string>): Promise<void> {
+    const snapshot = this.snapshot;
+    if (snapshot === false) return;
+    const unread = snapshot.vaults.filter(
+      (entry) =>
+        entry.grantedToCurrentInstallation &&
+        !held.has(entry.storeId) &&
+        !this.awayVaultNames.has(entry.storeId) &&
+        !this.namesInFlight.has(entry.storeId),
+    );
+    if (unread.length === 0) return;
+    for (const entry of unread) this.namesInFlight.add(entry.storeId);
+    const providers = this.providersSnapshot();
+    const names = new Map<string, ProviderVaultName>();
+    for (const entry of unread) {
+      const read = await this.withManager((manager) =>
+        manager.identity_vault_name(providers, entry.storeId),
+      );
+      if (read.isErr()) {
+        log.warn(
+          `vault name not read: ${read.error.kind} (${read.error.translationKey})`,
+        );
+        continue;
+      }
+      switch (read.value.state) {
+        case "read":
+          names.set(entry.storeId, read.value.name);
+          break;
+        // No saved provider replicates it yet: read once one does.
+        case "notReplicatedHereYet":
+          break;
+      }
+    }
+    for (const entry of unread) this.namesInFlight.delete(entry.storeId);
+    // Another keyring in use since: these names are not its vaults'.
+    const current = this.view;
+    if (
+      current.kind !== IdentityControlViewKind.Ready ||
+      current.snapshot.identityId !== snapshot.identityId
+    )
+      return;
+    this.awayVaultNames = new Map([...this.awayVaultNames, ...names]);
   }
 
   /** Project the identity log this app already holds, without creating one. */
