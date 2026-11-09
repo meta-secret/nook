@@ -340,10 +340,10 @@ impl NookVaultManager {
     pub(in crate::manager) async fn sync_events_from_current_provider(
         &mut self,
     ) -> Result<(), NookError> {
-        if self.vault.store_id.is_empty() {
-            if self.discover_provider_vault().await? != VaultDiscovery::Chosen {
-                return Ok(());
-            }
+        if self.vault.store_id.is_empty()
+            && self.discover_provider_vault().await? != VaultDiscovery::Chosen
+        {
+            return Ok(());
         }
         let remote_ids = self.list_current_provider_event_ids().await?;
         let local_ids: BTreeSet<EventId> =
