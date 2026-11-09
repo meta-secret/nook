@@ -17,8 +17,24 @@ import {
   IdentityActionOutcome,
   IdentityControlViewKind,
 } from '$lib/vault/identity-control.svelte'
-import type { IdentityControlSnapshot } from '$app-wasm'
+import type { AuthProvidersSnapshot, IdentityControlSnapshot } from '$app-wasm'
+import { unselectedVaultScope } from '$lib/auth/providers'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
+
+/** A keyring log with no vault. */
+const emptyKeyring: IdentityControlSnapshot = {
+  identityId: 'idn_personalide',
+  identityLabel: 'Personal',
+  standing: 'member',
+  members: [],
+  devices: [],
+  deviceCount: 0,
+  extensionOnThisDevice: 'notJoined',
+  joinRequests: [],
+  vaults: [],
+  mounts: [],
+  recoveryPassphrases: [],
+}
 
 function leavingVault() {
   const vault = VaultStateTestFixture.create()
@@ -43,7 +59,7 @@ describe('leaving an identity', () => {
     const vault = leavingVault()
     vault.identityControl.view = {
       kind: IdentityControlViewKind.Ready,
-      snapshot: { vaults: [] } as unknown as IdentityControlSnapshot,
+      snapshot: emptyKeyring,
     }
 
     new IdentitySessionTransition(vault).clearPriorIdentity()
@@ -58,9 +74,11 @@ describe('leaving an identity', () => {
 describe('using another identity', () => {
   test('reads its own keyring log once its providers load, with a passkey as with a PIN', async () => {
     const vault = VaultStateTestFixture.create()
-    vault.loadProviders = vi.fn(async () =>
-      ok({ providers: [], activeVaultStoreId: '' }),
-    ) as unknown as typeof vault.loadProviders
+    const loaded: AuthProvidersSnapshot = {
+      providers: [],
+      activeVaultStoreId: unselectedVaultScope(),
+    }
+    vi.spyOn(vault, 'loadProviders').mockResolvedValue(ok(loaded))
     vault.applyActiveProviderCredentials = vi.fn()
     const loadSnapshot = vi
       .spyOn(vault.identityControl, 'loadSnapshot')

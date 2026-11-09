@@ -38,11 +38,11 @@ describe('taking a set-up step', () => {
   })
 
   test('the protections open their own pages', () => {
-    expect(take(NookIdentityNextStep.AddSyncProvider).openSection).toHaveBeenCalledWith(
-      WorkspaceSection.Sync,
-    )
-    expect(take(NookIdentityNextStep.AddDevice).openSection).toHaveBeenCalledWith(
-      WorkspaceSection.AddDevice,
-    )
+    expect(
+      take(NookIdentityNextStep.AddSyncProvider).openSection,
+    ).toHaveBeenCalledWith(WorkspaceSection.Sync)
+    expect(
+      take(NookIdentityNextStep.AddDevice).openSection,
+    ).toHaveBeenCalledWith(WorkspaceSection.AddDevice)
   })
 })

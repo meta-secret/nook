@@ -1,4 +1,5 @@
 import { untrack } from "svelte";
+import { SvelteSet } from "svelte/reactivity";
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
@@ -43,7 +44,9 @@ export class IdentityCards {
     $effect(() => {
       if (!(vault.isAuthenticated || vault.deviceProtectionReady)) return;
       if (vault.identityControl.snapshot === false) return;
-      const held = new Set(vault.localVaults.map((entry) => entry.storeId));
+      const held = new SvelteSet(
+        vault.localVaults.map((entry) => entry.storeId),
+      );
       void untrack(() => vault.identityControl.readAwayVaultNames(held));
     });
   }

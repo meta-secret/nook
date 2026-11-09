@@ -3,6 +3,7 @@ import initNookWasm, {
   NookVaultManager,
   type GrantedVaultNameRead,
   type IdentityControlSnapshot,
+  type IdentityVaultView,
   type ProviderVaultName,
 } from '$app-wasm'
 import { IdentityControlViewKind } from '$lib/vault/identity-control.svelte'
@@ -15,7 +16,9 @@ beforeAll(async () => {
 
 afterEach(() => vi.restoreAllMocks())
 
-function vaultView(storeId: string, granted: boolean) {
+function vaultView(
+  ...[storeId, granted]: readonly [string, boolean]
+): IdentityVaultView {
   return {
     storeId,
     grantedToCurrentInstallation: granted,
@@ -23,15 +26,36 @@ function vaultView(storeId: string, granted: boolean) {
   }
 }
 
+/** A keyring log listing `vaults`. */
+function keyring(
+  ...[identityId, vaults]: readonly [string, IdentityVaultView[]]
+): IdentityControlSnapshot {
+  return {
+    identityId,
+    identityLabel: 'Personal',
+    standing: 'member',
+    members: [],
+    devices: [],
+    deviceCount: 0,
+    extensionOnThisDevice: 'notJoined',
+    joinRequests: [],
+    vaults,
+    mounts: [],
+    recoveryPassphrases: [],
+  }
+}
+
 /** A session whose identity lists `vaults`, with a manager that names them. */
-function session(identityId: string, vaults: ReturnType<typeof vaultView>[]) {
+function session(
+  ...[identityId, vaults]: readonly [string, IdentityVaultView[]]
+) {
   const vault: VaultState = VaultStateTestFixture.create()
   const manager = new NookVaultManager()
   vault.openManager(manager)
   VaultStateTestFixture.runStorageImmediately(vault)
   vault.identityControl.view = {
     kind: IdentityControlViewKind.Ready,
-    snapshot: { identityId, vaults } as unknown as IdentityControlSnapshot,
+    snapshot: keyring(identityId, vaults),
   }
   return { vault, manager }
 }

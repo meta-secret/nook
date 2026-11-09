@@ -110,10 +110,13 @@ export enum FirstRunSyncDiagramProvider {
 
 type ProviderBox = Pick<FirstRunDiagramNode, "icons" | "label">;
 
-function providerBox(
-  vault: VaultState,
-  provider: FirstRunSyncDiagramProvider,
-): ProviderBox {
+/** The provider box of a sync diagram, in the vault app's language. */
+type ProviderBoxRequest = {
+  readonly vault: VaultState;
+  readonly provider: FirstRunSyncDiagramProvider;
+};
+
+function providerBox({ vault, provider }: ProviderBoxRequest): ProviderBox {
   switch (provider) {
     case FirstRunSyncDiagramProvider.Any:
       return {
@@ -144,7 +147,8 @@ export function firstRunSyncDiagram({
   vault,
   provider,
 }: FirstRunSyncDiagramRequest): FirstRunDiagramView {
-  const box = providerBox(vault, provider);
+  const boxRequest: ProviderBoxRequest = { vault, provider };
+  const box = providerBox(boxRequest);
   return {
     label: vault.t(I18N_KEYS.FirstRunSyncDiagramLabel),
     testId: "first-run-sync-diagram",
@@ -186,12 +190,16 @@ export function firstRunSyncDiagram({
 export function firstRunRecoveryDiagram(
   vault: VaultState,
 ): FirstRunDiagramView {
+  const anyProvider: ProviderBoxRequest = {
+    vault,
+    provider: FirstRunSyncDiagramProvider.Any,
+  };
   return {
     label: vault.t(I18N_KEYS.FirstRunRestoreDiagramLabel),
     testId: "first-run-recovery-diagram",
     nodes: [
       {
-        ...providerBox(vault, FirstRunSyncDiagramProvider.Any),
+        ...providerBox(anyProvider),
         testId: "first-run-recovery-diagram-provider",
         current: true,
         arrow: { kind: FirstRunDiagramArrowKind.Start },

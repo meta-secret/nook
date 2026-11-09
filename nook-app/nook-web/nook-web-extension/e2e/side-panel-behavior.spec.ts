@@ -524,9 +524,9 @@ test('approving a keyring that has no vault yet shows it on This site at once', 
 
   const connected = page.getByTestId('side-panel-connected-identity')
   await expect(connected).toHaveCount(1)
-  await expect(connected.getByTestId('side-panel-connected-keyring')).toHaveText(
-    'Alice Martin',
-  )
+  await expect(
+    connected.getByTestId('side-panel-connected-keyring'),
+  ).toHaveText('Alice Martin')
   await expect(
     connected.getByTestId('side-panel-connected-keyring-no-vaults'),
   ).toHaveText('No vaults in this keyring yet')

@@ -1,4 +1,5 @@
 import { err, ok, type Result } from "neverthrow";
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import {
   NativeVaultStorageFailure,
@@ -117,6 +118,9 @@ const PASSPHRASE_OPTIONS: PasswordGenerationOptions = {
   symbols: false,
 };
 
+/** Store ids of the vaults this browser holds. */
+export type HeldStoreIds = ReadonlySet<string>;
+
 /** Identity-level devices, onboarding, and sync-provider mounts. */
 export class IdentityControlModel {
   view = $state<IdentityControlView>({ kind: IdentityControlViewKind.Loading });
@@ -128,8 +132,8 @@ export class IdentityControlModel {
    * once each from the provider that replicates them with the key the
    * identity granted this browser. A vault not read, or never named, shows
    * its id. */
-  awayVaultNames = $state<ReadonlyMap<string, ProviderVaultName>>(new Map());
-  private readonly namesInFlight = new Set<string>();
+  readonly awayVaultNames = new SvelteMap<string, ProviderVaultName>();
+  private readonly namesInFlight = new SvelteSet<string>();
 
   constructor(private readonly vault: VaultState) {}
 
@@ -220,7 +224,7 @@ export class IdentityControlModel {
   forgetIdentity(): void {
     this.view = { kind: IdentityControlViewKind.Loading };
     this.mounts = [];
-    this.awayVaultNames = new Map();
+    this.awayVaultNames.clear();
     this.namesInFlight.clear();
   }
 
@@ -228,7 +232,7 @@ export class IdentityControlModel {
    * hold and has not read yet. A read that fails is logged, the vault
    * keeps showing its id, and the next read of the identity tries again;
    * nothing opens, and the open vault stays. */
-  async readAwayVaultNames(held: ReadonlySet<string>): Promise<void> {
+  async readAwayVaultNames(held: HeldStoreIds): Promise<void> {
     const snapshot = this.snapshot;
     if (snapshot === false) return;
     const unread = snapshot.vaults.filter(
@@ -241,7 +245,7 @@ export class IdentityControlModel {
     if (unread.length === 0) return;
     for (const entry of unread) this.namesInFlight.add(entry.storeId);
     const providers = this.providersSnapshot();
-    const names = new Map<string, ProviderVaultName>();
+    const names: Array<readonly [string, ProviderVaultName]> = [];
     for (const entry of unread) {
       const read = await this.withManager((manager) =>
         manager.identity_vault_name(providers, entry.storeId),
@@ -254,7 +258,7 @@ export class IdentityControlModel {
       }
       switch (read.value.state) {
         case "read":
-          names.set(entry.storeId, read.value.name);
+          names.push([entry.storeId, read.value.name]);
           break;
         // No saved provider replicates it yet: read once one does.
         case "notReplicatedHereYet":
@@ -269,7 +273,7 @@ export class IdentityControlModel {
       current.snapshot.identityId !== snapshot.identityId
     )
       return;
-    this.awayVaultNames = new Map([...this.awayVaultNames, ...names]);
+    for (const [storeId, name] of names) this.awayVaultNames.set(storeId, name);
   }
 
   /** Project the identity log this app already holds, without creating one. */

@@ -161,7 +161,7 @@ export class ProviderSyncActions {
             failureHandling,
             failure: synced.error,
           };
-          return await this.presentFailure(failurePresentation);
+          return this.presentFailure(failurePresentation);
         }
       } else {
         const connection = state.providerWasmArgs(provider);
@@ -187,7 +187,7 @@ export class ProviderSyncActions {
             failureHandling,
             failure: synced.error,
           };
-          return await this.presentFailure(failurePresentation);
+          return this.presentFailure(failurePresentation);
         }
         const applied = state.applyVaultSyncResult(synced.value);
         if (applied.isErr()) {
@@ -210,7 +210,7 @@ export class ProviderSyncActions {
             failureHandling,
             failure: nativeFailure,
           };
-          return await this.presentFailure(failurePresentation);
+          return this.presentFailure(failurePresentation);
         }
         const metadataRequest: Parameters<
           typeof state.updateProviderSyncMetadata
@@ -228,7 +228,7 @@ export class ProviderSyncActions {
             failureHandling,
             failure: metadata.error,
           };
-          return await this.presentFailure(failurePresentation);
+          return this.presentFailure(failurePresentation);
         }
       }
       if (state.isAuthenticated) {

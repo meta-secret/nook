@@ -31,9 +31,7 @@ describe('connected list on This site', () => {
 
     const rows = connectedRows(pairedVaultGroups(connections))
 
-    expect(rows.map((row) => row.kind)).toEqual([
-      ConnectedRowKind.EmptyKeyring,
-    ])
+    expect(rows.map((row) => row.kind)).toEqual([ConnectedRowKind.EmptyKeyring])
     expect(rows.map(connectedRowKey)).toEqual(['keyring:app-personal'])
   })
 
@@ -43,7 +41,10 @@ describe('connected list on This site', () => {
         { identityLabel: 'Personal', deviceId: 'app-personal' },
         { identityLabel: 'Work', deviceId: 'app-work' },
       ],
-      vaults: [vault('Passwords', 'app-personal'), vault('Cards', 'app-personal')],
+      vaults: [
+        vault('Passwords', 'app-personal'),
+        vault('Cards', 'app-personal'),
+      ],
     }
 
     const rows = connectedRows(pairedVaultGroups(connections))

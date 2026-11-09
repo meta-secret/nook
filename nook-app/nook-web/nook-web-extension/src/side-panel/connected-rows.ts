@@ -29,13 +29,11 @@ export function connectedRows(
   return groups.flatMap((group): ConnectedRow[] =>
     group.vaults.length === 0
       ? [{ kind: ConnectedRowKind.EmptyKeyring, group }]
-      : group.vaults.map(
-          (vault): ConnectedRow => ({
-            kind: ConnectedRowKind.Vault,
-            group,
-            vault,
-          }),
-        ),
+      : group.vaults.map((vault): ConnectedRow => ({
+          kind: ConnectedRowKind.Vault,
+          group,
+          vault,
+        })),
   )
 }
 
