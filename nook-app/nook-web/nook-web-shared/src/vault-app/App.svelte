@@ -51,7 +51,6 @@
   import { ExistingVaultUnlockWait } from '$lib/vault/existing-vault-unlock.svelte'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
   import { ExistingVaultImportLifecycle } from '$lib/vault/existing-vault-import.svelte'
-  import { ProviderVaultActions } from '$lib/vault/provider-vaults'
   import { FirstRunActions } from '$lib/vault/first-run'
   import {
     THEME_STORAGE_KEY,
@@ -453,11 +452,6 @@
   $effect(() => {
     void vault.isAuthenticated
     return extensionSetupOffer.follow()
-  })
-
-  // A confirmed empty-vault swap finishes once the chosen vault is open.
-  $effect(() => {
-    void new ProviderVaultActions(vault).completeEmptyVaultReplacement()
   })
 
   $effect(() => {

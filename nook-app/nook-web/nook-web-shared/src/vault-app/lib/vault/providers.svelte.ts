@@ -34,7 +34,6 @@ import {
   provider_draft_label,
   remove_local_folder_handle,
   RemoteVaultAssessDecision,
-  RemoteVaultRecoveryState,
   staged_storage_args,
   local_vault_storage_args,
   type NookStorageConnection,
@@ -289,21 +288,10 @@ export class VaultProviderActions {
     const decision = state.clientPolicy.remote_vault_assess_decision(
       accessStatus,
       state.loginRequiresExistingVault,
-      state.loginSetup.kind === LoginSetupKind.Active,
     );
     switch (decision) {
-      case RemoteVaultAssessDecision.PromptRecoveryFromCache: {
-        state.remoteVaultRecoveryState =
-          RemoteVaultRecoveryState.PromptWithCache;
-        return true;
-      }
       case RemoteVaultAssessDecision.RejectMissingExistingVault:
-        state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
         state.errorMsg = state.t(I18N_KEYS.AuthStorageExistingVaultNotFound);
-        return true;
-      case RemoteVaultAssessDecision.PromptMissingRemote:
-        state.remoteVaultRecoveryState =
-          RemoteVaultRecoveryState.PromptMissingOnly;
         return true;
       case RemoteVaultAssessDecision.Continue:
         return false;

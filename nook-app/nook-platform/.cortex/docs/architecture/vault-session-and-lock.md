@@ -280,7 +280,7 @@ unrelated vaults. See [unified-vault.md](unified-vault.md).
 - **Settings → Delete local vault data**
   - **Purpose:** Remove every Nook vault and credential persisted by this browser; remote replicas remain
 
-**Test ids:** `header-lock-vault-btn`, `header-switch-vault-btn`, `login-vault-picker`, `login-vault-option`, `login-create-additional-vault-btn`, `sync-conflict-import-new-vault-btn`, `unlock-vault-btn`, `login-create-device-vault-btn`, `login-connect-storage-btn`, `add-provider-btn`.
+**Test ids:** `header-lock-vault-btn`, `header-switch-vault-btn`, `login-vault-picker`, `login-vault-option`, `login-create-additional-vault-btn`, `unlock-vault-btn`, `login-create-device-vault-btn`, `login-connect-storage-btn`, `add-provider-btn`.
 
 ---
 

@@ -20,7 +20,6 @@ import {
   ProviderSyncVisibility,
   provider_connected_toast_key,
   provider_draft_kind,
-  RemoteVaultRecoveryState,
   VaultConnectGateDecision,
   VaultConnectProbeDecision,
 } from "$app-wasm";
@@ -189,14 +188,7 @@ export class VaultConnectionActions {
         }
       }
 
-      if (
-        !state.clientPolicy.remote_recovery_connect_confirmed(
-          state.remoteVaultRecoveryState,
-        ) &&
-        (await state.handleRemoteVaultAssessStatus(accessStatus))
-      ) {
-        return;
-      }
+      if (await state.handleRemoteVaultAssessStatus(accessStatus)) return;
 
       const gateDecision =
         state.clientPolicy.vault_connect_gate_decision(accessStatus);
@@ -233,13 +225,9 @@ export class VaultConnectionActions {
         if (connectArgs.isErr()) return storageErr(connectArgs.error);
         const admitted = state.admitManager();
         if (admitted.isErr()) return storageErr(admitted.error);
-        const recovery = state.remoteVaultRecoveryState;
-        state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
         const operation = (async () => {
           try {
-            if (recovery === RemoteVaultRecoveryState.ConnectFresh)
-              await admitted.value.connect_fresh(connectArgs.value);
-            else await admitted.value.connect(connectArgs.value);
+            await admitted.value.connect(connectArgs.value);
             return storageOk(VaultChangeOutcome.Completed);
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));

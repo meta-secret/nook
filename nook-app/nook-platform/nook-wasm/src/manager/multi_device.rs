@@ -6,10 +6,7 @@
 use super::NookVaultManager;
 use super::verified_access::VerifiedVaultAccessFlow;
 use crate::BrowserTimestamp;
-use crate::LoadedVaultUnlockRequest;
 use crate::NookError;
-use crate::TypedInput;
-use crate::conversion::LoadedVault;
 use crate::{NookJoinRequest, NookVaultMember};
 use nook_core::{
     BuildMembersRecordsRequest, MemberFromIdentityRequest, ResolveMemberRosterRequest,
@@ -17,8 +14,8 @@ use nook_core::{
 };
 use nook_core::{CreateSentinelShareRecordsForRecipientsRequest, SentinelShareEnvelope};
 use nook_core::{
-    DeviceId, DevicePublicKey, DeviceSigningPublicKey, MemberLabel, MultiDeviceError, SecretId,
-    SentinelConfiguration, StorageMode, SymmetricKey, VaultMetaState, VaultOperation, VaultType,
+    DeviceId, DevicePublicKey, DeviceSigningPublicKey, MemberLabel, MultiDeviceError,
+    SentinelConfiguration, SymmetricKey, VaultMetaState, VaultOperation, VaultType,
 };
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -50,126 +47,6 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn ensure_vault_roster_hydrated_js(&mut self) -> Result<bool, JsError> {
         Ok(self.ensure_vault_roster_hydrated().await?)
-    }
-
-    /// Device B requests access without decrypting the vault (writes join record only).
-    pub async fn request_vault_access(
-        &mut self,
-        connection: &tsify::Ts<crate::NookStorageConnection>,
-        _requested_at: String,
-    ) -> Result<(), JsError> {
-        let connection = connection.decode()?;
-        self.prepare_storage(&connection).await?;
-        let identity = self.ensure_device_identity()?;
-        let mut vault_missing = false;
-        let content = self.fetch_vault_content(&mut vault_missing).await?;
-        if vault_missing || content.trim().is_empty() {
-            self.sync_events_from_current_provider().await?;
-            if self.vault.store_id.is_empty() || !self.event_log_has_events().await? {
-                return Err(NookError::Database("No vault found to join.".to_owned()).into());
-            }
-        } else {
-            self.capture_vault_metadata(&content)?;
-            self.sync_events_from_current_provider().await?;
-            if self.vault.store_id.is_empty() || !self.event_log_has_events().await? {
-                return Err(NookError::Database("Vault event log is required.".to_owned()).into());
-            }
-        }
-
-        let auth_id = SecretId::from_vault_record(identity.auth_id().as_str());
-        if self
-            .stored_records_snapshot()
-            .iter()
-            .any(|record| record.key == auth_id)
-        {
-            return Err(NookError::Database(
-                "This device is already enrolled. Use Connect vault.".to_owned(),
-            )
-            .into());
-        }
-        let signing = self.ensure_signing_identity().await?;
-        let signing_pk =
-            DeviceSigningPublicKey::from_trusted(hex::encode(signing.verifying_key().as_bytes()));
-        self.append_vault_operations(vec![VaultOperation::JoinRequested {
-            device_id: identity.device_id().clone(),
-            encryption_public_key: identity.public_key().clone(),
-            signing_public_key: signing_pk,
-            label: MemberLabel::from_trusted(String::new()),
-        }])
-        .await?;
-        if self.storage.mode() != StorageMode::Local {
-            self.flush_event_outbox().await?;
-        }
-        Ok(())
-    }
-
-    /// Device B enrolls with out-of-band `secrets_key` and `members_key`, then unlocks the vault.
-    pub async fn enroll_and_connect(
-        &mut self,
-        connection: &tsify::Ts<crate::NookStorageConnection>,
-        secrets_key: String,
-        members_key: String,
-    ) -> Result<(), JsError> {
-        let connection = connection.decode()?;
-        self.prepare_storage(&connection).await?;
-        let identity = self.ensure_device_identity()?;
-        let mut vault_missing = false;
-        let content = self.fetch_vault_content(&mut vault_missing).await?;
-        if vault_missing || content.trim().is_empty() {
-            return Err(NookError::Database("No vault found to join.".to_owned()).into());
-        }
-        // Fresh enrolment — adopt the remote unlock mode.
-        self.capture_vault_metadata(&content)?;
-
-        if self.vault.architecture.vault_type == VaultType::Sentinel {
-            return Err(MultiDeviceError::SentinelCeremonyRequired.into());
-        }
-
-        let format = nook_core::VaultFormatDocument::new(&content).detect()?;
-        let records = nook_core::VaultFormatDocument::new(&content).deserialize(format)?;
-        let parsed_secrets = SymmetricKey::parse(&secrets_key)?;
-        let parsed_members = SymmetricKey::parse(&members_key)?;
-
-        let auth_id = SecretId::from_vault_record(identity.auth_id().as_str());
-        let mut retained = Vec::with_capacity(records.len());
-        for record in records {
-            if record.key != auth_id
-                && !matches!(record.classify()?, nook_core::VaultMetaRecord::Member(..))
-            {
-                retained.push(record);
-            }
-        }
-        let mut records = retained;
-        let (auth, members) = nook_core::DeviceEnrollment::with_keys(
-            &parsed_secrets,
-            &parsed_members,
-            &identity,
-            &BrowserTimestamp::now().into_iso_string(),
-        )
-        .enroll()?;
-        records.push(auth);
-        records.extend(members);
-
-        self.vault.meta = VaultMetaState::from_stored_records(&records)?;
-        self.persist_vault_change(Vec::new()).await?;
-
-        let updated = nook_core::VaultRecordSet::serialize(&records, format)?;
-        let loaded = LoadedVault::unlock(LoadedVaultUnlockRequest {
-            content: updated.as_str(),
-            identity: &identity,
-        })?;
-        let LoadedVault {
-            meta,
-            secrets_key: resolved_secrets_key,
-            members_key: resolved_members_key,
-        } = loaded;
-        self.apply_vault_keys(resolved_secrets_key.as_str(), resolved_members_key.as_str())?;
-        self.vault.meta = meta;
-        self.purge_legacy_plaintext_search_catalog().await?;
-        VerifiedVaultAccessFlow::EnrollAndConnect
-            .complete(Ok(()), identity.device_id(), &self.vault.store_id)
-            .await?;
-        Ok(())
     }
 
     /// Device B publishes a join request record with its public key.
@@ -610,7 +487,6 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
-    use crate::TypedOutput;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -892,26 +768,12 @@ mod browser_tests {
     }
 
     #[wasm_bindgen_test]
-    async fn local_join_and_enrollment_require_a_vault_and_valid_keys() -> anyhow::Result<()> {
+    async fn sentinel_vaults_refuse_key_enrollment() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
         js(manager.delete_local_browser_data().await)?;
         let identity = nook_core::DeviceIdentity::generate()?;
         manager.device.id = identity.device_id().to_string();
         manager.device.identity_private_key = identity.secret_string().into_inner();
-        let local = nook_core::StorageConnection::Local.encode()?;
-
-        assert!(
-            manager
-                .request_vault_access(&local, "2026-09-07T00:00:00Z".to_owned())
-                .await
-                .is_err()
-        );
-        assert!(
-            manager
-                .enroll_and_connect(&local, String::new(), String::new())
-                .await
-                .is_err()
-        );
 
         manager.vault.architecture = nook_core::VaultArchitecture::sentinel_personal(
             nook_core::DeviceMode::Standard,

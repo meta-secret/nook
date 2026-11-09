@@ -332,56 +332,11 @@ pub const AUTH_STORAGE_LOCAL_FOLDER_DETECTED_VAULTS: &str =
 pub const AUTH_STORAGE_LOCAL_FOLDER_DETECTED_VAULTS_UNKNOWN: &str =
     "auth_storage.local_folder_detected_vaults_unknown";
 pub const AUTH_STORAGE_LOCAL_FOLDER_DISCONNECT: &str = "auth_storage.local_folder_disconnect";
-pub const AUTH_STORAGE_LOCAL_FOLDER_MULTIPLE_VAULTS_DESC: &str =
-    "auth_storage.local_folder_multiple_vaults_desc";
-pub const AUTH_STORAGE_LOCAL_FOLDER_MULTIPLE_VAULTS_RESOLUTION: &str =
-    "auth_storage.local_folder_multiple_vaults_resolution";
-pub const AUTH_STORAGE_LOCAL_FOLDER_MULTIPLE_VAULTS_SHORT: &str =
-    "auth_storage.local_folder_multiple_vaults_short";
-pub const AUTH_STORAGE_LOCAL_FOLDER_MULTIPLE_VAULTS_TITLE: &str =
-    "auth_storage.local_folder_multiple_vaults_title";
 pub const AUTH_STORAGE_LOCAL_FOLDER_NEEDS_RECONNECT: &str =
     "auth_storage.local_folder_needs_reconnect";
 pub const AUTH_STORAGE_NO_SYNC_PROVIDERS: &str = "auth_storage.no_sync_providers";
 pub const AUTH_STORAGE_NO_TOKEN_SAVED: &str = "auth_storage.no_token_saved";
 pub const AUTH_STORAGE_NOT_SYNCED_YET: &str = "auth_storage.not_synced_yet";
-pub const AUTH_STORAGE_PROVIDER_VAULT_CHECKING: &str = "auth_storage.provider_vault_checking";
-pub const AUTH_STORAGE_PROVIDER_VAULT_CHOOSE_IDENTITY: &str =
-    "auth_storage.provider_vault_choose_identity";
-pub const AUTH_STORAGE_PROVIDER_VAULT_CURRENT_IDENTITY: &str =
-    "auth_storage.provider_vault_current_identity";
-pub const AUTH_STORAGE_PROVIDER_VAULT_IDENTITIES_TITLE: &str =
-    "auth_storage.provider_vault_identities_title";
-pub const AUTH_STORAGE_PROVIDER_VAULT_IDENTITY_NOT_LINKED: &str =
-    "auth_storage.provider_vault_identity_not_linked";
-pub const AUTH_STORAGE_PROVIDER_VAULT_IDENTITY_READY: &str =
-    "auth_storage.provider_vault_identity_ready";
-pub const AUTH_STORAGE_PROVIDER_VAULT_IDENTITY_SELECTION_FAILED: &str =
-    "auth_storage.provider_vault_identity_selection_failed";
-pub const AUTH_STORAGE_PROVIDER_VAULT_IDENTITY_UNAVAILABLE: &str =
-    "auth_storage.provider_vault_identity_unavailable";
-pub const AUTH_STORAGE_PROVIDER_VAULT_INTRO: &str = "auth_storage.provider_vault_intro";
-pub const AUTH_STORAGE_PROVIDER_VAULT_KEEP_BOTH_RECOMMENDED: &str =
-    "auth_storage.provider_vault_keep_both_recommended";
-pub const AUTH_STORAGE_PROVIDER_VAULT_NO_MERGE: &str = "auth_storage.provider_vault_no_merge";
-pub const AUTH_STORAGE_PROVIDER_VAULT_PASSKEY_EXPLANATION: &str =
-    "auth_storage.provider_vault_passkey_explanation";
-pub const AUTH_STORAGE_PROVIDER_VAULT_REASON_IDENTITY_UNAVAILABLE: &str =
-    "auth_storage.provider_vault_reason_identity_unavailable";
-pub const AUTH_STORAGE_PROVIDER_VAULT_REASON_LOCAL_DATA: &str =
-    "auth_storage.provider_vault_reason_local_data";
-pub const AUTH_STORAGE_PROVIDER_VAULT_REASON_NO_IDENTITY: &str =
-    "auth_storage.provider_vault_reason_no_identity";
-pub const AUTH_STORAGE_PROVIDER_VAULT_REASON_READY: &str =
-    "auth_storage.provider_vault_reason_ready";
-pub const AUTH_STORAGE_PROVIDER_VAULT_REASON_UNKNOWN: &str =
-    "auth_storage.provider_vault_reason_unknown";
-pub const AUTH_STORAGE_PROVIDER_VAULT_TECHNICAL_DETAILS: &str =
-    "auth_storage.provider_vault_technical_details";
-pub const AUTH_STORAGE_PROVIDER_VAULT_USE_PROVIDER: &str =
-    "auth_storage.provider_vault_use_provider";
-pub const AUTH_STORAGE_PROVIDER_VAULT_USE_RECOMMENDED: &str =
-    "auth_storage.provider_vault_use_recommended";
 pub const AUTH_STORAGE_RECONNECT: &str = "auth_storage.reconnect";
 pub const AUTH_STORAGE_S3_ADD_KEY: &str = "auth_storage.s3_add_key";
 pub const AUTH_STORAGE_S3_KEY_IN_USE: &str = "auth_storage.s3_key_in_use";
@@ -392,32 +347,7 @@ pub const AUTH_STORAGE_SAVED_PROVIDERS: &str = "auth_storage.saved_providers";
 pub const AUTH_STORAGE_SECURITY_CONFLICT_EDITS: &str = "auth_storage.security_conflict_edits";
 pub const AUTH_STORAGE_SETUP_DESC: &str = "auth_storage.setup_desc";
 pub const AUTH_STORAGE_SIGNED_OUT_NOTE: &str = "auth_storage.signed_out_note";
-pub const AUTH_STORAGE_SYNC_BLOCKED_EDITS: &str = "auth_storage.sync_blocked_edits";
 pub const AUTH_STORAGE_SYNC_CHOOSE_DESC: &str = "auth_storage.sync_choose_desc";
-pub const AUTH_STORAGE_SYNC_CONFLICT: &str = "auth_storage.sync_conflict";
-pub const AUTH_STORAGE_SYNC_CONFLICT_BANNER: &str = "auth_storage.sync_conflict_banner";
-pub const AUTH_STORAGE_SYNC_CONFLICT_CHOOSE_DIFFERENT_PROVIDER: &str =
-    "auth_storage.sync_conflict_choose_different_provider";
-pub const AUTH_STORAGE_SYNC_CONFLICT_DESC: &str = "auth_storage.sync_conflict_desc";
-pub const AUTH_STORAGE_SYNC_CONFLICT_IMPORT_NEW_VAULT: &str =
-    "auth_storage.sync_conflict_import_new_vault";
-pub const AUTH_STORAGE_SYNC_CONFLICT_IMPORTED_VAULT: &str =
-    "auth_storage.sync_conflict_imported_vault";
-pub const AUTH_STORAGE_SYNC_CONFLICT_KEEP_LOCAL: &str = "auth_storage.sync_conflict_keep_local";
-pub const AUTH_STORAGE_SYNC_CONFLICT_KEEP_REMOTE: &str = "auth_storage.sync_conflict_keep_remote";
-pub const AUTH_STORAGE_SYNC_CONFLICT_LOCAL_COPY: &str = "auth_storage.sync_conflict_local_copy";
-pub const AUTH_STORAGE_SYNC_CONFLICT_REMOTE_COPY: &str = "auth_storage.sync_conflict_remote_copy";
-pub const AUTH_STORAGE_SYNC_CONFLICT_RESOLVE: &str = "auth_storage.sync_conflict_resolve";
-pub const AUTH_STORAGE_SYNC_CONFLICT_STORE_ID_BANNER: &str =
-    "auth_storage.sync_conflict_store_id_banner";
-pub const AUTH_STORAGE_SYNC_CONFLICT_STORE_ID_LOCAL: &str =
-    "auth_storage.sync_conflict_store_id_local";
-pub const AUTH_STORAGE_SYNC_CONFLICT_STORE_ID_REMOTE: &str =
-    "auth_storage.sync_conflict_store_id_remote";
-pub const AUTH_STORAGE_SYNC_CONFLICT_STORE_ID_TITLE: &str =
-    "auth_storage.sync_conflict_store_id_title";
-pub const AUTH_STORAGE_SYNC_CONFLICT_TITLE: &str = "auth_storage.sync_conflict_title";
-pub const AUTH_STORAGE_SYNC_CONFLICT_VERSION: &str = "auth_storage.sync_conflict_version";
 pub const AUTH_STORAGE_SYNC_CONNECTING: &str = "auth_storage.sync_connecting";
 pub const AUTH_STORAGE_SYNC_FAILED: &str = "auth_storage.sync_failed";
 pub const AUTH_STORAGE_SYNC_NOW: &str = "auth_storage.sync_now";
@@ -425,6 +355,8 @@ pub const AUTH_STORAGE_SYNC_PROVIDERS_DESC: &str = "auth_storage.sync_providers_
 pub const AUTH_STORAGE_SYNC_SETUP_DESC: &str = "auth_storage.sync_setup_desc";
 pub const AUTH_STORAGE_SYNC_UP_TO_DATE: &str = "auth_storage.sync_up_to_date";
 pub const AUTH_STORAGE_THIS_DEVICE: &str = "auth_storage.this_device";
+pub const AUTH_STORAGE_VAULT_FOLDER_HOLDS_ANOTHER_VAULT: &str =
+    "auth_storage.vault_folder_holds_another_vault";
 pub const AUTHORIZED_ACCOUNTS_ADD: &str = "authorized_accounts.add";
 pub const AUTHORIZED_ACCOUNTS_ADD_FAILED: &str = "authorized_accounts.add_failed";
 pub const AUTHORIZED_ACCOUNTS_ADD_LABEL: &str = "authorized_accounts.add_label";
@@ -767,11 +699,6 @@ pub const ERRORS_VALIDATION_DOMESTIC_ACCOUNT_NUMBER_INVALID: &str =
     "errors.validation.domestic_account_number_invalid";
 pub const ERRORS_VALIDATION_DOMESTIC_ACCOUNT_NUMBER_REQUIRED: &str =
     "errors.validation.domestic_account_number_required";
-pub const ERRORS_VALIDATION_DRIVE_FILE_NAME_CHARS: &str = "errors.validation.drive_file_name_chars";
-pub const ERRORS_VALIDATION_DRIVE_FILE_NAME_INVALID: &str =
-    "errors.validation.drive_file_name_invalid";
-pub const ERRORS_VALIDATION_DRIVE_FILE_NAME_LENGTH: &str =
-    "errors.validation.drive_file_name_length";
 pub const ERRORS_VALIDATION_ENROLLMENT_CREDENTIAL_MISMATCH: &str =
     "errors.validation.enrollment_credential_mismatch";
 pub const ERRORS_VALIDATION_EXTENSION_APPROVAL_APPLICATION_FORBIDDEN: &str =
@@ -866,8 +793,6 @@ pub const ERRORS_VAULT_GENERIC: &str = "errors.vault.generic";
 pub const ERRORS_VAULT_CREATION_FAILED: &str = "errors.vault_creation_failed";
 pub const ERRORS_VAULT_RENAME_FAILED: &str = "errors.vault_rename_failed";
 pub const ERRORS_VAULT_SELECTION_FAILED: &str = "errors.vault_selection_failed";
-pub const ERRORS_WHOLE_VAULT_CONFLICT_RESOLUTION_RETIRED: &str =
-    "errors.whole_vault_conflict_resolution_retired";
 pub const EXTENSION_ACTION_CONNECT_ANOTHER: &str = "extension.action.connect_another";
 pub const EXTENSION_ACTION_CONNECT_IDENTITY: &str = "extension.action.connect_identity";
 pub const EXTENSION_ACTION_CONTINUE_IN_TAB: &str = "extension.action.continue_in_tab";
@@ -1647,28 +1572,16 @@ pub const JOIN_SUBTITLE: &str = "join.subtitle";
 pub const JOIN_THIS_DEVICE: &str = "join.this_device";
 pub const JOIN_TITLE: &str = "join.title";
 pub const JOIN_ENROLLMENT_APPROVE_ON_ENROLLED: &str = "join_enrollment.approve_on_enrolled";
-pub const JOIN_ENROLLMENT_CREATE_NEW_VAULT: &str = "join_enrollment.create_new_vault";
-pub const JOIN_ENROLLMENT_CREATING: &str = "join_enrollment.creating";
 pub const JOIN_ENROLLMENT_DESC_JOIN: &str = "join_enrollment.desc_join";
 pub const JOIN_ENROLLMENT_DESC_PENDING: &str = "join_enrollment.desc_pending";
-pub const JOIN_ENROLLMENT_ENROLL_WITH_KEYS: &str = "join_enrollment.enroll_with_keys";
 pub const JOIN_ENROLLMENT_EXPLAINER_ITEM1: &str = "join_enrollment.explainer_item1";
 pub const JOIN_ENROLLMENT_EXPLAINER_ITEM2: &str = "join_enrollment.explainer_item2";
 pub const JOIN_ENROLLMENT_EXPLAINER_ITEM3: &str = "join_enrollment.explainer_item3";
 pub const JOIN_ENROLLMENT_EXPLAINER_ITEM4: &str = "join_enrollment.explainer_item4";
 pub const JOIN_ENROLLMENT_GOT_IT: &str = "join_enrollment.got_it";
-pub const JOIN_ENROLLMENT_HAVE_TRANSFER_KEYS: &str = "join_enrollment.have_transfer_keys";
-pub const JOIN_ENROLLMENT_MEMBERS_KEY: &str = "join_enrollment.members_key";
-pub const JOIN_ENROLLMENT_SECRETS_KEY: &str = "join_enrollment.secrets_key";
-pub const JOIN_ENROLLMENT_SECRETS_KEY_PLACEHOLDER: &str = "join_enrollment.secrets_key_placeholder";
-pub const JOIN_ENROLLMENT_SETUP_FROM_SCRATCH: &str = "join_enrollment.setup_from_scratch";
-pub const JOIN_ENROLLMENT_SETUP_FROM_SCRATCH_DESC: &str = "join_enrollment.setup_from_scratch_desc";
-pub const JOIN_ENROLLMENT_STARTING_OVER: &str = "join_enrollment.starting_over";
-pub const JOIN_ENROLLMENT_STARTING_OVER_DESC: &str = "join_enrollment.starting_over_desc";
 pub const JOIN_ENROLLMENT_THIS_BROWSER: &str = "join_enrollment.this_browser";
 pub const JOIN_ENROLLMENT_TITLE_JOIN: &str = "join_enrollment.title_join";
 pub const JOIN_ENROLLMENT_TITLE_PENDING: &str = "join_enrollment.title_pending";
-pub const JOIN_ENROLLMENT_TRANSFER_KEYS_DESC: &str = "join_enrollment.transfer_keys_desc";
 pub const KEEPASSXC_IMPORT_DESCRIPTION: &str = "keepassxc_import.description";
 pub const KEEPASSXC_IMPORT_EXPORT_HINT: &str = "keepassxc_import.export_hint";
 pub const KEEPASSXC_IMPORT_EXPORT_HINT_TITLE: &str = "keepassxc_import.export_hint_title";
@@ -2024,20 +1937,7 @@ pub const LOGIN_WIZARD_ENROLL_TITLE: &str = "login_wizard.enroll_title";
 pub const LOGIN_WIZARD_ENROLL_WARNING: &str = "login_wizard.enroll_warning";
 pub const LOGIN_WIZARD_GET_ACCESS: &str = "login_wizard.get_access";
 pub const LOGIN_WIZARD_GET_ACCESS_SUBHEADER: &str = "login_wizard.get_access_subheader";
-pub const LOGIN_WIZARD_MANAGE_PROVIDERS: &str = "login_wizard.manage_providers";
-pub const LOGIN_WIZARD_MANAGE_PROVIDERS_DESC: &str = "login_wizard.manage_providers_desc";
 pub const LOGIN_WIZARD_NO_PROVIDERS: &str = "login_wizard.no_providers";
-pub const LOGIN_WIZARD_REMOTE_RECOVERY_CREATE_FRESH_BTN: &str =
-    "login_wizard.remote_recovery.create_fresh_btn";
-pub const LOGIN_WIZARD_REMOTE_RECOVERY_DESC_MISSING_ONLY: &str =
-    "login_wizard.remote_recovery.desc_missing_only";
-pub const LOGIN_WIZARD_REMOTE_RECOVERY_DESC_WITH_CACHE: &str =
-    "login_wizard.remote_recovery.desc_with_cache";
-pub const LOGIN_WIZARD_REMOTE_RECOVERY_RECOVER_BTN: &str =
-    "login_wizard.remote_recovery.recover_btn";
-pub const LOGIN_WIZARD_REMOTE_RECOVERY_RECOVERING: &str = "login_wizard.remote_recovery.recovering";
-pub const LOGIN_WIZARD_REMOTE_RECOVERY_TITLE: &str = "login_wizard.remote_recovery.title";
-pub const LOGIN_WIZARD_SAVED_COUNT: &str = "login_wizard.saved_count";
 pub const LOGIN_WIZARD_SCAN_INSTRUCTIONS: &str = "login_wizard.scan_instructions";
 pub const LOGIN_WIZARD_SCAN_QR: &str = "login_wizard.scan_qr";
 pub const LOGIN_WIZARD_STORAGE_PROVIDER: &str = "login_wizard.storage_provider";
@@ -2115,7 +2015,6 @@ pub const ONBOARD_DEVICE_WIZARD_SYNC_READY_SINGULAR: &str =
 pub const ONBOARD_DEVICE_WIZARD_SYNC_STEP: &str = "onboard_device.wizard_sync_step";
 pub const ONBOARD_DEVICE_WIZARD_SYNC_SUBTITLE: &str = "onboard_device.wizard_sync_subtitle";
 pub const ONBOARDING_ADD_PROVIDER: &str = "onboarding.add_provider";
-pub const ONBOARDING_ADD_PROVIDER_BTN: &str = "onboarding.add_provider_btn";
 pub const ONBOARDING_ANOTHER_PROVIDER: &str = "onboarding.another_provider";
 pub const ONBOARDING_BACK_TO_SAVED: &str = "onboarding.back_to_saved";
 pub const ONBOARDING_CONNECT_TO: &str = "onboarding.connect_to";
@@ -2309,27 +2208,13 @@ pub const PROVIDER_SETUP_S3_USE_LOCAL_DEV: &str = "provider_setup.s3_use_local_d
 pub const PROVIDER_SETUP_SIGN_IN_WITH_GOOGLE: &str = "provider_setup.sign_in_with_google";
 pub const PROVIDER_SETUP_SIGN_IN_WITH_ICLOUD: &str = "provider_setup.sign_in_with_icloud";
 pub const PROVIDER_SETUP_STORED_LOCALLY_DESC: &str = "provider_setup.stored_locally_desc";
-pub const PROVIDER_VAULTS_ACCESS_REQUESTED_TOAST: &str = "provider_vaults.access_requested_toast";
-pub const PROVIDER_VAULTS_CHOICE_CONNECT: &str = "provider_vaults.choice_connect";
-pub const PROVIDER_VAULTS_CREATED: &str = "provider_vaults.created";
 pub const PROVIDER_VAULTS_DEVICES: &str = "provider_vaults.devices";
-pub const PROVIDER_VAULTS_EVENTS: &str = "provider_vaults.events";
-pub const PROVIDER_VAULTS_FILED_UNDER: &str = "provider_vaults.filed_under";
 pub const PROVIDER_VAULTS_IDENTITY_VAULTS: &str = "provider_vaults.identity_vaults";
-pub const PROVIDER_VAULTS_LAST_ACTIVITY: &str = "provider_vaults.last_activity";
 pub const PROVIDER_VAULTS_LIST_TITLE: &str = "provider_vaults.list_title";
 pub const PROVIDER_VAULTS_LOADING: &str = "provider_vaults.loading";
 pub const PROVIDER_VAULTS_LOADING_S3: &str = "provider_vaults.loading_s3";
-pub const PROVIDER_VAULTS_NEWEST_DEVICE: &str = "provider_vaults.newest_device";
-pub const PROVIDER_VAULTS_RECOVER_IDENTITY: &str = "provider_vaults.recover_identity";
-pub const PROVIDER_VAULTS_REPLACE_CONFIRM: &str = "provider_vaults.replace_confirm";
-pub const PROVIDER_VAULTS_REPLACE_CONFIRM_TITLE: &str = "provider_vaults.replace_confirm_title";
-pub const PROVIDER_VAULTS_REPLACED: &str = "provider_vaults.replaced";
-pub const PROVIDER_VAULTS_REQUEST_ACCESS: &str = "provider_vaults.request_access";
-pub const PROVIDER_VAULTS_REQUEST_FAILED: &str = "provider_vaults.request_failed";
 pub const PROVIDER_VAULTS_ROOT_ABSENT: &str = "provider_vaults.root_absent";
 pub const PROVIDER_VAULTS_ROOT_EMPTY: &str = "provider_vaults.root_empty";
-pub const PROVIDER_VAULTS_USE_INSTEAD: &str = "provider_vaults.use_instead";
 pub const RECOVERY_PASSPHRASE_ADD: &str = "recovery_passphrase.add";
 pub const RECOVERY_PASSPHRASE_ADD_HINT: &str = "recovery_passphrase.add_hint";
 pub const RECOVERY_PASSPHRASE_APPROVED_BY: &str = "recovery_passphrase.approved_by";

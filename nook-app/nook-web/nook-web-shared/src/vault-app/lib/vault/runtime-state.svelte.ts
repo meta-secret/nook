@@ -32,7 +32,6 @@ import {
 import * as localeActions from "$lib/vault/locale";
 import * as oauthActions from "$lib/vault/oauth";
 import * as providersActions from "$lib/vault/providers.svelte";
-import * as syncActions from "$lib/vault/sync.svelte";
 import { VaultLifecycleState } from "$lib/vault/state/lifecycle.svelte";
 import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 import {
@@ -55,7 +54,6 @@ export type VaultEditRestriction =
   | {
       decision:
         | VaultEditDecision.BlockedSecurityConflict
-        | VaultEditDecision.BlockedSyncConflict
         | VaultEditDecision.BlockedByArchitecture;
       reason: string;
     };
@@ -97,18 +95,9 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
   protected abstract providerActionsContext(): ProviderActionsContext;
   protected abstract completeVaultState(): VaultState;
 
-  get syncBlocked(): boolean {
-    return this.syncConflictRequiresDecision;
-  }
-
-  get syncConflictLabel(): string {
-    return new syncActions.SyncConflictPresentation(this).label;
-  }
-
   get editsBlocked(): boolean {
     return this.clientPolicy.edits_blocked(
       this.securityConflicts.length,
-      this.syncBlocked,
       this.architectureCanCreateSecret,
     );
   }
@@ -120,13 +109,11 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
   get editRestriction(): VaultEditRestriction {
     const decision = this.clientPolicy.edit_block_reason(
       this.securityConflicts.length,
-      this.syncBlocked,
       this.architectureCanCreateSecret,
     );
     if (decision === VaultEditDecision.Allowed) return { decision };
     const reason = this.clientPolicy.edit_block_message(
       this.securityConflicts.length,
-      this.syncBlocked,
       this.architectureCanCreateSecret,
       this.translations,
       this.locale,

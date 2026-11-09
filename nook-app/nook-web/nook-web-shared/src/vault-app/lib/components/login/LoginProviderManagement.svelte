@@ -1,241 +1,72 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import {
-    Archive,
-    ChevronDown,
-    Cloud,
-    HardDrive,
-    Plus,
-    Settings2,
-  } from '@lucide/svelte'
-  import {
-    ProviderRowGlyph,
-    ProviderRowGlyphs,
-  } from '$lib/components/provider-row-glyph'
   import ProviderPicker from '$lib/components/ProviderPicker.svelte'
   import BackButton from '$lib/components/workspace/BackButton.svelte'
   import FirstRunDiagram from '$lib/components/login/FirstRunDiagram.svelte'
   import { firstRunRecoveryDiagram } from '$lib/components/login/first-run-diagram'
-  import type { ProviderKind, StorageProvider } from '$lib/auth/providers'
-  import {
-    localizedProviderStorageDetail,
-    localizeProviderLabel,
-  } from '$lib/auth/providers'
-  import { PickerRow } from '$lib/components/provider-picker-state'
+  import type { ProviderKind } from '$lib/auth/providers'
   import { SentinelGenesisPhase } from '$app-wasm'
 
   import type { VaultState } from '$lib/vault.svelte'
-  import {
-    LocalFolderPickerRow,
-    LoginProviderManagementVariant,
-  } from './login-provider-management-state'
+  import { LocalFolderPickerRow } from './login-provider-management-state'
 
   let {
     vault,
-    providers,
-    variant = LoginProviderManagementVariant.Manage,
-    isVerifying,
-    isInitializing,
-    open = $bindable(false),
     addingProvider = false,
     onBeginSetup,
     onCancelAddProvider,
-    onRemoveProvider,
-    onBeginAddProvider,
   }: {
     vault: VaultState
-    providers: StorageProvider[]
-    variant?: LoginProviderManagementVariant
-    isVerifying: boolean
-    isInitializing: boolean
-    open?: boolean
     addingProvider?: boolean
     onBeginSetup: (kind: ProviderKind) => void
     onCancelAddProvider?: () => void
-    onRemoveProvider?: (id: string) => void | Promise<void>
-    onBeginAddProvider?: () => void
   } = $props()
 
-  const isSetup = $derived(variant === LoginProviderManagementVariant.Setup)
   /** A Sentinel vault delivering its shares cannot use a local folder. */
   const localFolderRow = $derived(
     LocalFolderPickerRow.of(
       vault.sentinelGenesisPhase === SentinelGenesisPhase.DeliveringShares,
     ),
   )
-
-  function confirmRemoveProvider(provider: StorageProvider) {
-    if (!onRemoveProvider) return
-    const tArgs: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.AuthStorageConfirmRemove,
-      replacements: {
-        label: provider.label,
-        signedOutNote: '',
-      },
-    }
-    const ok = confirm(vault.t(tArgs))
-    if (ok) {
-      void onRemoveProvider(provider.id)
-    }
-  }
 </script>
 
-{#if isSetup}
-  <div class="space-y-4" data-testid="login-provider-setup">
-    {#if addingProvider && onCancelAddProvider}
-      <BackButton
-        label={vault.t(I18N_KEYS.LoginWizardBackToUnlock)}
-        testId="cancel-add-provider-btn"
-        onBack={() => onCancelAddProvider()}
-      />
-    {/if}
-
-    <div class="space-y-1">
-      <h2 class="text-sm font-semibold text-foreground">
-        {#if addingProvider}
-          {vault.t(I18N_KEYS.OnboardingAddProvider)}
-        {:else if vault.loginRequiresExistingVault}
-          {vault.t(I18N_KEYS.FirstRunRestorePick)}
-        {:else}
-          {vault.t(I18N_KEYS.LoginWizardChooseStoreVault)}
-        {/if}
-      </h2>
-      <p class="text-xs text-muted-foreground text-pretty">
-        {#if addingProvider}
-          {vault.t(I18N_KEYS.LoginWizardAddProviderDesc)}
-        {:else if vault.loginRequiresExistingVault}
-          {vault.t(I18N_KEYS.FirstRunRestoreBody)}
-        {:else}
-          {vault.t(I18N_KEYS.LoginWizardBeforeConnectDesc)}
-        {/if}
-      </p>
-    </div>
-
-    {#if !addingProvider && vault.loginRequiresExistingVault}
-      <FirstRunDiagram diagram={firstRunRecoveryDiagram(vault)} />
-    {/if}
-
-    <ProviderPicker
-      {vault}
-      onSelect={onBeginSetup}
-      local={PickerRow.Hidden}
-      localFolder={localFolderRow}
+<div class="space-y-4" data-testid="login-provider-setup">
+  {#if addingProvider && onCancelAddProvider}
+    <BackButton
+      label={vault.t(I18N_KEYS.LoginWizardBackToUnlock)}
+      testId="cancel-add-provider-btn"
+      onBack={() => onCancelAddProvider()}
     />
+  {/if}
+
+  <div class="space-y-1">
+    <h2 class="text-sm font-semibold text-foreground">
+      {#if addingProvider}
+        {vault.t(I18N_KEYS.OnboardingAddProvider)}
+      {:else if vault.loginRequiresExistingVault}
+        {vault.t(I18N_KEYS.FirstRunRestorePick)}
+      {:else}
+        {vault.t(I18N_KEYS.LoginWizardChooseStoreVault)}
+      {/if}
+    </h2>
+    <p class="text-xs text-muted-foreground text-pretty">
+      {#if addingProvider}
+        {vault.t(I18N_KEYS.LoginWizardAddProviderDesc)}
+      {:else if vault.loginRequiresExistingVault}
+        {vault.t(I18N_KEYS.FirstRunRestoreBody)}
+      {:else}
+        {vault.t(I18N_KEYS.LoginWizardBeforeConnectDesc)}
+      {/if}
+    </p>
   </div>
-{:else}
-  <div
-    class="overflow-hidden rounded-xl border border-border/60 bg-card/60"
-    data-testid="login-manage-providers"
-  >
-    <button
-      type="button"
-      class="flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-muted/30 {open
-        ? 'bg-muted/20'
-        : ''}"
-      aria-expanded={open}
-      data-testid="login-manage-providers-toggle"
-      disabled={isVerifying || isInitializing}
-      onclick={() => {
-        open = !open
-      }}
-    >
-      <Settings2 class="size-5 shrink-0 text-muted-foreground" />
-      <span class="min-w-0 flex-1 text-base">
-        <span class="font-semibold text-foreground"
-          >{vault.t(I18N_KEYS.LoginWizardManageProviders)}</span
-        >
-        {#if providers.length > 0}
-          <span class="text-sm text-muted-foreground">
-            · {providers.length}
-            {vault.t(I18N_KEYS.LoginWizardSavedCount)}
-          </span>
-        {/if}
-      </span>
-      <ChevronDown
-        class="size-5 shrink-0 text-muted-foreground transition-transform duration-200 {open
-          ? 'rotate-180'
-          : ''}"
-      />
-    </button>
 
-    {#if open}
-      <div
-        class="space-y-3 border-t border-border/40 bg-background/50 px-3.5 py-3"
-        data-testid="login-manage-providers-panel"
-      >
-        <p class="text-xs text-muted-foreground text-pretty">
-          {vault.t(I18N_KEYS.LoginWizardManageProvidersDesc)}
-        </p>
+  {#if !addingProvider && vault.loginRequiresExistingVault}
+    <FirstRunDiagram diagram={firstRunRecoveryDiagram(vault)} />
+  {/if}
 
-        <ul
-          class="divide-y divide-border/40"
-          data-testid="login-manage-providers-list"
-        >
-          {#each providers as provider (provider.id)}
-            {@const glyph = ProviderRowGlyphs.of(provider.provider)}
-            <li class="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
-              {#if glyph === ProviderRowGlyph.Cloud}
-                <Cloud class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-              {:else if glyph === ProviderRowGlyph.Archive}
-                <Archive
-                  class="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                />
-              {:else}
-                <HardDrive
-                  class="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                />
-              {/if}
-              <div class="min-w-0 flex-1">
-                <div class="truncate text-sm font-medium text-foreground">
-                  {(() => {
-                    const localizeProviderLabelArgs: Parameters<
-                      typeof localizeProviderLabel
-                    >[0] = { label: provider.label, t: vault.t }
-                    return localizeProviderLabel(localizeProviderLabelArgs)
-                  })()}
-                </div>
-                <div
-                  class="truncate text-xs text-muted-foreground"
-                  data-testid="provider-detail-{provider.id}"
-                >
-                  {(() => {
-                    const localizedProviderStorageDetailRequest: Parameters<
-                      typeof localizedProviderStorageDetail
-                    >[0] = { provider, t: vault.t }
-                    return localizedProviderStorageDetail(
-                      localizedProviderStorageDetailRequest,
-                    )
-                  })()}
-                </div>
-              </div>
-              {#if onRemoveProvider}
-                <button
-                  type="button"
-                  class="shrink-0 text-xs font-medium text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
-                  data-testid="remove-provider-{provider.id}"
-                  disabled={isVerifying || isInitializing}
-                  onclick={() => confirmRemoveProvider(provider)}
-                >
-                  {vault.t(I18N_KEYS.CommonRemove)}
-                </button>
-              {/if}
-            </li>
-          {/each}
-        </ul>
-
-        {#if onBeginAddProvider}
-          <button
-            type="button"
-            class="inline-flex items-center gap-1.5 text-sm font-medium text-primary transition-colors hover:text-primary/80 disabled:opacity-50"
-            data-testid="add-provider-btn"
-            disabled={isVerifying || isInitializing}
-            onclick={() => onBeginAddProvider()}
-          >
-            <Plus class="size-4" />
-            {vault.t(I18N_KEYS.OnboardingAddProviderBtn)}
-          </button>
-        {/if}
-      </div>
-    {/if}
-  </div>
-{/if}
+  <ProviderPicker
+    {vault}
+    onSelect={onBeginSetup}
+    localFolder={localFolderRow}
+  />
+</div>

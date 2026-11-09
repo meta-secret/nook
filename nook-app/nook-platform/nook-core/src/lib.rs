@@ -53,7 +53,7 @@ pub(crate) use sync::{
     provider_identity_choice, provider_identity_join, provider_identity_log,
     provider_identity_recovery, provider_vault_access, provider_vault_join, provider_vault_listing,
     s3_protocol, sync_provider_credentials, sync_provider_store, validation, vault_access_check,
-    vault_sync, vault_sync_conflict, vault_sync_session, vault_sync_state, vault_sync_store,
+    vault_sync, vault_sync_session, vault_sync_state, vault_sync_store,
 };
 pub use vault::domain_numbers::*;
 pub use vault::passkey_detail_read::{
@@ -134,8 +134,8 @@ pub use google_authenticator_import::{
     GoogleAuthenticatorMigrationInput, GoogleAuthenticatorMigrationQrCodeCount,
 };
 pub use identity_health::{
-    BrowserExtensionInstallation, BrowserExtensionMembership, IdentityExtensionStep, IdentityHealth,
-    IdentityHealthAssessment, IdentityHealthStage, IdentityNextStep, IdentityNudge,
+    BrowserExtensionInstallation, BrowserExtensionMembership, IdentityExtensionStep,
+    IdentityHealth, IdentityHealthAssessment, IdentityHealthStage, IdentityNextStep, IdentityNudge,
     IdentityProtectionChecklist, IdentityProtectionStep, IdentityProtectionTask,
     IdentityProtectionTaskState,
 };
@@ -230,16 +230,7 @@ pub use vault_sentinel_onboarding::{
     AcceptedSentinelOnboarding, SentinelOnboardingIssuance, SentinelOnboardingPackage,
     SentinelOnboardingRecipient, SentinelOnboardingVersion,
 };
-pub use vault_sync_conflict::{
-    ContentSyncConflict, CurrentVaultReplaceability, ProviderVaultDecision,
-    ProviderVaultDecisionProjection, ProviderVaultDecisionReason, ProviderVaultIdentityEligibility,
-    ProviderVaultIdentityObservation, ProviderVaultIdentityProjection, StoreIdSyncConflict,
-    VaultSyncConflict, VaultSyncConflictKind,
-};
-pub use vault_sync_state::{
-    LocalFolderHealth, LocalFolderMultipleVaultsIssue, ManualProviderSync, SyncConflictReview,
-    VaultLastSync, VaultSyncUnixMilliseconds,
-};
+pub use vault_sync_state::{ManualProviderSync, VaultLastSync, VaultSyncUnixMilliseconds};
 pub use website_login_save::{
     WebsiteLoginSaveCandidate, WebsiteLoginSaveDecision, WebsiteLoginSaveRequest,
 };
@@ -369,13 +360,12 @@ pub use provider_identity_log::{
 };
 pub use provider_identity_recovery::IdentityRecoveryOffer;
 pub use provider_vault_access::{
-    BrowserIdentityVault, BrowserVaultKeys, ProviderVaultAccess, ProviderVaultAction,
-    ProviderVaultEvents, ProviderVaultInspection, ProviderVaultKeyholding, ProviderVaultStanding,
+    BrowserIdentityVault, BrowserVaultKeys, ProviderVaultAccess, ProviderVaultEvents,
+    ProviderVaultInspection, ProviderVaultKeyholding, ProviderVaultStanding,
 };
 pub use provider_vault_join::ProviderVaultAccessRequest;
 pub use provider_vault_listing::{
-    BrowserNames, EmptyVaultReplacement, FilingIdentity, IdentityAppCount, KnownIdentityName,
-    KnownVaultName, LocalVaultItemCount, LocalVaultOccupancy, NOOK_PROVIDER_ROOT_NAME,
+    BrowserNames, FilingIdentity, KnownIdentityName, KnownVaultName, NOOK_PROVIDER_ROOT_NAME,
     ProviderEventCount, ProviderInstant, ProviderVaultListing, ProviderVaultListingRequest,
     ProviderVaultName, ProviderVaultObservation, ProviderVaultSummary, ProviderVaultTime,
 };
@@ -450,10 +440,10 @@ pub use vault_client_policy::{
     ActiveVaultStore, DeviceIdentityInitializationMode, DeviceProtectionStatus,
     InvalidDeviceProtectionStatus, JoinEnrollmentState, ProviderSyncFailureHandling,
     ProviderSyncFreshness, ProviderSyncVisibility, RemoteVaultAssessDecision,
-    RemoteVaultRecoveryState, SentinelVaultUnlockState, UnauthenticatedSyncDecision,
-    VaultAccessObservation, VaultClientPolicy, VaultConnectGateDecision, VaultConnectProbeDecision,
-    VaultEditDecision, VaultEditMessage, VaultEditTranslation, VaultStorageSyncDecision,
-    VaultSwitchDecision, VaultSyncTimerStartDecision, VaultSyncTimerTickDecision,
+    SentinelVaultUnlockState, UnauthenticatedSyncDecision, VaultAccessObservation,
+    VaultClientPolicy, VaultConnectGateDecision, VaultConnectProbeDecision, VaultEditDecision,
+    VaultEditMessage, VaultEditTranslation, VaultStorageSyncDecision, VaultSwitchDecision,
+    VaultSyncTimerStartDecision, VaultSyncTimerTickDecision,
 };
 pub use vault_connect::{
     LoadedVault, UnlockedVault, UnlockedVaultMaterial, VaultAccessStatus, VaultContent,
@@ -628,8 +618,8 @@ pub use vault_client_policy::{
     VaultJoinApprovalWait, VaultProviderSyncState, VaultSaveActivity,
     VaultSecretCreationPermission, VaultSelectionState, VaultSessionLockIntent,
     VaultStorageSyncDecisionRequest, VaultSwitchTargetRequest, VaultSyncActivity, VaultSyncChange,
-    VaultSyncConflictState, VaultSyncIntent, VaultSyncPermission,
-    VaultSyncTimerStartDecisionRequest, VaultSyncTimerTickDecisionRequest, VaultVerificationState,
+    VaultSyncIntent, VaultSyncTimerStartDecisionRequest, VaultSyncTimerTickDecisionRequest,
+    VaultVerificationState,
 };
 
 pub use device_access::DeviceSessionLockState;

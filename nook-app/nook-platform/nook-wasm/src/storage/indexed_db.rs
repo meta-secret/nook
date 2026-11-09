@@ -16,7 +16,6 @@
 //!   previous active blob.
 //! - `device_id` / `device_identity_wrapped` — stable browser device identity
 //!   metadata for passkey-derived identities or PIN-encrypted identity records.
-//! - `vault_cache:{ref}` — per-provider local mirror of remote YAML.
 //! - `secret_search_v2:{store_id}:{bucket}` — independently encrypted search
 //!   catalog buckets. Searchable metadata is decrypted only while unlocked.
 //! - `secret_search:{store_id}` — legacy plaintext catalog key, deleted
@@ -32,7 +31,6 @@ pub(crate) use atomic_string::{IndexedDbUpdate, StringUpdateGuard, StringUpdateR
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use nook_core::ActiveVaultScope;
 mod local_vault;
-pub(crate) use local_vault::ImportVaultLabel;
 #[cfg(test)]
 pub(crate) use local_vault::RegistryLabelUpdate;
 pub(crate) use local_vault::VaultSnapshotLookup;
@@ -125,12 +123,6 @@ pub(crate) struct IdbPutStringRequest<'a> {
 impl NookDatabase {
     fn vault_blob_key(store_id: &str) -> String {
         format!("vault:{store_id}")
-    }
-}
-
-impl NookDatabase {
-    fn vault_cache_key(cache_ref: &str) -> String {
-        format!("vault_cache:{cache_ref}")
     }
 }
 
@@ -350,10 +342,6 @@ mod unit_tests {
     #[wasm_bindgen_test]
     fn storage_keys_keep_each_namespace_and_bucket_shape() {
         assert_eq!(NookDatabase::vault_blob_key("store-a"), "vault:store-a");
-        assert_eq!(
-            NookDatabase::vault_cache_key("remote"),
-            "vault_cache:remote"
-        );
         assert_eq!(
             NookDatabase::secret_search_key("store-a"),
             "secret_search:store-a"
@@ -635,11 +623,7 @@ mod sentinel_genesis_storage_tests {
         .into_inner();
 
         assert_eq!(
-            NookDatabase::import_vault_blob(ImportVaultBlobRequest {
-                content: &first,
-                label: ImportVaultLabel::FromDocument
-            })
-            .await?,
+            NookDatabase::import_vault_blob(ImportVaultBlobRequest { content: &first }).await?,
             first_id
         );
         assert_eq!(
@@ -682,15 +666,6 @@ mod sentinel_genesis_storage_tests {
             NookDatabase::idb_get_string(&NookDatabase::secret_search_key(&first_id)).await?,
             StoredStringRecord::MissingKey
         ));
-        NookDatabase::idb_put_string(IdbPutStringRequest {
-            key: &NookDatabase::vault_cache_key("provider-cache"),
-            value: "cached-vault",
-        })
-        .await?;
-        assert_eq!(
-            NookDatabase::load_vault_local_cache("provider-cache").await?,
-            VaultSnapshotLookup::Stored("cached-vault".to_owned())
-        );
 
         NookDatabase::prepare_new_local_vault_slot().await?;
         assert!(matches!(
@@ -698,11 +673,7 @@ mod sentinel_genesis_storage_tests {
             VaultSnapshotLookup::NotStored
         ));
         assert_eq!(
-            NookDatabase::import_vault_blob(ImportVaultBlobRequest {
-                content: &second,
-                label: ImportVaultLabel::Override("Imported label")
-            })
-            .await?,
+            NookDatabase::import_vault_blob(ImportVaultBlobRequest { content: &second }).await?,
             second_id
         );
         assert_eq!(NookDatabase::list_vault_registry_entries().await?.len(), 2);

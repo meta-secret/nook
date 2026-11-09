@@ -18,8 +18,8 @@ mod lookup;
 mod pending_genesis_store;
 mod transition_context;
 pub(crate) use lookup::{
-    LocalIdentityProjection, ProtectedIdentityLookup, ProtectedLocalIdentity,
-    SelectedIdentityRecord, StoredIdentityProtection, StoredIdentityRecord,
+    ProtectedIdentityLookup, ProtectedLocalIdentity, SelectedIdentityRecord,
+    StoredIdentityProtection, StoredIdentityRecord,
 };
 pub(crate) use transition_context::PreviousLocalSelection;
 mod genesis_cleanup;

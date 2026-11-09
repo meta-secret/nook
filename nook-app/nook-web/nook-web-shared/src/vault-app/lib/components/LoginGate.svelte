@@ -36,10 +36,6 @@
   } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
   import type { ProviderKind, StorageProvider } from '$lib/auth/providers'
-  import {
-    ConnectQuestions,
-    type AskedConnectQuestion,
-  } from '$lib/components/connect-button-state'
   import { WorkspaceRoute } from '$lib/app/workspace-route'
   import { WorkspaceSectionRoute } from '$lib/vault/ui'
   import { IdentityPages } from '$lib/vault/identity-pages'
@@ -58,7 +54,6 @@
   import LoginVaultPicker from '$lib/components/login/LoginVaultPicker.svelte'
   import LoginNewVaultPanel from '$lib/components/login/LoginNewVaultPanel.svelte'
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
-  import { LoginProviderManagementVariant } from '$lib/components/login/login-provider-management-state'
   import JoinThisDevice from '$lib/components/join/JoinThisDevice.svelte'
   import { FirstRunStage, NewIdentityStage } from '$lib/vault/state/ui.svelte'
   import CardPinUnlock from '$lib/components/identities/CardPinUnlock.svelte'
@@ -78,7 +73,6 @@
     SentinelLoginPresentationReader,
     SentinelLoginPresentationKind,
   } from '$lib/vault/sentinel-login-presentation.svelte'
-  import RemoteVaultRecoveryPrompt from '$lib/components/login/RemoteVaultRecoveryPrompt.svelte'
   import RemoteVaultChoice from '$lib/components/login/RemoteVaultChoice.svelte'
   import {
     ProviderSetupName,
@@ -103,7 +97,6 @@
     onUnlock,
     onUnlockOnCard,
     identityHealth,
-    onBeginAddProvider,
     onCancelAddProvider,
     onBeginSetup,
     onCancelSetup,
@@ -113,7 +106,6 @@
     onStartSentinelGenesis,
     onCreateSentinelGenesisPublicKeyAnnouncement,
     onCreateSentinelGenesisParticipantResponse,
-    onRemoveProvider,
     prefillEnrollmentCode = '',
     enrollmentFromUrlPending = false,
     deviceAuthorizationPending = false,
@@ -139,7 +131,6 @@
     /** How the identity is protected; its unlocked card offers the
      * checklist before any vault is open. */
     identityHealth?: NookIdentityHealth
-    onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
     onBeginSetup: (kind: ProviderKind) => void
     onCancelSetup: () => void
@@ -153,7 +144,6 @@
     onCreateSentinelGenesisParticipantResponse?: (
       requestPayload: string,
     ) => Promise<SentinelActionResult<string>>
-    onRemoveProvider?: (id: string) => void | Promise<void>
     prefillEnrollmentCode?: string
     enrollmentFromUrlPending?: boolean
     deviceAuthorizationPending?: boolean
@@ -198,10 +188,7 @@
     Pick<ComponentProps<typeof SentinelCeremonyPanel>, 'onUnlocked'>
   >
   type ProviderManagementOptionalProps = Partial<
-    Pick<
-      ComponentProps<typeof LoginProviderManagement>,
-      'onBeginAddProvider' | 'onCancelAddProvider' | 'onRemoveProvider'
-    >
+    Pick<ComponentProps<typeof LoginProviderManagement>, 'onCancelAddProvider'>
   >
   const createVaultChooserOptionalProps = $derived.by(() => {
     const props: CreateVaultChooserOptionalProps = {}
@@ -220,9 +207,7 @@
   })
   const providerManagementOptionalProps = $derived.by(() => {
     const props: ProviderManagementOptionalProps = {}
-    if (onBeginAddProvider) props.onBeginAddProvider = onBeginAddProvider
     if (onCancelAddProvider) props.onCancelAddProvider = onCancelAddProvider
-    if (onRemoveProvider) props.onRemoveProvider = onRemoveProvider
     return props
   })
 
@@ -230,8 +215,8 @@
   let firstScreenRequested = $state(false)
   let newVaultOpen = $state(false)
 
-  /** Close what is open beside the card (New vault, an import, provider
-   * setup) when another panel opens there. */
+  /** Close what is open beside the card (New vault, keyring recovery,
+   * provider setup) when another panel opens there. */
   function closeSidePanels(): void {
     newVaultOpen = false
     if (vault.vaultImportOpen) {
@@ -248,8 +233,8 @@
     await vault.chooseLoginVault(storeId)
   }
 
-  // An import started from the unlocked workspace locked the identity to
-  // continue here.
+  // Recover keyring started from the unlocked workspace locked the
+  // identity to continue here.
   onMount(() => {
     if (vault.vaultImportOpen && !vault.loginRequiresExistingVault)
       vault.beginExistingVaultOpen()
@@ -261,7 +246,7 @@
     await openVaultFromCard(storeId)
   }
 
-  /** "New vault" on the identity card: create one here or import one. */
+  /** "New vault" on the identity card creates a vault here. */
   function openNewVault(): void {
     newVaultOpen = true
   }
@@ -531,21 +516,6 @@
     }
     return new ProviderSetupName(request).text()
   })
-  const recoveryPromptVisible = $derived(
-    vault.clientPolicy.remote_recovery_prompt_visible(
-      vault.remoteVaultRecoveryState,
-    ),
-  )
-  /** The remote-recovery question the GitHub and S3 setups ask above
-   * Connect, which waits while it is open. */
-  const recoveryQuestion = $derived.by(() => {
-    const asked: AskedConnectQuestion = {
-      prompt: recoveryPrompt,
-      open: recoveryPromptVisible,
-    }
-    return ConnectQuestions.asked(asked)
-  })
-
   function handleFirstConnectSubmit(e: Event) {
     e.preventDefault()
     void onUnlock()
@@ -610,9 +580,6 @@
 {/snippet}
 {#snippet sentinelCeremony()}
   <SentinelCeremonyPanel {vault} {isVerifying} {isInitializing} />
-{/snippet}
-{#snippet recoveryPrompt()}
-  <RemoteVaultRecoveryPrompt {vault} {isVerifying} />
 {/snippet}
 {#snippet cardPinUnlock()}
   <CardPinUnlock
@@ -730,7 +697,6 @@
             draft={setupView.draft}
             {isVerifying}
             {isInitializing}
-            question={recoveryQuestion}
             {onCancelSetup}
             onConnect={onUnlock}
           />
@@ -740,7 +706,6 @@
             idPrefix="login"
             {isVerifying}
             {isInitializing}
-            question={recoveryQuestion}
             {onCancelSetup}
             onConnect={onUnlock}
           />
@@ -784,10 +749,6 @@
       {:else if showProviderSetup}
         <LoginProviderManagement
           {vault}
-          variant={LoginProviderManagementVariant.Setup}
-          {providers}
-          {isVerifying}
-          {isInitializing}
           addingProvider={addProviderOpen}
           {...providerManagementOptionalProps}
           {onBeginSetup}

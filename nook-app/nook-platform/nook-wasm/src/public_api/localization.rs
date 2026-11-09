@@ -308,6 +308,11 @@ mod tests {
                 ProviderFailureCode::GitHubTokenRejected,
                 "unauthorized",
             ),
+            (
+                NookError::VaultFolderHoldsAnotherVault,
+                ProviderFailureCode::VaultFolderHoldsAnotherVault,
+                "other",
+            ),
         ] {
             let message = error.to_string();
             assert_eq!(provider_failure_code(&message), code);

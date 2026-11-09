@@ -10,9 +10,9 @@ use crate::storage::provider_vault_listing::ProviderLocation;
 use crate::storage::s3::{S3Storage, S3VaultListing};
 use crate::{TypedInput, TypedOutput};
 use nook_core::{
-    LocalVaultOccupancy, ProviderVaultListing, S3Connection, S3ConnectionDraft, S3DraftValidation,
-    S3EndpointService, S3KnownService, S3ServiceGuide, S3SpareKeyAddition, S3SpareKeyRemoval,
-    S3SpareKeyRequest, StorageProvider,
+    ProviderVaultListing, S3Connection, S3ConnectionDraft, S3DraftValidation, S3EndpointService,
+    S3KnownService, S3ServiceGuide, S3SpareKeyAddition, S3SpareKeyRemoval, S3SpareKeyRequest,
+    StorageProvider,
 };
 use wasm_bindgen::JsError;
 
@@ -81,16 +81,14 @@ use wasm_bindgen::JsError;
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn list_s3_vaults(
     configuration: &tsify::Ts<S3Connection>,
-    local_vault: &tsify::Ts<LocalVaultOccupancy>,
 ) -> Result<tsify::Ts<ProviderVaultListing>, JsError> {
     let configuration = configuration.decode()?;
-    let local_vault = local_vault.decode()?;
     let listing = S3VaultListing {
         storage: S3Storage {
             connection: &configuration,
         },
     }
-    .listing(&local_vault)
+    .listing()
     .await?;
     Ok(listing.encode()?)
 }
@@ -216,7 +214,7 @@ mod browser_tests {
     use crate::public_api::provider_failure_code;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
     use crate::test_fixtures::WasmFixture;
-    use nook_core::{LocalVaultOccupancy, ProviderFailureCode};
+    use nook_core::ProviderFailureCode;
     use wasm_bindgen::JsCast;
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
@@ -234,11 +232,7 @@ mod browser_tests {
         let _stub = FetchStub::install(vec![FetchRoute::failing("GET", "127.0.0.1:8333", 403)])
             .map_err(|error| anyhow::anyhow!("{error}"))?;
         let configuration = WasmFixture::s3_connection()?;
-        let rejected = list_s3_vaults(
-            &configuration.encode()?,
-            &LocalVaultOccupancy::Closed.encode()?,
-        )
-        .await;
+        let rejected = list_s3_vaults(&configuration.encode()?).await;
         let Err(failure) = rejected else {
             anyhow::bail!("a refused key fails the listing");
         };

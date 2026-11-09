@@ -22,8 +22,6 @@
     showSyncStatus = true,
     showStorageIcon = true,
     variant = VaultStatusBarVariant.Panel,
-    syncConflictLabel = '',
-    onOpenSyncConflict,
     onRefresh,
     onDismissSuccess,
     onDismissError,
@@ -38,8 +36,6 @@
     showSyncStatus?: boolean
     showStorageIcon?: boolean
     variant?: VaultStatusBarVariant
-    syncConflictLabel?: string
-    onOpenSyncConflict?: () => void
     onRefresh?: () => void | Promise<void>
     onDismissSuccess?: () => void
     onDismissError?: () => void
@@ -235,7 +231,7 @@
             variant="ghost"
             size="sm"
             class="h-7 shrink-0 px-2 text-xs text-muted-foreground hover:text-foreground"
-            disabled={isSyncing || vault?.syncBlocked}
+            disabled={isSyncing}
             data-testid="vault-sync-refresh-btn"
             aria-label={isAuthenticatedVault
               ? vault
@@ -272,29 +268,6 @@
         </div>
       {/if}
     </div>
-
-    {#if syncConflictLabel}
-      <div
-        class="nk-banner nk-banner-warning flex items-center gap-2 px-2.5 py-1.5 font-sans text-xs text-foreground"
-        role="alert"
-        data-testid="vault-sync-conflict-banner"
-      >
-        <TriangleAlert class="size-3.5 shrink-0" />
-        <span class="min-w-0 flex-1 text-pretty">{syncConflictLabel}</span>
-        {#if onOpenSyncConflict}
-          <button
-            type="button"
-            class="shrink-0 rounded border border-amber-500/30 px-2 py-0.5 font-medium hover:bg-amber-500/10"
-            data-testid="vault-sync-conflict-open-btn"
-            onclick={() => onOpenSyncConflict()}
-          >
-            {vault
-              ? vault.t(I18N_KEYS.AuthStorageSyncConflictResolve)
-              : 'Resolve'}
-          </button>
-        {/if}
-      </div>
-    {/if}
 
     {#if successMsg}
       <div

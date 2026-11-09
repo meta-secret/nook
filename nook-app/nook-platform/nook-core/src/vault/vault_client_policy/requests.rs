@@ -3,21 +3,18 @@
 #[derive(Clone, Copy)]
 pub struct EditBlockReasonRequest {
     pub security_conflict_count: crate::VaultSecurityConflictCount,
-    pub has_sync_conflict: crate::VaultSyncConflictState,
     pub architecture_allows_secret_creation: crate::VaultSecretCreationPermission,
 }
 
 #[derive(Clone, Copy)]
 pub struct EditsBlockedRequest {
     pub security_conflict_count: crate::VaultSecurityConflictCount,
-    pub has_sync_conflict: crate::VaultSyncConflictState,
     pub architecture_allows_secret_creation: crate::VaultSecretCreationPermission,
 }
 
 #[derive(Clone, Copy)]
 pub struct EditBlockMessageRequest<'a> {
     pub security_conflict_count: crate::VaultSecurityConflictCount,
-    pub has_sync_conflict: crate::VaultSyncConflictState,
     pub architecture_allows_secret_creation: crate::VaultSecretCreationPermission,
     pub catalog_json: &'a str,
     pub locale: &'a str,
@@ -53,7 +50,6 @@ pub struct ExistingVaultIdentityRecoveryRequiredRequest {
 pub struct RemoteVaultAssessDecisionRequest {
     pub access_status: crate::VaultAccessStatus,
     pub existing_vault_required: crate::VaultExistenceRequirement,
-    pub provider_setup_active: crate::ProviderSetupState,
 }
 
 #[derive(Clone, Copy)]
@@ -86,7 +82,6 @@ pub struct SyncActivityVisibleRequest {
 
 #[derive(Clone, Copy)]
 pub struct ShouldSyncFromProvidersRequest {
-    pub sync_blocked: crate::VaultSyncPermission,
     pub force: crate::VaultSyncIntent,
     pub verifying: crate::VaultVerificationState,
     pub saving: crate::VaultSaveActivity,
@@ -133,7 +128,6 @@ pub struct VaultSyncTimerTickDecisionRequest {
 
 #[derive(Clone, Copy)]
 pub struct VaultStorageSyncDecisionRequest {
-    pub sync_blocked: crate::VaultSyncPermission,
     pub freshness: crate::ProviderSyncFreshness,
     pub verifying: crate::VaultVerificationState,
     pub saving: crate::VaultSaveActivity,

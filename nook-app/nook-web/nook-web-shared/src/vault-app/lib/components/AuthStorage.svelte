@@ -44,7 +44,6 @@
     SharedProviderAccountsOf,
   } from '$lib/components/shared-provider-accounts'
   import { SharedJoinerSelections } from '$lib/vault/shared-joiner-selection'
-  import { ConnectQuestions } from '$lib/components/connect-button-state'
   import { PickerRow } from '$lib/components/provider-picker-state'
   import type { VaultState } from '$lib/vault.svelte'
   import {
@@ -237,7 +236,6 @@
           <GitHubProviderSetupWizard
             {vault}
             draft={setupView.draft}
-            question={ConnectQuestions.NONE}
             {isVerifying}
             {isInitializing}
             {onCancelSetup}
@@ -260,7 +258,6 @@
         <ProviderPicker
           {vault}
           onSelect={onBeginSetup}
-          local={PickerRow.Hidden}
           localFolder={PickerRow.Offered}
         />
       {:else}
@@ -485,7 +482,6 @@
       <S3ProviderSetupWizard
         {vault}
         idPrefix="settings"
-        question={ConnectQuestions.NONE}
         {isVerifying}
         {isInitializing}
         {onCancelSetup}

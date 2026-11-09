@@ -7,7 +7,6 @@ import type { JoinRequest, VaultMember } from "$lib/nook";
 import {
   DeviceProtectionStatus,
   JoinEnrollmentState,
-  RemoteVaultRecoveryState,
   type NookVaultManager,
 } from "$app-wasm";
 export enum ManagerSessionKind {
@@ -56,8 +55,6 @@ export class VaultSessionState {
   devicePublicKey = $state("");
   pendingJoins = $state<JoinRequest[]>([]);
   vaultMembers = $state<VaultMember[]>([]);
-  enrollSecretsKey = $state("");
-  enrollMembersKey = $state("");
   joinEnrollmentPrompt = $state<JoinEnrollmentState>(JoinEnrollmentState.None);
   /**
    * True from the moment this device sends a join request until it unlocks.
@@ -66,13 +63,6 @@ export class VaultSessionState {
    */
   awaitingJoinApproval = $state(false);
 
-  /**
-   * Whether the current device identity can unwrap vault keys for the selected
-   * login vault. Unknown until assess runs with a device identity in memory.
-   */
-  remoteVaultRecoveryState = $state<RemoteVaultRecoveryState>(
-    RemoteVaultRecoveryState.None,
-  );
   /** A one-time invite code is being issued or joined; sync waits. */
   isInviteBusy = $state(false);
   enrollmentCode = $state("");

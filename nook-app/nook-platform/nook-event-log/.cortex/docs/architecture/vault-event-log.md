@@ -382,8 +382,9 @@ Apply these rules during provider sync:
 - **Invalid event bytes**
   - **Action:** Fail closed before any write
 
-The user must choose an explicit recovery/import path. The current local vault
-must not silently take over provider data.
+Another vault's events in the vault's folder stop sync with an observable
+error. Nothing is imported or repaired, and the current local vault must not
+silently take over provider data.
 
 Event-log provider sync never writes the materialized projection. Normal
 provider fan-out appends YAML event files. It repairs missing provider events

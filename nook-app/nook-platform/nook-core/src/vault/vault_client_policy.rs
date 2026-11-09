@@ -13,8 +13,8 @@ mod join_connect;
 mod sync_policy;
 
 pub use connection::{
-    ActiveVaultStore, JoinEnrollmentState, RemoteVaultAssessDecision, RemoteVaultRecoveryState,
-    VaultConnectGateDecision, VaultConnectProbeDecision, VaultSwitchDecision,
+    ActiveVaultStore, JoinEnrollmentState, RemoteVaultAssessDecision, VaultConnectGateDecision,
+    VaultConnectProbeDecision, VaultSwitchDecision,
 };
 pub use join_connect::{JoinConnectEnrollment, JoinConnectRequest, JoinConnectSource};
 pub use sync_policy::{
@@ -111,7 +111,6 @@ pub enum SentinelVaultUnlockState {
 pub enum VaultEditDecision {
     Allowed,
     BlockedSecurityConflict,
-    BlockedSyncConflict,
     BlockedByArchitecture,
 }
 
@@ -134,9 +133,6 @@ impl VaultEditDecision {
             Self::BlockedSecurityConflict => {
                 VaultEditTranslation::Blocked(i18n_keys::AUTH_STORAGE_SECURITY_CONFLICT_EDITS)
             }
-            Self::BlockedSyncConflict => {
-                VaultEditTranslation::Blocked(i18n_keys::AUTH_STORAGE_SYNC_BLOCKED_EDITS)
-            }
             Self::BlockedByArchitecture => VaultEditTranslation::Blocked(
                 i18n_keys::ARCHITECTURE_MODES_SENTINEL_SECRET_CREATION_BLOCKED,
             ),
@@ -153,12 +149,6 @@ impl VaultClientPolicy {
         if request.security_conflict_count.is_nonzero() {
             return VaultEditDecision::BlockedSecurityConflict;
         }
-        if matches!(
-            request.has_sync_conflict,
-            crate::VaultSyncConflictState::Conflicted
-        ) {
-            return VaultEditDecision::BlockedSyncConflict;
-        }
         if !matches!(
             request.architecture_allows_secret_creation,
             crate::VaultSecretCreationPermission::Allowed
@@ -173,7 +163,6 @@ impl VaultClientPolicy {
         !matches!(
             Self::edit_block_reason(crate::EditBlockReasonRequest {
                 security_conflict_count: request.security_conflict_count,
-                has_sync_conflict: request.has_sync_conflict,
                 architecture_allows_secret_creation: request.architecture_allows_secret_creation
             }),
             VaultEditDecision::Allowed
@@ -184,7 +173,6 @@ impl VaultClientPolicy {
     pub fn edit_block_message(request: crate::EditBlockMessageRequest<'_>) -> VaultEditMessage {
         let translation = Self::edit_block_reason(crate::EditBlockReasonRequest {
             security_conflict_count: request.security_conflict_count,
-            has_sync_conflict: request.has_sync_conflict,
             architecture_allows_secret_creation: request.architecture_allows_secret_creation,
         })
         .translation_key();
@@ -262,7 +250,6 @@ mod tests {
         assert_eq!(
             VaultClientPolicy::edit_block_reason(crate::EditBlockReasonRequest {
                 security_conflict_count: 1.into(),
-                has_sync_conflict: (true).into(),
                 architecture_allows_secret_creation: (false).into()
             }),
             VaultEditDecision::BlockedSecurityConflict
@@ -270,15 +257,6 @@ mod tests {
         assert_eq!(
             VaultClientPolicy::edit_block_reason(crate::EditBlockReasonRequest {
                 security_conflict_count: 0.into(),
-                has_sync_conflict: (true).into(),
-                architecture_allows_secret_creation: (false).into()
-            }),
-            VaultEditDecision::BlockedSyncConflict
-        );
-        assert_eq!(
-            VaultClientPolicy::edit_block_reason(crate::EditBlockReasonRequest {
-                security_conflict_count: 0.into(),
-                has_sync_conflict: (false).into(),
                 architecture_allows_secret_creation: (false).into()
             }),
             VaultEditDecision::BlockedByArchitecture
@@ -286,7 +264,6 @@ mod tests {
         assert_eq!(
             VaultClientPolicy::edit_block_reason(crate::EditBlockReasonRequest {
                 security_conflict_count: 0.into(),
-                has_sync_conflict: (false).into(),
                 architecture_allows_secret_creation: (true).into()
             }),
             VaultEditDecision::Allowed
@@ -294,10 +271,6 @@ mod tests {
         assert_eq!(
             VaultEditDecision::BlockedSecurityConflict.translation_key(),
             VaultEditTranslation::Blocked(i18n_keys::AUTH_STORAGE_SECURITY_CONFLICT_EDITS)
-        );
-        assert_eq!(
-            VaultEditDecision::BlockedSyncConflict.translation_key(),
-            VaultEditTranslation::Blocked(i18n_keys::AUTH_STORAGE_SYNC_BLOCKED_EDITS)
         );
         assert_eq!(
             VaultEditDecision::BlockedByArchitecture.translation_key(),
@@ -312,21 +285,18 @@ mod tests {
         assert!(VaultClientPolicy::edits_blocked(
             crate::EditsBlockedRequest {
                 security_conflict_count: 1.into(),
-                has_sync_conflict: (false).into(),
                 architecture_allows_secret_creation: (true).into()
             }
         ));
         assert!(!VaultClientPolicy::edits_blocked(
             crate::EditsBlockedRequest {
                 security_conflict_count: 0.into(),
-                has_sync_conflict: (false).into(),
                 architecture_allows_secret_creation: (true).into()
             }
         ));
         assert_eq!(
             VaultClientPolicy::edit_block_message(crate::EditBlockMessageRequest {
                 security_conflict_count: 1.into(),
-                has_sync_conflict: (true).into(),
                 architecture_allows_secret_creation: (false).into(),
                 catalog_json: AppLocale::get_translation_catalog("en"),
                 locale: "en"
@@ -338,7 +308,6 @@ mod tests {
         assert_eq!(
             VaultClientPolicy::edit_block_message(crate::EditBlockMessageRequest {
                 security_conflict_count: 0.into(),
-                has_sync_conflict: (false).into(),
                 architecture_allows_secret_creation: (true).into(),
                 catalog_json: "{}",
                 locale: "en"

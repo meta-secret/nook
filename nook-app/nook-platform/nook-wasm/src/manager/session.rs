@@ -1,4 +1,4 @@
-use super::prepared_provider::{NextConnect, PreparedProvider, ProviderCacheRef};
+use super::prepared_provider::{PreparedProvider, ProviderCacheRef};
 use crate::ConfiguredVaultApplication;
 use nook_core::{
     EventGraph, SentinelConfiguration, SentinelGenesisPhase, SentinelPolicy, StorageConnection,
@@ -9,7 +9,7 @@ use nook_core::{
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
-use crate::{NookError, NookEventLogSyncIssue};
+use crate::NookError;
 
 /// The vault a provider import should open when the provider holds several.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -19,14 +19,13 @@ pub(in crate::manager) enum ChosenProviderVault {
     Chosen(StoreId),
 }
 
-/// The storage of one session: what it reads and writes, the vault it opens
-/// when the provider holds several, and where the next connect reads from.
+/// The storage of one session: what it reads and writes, and the vault it
+/// opens when the provider holds several.
 #[derive(Default)]
 pub(in crate::manager) struct StorageSession {
     pub(in crate::manager) provider: PreparedProvider,
     /// The vault to open when the prepared provider holds several.
     pub(in crate::manager) chosen_vault: ChosenProviderVault,
-    pub(in crate::manager) next_connect: NextConnect,
 }
 
 impl StorageSession {
@@ -82,48 +81,6 @@ pub(in crate::manager) enum SearchCatalogRestore {
 pub(in crate::manager) enum CeremonyState<T> {
     Inactive,
     Active(T),
-}
-
-pub(in crate::manager) enum EventLogSyncIssueState {
-    Clear,
-    Pending {
-        provider_label: String,
-        classification: nook_core::RemoteEventLogClassification,
-    },
-}
-
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NookEventLogSyncIssueState {
-    Clear,
-    Pending,
-}
-
-#[wasm_bindgen]
-pub struct NookEventLogSyncIssueResult(pub(in crate::manager) EventLogSyncIssueState);
-
-#[wasm_bindgen]
-impl NookEventLogSyncIssueResult {
-    #[wasm_bindgen(getter)]
-    pub fn state(&self) -> NookEventLogSyncIssueState {
-        match self.0 {
-            EventLogSyncIssueState::Clear => NookEventLogSyncIssueState::Clear,
-            EventLogSyncIssueState::Pending { .. } => NookEventLogSyncIssueState::Pending,
-        }
-    }
-
-    pub fn issue(&self) -> Result<crate::NookEventLogSyncIssue, JsError> {
-        match &self.0 {
-            EventLogSyncIssueState::Pending {
-                provider_label,
-                classification,
-            } => Ok(NookEventLogSyncIssue::new(
-                provider_label.clone(),
-                classification.clone(),
-            )),
-            EventLogSyncIssueState::Clear => Err(JsError::new("No event-log sync issue.")),
-        }
-    }
 }
 
 impl<T> CeremonyState<T> {
@@ -377,7 +334,6 @@ pub struct NookVaultManager {
         CeremonyState<nook_core::SentinelGenesisRequest>,
     pub(in crate::manager) sentinel_unlock: CeremonyState<nook_core::SentinelUnlockSession>,
     pub(in crate::manager) sync_outbox: SyncOutbox,
-    pub(in crate::manager) event_log_sync_issue: EventLogSyncIssueState,
     /// A recovery passphrase shown on this device and not yet confirmed.
     pub(in crate::manager) recovery_passphrase: CeremonyState<nook_core::PendingRecoveryPassphrase>,
 }
@@ -392,7 +348,6 @@ impl Drop for NookVaultManager {
         self.pending_sentinel_genesis_request = CeremonyState::Inactive;
         self.sentinel_unlock = CeremonyState::Inactive;
         self.sync_outbox = SyncOutbox::Unbound;
-        self.event_log_sync_issue = EventLogSyncIssueState::Clear;
         self.recovery_passphrase = CeremonyState::Inactive;
     }
 }
@@ -413,7 +368,6 @@ impl NookVaultManager {
             pending_sentinel_genesis_request: CeremonyState::Inactive,
             sentinel_unlock: CeremonyState::Inactive,
             sync_outbox: SyncOutbox::Unbound,
-            event_log_sync_issue: EventLogSyncIssueState::Clear,
             recovery_passphrase: CeremonyState::Inactive,
         }
     }
@@ -580,11 +534,5 @@ mod tests {
         assert!(state.signing_seed.is_empty());
         assert!(state.key_epoch.is_empty());
         assert!(state.heads.is_empty());
-    }
-
-    #[wasm_bindgen_test]
-    fn sync_issue_result_exposes_clear_state() {
-        let result = NookEventLogSyncIssueResult(EventLogSyncIssueState::Clear);
-        assert_eq!(result.state(), NookEventLogSyncIssueState::Clear);
     }
 }

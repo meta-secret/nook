@@ -248,7 +248,6 @@ function recoverableOnDrive(): ProviderVaultSummary {
     lastActivity: { state: 'reported', at: Date.UTC(2026, 9, 2) },
     eventCount: 2,
     access: { state: 'locked' },
-    actions: ['requestAccess'],
   }
 }
 
@@ -263,7 +262,6 @@ describe('first-run recovery from Google Drive', () => {
         listing: {
           vaults: [recoverableOnDrive()],
           identities: [],
-          replacement: { state: 'unavailable' },
         },
       }),
     )

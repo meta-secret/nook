@@ -19,8 +19,8 @@ use nook_core::{
     BrowserIdentityVault, BrowserNames, BrowserVaultKeys, CheckedVaultEvents, DriveEventParent,
     EventError, EventId, EventLogLocation, EventLogNamespaceKind, EventStorageBytes, IdentityId,
     IdentitySelection, KnownIdentityName, KnownVaultName, ListedIdentityLog, ListingIdentity,
-    LocalEventWrite, LocalIdentityLog, LocalVaultOccupancy, PlacedNamespace,
-    ProviderIdentityLogEvents, ProviderVaultEvents, ProviderVaultKeyholding, ProviderVaultListing,
+    LocalEventWrite, LocalIdentityLog, PlacedNamespace, ProviderIdentityLogEvents,
+    ProviderVaultEvents, ProviderVaultKeyholding, ProviderVaultListing,
     ProviderVaultListingRequest, ProviderVaultObservation, ProviderVaultStanding,
     ProviderVaultTime, StoreId,
 };
@@ -251,13 +251,10 @@ pub(crate) trait ProviderLocation {
         })
     }
 
-    /// What the location holds, related to this browser's keys and the vault
-    /// it has open. The vaults and the identity logs are read side by side;
-    /// only the vaults no identity here holds are then inspected.
-    async fn listing(
-        &self,
-        local_vault: &LocalVaultOccupancy,
-    ) -> Result<ProviderVaultListing, NookError> {
+    /// What the location holds, related to this browser's keys. The vaults
+    /// and the identity logs are read side by side; only the vaults no
+    /// identity here holds are then inspected.
+    async fn listing(&self) -> Result<ProviderVaultListing, NookError> {
         let held = BrowserHeldVaults::load().await?;
         let (observations, identity_logs) =
             try_join(self.observations(), self.identity_logs(&held.identity)).await?;
@@ -272,7 +269,6 @@ pub(crate) trait ProviderLocation {
             observations,
             inspected: &inspected,
             identity_logs: &identity_logs,
-            local_vault,
         }))
     }
 }
@@ -518,7 +514,6 @@ pub(crate) struct VaultListingParts<'a> {
     pub(crate) observations: Vec<ProviderVaultObservation>,
     pub(crate) inspected: &'a InspectedVaults,
     pub(crate) identity_logs: &'a [ListedIdentityLog],
-    pub(crate) local_vault: &'a LocalVaultOccupancy,
 }
 
 /// The vaults this browser holds keys for, by identity.
@@ -598,14 +593,12 @@ impl BrowserHeldVaults {
             .collect()
     }
 
-    /// Relate what one listing read to the keys this browser holds and the
-    /// vault it has open.
+    /// Relate what one listing read to the keys this browser holds.
     pub(crate) fn listing(&self, parts: VaultListingParts<'_>) -> ProviderVaultListing {
         let VaultListingParts {
             observations,
             inspected,
             identity_logs,
-            local_vault,
         } = parts;
         ProviderVaultListingRequest {
             observations,
@@ -621,7 +614,6 @@ impl BrowserHeldVaults {
                 identities: &self.identity_names,
             },
             identity_logs,
-            local_vault,
         }
         .listing()
     }

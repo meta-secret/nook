@@ -36,11 +36,6 @@
     vault.beginProviderSetup(kind)
   }
 
-  async function removeProvider(id: string): Promise<void> {
-    const removed = await vault.removeProvider(id)
-    if (removed.isErr()) vault.errorMsg = vault.t(removed.error.translationKey)
-  }
-
   let {
     vault,
     showAccessGate,
@@ -166,7 +161,6 @@
         {onUnlock}
         {onUnlockOnCard}
         {...identityHealth ? { identityHealth } : {}}
-        onBeginAddProvider={() => vault.beginAddProvider()}
         onCancelAddProvider={() => vault.cancelAddProvider()}
         onBeginSetup={beginProviderSetup}
         onCancelSetup={() => vault.cancelProviderSetup()}
@@ -185,7 +179,6 @@
         {onStartSentinelGenesis}
         onCreateSentinelGenesisPublicKeyAnnouncement={onCreateSentinelParticipantKey}
         onCreateSentinelGenesisParticipantResponse={onCreateSentinelParticipantResponse}
-        onRemoveProvider={removeProvider}
       />
     {/if}
     <VaultStatusBar

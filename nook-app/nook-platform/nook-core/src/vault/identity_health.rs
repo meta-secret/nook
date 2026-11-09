@@ -13,6 +13,8 @@
 //! websites. It protects nothing, so it never changes the stage, the next
 //! step, or the nudge.
 
+use std::slice;
+
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -125,12 +127,41 @@ pub struct IdentityProtectionChecklist {
     pub extension: IdentityExtensionStep,
 }
 
+impl IdentityExtensionStep {
+    /// The extension's row: none where the app does not offer it; install it,
+    /// connect the installed one, or done once it has joined.
+    const fn assess(
+        installation: BrowserExtensionInstallation,
+        membership: BrowserExtensionMembership,
+    ) -> Self {
+        let (state, action) = match (installation, membership) {
+            (BrowserExtensionInstallation::NotOffered, _) => return Self::NotOffered,
+            (BrowserExtensionInstallation::NotInstalled, _) => (
+                IdentityProtectionTaskState::Open,
+                IdentityNextStep::InstallExtension,
+            ),
+            (BrowserExtensionInstallation::Installed, BrowserExtensionMembership::NotJoined) => (
+                IdentityProtectionTaskState::Open,
+                IdentityNextStep::ConnectExtension,
+            ),
+            (BrowserExtensionInstallation::Installed, BrowserExtensionMembership::Joined) => {
+                (IdentityProtectionTaskState::Done, IdentityNextStep::Done)
+            }
+        };
+        Self::Offered(IdentityProtectionStep {
+            task: IdentityProtectionTask::BrowserExtension,
+            state,
+            action,
+        })
+    }
+}
+
 impl IdentityProtectionChecklist {
     /// The rows in order, the extension's last where it is offered.
     pub fn steps(&self) -> impl Iterator<Item = IdentityProtectionStep> + '_ {
         let extension: &[IdentityProtectionStep] = match &self.extension {
             IdentityExtensionStep::NotOffered => &[],
-            IdentityExtensionStep::Offered(step) => std::slice::from_ref(step),
+            IdentityExtensionStep::Offered(step) => slice::from_ref(step),
         };
         self.protections.iter().chain(extension).copied()
     }
@@ -246,30 +277,7 @@ impl IdentityHealth {
                 action: IdentityNextStep::AddDevice,
             }
         };
-        let extension = match (extension_installation, extension_membership) {
-            (BrowserExtensionInstallation::NotOffered, _) => IdentityExtensionStep::NotOffered,
-            (BrowserExtensionInstallation::NotInstalled, _) => {
-                IdentityExtensionStep::Offered(IdentityProtectionStep {
-                    task: IdentityProtectionTask::BrowserExtension,
-                    state: IdentityProtectionTaskState::Open,
-                    action: IdentityNextStep::InstallExtension,
-                })
-            }
-            (BrowserExtensionInstallation::Installed, BrowserExtensionMembership::NotJoined) => {
-                IdentityExtensionStep::Offered(IdentityProtectionStep {
-                    task: IdentityProtectionTask::BrowserExtension,
-                    state: IdentityProtectionTaskState::Open,
-                    action: IdentityNextStep::ConnectExtension,
-                })
-            }
-            (BrowserExtensionInstallation::Installed, BrowserExtensionMembership::Joined) => {
-                IdentityExtensionStep::Offered(IdentityProtectionStep {
-                    task: IdentityProtectionTask::BrowserExtension,
-                    state: IdentityProtectionTaskState::Done,
-                    action: IdentityNextStep::Done,
-                })
-            }
-        };
+        let extension = IdentityExtensionStep::assess(extension_installation, extension_membership);
         Self {
             stage,
             next_step,
@@ -481,8 +489,14 @@ mod tests {
     fn removing_the_last_provider_reopens_only_the_copy() {
         let health = assess(0, 0, 2, 5);
 
-        assert_eq!(health.checklist.protections[0].state, IdentityProtectionTaskState::Open);
-        assert_eq!(health.checklist.protections[1].state, IdentityProtectionTaskState::Done);
+        assert_eq!(
+            health.checklist.protections[0].state,
+            IdentityProtectionTaskState::Open
+        );
+        assert_eq!(
+            health.checklist.protections[1].state,
+            IdentityProtectionTaskState::Done
+        );
         assert!(!health.is_protected());
     }
 
@@ -490,7 +504,10 @@ mod tests {
     fn an_app_without_the_extension_lists_only_the_protections() {
         let health = assess(1, 1, 2, 5);
 
-        assert_eq!(health.checklist.extension, IdentityExtensionStep::NotOffered);
+        assert_eq!(
+            health.checklist.extension,
+            IdentityExtensionStep::NotOffered
+        );
         assert_eq!(health.checklist.steps().count(), 2);
         assert!(health.is_complete());
     }

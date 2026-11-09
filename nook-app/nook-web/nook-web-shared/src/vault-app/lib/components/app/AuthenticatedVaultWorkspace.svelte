@@ -576,7 +576,6 @@ band, the scrolling page and the status line.
         isSyncing={vault.isSyncActivityVisible}
         successMsg={vault.successMsg}
         errorMsg={vault.errorMsg}
-        syncConflictLabel={vault.syncConflictLabel}
         {appVersion}
         onRefresh={syncAll}
         onDismissSuccess={() => vault.dismissSuccess()}
@@ -669,7 +668,6 @@ band, the scrolling page and the status line.
         isSyncing={vault.isSyncActivityVisible}
         successMsg={vault.successMsg}
         errorMsg={vault.errorMsg}
-        syncConflictLabel={vault.syncConflictLabel}
         {appVersion}
         onRefresh={syncAll}
         onDismissSuccess={() => vault.dismissSuccess()}

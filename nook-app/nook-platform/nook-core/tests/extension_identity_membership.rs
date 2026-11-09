@@ -9,14 +9,14 @@
 //! without a sync provider.
 
 use nook_core::{
-    AdoptedIdentityLabel, BrowserExtensionInstallation, BrowserExtensionMembership,
-    IdentityExtensionStep, IdentityProtectionTaskState, AppKey, EventId, IdentityConnectionKey, IdentityConnectionKeyRequest,
-    IdentityControlLog, IdentityControlOperation, IdentityControlSnapshot,
-    IdentityControlSnapshotRequest, IdentityControlStanding, IdentityControlState,
-    IdentityCreation, IdentityDirectory, IdentityEvent, IdentityEventInsertStatus,
-    IdentityEventSigning, IdentityGenesisRequest, IdentityHealth, IdentityHealthAssessment,
-    IdentityHealthStage, IdentityId, IdentityInvitationBinding, IdentityJoinCompletion,
-    IdentityJoinCompletionPlan, IdentityMemberAdd, IdentityMemberKeys, IdentityNextStep,
+    AdoptedIdentityLabel, AppKey, BrowserExtensionInstallation, BrowserExtensionMembership,
+    EventId, IdentityConnectionKey, IdentityConnectionKeyRequest, IdentityControlLog,
+    IdentityControlOperation, IdentityControlSnapshot, IdentityControlSnapshotRequest,
+    IdentityControlStanding, IdentityControlState, IdentityCreation, IdentityDirectory,
+    IdentityEvent, IdentityEventInsertStatus, IdentityEventSigning, IdentityExtensionStep,
+    IdentityGenesisRequest, IdentityHealth, IdentityHealthAssessment, IdentityHealthStage,
+    IdentityId, IdentityInvitationBinding, IdentityJoinCompletion, IdentityJoinCompletionPlan,
+    IdentityMemberAdd, IdentityMemberKeys, IdentityNextStep, IdentityProtectionTaskState,
     IdentityVaultKeyOpening, IdentityVaultPairingRequest, IdentityVaultRegistration, IsoTimestamp,
     LocalIdentityLog, MemberLabel, MemberLabelState, MultiDeviceError, OpenedVaultDek,
     ReplicatedIdentityAdoption, ReplicatedIdentityMembership, ReplicatedIdentityStanding,
@@ -383,7 +383,9 @@ fn the_extension_runs_in_the_web_apps_browser_so_it_adds_no_device() -> anyhow::
 fn the_web_app_sees_when_its_browser_extension_has_joined() -> anyhow::Result<()> {
     let mut family = WebIdentity::found()?;
     assert_eq!(
-        family.snapshot_for(&family.founder)?.extension_on_this_device,
+        family
+            .snapshot_for(&family.founder)?
+            .extension_on_this_device,
         BrowserExtensionMembership::NotJoined
     );
 
@@ -392,7 +394,9 @@ fn the_web_app_sees_when_its_browser_extension_has_joined() -> anyhow::Result<()
     family.add(&key)?;
 
     assert_eq!(
-        family.snapshot_for(&family.founder)?.extension_on_this_device,
+        family
+            .snapshot_for(&family.founder)?
+            .extension_on_this_device,
         BrowserExtensionMembership::Joined
     );
     Ok(())

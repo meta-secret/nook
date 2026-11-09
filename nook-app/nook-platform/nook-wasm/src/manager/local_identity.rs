@@ -14,7 +14,7 @@ use nook_core::{AppId, IdentityId};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
-use super::{EventLogSyncIssueState, NookVaultManager, StorageSession};
+use super::{NookVaultManager, StorageSession};
 
 const DEFAULT_IDENTITY_LABEL: &str = "Personal";
 
@@ -35,7 +35,6 @@ impl NookVaultManager {
     fn reset_local_identity_session(&mut self) {
         self.reset_vault_session();
         self.storage = StorageSession::default();
-        self.event_log_sync_issue = EventLogSyncIssueState::Clear;
     }
 
     pub(in crate::manager) fn is_creating_local_identity(&self) -> bool {

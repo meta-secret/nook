@@ -37,7 +37,6 @@ import {
   type IdentityPlanRun,
 } from "$lib/vault/identity-plan-actions";
 import { VaultOAuthActions } from "$lib/vault/oauth";
-import { ProviderVaultActions } from "$lib/vault/provider-vaults";
 import {
   FirstRunPlace,
   FirstRunStage,
@@ -301,12 +300,11 @@ export class FirstRunActions {
    * from. An S3 key the server refuses says so; Rust reads the refusal. */
   async listVaults(source: FirstRunProviderSource): Promise<FirstRunVaultRead> {
     const vault = this.vault;
-    const localVault = new ProviderVaultActions(vault).localVaultOccupancy();
     switch (source.kind) {
       case "googleDrive": {
-        const listed = await new VaultOAuthActions(vault).listGoogleDriveVaults(
-          localVault,
-        );
+        const listed = await new VaultOAuthActions(
+          vault,
+        ).listGoogleDriveVaults();
         if (listed.isErr())
           return {
             kind: FirstRunInventoryKind.Failed,
@@ -319,10 +317,7 @@ export class FirstRunActions {
       }
       case "s3":
         try {
-          const listing = await list_s3_vaults(
-            source.configuration,
-            localVault,
-          );
+          const listing = await list_s3_vaults(source.configuration);
           return { kind: FirstRunInventoryKind.Loaded, listing };
         } catch (cause) {
           const keyRequest: Parameters<

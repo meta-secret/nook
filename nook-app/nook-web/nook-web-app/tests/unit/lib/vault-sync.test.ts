@@ -3,76 +3,22 @@ import { describe, expect, test, vi } from 'vitest'
 import {
   DeviceProtectionStatus,
   NookClientRunModeUtil,
-  NookPendingSyncConflict,
-  NookProviderSyncRevision,
   NookRuntimeConfig,
-  NookSyncConflictReview,
   JoinEnrollmentState,
   ProviderSyncFreshness,
-  VaultSyncConflictKind,
 } from '$app-wasm'
 import {
-  SyncConflictPresentation,
   VaultSyncActions,
   type VaultSynchronizationResult,
 } from '$lib/vault/sync.svelte'
 import type { SyncScheduleRequest } from '$lib/vault/action-contexts'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import {
-  TranslationMessage,
-  type TranslationRequest,
-} from '$lib/vault/translation'
-import {
   VaultStorageFailure,
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
-
-function buildConflict(kind: VaultSyncConflictKind): NookPendingSyncConflict {
-  const revision = NookProviderSyncRevision.untracked()
-  try {
-    return kind === VaultSyncConflictKind.StoreId
-      ? NookPendingSyncConflict.store_id(
-          'provider-1',
-          'GitHub',
-          'local',
-          'remote',
-          { mode: 'github', token: 'token', repo: 'owner/repo' },
-          revision,
-          'store-local',
-          'store-remote',
-        )
-      : NookPendingSyncConflict.content(
-          'provider-1',
-          'GitHub',
-          'local',
-          'remote',
-          1,
-          1,
-          { mode: 'github', token: 'token', repo: 'owner/repo' },
-          revision,
-        )
-  } finally {
-    revision.free()
-  }
-}
-
-function labelFor(review: NookSyncConflictReview): string {
-  try {
-    return new SyncConflictPresentation({
-      syncConflictReview: review,
-      t: (request: TranslationRequest) => {
-        const replacements = new TranslationMessage(
-          request,
-        ).translationReplacements()
-        return `${new TranslationMessage(request).translationKey()}:${((v) => (v ? v : ''))(replacements.provider)}`
-      },
-    }).label
-  } finally {
-    review.free()
-  }
-}
 
 describe('resolveVaultSyncIntervalMs', () => {
   test('production build ignores fast-sync env and uses 60s', () => {
@@ -486,31 +432,5 @@ describe('automatic vault sync', () => {
       ProviderSyncFreshness.Scheduled,
     )
     expect(state.errorMsg).toBe('')
-  })
-})
-
-describe('syncConflictLabel', () => {
-  test('returns an empty label when no conflict is staged', () => {
-    expect(labelFor(NookSyncConflictReview.clear())).toBe('')
-  })
-
-  test('uses the content conflict banner for normal conflicts', () => {
-    expect(
-      labelFor(
-        NookSyncConflictReview.requires_decision(
-          buildConflict(VaultSyncConflictKind.Content),
-        ),
-      ),
-    ).toBe('auth_storage.sync_conflict_banner:GitHub')
-  })
-
-  test('uses the store-id conflict banner for store mismatches', () => {
-    expect(
-      labelFor(
-        NookSyncConflictReview.requires_decision(
-          buildConflict(VaultSyncConflictKind.StoreId),
-        ),
-      ),
-    ).toBe('auth_storage.sync_conflict_store_id_banner:GitHub')
   })
 })

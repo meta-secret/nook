@@ -8,7 +8,6 @@ use nook_core::StoreId;
 pub(super) enum VerifiedVaultAccessFlow {
     Connect,
     SentinelUnlock,
-    EnrollAndConnect,
     EnrollWithKeys,
 }
 
@@ -53,7 +52,6 @@ mod tests {
             .map_err(|error| NookError::Database(error.to_string()))?;
         for flow in [
             VerifiedVaultAccessFlow::SentinelUnlock,
-            VerifiedVaultAccessFlow::EnrollAndConnect,
             VerifiedVaultAccessFlow::EnrollWithKeys,
         ] {
             DeviceAccessProfileKey::clear_companion().await?;

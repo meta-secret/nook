@@ -239,7 +239,7 @@ wasm; the web shim is adapters + i18n only.
 - **List and classify the vaults a provider holds**
   - **Home:** `nook-app/nook-platform/nook-core/src/sync/provider_vault_listing.rs`,
     exported by `nook-app/nook-platform/nook-wasm/src/public_api/provider_vault_listing.rs`
-    and routed by [`vault/provider-vaults.ts`](../../../../nook-web/nook-web-shared/src/vault-app/lib/vault/provider-vaults.ts)
+    and read by [`vault/first-run.ts`](../../../../nook-web/nook-web-shared/src/vault-app/lib/vault/first-run.ts)
 
 **Enrollment and web presentation**
 

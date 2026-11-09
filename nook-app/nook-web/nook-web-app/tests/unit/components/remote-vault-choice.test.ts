@@ -73,7 +73,6 @@ function choice({ storeId, identity }: ChoiceRequest): ProviderVaultSummary {
     lastActivity: { state: 'unreported' },
     eventCount: 3,
     access: { state: 'unchecked' },
-    actions: ['importSeparately'],
   }
 }
 

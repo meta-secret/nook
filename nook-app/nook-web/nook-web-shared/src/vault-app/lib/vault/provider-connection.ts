@@ -1,7 +1,5 @@
-import { StagedProviderConflictOutcome } from "$lib/vault/provider-conflict";
 import { ProviderSyncOutcome } from "$lib/vault/provider-sync.svelte";
 import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
-import { VaultOperationStale } from "$lib/runtime/vault-operation-stale";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 import {
   ProviderDraftIncompleteFailure,
@@ -13,7 +11,6 @@ import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
   draft_storage_args,
-  NookLocalFolderHealthState,
   ProviderSyncFailureHandling,
   ProviderSyncVisibility,
   type LocalFolderDraft,
@@ -245,20 +242,6 @@ export class ProviderConnectionActions {
           stagedRemoteArgs.args,
         );
         if (accessStatus.isErr()) {
-          if (
-            accessStatus.error.kind !== StorageOperationFailureKind.TimedOut
-          ) {
-            const stagedConflict = await state.stageStagedProviderSyncIssue(
-              stagedRemoteArgs.args,
-            );
-            if (stagedConflict.isErr()) {
-              state.errorMsg = state.t(stagedConflict.error.translationKey);
-              return;
-            }
-            if (stagedConflict.value instanceof VaultOperationStale) return;
-            if (stagedConflict.value === StagedProviderConflictOutcome.Staged)
-              return;
-          }
           state.errorMsg = state.t(accessStatus.error.translationKey);
           return;
         }
@@ -297,38 +280,17 @@ export class ProviderConnectionActions {
         };
       const providerSync = await state.syncProviderById(syncProviderByIdArgs);
       if (providerSync.isErr()) {
-        state.errorMsg =
-          state.localFolderHealth.state ===
-          NookLocalFolderHealthState.MultipleVaults
-            ? state.t(I18N_KEYS.AuthStorageLocalFolderMultipleVaultsShort)
-            : state.t(providerSync.error.translationKey);
+        state.errorMsg = state.t(providerSync.error.translationKey);
         return;
       }
       if (providerSync.value !== ProviderSyncOutcome.Synced) return;
       state.clearLoginSetup();
       state.addProviderOpen = false;
     } catch (error) {
-      if (stagedRemoteArgs.kind === StagedRemoteStorageKind.Available) {
-        const stagedConflict = await state.stageStagedProviderSyncIssue(
-          stagedRemoteArgs.args,
-        );
-        if (stagedConflict.isErr()) {
-          state.errorMsg = state.t(stagedConflict.error.translationKey);
-          return;
-        }
-        if (stagedConflict.value instanceof VaultOperationStale) return;
-        if (stagedConflict.value === StagedProviderConflictOutcome.Staged)
-          return;
-      }
-      {
-        state.errorMsg =
-          state.localFolderHealth.state ===
-          NookLocalFolderHealthState.MultipleVaults
-            ? state.t(I18N_KEYS.AuthStorageLocalFolderMultipleVaultsShort)
-            : error instanceof Error
-              ? error.message
-              : state.t(I18N_KEYS.AuthStorageSyncFailed);
-      }
+      state.errorMsg =
+        error instanceof Error
+          ? error.message
+          : state.t(I18N_KEYS.AuthStorageSyncFailed);
     } finally {
       state.isVerifying = false;
       state.providerConnectionPhase = ProviderConnectionPhase.Idle;

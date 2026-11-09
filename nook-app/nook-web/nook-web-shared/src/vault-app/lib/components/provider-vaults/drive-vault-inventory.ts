@@ -5,7 +5,6 @@ import type {
 } from "$app-wasm";
 import type { VaultState } from "$lib/vault.svelte";
 import { VaultOAuthActions } from "$lib/vault/oauth";
-import { ProviderVaultActions } from "$lib/vault/provider-vaults";
 
 export enum DriveVaultInventoryKind {
   Loading = "loading",
@@ -49,9 +48,7 @@ export class DriveVaultInventoryReader {
   /** What the folder holds; a failed read says why on the vault. */
   async read(): Promise<DriveVaultInventory> {
     const vault = this.vault;
-    const listed = await new VaultOAuthActions(vault).listGoogleDriveVaults(
-      new ProviderVaultActions(vault).localVaultOccupancy(),
-    );
+    const listed = await new VaultOAuthActions(vault).listGoogleDriveVaults();
     if (listed.isErr()) {
       vault.errorMsg = vault.t(listed.error.translationKey);
       return { kind: DriveVaultInventoryKind.Failed };

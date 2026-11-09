@@ -3,7 +3,6 @@
 use crate::BrowserDeviceAccessSnapshotForSessionWithProtected;
 use crate::BrowserDeviceVaultAccessForIdentity;
 use crate::NookDatabase;
-use crate::storage::identity_record;
 use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::storage::identity_record::{ProtectedIdentityLookup, SelectedIdentityRecord};
 use crate::{
@@ -54,8 +53,6 @@ pub enum NookSelectedVaultIdentityContextKind {
     LinkedWithCurrent,
 }
 
-mod provider_observation;
-
 struct LocalAppProtection {
     app_id: nook_core::AppId,
     protection: nook_core::DeviceAccessProtectionKind,
@@ -74,20 +71,6 @@ impl LocalAppProtection {
             })
             .collect()
     }
-}
-
-/// Named values required by `NookIdentityDirectorySnapshot::provider_vault_identity_observations`.
-pub(crate) struct BrowserProviderVaultIdentityObservations<'a> {
-    pub(crate) session_app_id: &'a str,
-    pub(crate) store_id: &'a nook_core::StoreId,
-}
-
-/// Named values required by `NookIdentityDirectorySnapshot::provider_vault_identity_observations_from_projection`.
-#[derive(Clone, Copy)]
-pub(crate) struct BrowserProviderVaultIdentityObservationsFromProjection<'a> {
-    pub(crate) session_app_id: &'a str,
-    pub(crate) store_id: &'a nook_core::StoreId,
-    pub(crate) projection: &'a identity_record::LocalIdentityProjection,
 }
 
 /// Named values required by `NookIdentityDirectorySnapshot::identity_directory_snapshot_for_session`.

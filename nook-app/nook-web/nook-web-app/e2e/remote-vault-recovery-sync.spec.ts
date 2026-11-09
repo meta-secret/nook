@@ -28,7 +28,7 @@ import {
   type LocalFileSyncE2eTarget,
 } from './sync-provider'
 
-test.describe('remote vault recovery (local-first sync)', () => {
+test.describe('an emptied provider receives the vault again (local-first sync)', () => {
   test.describe.configure({ mode: 'serial' })
 
   let vaultPage: Page

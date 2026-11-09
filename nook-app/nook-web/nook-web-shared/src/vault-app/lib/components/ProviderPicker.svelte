@@ -7,7 +7,7 @@
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { ReplicationSupport } from '$app-wasm'
 
-  import { Archive, Cloud, FolderOpen, HardDrive } from '@lucide/svelte'
+  import { Archive, Cloud, FolderOpen } from '@lucide/svelte'
   import GoogleDriveMark from '$lib/components/provider-marks/GoogleDriveMark.svelte'
   import ICloudMark from '$lib/components/provider-marks/ICloudMark.svelte'
   import type { ProviderKind } from '$lib/auth/providers'
@@ -20,13 +20,10 @@
   let {
     vault,
     onSelect,
-    local,
     localFolder,
   }: {
     vault: VaultState
     onSelect: (kind: ProviderKind) => void
-    /** Whether the This device row is offered. */
-    local: PickerRow
     /** Whether the Local folder row is offered. */
     localFolder: PickerRow
   } = $props()
@@ -72,33 +69,6 @@
     class="min-w-0 w-full max-w-full space-y-1.5 overflow-hidden"
     data-testid="provider-picker-list"
   >
-    {#if local === PickerRow.Offered}
-      <li>
-        <button
-          type="button"
-          class="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
-          data-testid="provider-option-local"
-          disabled={blocked(ProviderSetupKinds.THIS_BROWSER)}
-          onclick={() => onSelect(ProviderSetupKinds.THIS_BROWSER)}
-        >
-          <HardDrive class="size-4 shrink-0 text-foreground" />
-          <span class="min-w-0 flex-1">
-            <span class="block text-sm font-semibold text-foreground"
-              >{vault.t(I18N_KEYS.ProviderPickerThisDevice)}</span
-            >
-            <span class="block truncate text-xs text-muted-foreground">
-              {(() => {
-                const descriptionRequest: Parameters<typeof description>[0] = {
-                  key: I18N_KEYS.ProviderPickerThisDeviceDesc,
-                  kind: ProviderSetupKinds.THIS_BROWSER,
-                }
-                return description(descriptionRequest)
-              })()}
-            </span>
-          </span>
-        </button>
-      </li>
-    {/if}
     {#if localFolder === PickerRow.Offered}
       <li class="min-w-0 max-w-full">
         <button

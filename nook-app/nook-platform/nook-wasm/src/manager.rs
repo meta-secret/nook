@@ -71,18 +71,18 @@ pub use secrets::{
     NookExternalEventLogRecords,
 };
 pub use sentinel::NookSentinelStoredDeliveriesRequest;
-pub use session::{NookEventLogSyncIssueResult, NookVaultManager, NookVaultNameState};
+pub use session::{NookVaultManager, NookVaultNameState};
 mod grant_authority;
 
 #[cfg(test)]
 pub(in crate::manager) use prepared_provider::ProviderCacheRef;
 pub(in crate::manager) use prepared_provider::{
-    NextConnect, PreparedProvider, PreparedRemote, ProviderPreparation, ProviderSwitch,
+    PreparedProvider, PreparedRemote, ProviderPreparation, ProviderSwitch,
 };
 pub(in crate::manager) use session::{
-    CeremonyState, ChosenProviderVault, EventLogSessionState, EventLogSyncIssueState, OutboxTarget,
-    SearchCatalogRestore, SearchCatalogState, StorageSession, SyncOutbox, VaultCryptoState,
-    VaultNameState, VaultSessionState,
+    CeremonyState, ChosenProviderVault, EventLogSessionState, OutboxTarget, SearchCatalogRestore,
+    SearchCatalogState, StorageSession, SyncOutbox, VaultCryptoState, VaultNameState,
+    VaultSessionState,
 };
 
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultArchitecture, NookVaultMember};
@@ -91,14 +91,6 @@ use zeroize::Zeroize;
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    #[wasm_bindgen]
-    pub fn take_event_log_sync_issue(&mut self) -> NookEventLogSyncIssueResult {
-        NookEventLogSyncIssueResult(mem::replace(
-            &mut self.event_log_sync_issue,
-            EventLogSyncIssueState::Clear,
-        ))
-    }
-
     #[wasm_bindgen(getter)]
     pub fn storage_mode(&self) -> String {
         self.storage.mode().to_string()
@@ -232,7 +224,6 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub fn reset_vault_session(&mut self) {
         self.vault.reset();
-        self.storage.next_connect = NextConnect::FromProvider;
         self.event_log.reset();
         self.sentinel_genesis = CeremonyState::Inactive;
         self.sentinel_genesis_phase = SentinelGenesisPhase::Inactive;
@@ -647,7 +638,6 @@ mod tests {
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.storage.provider =
             PreparedProvider::github_fixture("provider-token", "owner/repo")?;
-        manager.storage.next_connect = NextConnect::FromLocalCache;
         manager.vault.store_id = "store_sessionreset1".to_owned();
         manager.sync_outbox = SyncOutbox::Bound(OutboxTarget {
             provider: manager.storage.provider.cache_ref(),
@@ -659,7 +649,6 @@ mod tests {
         assert_eq!(manager.device.id, "device-stable");
         assert!(!manager.device.identity_private_key.is_empty());
         assert_eq!(manager.local_cache_ref(), "github:owner/repo:");
-        assert_eq!(manager.storage.next_connect, NextConnect::FromProvider);
         assert!(manager.vault.store_id.is_empty());
         assert!(matches!(manager.sync_outbox, SyncOutbox::Unbound));
         Ok(())

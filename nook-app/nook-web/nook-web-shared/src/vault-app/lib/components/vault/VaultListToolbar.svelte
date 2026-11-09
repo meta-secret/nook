@@ -78,7 +78,6 @@ field, the item count and add button, and the section's type filters.
       case VaultEditDecision.Allowed:
         return {}
       case VaultEditDecision.BlockedSecurityConflict:
-      case VaultEditDecision.BlockedSyncConflict:
       case VaultEditDecision.BlockedByArchitecture:
         return { title: editRestriction.reason }
     }

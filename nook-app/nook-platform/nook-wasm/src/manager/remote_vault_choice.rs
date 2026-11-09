@@ -15,8 +15,7 @@
 
 use crate::{TypedInput, TypedOutput};
 use nook_core::{
-    IdentitySession, LocalVaultOccupancy, ProviderIdentityChoices, ProviderVaultSummary,
-    StorageMode, StoreId,
+    IdentitySession, ProviderIdentityChoices, ProviderVaultSummary, StorageMode, StoreId,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -64,7 +63,7 @@ impl NookVaultManager {
     async fn listed_for_choice(
         location: OpenedLocation<'_>,
     ) -> Result<NookRemoteVaultDiscovery, NookError> {
-        let listing = location.listing(&LocalVaultOccupancy::Closed).await?;
+        let listing = location.listing().await?;
         Ok(NookRemoteVaultDiscovery::Choose {
             vaults: listing.vaults,
             identities: listing.identities,
@@ -82,7 +81,7 @@ impl NookVaultManager {
             ChosenProviderVault::Chosen(_) => return Ok(OneVaultDiscovery::Opens),
             ChosenProviderVault::Unchosen => {}
         }
-        let listing = location.listing(&LocalVaultOccupancy::Closed).await?;
+        let listing = location.listing().await?;
         let recoverable = ProviderIdentityChoices {
             vaults: &listing.vaults,
             identities: &listing.identities,
@@ -275,7 +274,6 @@ mod tests {
             keys: nook_core::ProviderVaultKeyholding::NONE,
             names: nook_core::BrowserNames::NONE,
             identity_logs: &[],
-            local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
         let discovery = NookRemoteVaultDiscovery::Choose {
@@ -304,7 +302,6 @@ mod tests {
                     "lastActivity": { "state": "unreported" },
                     "eventCount": 2,
                     "access": { "state": "unchecked" },
-                    "actions": ["importSeparately"],
                 }],
                 "identities": [],
             })

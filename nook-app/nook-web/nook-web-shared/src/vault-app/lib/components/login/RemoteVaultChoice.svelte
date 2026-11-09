@@ -92,8 +92,8 @@ identity decrypts in memory and changes nothing.
 
   async function apply(): Promise<void> {
     working = true
-    // A keyring recovered here opens its vault next: the import continues
-    // with that vault, as with one picked from a list of vaults.
+    // A keyring recovered here opens one of its vaults next, as with one
+    // picked from a list of vaults.
     const recovered = planned.find((entry) => entry.decision === 'addToBrowser')
     const [recoveredVault] = recovered ? recovered.choice.vaults : []
     try {

@@ -116,14 +116,6 @@ pub(in crate::manager) enum ProviderSwitch {
     OtherStorage,
 }
 
-/// What the next connect reads its vault from.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(in crate::manager) enum NextConnect {
-    #[default]
-    FromProvider,
-    FromLocalCache,
-}
-
 /// One connection to prepare, and the channel its progress is reported on.
 pub(in crate::manager) struct ProviderPreparation<'a> {
     pub(in crate::manager) connection: &'a StorageConnection,

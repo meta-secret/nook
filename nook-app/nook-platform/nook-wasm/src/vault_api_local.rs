@@ -1,7 +1,6 @@
 use super::wasm_bindgen;
 use crate::ConfiguredVaultApplication;
 use crate::VaultSnapshotLookup;
-use crate::storage::indexed_db::ImportVaultLabel;
 use crate::storage::indexed_db::VaultUnlockHistory;
 use crate::{ImportVaultBlobRequest, NookDatabase, SetLocalVaultLabelRequest};
 use nook_core::ActiveVaultScope;
@@ -314,21 +313,6 @@ impl NookActiveVaultSelection {
     ConfiguredVaultApplication::validate_configured_application_for_content(&content)?;
     NookDatabase::import_vault_blob(ImportVaultBlobRequest {
         content: &content,
-        label: ImportVaultLabel::FromDocument,
-    })
-    .await
-    .map_err(Into::into)
-}
-
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn import_named_local_vault_blob(
-    content: String,
-    label: String,
-) -> Result<String, JsError> {
-    ConfiguredVaultApplication::validate_configured_application_for_content(&content)?;
-    NookDatabase::import_vault_blob(ImportVaultBlobRequest {
-        content: &content,
-        label: ImportVaultLabel::Override(&label),
     })
     .await
     .map_err(Into::into)

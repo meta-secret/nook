@@ -17,9 +17,7 @@
 use std::cmp::Ordering;
 
 use crate::errors::{ValidationError, ValidationResult};
-use crate::provider_vault_access::{
-    OpenVaultContents, ProviderVaultAccess, ProviderVaultAction, ProviderVaultKeyholding,
-};
+use crate::provider_vault_access::{ProviderVaultAccess, ProviderVaultKeyholding};
 use crate::{IdentityId, IdentityWords, ListedIdentityLog, ProviderIdentityLog, StoreId};
 use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
@@ -238,8 +236,6 @@ pub struct ProviderVaultSummary {
     pub event_count: ProviderEventCount,
     /// How this device can open it.
     pub access: ProviderVaultAccess,
-    /// What the user may do with it, the recommended action first.
-    pub actions: Vec<ProviderVaultAction>,
 }
 
 impl ProviderVaultSummary {
@@ -257,7 +253,6 @@ impl ProviderVaultSummary {
         keys: &ProviderVaultKeyholding<'_>,
         names: BrowserNames<'_>,
         identity_logs: &[ListedIdentityLog],
-        contents: OpenVaultContents,
     ) -> Self {
         let ProviderVaultObservation {
             store_id,
@@ -266,7 +261,6 @@ impl ProviderVaultSummary {
             events,
         } = observation;
         let access = keys.access(&store_id);
-        let actions = contents.actions(&access);
         let event_times = events
             .iter()
             .filter_map(|time| time.instant())
@@ -296,7 +290,6 @@ impl ProviderVaultSummary {
             last_activity: ProviderVaultTime::from_instant(last_activity),
             event_count: ProviderEventCount::of(events.len()),
             access,
-            actions,
         }
     }
 
@@ -315,80 +308,7 @@ impl ProviderVaultSummary {
     }
 }
 
-/// How many items a local vault holds.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct LocalVaultItemCount(u32);
-
-impl From<u32> for LocalVaultItemCount {
-    fn from(value: u32) -> Self {
-        Self(value)
-    }
-}
-
-/// How many app keys the local identity has, this one included.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct IdentityAppCount(u32);
-
-impl From<u32> for IdentityAppCount {
-    fn from(value: u32) -> Self {
-        Self(value)
-    }
-}
-
-/// The vault this device has open, as far as a replacement offer needs it.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", rename_all = "camelCase")]
-pub enum LocalVaultOccupancy {
-    /// No vault is open on this device.
-    Closed,
-    #[serde(rename_all = "camelCase")]
-    Open {
-        store_id: StoreId,
-        #[tsify(type = "number")]
-        item_count: LocalVaultItemCount,
-        #[tsify(type = "number")]
-        identity_app_count: IdentityAppCount,
-    },
-}
-
-impl LocalVaultOccupancy {
-    /// The open vault holds nothing and nobody else shares it.
-    fn empty_store_id(&self) -> Option<&StoreId> {
-        match self {
-            Self::Open {
-                store_id,
-                item_count,
-                identity_app_count,
-            } if item_count.0 == 0 && identity_app_count.0 <= 1 => Some(store_id),
-            Self::Closed | Self::Open { .. } => None,
-        }
-    }
-
-    fn contents(&self) -> OpenVaultContents {
-        match (self, self.empty_store_id()) {
-            (Self::Closed, _) => OpenVaultContents::Closed,
-            (Self::Open { .. }, Some(_)) => OpenVaultContents::Empty,
-            (Self::Open { .. }, None) => OpenVaultContents::Occupied,
-        }
-    }
-}
-
-/// Whether this device may swap its empty vault for one the provider holds.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", rename_all = "camelCase")]
-pub enum EmptyVaultReplacement {
-    Unavailable,
-    /// The open vault is empty; after an explicit confirmation it may give
-    /// way to one of the provider's other vaults.
-    #[serde(rename_all = "camelCase")]
-    Offered {
-        empty_store_id: StoreId,
-    },
-}
-
-/// The vaults a provider holds and what this device may do with them.
+/// The vaults a provider holds and how this device can open them.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderVaultListing {
@@ -396,11 +316,9 @@ pub struct ProviderVaultListing {
     /// Every identity whose control log the provider holds, in the order
     /// the logs were listed, each with what its log tells.
     pub identities: Vec<FilingIdentity>,
-    pub replacement: EmptyVaultReplacement,
 }
 
-/// The transport's observations, the keys this device holds, and its open
-/// vault.
+/// The transport's observations and the keys this device holds.
 pub struct ProviderVaultListingRequest<'a> {
     pub observations: Vec<ProviderVaultObservation>,
     pub keys: ProviderVaultKeyholding<'a>,
@@ -408,14 +326,10 @@ pub struct ProviderVaultListingRequest<'a> {
     pub names: BrowserNames<'a>,
     /// The public control logs of the listed identities, where read.
     pub identity_logs: &'a [ListedIdentityLog],
-    pub local_vault: &'a LocalVaultOccupancy,
 }
 
 impl ProviderVaultListingRequest<'_> {
-    /// Summarize every listed vault, decide how this device can open it, and
-    /// offer what the user may do: a vault this device can open replaces an
-    /// empty open vault or comes in beside the open one; a vault nothing
-    /// here opens can only be requested.
+    /// Summarize every listed vault and decide how this device can open it.
     #[must_use]
     pub fn listing(self) -> ProviderVaultListing {
         let Self {
@@ -423,25 +337,14 @@ impl ProviderVaultListingRequest<'_> {
             keys,
             names,
             identity_logs,
-            local_vault,
         } = self;
-        let contents = local_vault.contents();
         let mut vaults = observations
             .into_iter()
             .map(|observation| {
-                ProviderVaultSummary::summarize(observation, &keys, names, identity_logs, contents)
+                ProviderVaultSummary::summarize(observation, &keys, names, identity_logs)
             })
             .collect::<Vec<_>>();
         vaults.sort_by(ProviderVaultSummary::listing_order);
-        let offers_replacement = vaults
-            .iter()
-            .any(|vault| vault.actions.contains(&ProviderVaultAction::UseInstead));
-        let replacement = match local_vault.empty_store_id() {
-            Some(empty_store_id) if offers_replacement => EmptyVaultReplacement::Offered {
-                empty_store_id: empty_store_id.clone(),
-            },
-            Some(_) | None => EmptyVaultReplacement::Unavailable,
-        };
         let identities = identity_logs
             .iter()
             .map(|listed| {
@@ -454,11 +357,7 @@ impl ProviderVaultListingRequest<'_> {
                 )
             })
             .collect();
-        ProviderVaultListing {
-            vaults,
-            identities,
-            replacement,
-        }
+        ProviderVaultListing { vaults, identities }
     }
 }
 
@@ -481,14 +380,6 @@ mod tests {
     /// The identity whose folder files every listed test vault.
     fn filer() -> anyhow::Result<IdentityId> {
         Ok(IdentityId::parse("idn_filerfilerf")?)
-    }
-
-    fn open(store_id: &StoreId, items: u32, apps: u32) -> LocalVaultOccupancy {
-        LocalVaultOccupancy::Open {
-            store_id: store_id.clone(),
-            item_count: items.into(),
-            identity_app_count: apps.into(),
-        }
     }
 
     #[test]
@@ -553,7 +444,6 @@ mod tests {
             keys: ProviderVaultKeyholding::NONE,
             names: BrowserNames::NONE,
             identity_logs: &[],
-            local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
         assert_eq!(
@@ -573,10 +463,8 @@ mod tests {
                 last_activity: at("2024-03-01T00:00:00Z")?,
                 event_count: ProviderEventCount(3),
                 access: ProviderVaultAccess::Unchecked,
-                actions: vec![ProviderVaultAction::ImportSeparately],
             }]
         );
-        assert_eq!(listing.replacement, EmptyVaultReplacement::Unavailable);
         Ok(())
     }
 
@@ -592,7 +480,6 @@ mod tests {
             keys: ProviderVaultKeyholding::NONE,
             names: BrowserNames::NONE,
             identity_logs: &[],
-            local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
         let [vault] = listing.vaults.as_slice() else {
@@ -616,7 +503,6 @@ mod tests {
             keys: ProviderVaultKeyholding::NONE,
             names: BrowserNames::NONE,
             identity_logs: &[],
-            local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
         let [vault] = listing.vaults.as_slice() else {
@@ -658,7 +544,6 @@ mod tests {
             },
             names: BrowserNames::NONE,
             identity_logs: &[],
-            local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
         let ranked = listing
@@ -675,106 +560,6 @@ mod tests {
                 (older, ProviderVaultAccess::Locked),
             ]
         );
-        Ok(())
-    }
-
-    #[test]
-    fn an_openable_vault_replaces_an_empty_vault_and_comes_in_beside_a_full_one()
-    -> anyhow::Result<()> {
-        use ProviderVaultAction::{ImportSeparately, RequestAccess, UseInstead};
-        let local = store("store_localvault1")?;
-        let other = store("store_othervault1")?;
-        let identity = filer()?;
-        let observations = || {
-            vec![
-                ProviderVaultObservation {
-                    store_id: local.clone(),
-                    identity: identity.clone(),
-                    namespace_created: ProviderVaultTime::Unreported,
-                    events: vec![ProviderVaultTime::Unreported],
-                },
-                ProviderVaultObservation {
-                    store_id: other.clone(),
-                    identity: identity.clone(),
-                    namespace_created: ProviderVaultTime::Unreported,
-                    events: vec![ProviderVaultTime::Unreported; 5],
-                },
-            ]
-        };
-        let identity_vaults = [local.clone()];
-        let listed = |occupancy: LocalVaultOccupancy, granted_vaults: &[StoreId]| {
-            let listing = ProviderVaultListingRequest {
-                observations: observations(),
-                keys: ProviderVaultKeyholding {
-                    identity_vaults: &identity_vaults,
-                    granted_vaults,
-                    session: crate::IdentitySession::IdentityInUse,
-                    ..ProviderVaultKeyholding::NONE
-                },
-                names: BrowserNames::NONE,
-                identity_logs: &[],
-                local_vault: &occupancy,
-            }
-            .listing();
-            let actions = listing
-                .vaults
-                .iter()
-                .find(|vault| vault.store_id == other)
-                .map(|vault| vault.actions.clone())
-                .unwrap_or_default();
-            (listing.replacement, actions)
-        };
-        let openable = [other.clone()];
-        assert_eq!(
-            listed(open(&local, 0, 1), &openable),
-            (
-                EmptyVaultReplacement::Offered {
-                    empty_store_id: local.clone()
-                },
-                vec![UseInstead, ImportSeparately]
-            )
-        );
-        // An open vault with records or another app is never replaced.
-        for occupancy in [open(&local, 3, 1), open(&local, 0, 2)] {
-            assert_eq!(
-                listed(occupancy, &openable),
-                (EmptyVaultReplacement::Unavailable, vec![ImportSeparately])
-            );
-        }
-        assert_eq!(
-            listed(LocalVaultOccupancy::Closed, &openable),
-            (EmptyVaultReplacement::Unavailable, vec![ImportSeparately])
-        );
-        // A vault nothing here opens can only be requested, so it never
-        // replaces the empty vault.
-        assert_eq!(
-            listed(open(&local, 0, 1), &[]),
-            (EmptyVaultReplacement::Unavailable, vec![RequestAccess])
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn nothing_replaces_the_empty_vault_without_another_vault() -> anyhow::Result<()> {
-        let local = store("store_localvault1")?;
-        let identity_vaults = [local.clone()];
-        let listing = ProviderVaultListingRequest {
-            observations: vec![ProviderVaultObservation {
-                store_id: local.clone(),
-                identity: filer()?,
-                namespace_created: ProviderVaultTime::Unreported,
-                events: vec![],
-            }],
-            keys: ProviderVaultKeyholding {
-                identity_vaults: &identity_vaults,
-                ..ProviderVaultKeyholding::NONE
-            },
-            names: BrowserNames::NONE,
-            identity_logs: &[],
-            local_vault: &open(&local, 0, 1),
-        }
-        .listing();
-        assert_eq!(listing.replacement, EmptyVaultReplacement::Unavailable);
         Ok(())
     }
 
@@ -808,7 +593,6 @@ mod tests {
                 identities: &[],
             },
             identity_logs: &[],
-            local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
         let name_of = |store_id: &StoreId| {
@@ -870,7 +654,6 @@ mod tests {
                 identities: &identities,
             },
             identity_logs: &theirs_log,
-            local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
         let identity_of = |token: &str| {
@@ -940,10 +723,8 @@ mod tests {
                 },
                 event_count: ProviderEventCount(1),
                 access: ProviderVaultAccess::Syncs,
-                actions: Vec::new(),
             }],
             identities: Vec::new(),
-            replacement: EmptyVaultReplacement::Unavailable,
         })?;
         assert_eq!(
             json,
@@ -971,19 +752,10 @@ mod tests {
                     "lastActivity": { "state": "reported", "at": 5 },
                     "eventCount": 1,
                     "access": { "state": "syncs" },
-                    "actions": [],
                 }],
                 "identities": [],
-                "replacement": { "state": "unavailable" },
             })
         );
-        let occupancy: LocalVaultOccupancy = serde_json::from_value(serde_json::json!({
-            "state": "open",
-            "storeId": "store_abcdefghijk",
-            "itemCount": 0,
-            "identityAppCount": 1,
-        }))?;
-        assert_eq!(occupancy, open(&store("store_abcdefghijk")?, 0, 1));
         Ok(())
     }
 }

@@ -227,7 +227,6 @@ test.describe('local folder backup provider', () => {
     await page.goto('/app/')
     const { sharedFolder } = await backUpTwoVaultsToOneFolder(page)
 
-    await expect(page.getByTestId('vault-sync-conflict-dialog')).toHaveCount(0)
     // Each browser filed its vault under the identity it created.
     const vaults = filedVaults(sharedFolder)
     expect(vaults).toHaveLength(2)

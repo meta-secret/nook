@@ -1,12 +1,9 @@
-use crate::manager::session::NookEventLogSyncIssueState;
-
 use super::*;
-use crate::manager::{OutboxTarget, PreparedProvider, ProviderCacheRef, SyncOutbox};
+use crate::manager::{OutboxTarget, ProviderCacheRef, SyncOutbox};
 use nook_core::{
     DeviceIdentity, IsoTimestamp, SigningIdentity, VaultEvent, VaultEventBody,
     VaultEventSchemaVersion, VaultMetaState, VaultOperation,
 };
-use wasm_bindgen::JsError;
 use wasm_bindgen_test::wasm_bindgen_test;
 
 #[cfg_attr(
@@ -50,97 +47,40 @@ fn projected_epoch_keys_use_the_current_auth_envelopes() -> anyhow::Result<()> {
 }
 
 #[test]
-#[cfg_attr(
-    dylint_lib = "non_local_effect_before_unhandled_error",
-    allow(
-        non_local_effect_before_unhandled_error,
-        reason = "the contract records a typed sync issue before rejecting the remote store"
-    )
-)]
-fn rejected_event_log_classification_is_available_as_a_typed_issue() -> Result<(), JsError> {
-    let mut manager = NookVaultManager::new();
-    let classification = RemoteEventLogClassification::DifferentStore {
-        local_store_id: "store_local12345".to_owned(),
-        remote_store_id: "store_remote1234".to_owned(),
-    };
-
-    assert!(
-        manager
-            .guard_remote_event_log_classification("Sync provider", &classification)
-            .is_err()
-    );
-    let issue = manager.take_event_log_sync_issue().issue()?;
-    assert!(issue.is_store_mismatch());
-    assert_eq!(issue.local_store_id()?, "store_local12345");
-    assert_eq!(issue.remote_store_id()?, "store_remote1234");
-    Ok(())
-}
-
-#[test]
-fn empty_and_same_store_classifications_leave_no_pending_issue() -> Result<(), JsError> {
-    let mut manager = NookVaultManager::new();
+fn another_vaults_events_in_the_folder_stop_sync_with_their_message() -> anyhow::Result<()> {
     for classification in [
-        RemoteEventLogClassification::Empty,
-        RemoteEventLogClassification::SameStore {
-            store_id: "store_same12345".to_owned(),
+        RemoteEventLogClassification::DifferentStore {
+            local_store_id: "store_local12345".to_owned(),
+            remote_store_id: "store_remote1234".to_owned(),
+        },
+        RemoteEventLogClassification::MultipleStores {
+            store_ids: vec!["store_first1234".to_owned(), "store_second12".to_owned()],
         },
     ] {
-        manager.guard_remote_event_log_classification("Drive", &classification)?;
+        let Err(error) = NookVaultManager::guard_remote_event_log_classification(&classification)
+        else {
+            anyhow::bail!("another vault's events must stop sync");
+        };
+        assert!(matches!(error, NookError::VaultFolderHoldsAnotherVault));
         assert_eq!(
-            manager.take_event_log_sync_issue().state(),
-            NookEventLogSyncIssueState::Clear
+            nook_core::ProviderFailureCode::classify(&error.to_string()),
+            nook_core::ProviderFailureCode::VaultFolderHoldsAnotherVault
         );
     }
     Ok(())
 }
 
 #[test]
-#[cfg_attr(
-    dylint_lib = "non_local_effect_before_unhandled_error",
-    allow(
-        non_local_effect_before_unhandled_error,
-        reason = "the test intentionally observes and then inspects the stored multi-store issue"
-    )
-)]
-fn multiple_store_classification_records_all_store_ids_in_the_issue() -> Result<(), JsError> {
-    let mut manager = NookVaultManager::new();
-    let classification = RemoteEventLogClassification::MultipleStores {
-        store_ids: vec!["store_first1234".to_owned(), "store_second12".to_owned()],
-    };
-    let Err(error) = manager.guard_remote_event_log_classification("GitHub", &classification)
-    else {
-        return Err(JsError::new("multiple provider stores must be rejected"));
-    };
-    assert!(
-        matches!(error, NookError::Database(message) if message.contains("store_first1234") && message.contains("store_second12"))
-    );
-    let issue = manager.take_event_log_sync_issue().issue()?;
-    assert!(issue.is_multiple_stores());
+fn empty_and_same_store_classifications_sync_on() -> anyhow::Result<()> {
+    for classification in [
+        RemoteEventLogClassification::Empty,
+        RemoteEventLogClassification::SameStore {
+            store_id: "store_same12345".to_owned(),
+        },
+    ] {
+        NookVaultManager::guard_remote_event_log_classification(&classification)?;
+    }
     Ok(())
-}
-
-#[test]
-fn provider_classification_errors_include_the_provider_and_store_context() {
-    let mismatch = NookVaultManager::provider_store_mismatch_error(
-        "Drive",
-        "store_local12345",
-        "store_remote1234",
-    );
-    assert!(matches!(
-        mismatch,
-        NookError::Database(message)
-            if message == "Drive already contains another vault (local store_id store_local12345, provider store_id store_remote1234). Choose which vault to use before syncing."
-    ));
-
-    let multiple = NookVaultManager::provider_multiple_stores_error(
-        "Backup folder",
-        &["store_first1234".to_owned(), "store_second12".to_owned()],
-    );
-    assert!(matches!(
-        multiple,
-        NookError::Database(message)
-            if message == "Backup folder holds several vaults (store_id: store_first1234, store_second12). Choose the vault to open."
-    ));
 }
 
 #[test]
@@ -195,108 +135,6 @@ fn wasm_projected_epoch_keys_reject_an_unknown_device() -> anyhow::Result<()> {
         NookError::Database(message)
             if message == "The current security epoch no longer authorizes this device."
     ));
-    Ok(())
-}
-
-#[wasm_bindgen_test]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-    )
-)]
-#[cfg_attr(
-    dylint_lib = "non_local_effect_before_unhandled_error",
-    allow(
-        non_local_effect_before_unhandled_error,
-        reason = "the test intentionally observes and then inspects the stored provider issue"
-    )
-)]
-fn wasm_provider_classification_errors_preserve_store_details() -> anyhow::Result<()> {
-    let mut manager = NookVaultManager::new();
-    let different = RemoteEventLogClassification::DifferentStore {
-        local_store_id: "store_local12345".to_owned(),
-        remote_store_id: "store_remote1234".to_owned(),
-    };
-    let Err(error) = manager.guard_remote_event_log_classification("Drive", &different) else {
-        anyhow::bail!("different stores must be rejected");
-    };
-    assert!(matches!(
-        error,
-        NookError::Database(message)
-            if message.contains("Drive")
-                && message.contains("store_local12345")
-                && message.contains("store_remote1234")
-    ));
-
-    let multiple = RemoteEventLogClassification::MultipleStores {
-        store_ids: vec!["store_first1234".to_owned(), "store_second12".to_owned()],
-    };
-    let Err(error) = manager.guard_remote_event_log_classification("GitHub", &multiple) else {
-        anyhow::bail!("multiple stores must be rejected");
-    };
-    assert!(matches!(
-        error,
-        NookError::Database(message)
-            if message.contains("GitHub")
-                && message.contains("store_first1234")
-                && message.contains("store_second12")
-    ));
-    Ok(())
-}
-
-#[wasm_bindgen_test]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test callback"
-    )
-)]
-#[cfg_attr(
-    dylint_lib = "non_local_effect_before_unhandled_error",
-    allow(
-        non_local_effect_before_unhandled_error,
-        reason = "the test intentionally observes and then inspects the mismatch issue"
-    )
-)]
-fn drive_vault_folder_target_keeps_store_id_mismatch_fail_closed() -> anyhow::Result<()> {
-    let mut manager = NookVaultManager::new();
-    manager.storage.provider =
-        PreparedProvider::drive_fixture("TEST-ONLY-token", "stable-vault-folder")?;
-    let classification = RemoteEventLogClassification::DifferentStore {
-        local_store_id: "store_local12345".to_owned(),
-        remote_store_id: "store_remote1234".to_owned(),
-    };
-
-    let Err(error) = manager.guard_remote_event_log_classification("Drive", &classification) else {
-        anyhow::bail!("a Drive vault folder must not bypass the store_id guard");
-    };
-    assert!(matches!(
-        error,
-        NookError::Database(message)
-            if message.contains("Drive")
-                && message.contains("store_local12345")
-                && message.contains("store_remote1234")
-    ));
-    let issue = manager
-        .take_event_log_sync_issue()
-        .issue()
-        .map_err(|_| anyhow::anyhow!("expected a pending event-log sync issue"))?;
-    assert!(issue.is_store_mismatch());
-    assert_eq!(
-        issue
-            .local_store_id()
-            .map_err(|_| anyhow::anyhow!("expected a local store ID on mismatch issue"))?,
-        "store_local12345"
-    );
-    assert_eq!(
-        issue
-            .remote_store_id()
-            .map_err(|_| anyhow::anyhow!("expected a remote store ID on mismatch issue"))?,
-        "store_remote1234"
-    );
     Ok(())
 }
 

@@ -6,7 +6,6 @@ import {
   openOpenVaultPanel,
   authorizeDeviceProtection,
   createLocalVaultOnLogin,
-  dismissSyncConflictIfVisible,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   expectAppLogMilestones,
   flushNookLogPersistQueue,
@@ -360,7 +359,6 @@ test.describe('vault connect flow', () => {
       ],
     })
 
-    await dismissSyncConflictIfVisible(page)
     await openManagePage(page, ManagePage.Sync)
     const driveProvider = page.getByTestId('settings-provider-oauth-file')
     await expect(driveProvider).toBeVisible()

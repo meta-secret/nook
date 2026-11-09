@@ -51,50 +51,7 @@ async function setSecurityConflict(page: Page, present: boolean) {
   }, present)
 }
 
-async function setContentSyncConflict(page: Page) {
-  await page.evaluate(() => {
-    const vault = window.__nookVault
-    if (
-      !vault ||
-      !('stageContentSyncConflictForTesting' in vault) ||
-      typeof vault.stageContentSyncConflictForTesting !== 'function'
-    ) {
-      throw new Error('__nookVault conflict harness is unavailable.')
-    }
-    const contentConflictArgs = {
-      providerLabel: 'Remote provider',
-      localVersion: 1,
-      remoteVersion: 2,
-    }
-    vault.stageContentSyncConflictForTesting(contentConflictArgs)
-  })
-}
-
 test.describe('sync conflict resolution', () => {
-  test('shows retired whole-vault resolution guidance in the selected locale', async ({
-    page,
-  }) => {
-    await page.addInitScript(() => localStorage.setItem('nook_locale', 'ru'))
-    await page.goto('/app/')
-    await createLocalVaultOnLogin(page)
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-
-    await setContentSyncConflict(page)
-    await expect(page.getByTestId('vault-sync-conflict-dialog')).toBeVisible()
-
-    await page.getByTestId('sync-conflict-keep-local-btn').click()
-    await expect(page.getByTestId('vault-error')).toContainText(
-      'Разрешение конфликтов всего сейфа больше не поддерживается.',
-    )
-
-    await page.getByTestId('sync-conflict-keep-remote-btn').click()
-    await expect(page.getByTestId('vault-error')).toContainText(
-      'Синхронизируйте журнал событий со всеми провайдерами и повторите попытку.',
-    )
-  })
-
   test('blocks secret edits while an event-log security conflict is present', async ({
     page,
   }) => {
@@ -200,7 +157,6 @@ test.describe('sync conflict resolution', () => {
       .toEqual([storeA, storeB].sort())
     for (const event of vaultAEvents)
       expect(stub.getEventFileContents()).toContain(event)
-    await expect(page.getByTestId('vault-sync-conflict-dialog')).toHaveCount(0)
 
     await openIdentitiesPage(page)
     await expect(page.getByTestId('identity-vault-row')).toHaveCount(2)

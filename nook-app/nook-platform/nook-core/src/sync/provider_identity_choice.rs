@@ -425,7 +425,6 @@ mod tests {
                 last_activity: ProviderVaultTime::Unreported,
                 event_count: crate::ProviderEventCount::default(),
                 access,
-                actions: Vec::new(),
             })
         }
 

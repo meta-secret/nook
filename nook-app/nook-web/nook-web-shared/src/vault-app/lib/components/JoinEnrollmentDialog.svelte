@@ -7,13 +7,7 @@
   }
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import {
-    ChevronDown,
-    ShieldCheck,
-    Smartphone,
-    UserPlus,
-    X,
-  } from '@lucide/svelte'
+  import { ShieldCheck, Smartphone, UserPlus, X } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import {
     CardContent,
@@ -30,10 +24,6 @@
     variant,
     deviceId = '',
     isBusy = false,
-    enrollSecretsKey = $bindable(''),
-    enrollMembersKey = $bindable(''),
-    onEnrollWithKeys,
-    onCreateFreshVault,
     onCancel,
   }: {
     vault: VaultState
@@ -41,14 +31,8 @@
     variant: JoinEnrollmentDialogVariant
     deviceId?: string
     isBusy?: boolean
-    enrollSecretsKey: string
-    enrollMembersKey: string
-    onEnrollWithKeys?: () => void | Promise<void>
-    onCreateFreshVault?: () => void | Promise<void>
     onCancel: () => void
   } = $props()
-
-  let showTransferKeys = $state(false)
 
   function truncate({ value, head, tail }: IdentityTextTruncation) {
     if (value.length <= head + tail + 3) return value
@@ -162,107 +146,6 @@
               {vault.t(I18N_KEYS.CommonCancel)}
             </Button>
           </div>
-
-          {#if onEnrollWithKeys}
-            <div class="rounded-lg border border-border bg-muted/20">
-              <button
-                type="button"
-                class="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                data-testid="enroll-dec-toggle"
-                aria-expanded={showTransferKeys}
-                onclick={() => (showTransferKeys = !showTransferKeys)}
-              >
-                <span>{vault.t(I18N_KEYS.JoinEnrollmentHaveTransferKeys)}</span>
-                <ChevronDown
-                  class="size-3.5 shrink-0 transition-transform {showTransferKeys
-                    ? 'rotate-180'
-                    : ''}"
-                />
-              </button>
-
-              {#if showTransferKeys}
-                <div class="space-y-2 border-t border-border px-3 py-3">
-                  <p class="text-[11px] leading-relaxed text-muted-foreground">
-                    {vault.t(I18N_KEYS.JoinEnrollmentTransferKeysDesc)}
-                  </p>
-                  <label
-                    class="text-xs font-medium text-muted-foreground"
-                    for="enroll-secrets-key"
-                  >
-                    {vault.t(I18N_KEYS.JoinEnrollmentSecretsKey)}
-                  </label>
-                  <input
-                    id="enroll-secrets-key"
-                    type="password"
-                    bind:value={enrollSecretsKey}
-                    placeholder={vault.t(
-                      I18N_KEYS.JoinEnrollmentSecretsKeyPlaceholder,
-                    )}
-                    autocomplete="off"
-                    data-testid="enroll-secrets-key-input"
-                    class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
-                  />
-                  <label
-                    class="text-xs font-medium text-muted-foreground"
-                    for="enroll-members-key"
-                  >
-                    {vault.t(I18N_KEYS.JoinEnrollmentMembersKey)}
-                  </label>
-                  <input
-                    id="enroll-members-key"
-                    type="password"
-                    bind:value={enrollMembersKey}
-                    placeholder={vault.t(
-                      I18N_KEYS.JoinEnrollmentSecretsKeyPlaceholder,
-                    )}
-                    autocomplete="off"
-                    data-testid="enroll-members-key-input"
-                    class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    class="w-full border-border"
-                    disabled={isBusy ||
-                      !enrollSecretsKey.trim() ||
-                      !enrollMembersKey.trim()}
-                    data-testid="enroll-with-keys-btn"
-                    onclick={() => void onEnrollWithKeys()}
-                  >
-                    {vault.t(I18N_KEYS.JoinEnrollmentEnrollWithKeys)}
-                  </Button>
-                </div>
-              {/if}
-            </div>
-          {/if}
-
-          {#if onCreateFreshVault}
-            <div
-              class="rounded-lg border border-border bg-muted/20 px-3 py-3 space-y-2"
-            >
-              <p class="text-xs font-medium text-foreground">
-                {vault.t(I18N_KEYS.JoinEnrollmentSetupFromScratch)}
-              </p>
-              <p class="text-[11px] leading-relaxed text-muted-foreground">
-                {vault.t(I18N_KEYS.JoinEnrollmentSetupFromScratchDesc)}
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                class="w-full border-border"
-                disabled={isBusy}
-                data-testid="create-fresh-vault-btn"
-                onclick={() => void onCreateFreshVault()}
-              >
-                {#if isBusy}
-                  {vault.t(I18N_KEYS.JoinEnrollmentCreating)}
-                {:else}
-                  {vault.t(I18N_KEYS.JoinEnrollmentCreateNewVault)}
-                {/if}
-              </Button>
-            </div>
-          {/if}
         {:else}
           <p class="text-sm leading-relaxed text-muted-foreground">
             {vault.t(I18N_KEYS.JoinEnrollmentApproveOnEnrolled)}
@@ -276,32 +159,6 @@
               {vault.t(I18N_KEYS.JoinEnrollmentGotIt)}
             </Button>
           </div>
-          {#if onCreateFreshVault}
-            <div
-              class="rounded-lg border border-border bg-muted/20 px-3 py-3 space-y-2"
-            >
-              <p class="text-xs font-medium text-foreground">
-                {vault.t(I18N_KEYS.JoinEnrollmentStartingOver)}
-              </p>
-              <p class="text-[11px] leading-relaxed text-muted-foreground">
-                {vault.t(I18N_KEYS.JoinEnrollmentStartingOverDesc)}
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                class="w-full border-border"
-                disabled={isBusy}
-                data-testid="create-fresh-vault-btn"
-                onclick={() => void onCreateFreshVault()}
-              >
-                {#if isBusy}
-                  {vault.t(I18N_KEYS.JoinEnrollmentCreating)}
-                {:else}
-                  {vault.t(I18N_KEYS.JoinEnrollmentCreateNewVault)}
-                {/if}
-              </Button>
-            </div>
-          {/if}
         {/if}
       </CardContent>
     </Dialog.Content>

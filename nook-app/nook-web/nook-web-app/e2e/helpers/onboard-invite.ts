@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
-import { assertVaultReady, dismissSyncConflictIfVisible } from './settings-auth'
+import { assertVaultReady } from './settings-auth'
 import {
   forceVaultQuiescentForE2e,
   waitForVaultOperationsIdle,
@@ -71,7 +71,6 @@ export async function submitOnboardEnrollmentCode(
   await expect(page.getByTestId('onboard-device-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
-  await dismissSyncConflictIfVisible(page)
   await expect(page.getByTestId('onboard-device-submit')).toBeEnabled({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })

@@ -22,6 +22,8 @@ pub enum ProviderFailureCode {
     GitHubTokenRejected,
     /// The S3 server refused this device's key.
     S3KeyAccessDenied,
+    /// A vault's folder on the provider holds another vault's events.
+    VaultFolderHoldsAnotherVault,
     /// Any other failure; its message says what happened.
     Unclassified,
 }
@@ -35,6 +37,8 @@ impl ProviderFailureCode {
             Self::GitHubTokenRejected
         } else if message.contains(i18n_keys::ERRORS_S3_KEY_ACCESS_DENIED) {
             Self::S3KeyAccessDenied
+        } else if message.contains(i18n_keys::AUTH_STORAGE_VAULT_FOLDER_HOLDS_ANOTHER_VAULT) {
+            Self::VaultFolderHoldsAnotherVault
         } else {
             Self::Unclassified
         }
@@ -47,6 +51,9 @@ impl ProviderFailureCode {
         match self {
             Self::GitHubTokenRejected => i18n_keys::AUTH_STORAGE_GITHUB_TOKEN_REJECTED,
             Self::S3KeyAccessDenied => i18n_keys::ERRORS_S3_KEY_ACCESS_DENIED,
+            Self::VaultFolderHoldsAnotherVault => {
+                i18n_keys::AUTH_STORAGE_VAULT_FOLDER_HOLDS_ANOTHER_VAULT
+            }
             Self::Unclassified => operation_failed,
         }
     }
@@ -103,6 +110,7 @@ impl ProviderFailureCause {
         match ProviderFailureCode::classify(message) {
             ProviderFailureCode::GitHubTokenRejected => Self::Unauthorized,
             ProviderFailureCode::S3KeyAccessDenied => Self::Forbidden,
+            ProviderFailureCode::VaultFolderHoldsAnotherVault => Self::Other,
             ProviderFailureCode::Unclassified => Self::classify_described(message),
         }
     }
@@ -234,6 +242,11 @@ mod tests {
                 ProviderFailureCode::GitHubTokenRejected,
                 ProviderFailureCause::Unauthorized,
             ),
+            (
+                i18n_keys::AUTH_STORAGE_VAULT_FOLDER_HOLDS_ANOTHER_VAULT,
+                ProviderFailureCode::VaultFolderHoldsAnotherVault,
+                ProviderFailureCause::Other,
+            ),
         ] {
             assert_eq!(ProviderFailureCode::classify(refused), code);
             assert_eq!(ProviderFailureCause::classify(refused), cause);
@@ -263,6 +276,10 @@ mod tests {
             (
                 i18n_keys::AUTH_STORAGE_GITHUB_TOKEN_REJECTED,
                 i18n_keys::AUTH_STORAGE_GITHUB_TOKEN_REJECTED,
+            ),
+            (
+                i18n_keys::AUTH_STORAGE_VAULT_FOLDER_HOLDS_ANOTHER_VAULT,
+                i18n_keys::AUTH_STORAGE_VAULT_FOLDER_HOLDS_ANOTHER_VAULT,
             ),
             ("S3 request failed with status 503", operation_failed),
             ("", operation_failed),

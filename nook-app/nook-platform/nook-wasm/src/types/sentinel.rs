@@ -1,8 +1,6 @@
 use super::{NookVaultArchitecture, wasm_bindgen};
 use crate::NookError;
-use nook_core::{
-    MultiDeviceError, RemoteEventLogClassification, SentinelGenesisPhase, SentinelUnlockReadiness,
-};
+use nook_core::{MultiDeviceError, SentinelGenesisPhase, SentinelUnlockReadiness};
 use std::mem;
 use wasm_bindgen::JsError;
 
@@ -275,74 +273,6 @@ pub struct NookSentinelGenesisFinalizeResult {
 }
 
 #[wasm_bindgen]
-pub struct NookEventLogSyncIssue {
-    provider_label: String,
-    classification: nook_core::RemoteEventLogClassification,
-}
-
-#[wasm_bindgen]
-impl NookEventLogSyncIssue {
-    pub(crate) fn new(
-        provider_label: String,
-        classification: nook_core::RemoteEventLogClassification,
-    ) -> Self {
-        Self {
-            provider_label,
-            classification,
-        }
-    }
-
-    #[wasm_bindgen(getter, js_name = providerLabel)]
-    pub fn provider_label(&self) -> String {
-        self.provider_label.clone()
-    }
-
-    #[wasm_bindgen(getter, js_name = isStoreMismatch)]
-    pub fn is_store_mismatch(&self) -> bool {
-        matches!(
-            self.classification,
-            RemoteEventLogClassification::DifferentStore { .. }
-        )
-    }
-
-    #[wasm_bindgen(getter, js_name = isMultipleStores)]
-    pub fn is_multiple_stores(&self) -> bool {
-        matches!(
-            self.classification,
-            RemoteEventLogClassification::MultipleStores { .. }
-        )
-    }
-
-    #[wasm_bindgen(getter, js_name = localStoreId)]
-    pub fn local_store_id(&self) -> Result<String, wasm_bindgen::JsError> {
-        match &self.classification {
-            RemoteEventLogClassification::DifferentStore { local_store_id, .. } => {
-                Ok(local_store_id.clone())
-            }
-            _ => Err(JsError::new("event-log issue is not a store mismatch")),
-        }
-    }
-
-    #[wasm_bindgen(getter, js_name = remoteStoreId)]
-    pub fn remote_store_id(&self) -> Result<String, wasm_bindgen::JsError> {
-        match &self.classification {
-            RemoteEventLogClassification::DifferentStore {
-                remote_store_id, ..
-            } => Ok(remote_store_id.clone()),
-            _ => Err(JsError::new("event-log issue is not a store mismatch")),
-        }
-    }
-
-    #[wasm_bindgen(getter, js_name = storeIds)]
-    pub fn store_ids(&self) -> Vec<String> {
-        match &self.classification {
-            RemoteEventLogClassification::MultipleStores { store_ids } => store_ids.clone(),
-            _ => Vec::new(),
-        }
-    }
-}
-
-#[wasm_bindgen]
 impl NookSentinelGenesisFinalizeResult {
     pub(crate) fn from_core(
         store_id: String,
@@ -449,41 +379,5 @@ mod projection_tests {
         assert_eq!(finalized.phase(), SentinelGenesisPhase::DeliveringShares);
         assert_eq!(finalized.participant_deliveries().len(), 1);
         assert!(finalized.participant_deliveries().is_empty());
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    #[wasm_bindgen_test]
-    fn event_log_issue_projects_each_classification() {
-        let same = NookEventLogSyncIssue::new(
-            "GitHub".into(),
-            RemoteEventLogClassification::SameStore {
-                store_id: "store-1".into(),
-            },
-        );
-        assert_eq!(same.provider_label(), "GitHub");
-        assert!(!same.is_store_mismatch() && !same.is_multiple_stores());
-        assert!(same.local_store_id().is_err());
-        assert!(same.remote_store_id().is_err());
-        assert!(same.store_ids().is_empty());
-
-        let different = NookEventLogSyncIssue::new(
-            "Drive".into(),
-            RemoteEventLogClassification::DifferentStore {
-                local_store_id: "local".into(),
-                remote_store_id: "remote".into(),
-            },
-        );
-        assert!(different.is_store_mismatch());
-        assert_eq!(different.local_store_id().unwrap(), "local");
-        assert_eq!(different.remote_store_id().unwrap(), "remote");
-
-        let multiple = NookEventLogSyncIssue::new(
-            "iCloud".into(),
-            RemoteEventLogClassification::MultipleStores {
-                store_ids: vec!["a".into(), "b".into()],
-            },
-        );
-        assert!(multiple.is_multiple_stores());
-        assert_eq!(multiple.store_ids(), vec!["a", "b"]);
     }
 }
