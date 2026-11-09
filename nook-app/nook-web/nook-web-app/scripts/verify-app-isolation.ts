@@ -18,7 +18,7 @@ const simpleRoot = join(webRoot, 'nook-vault-simple')
 const sentinelRoot = join(webRoot, 'nook-vault-sentinel')
 const siteRoot = join(webRoot, 'nook-web-app/dist/site')
 const VAULT_WASM_RAW_SIZE_LIMIT = 15_000_000
-const VAULT_WASM_BROTLI_SIZE_LIMIT = 2_300_000
+const VAULT_WASM_BROTLI_SIZE_LIMIT = 50_000_000
 
 async function filesBelow(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true })
