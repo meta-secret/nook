@@ -16,13 +16,16 @@ identities.
 
 On the recovery screen:
 
-- Google Drive always lists its identities.
-- GitHub, S3, iCloud, and a local folder list them when the location holds
-  several vaults.
-- A location holding one vault opens it for this browser's passkey, unless
-  Rust offers recovering its keyring with a recovery passphrase. Then the
-  keyring is listed too, so its words are offered beside its passkey.
-- A vault the user already chose from that list opens.
+- Every provider lists the identities it holds: Google Drive, GitHub, S3,
+  iCloud, and a local folder alike.
+  - An identity is listed whether it owns several vaults, one, or none.
+  - No vault opens on its own, not even a location's only one.
+- A location that holds no identity's log says that no keyring was found
+  there, and another provider can be picked.
+- An identity recovered or joined there keeps that provider.
+  - The provider is saved for it, and its log syncs.
+  - The page lands on the identities page with that identity.
+  - Its vaults open from its card.
 
 This record owns the rules and the identity operations behind them. The
 [identity architecture](identity-vault-architecture.md) owns identity, app key,
@@ -98,9 +101,11 @@ passphrase**, before **Ask to join**.
   gate, or a new local identity's key ceremony.
 - The words of one of its passphrases are typed next, in place of the list.
 - Once Rust accepts them, the identity is added here as after an approved
-  join, and the page connects the provider as its button does.
-- A local folder is a copy of a browser's store, not a connection, so the
-  vault the keyring granted opens from the folder's own records.
+  join, and the page keeps the provider for it, as for any identity
+  recovered there.
+- A local folder is a copy of a browser's store, not a connection, so a
+  vault the keyring granted opens from its card through the folder's own
+  records.
 - **Choose another way**, a quiet action beside **Recover**, returns to
   the list and joins nothing.
 

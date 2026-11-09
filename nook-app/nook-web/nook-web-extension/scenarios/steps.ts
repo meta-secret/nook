@@ -159,7 +159,7 @@ export async function runScenario(steps: ScenarioSteps): Promise<void> {
  * protection prompt that is already showing. With passkeys unavailable the
  * prompt reaches its PIN form through its own steps: the existing-passkey
  * attempt finds none, the new-key choice, then setup. */
-async function protectWithPin(page: Page): Promise<void> {
+export async function protectWithPin(page: Page): Promise<void> {
   const pinInput = page.getByTestId('device-protection-pin-input')
   const createChoice = page.getByTestId('device-protection-create-new-choice')
   const setup = page.getByTestId('device-protection-setup-btn')

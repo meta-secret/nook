@@ -131,11 +131,8 @@ type ProviderStateFields = Pick<
   VaultProviderState,
   | "activeVault"
   | "addProviderOpen"
-  | "clearExistingVaultRecoverySummary"
   | "clearLoginSetup"
   | "activateLoginSetup"
-  | "recoveryDiscovery"
-  | "recordExistingVaultRecovery"
   | "hasActiveVaultStore"
   | "icloudOAuthBusy"
   | "icloudOAuthPreparing"
@@ -144,7 +141,7 @@ type ProviderStateFields = Pick<
   | "localVaultCatalog"
   | "localVaults"
   | "localVaultPresent"
-  | "loginRequiresExistingVault"
+  | "keyringRecoveryActive"
   | "loginSetup"
   | "providerDraft"
   | "stageProviderDraft"
@@ -205,9 +202,6 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   flushRemoteEventOutboxNow(
     request: EventOutboxRequest,
   ): Promise<Result<EventOutboxFlushOutcome, VaultStorageFailure>>;
-  handleRemoteVaultAssessStatus(
-    accessStatus: VaultAccessStatus,
-  ): Promise<boolean>;
   loadDb(): Promise<void>;
   persistProviders(
     options: ProviderPersistenceOptions,
@@ -246,7 +240,7 @@ export type ProviderSaveContext = Pick<
   | "hasActiveVaultStore"
   | "hasManager"
   | "isAuthenticated"
-  | "loginRequiresExistingVault"
+  | "keyringRecoveryActive"
   | "loginSetup"
   | "providerDraft"
   | "stageProviderDraft"

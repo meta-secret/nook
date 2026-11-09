@@ -72,7 +72,7 @@
     onUnlockOnCard: () => Promise<void>
     onUseEnrollmentCode: (args: EnrollmentCodeUnlock) => Promise<void>
     onAcceptSentinelOnboardingPackage: (packageJson: string) => Promise<void>
-    onSentinelUnlocked: () => Promise<void>
+    onSentinelUnlocked: () => void
     onCreateDeviceVault: (label: string) => Promise<void>
     onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>
     onCreateSentinelParticipantKey: () => Promise<SentinelActionResult<string>>
@@ -152,7 +152,6 @@
       <LoginGate
         {vault}
         appKind={APP_KIND}
-        providers={vault.providers}
         loginSetup={vault.loginSetup}
         addProviderOpen={vault.addProviderOpen}
         isVerifying={vault.isVerifying}

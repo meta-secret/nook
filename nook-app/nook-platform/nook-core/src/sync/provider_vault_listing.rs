@@ -361,6 +361,37 @@ impl ProviderVaultListingRequest<'_> {
     }
 }
 
+/// What recovering from a sync provider finds there. A provider keeps
+/// keyrings, not vaults: every keyring whose control log it holds is listed,
+/// one that owns a single vault or none at all too, and its vaults come with
+/// it. A provider whose folder holds no keyring's log offers nothing to
+/// recover.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(tag = "state", rename_all = "camelCase")]
+pub enum ProviderKeyringDiscovery {
+    /// The provider keeps no keyring.
+    Empty,
+    /// The provider's keyrings, one card each, with the vaults filed under
+    /// them for each card's vault count.
+    Listed {
+        vaults: Vec<ProviderVaultSummary>,
+        identities: Vec<FilingIdentity>,
+    },
+}
+
+impl ProviderVaultListing {
+    /// The keyrings this listing offers to recover, or none.
+    #[must_use]
+    pub fn keyring_discovery(self) -> ProviderKeyringDiscovery {
+        let Self { vaults, identities } = self;
+        if identities.is_empty() {
+            ProviderKeyringDiscovery::Empty
+        } else {
+            ProviderKeyringDiscovery::Listed { vaults, identities }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -755,6 +786,127 @@ mod tests {
                 }],
                 "identities": [],
             })
+        );
+        Ok(())
+    }
+
+    /// A keyring's control log as a provider lists it, owning `vaults`.
+    fn keyring_log(identity_id: &IdentityId, vaults: u32) -> ListedIdentityLog {
+        ListedIdentityLog {
+            identity_id: identity_id.clone(),
+            log: ProviderIdentityLog::Read {
+                devices: ProviderLogCount::from(1),
+                newest_device: ProviderVaultTime::Unreported,
+                vaults: ProviderLogCount::from(vaults),
+                recovery_passphrases: ProviderLogCount::from(0),
+                this_browser: false,
+                join: ProviderIdentityJoin::NotAsked,
+            },
+        }
+    }
+
+    fn filed_vault(token: &str) -> anyhow::Result<ProviderVaultObservation> {
+        Ok(ProviderVaultObservation {
+            store_id: store(token)?,
+            identity: filer()?,
+            namespace_created: ProviderVaultTime::Unreported,
+            events: vec![ProviderVaultTime::Unreported],
+        })
+    }
+
+    #[test]
+    fn a_provider_holding_one_vault_lists_its_keyring() -> anyhow::Result<()> {
+        let logs = [keyring_log(&filer()?, 1)];
+        let discovery = ProviderVaultListingRequest {
+            observations: vec![filed_vault("store_onlyvault01")?],
+            keys: ProviderVaultKeyholding::NONE,
+            names: BrowserNames::NONE,
+            identity_logs: &logs,
+        }
+        .listing()
+        .keyring_discovery();
+        let ProviderKeyringDiscovery::Listed { vaults, identities } = discovery else {
+            anyhow::bail!("one vault's keyring must be listed, not opened");
+        };
+        assert_eq!(
+            identities
+                .iter()
+                .map(|keyring| keyring.identity_id.clone())
+                .collect::<Vec<_>>(),
+            vec![filer()?]
+        );
+        assert_eq!(
+            vaults
+                .iter()
+                .map(|vault| vault.identity.identity_id.clone())
+                .collect::<Vec<_>>(),
+            vec![filer()?]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_keyring_that_owns_no_vault_is_listed() -> anyhow::Result<()> {
+        let logs = [keyring_log(&filer()?, 0)];
+        let discovery = ProviderVaultListingRequest {
+            observations: Vec::new(),
+            keys: ProviderVaultKeyholding::NONE,
+            names: BrowserNames::NONE,
+            identity_logs: &logs,
+        }
+        .listing()
+        .keyring_discovery();
+        let ProviderKeyringDiscovery::Listed { vaults, identities } = discovery else {
+            anyhow::bail!("a keyring without vaults must be listed");
+        };
+        assert!(vaults.is_empty());
+        assert_eq!(
+            identities
+                .iter()
+                .map(|keyring| keyring.identity_id.clone())
+                .collect::<Vec<_>>(),
+            vec![filer()?]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_provider_without_a_keyring_lists_nothing() -> anyhow::Result<()> {
+        let empty = ProviderVaultListingRequest {
+            observations: Vec::new(),
+            keys: ProviderVaultKeyholding::NONE,
+            names: BrowserNames::NONE,
+            identity_logs: &[],
+        }
+        .listing()
+        .keyring_discovery();
+        assert_eq!(empty, ProviderKeyringDiscovery::Empty);
+        // A vault folder without its keyring's log offers no way in.
+        let unowned = ProviderVaultListingRequest {
+            observations: vec![filed_vault("store_strayvault1")?],
+            keys: ProviderVaultKeyholding::NONE,
+            names: BrowserNames::NONE,
+            identity_logs: &[],
+        }
+        .listing()
+        .keyring_discovery();
+        assert_eq!(unowned, ProviderKeyringDiscovery::Empty);
+        Ok(())
+    }
+
+    #[test]
+    fn a_keyring_discovery_crosses_the_web_boundary_tagged() -> anyhow::Result<()> {
+        assert_eq!(
+            serde_json::to_value(ProviderKeyringDiscovery::Empty)?,
+            serde_json::json!({ "state": "empty" })
+        );
+        let listed = serde_json::to_value(ProviderKeyringDiscovery::Listed {
+            vaults: Vec::new(),
+            identities: Vec::new(),
+        })?;
+        assert_eq!(
+            listed,
+            serde_json::json!({ "state": "listed", "vaults": [], "identities": [] })
         );
         Ok(())
     }

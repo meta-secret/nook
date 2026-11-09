@@ -10,9 +10,11 @@ one, and connects.
 
 On the recovery screen, with no identity yet, each identity offers the
 decisions Rust allows; picking one runs nothing, and the step's button runs
-the plan, then Connect & sync. A keyring recovered with a passphrase stops
-the plan for its words, typed in place of the list; once they let this
-browser in, Connect & sync runs. Checking which passkey opens an identity
+the plan. A keyring it brings here keeps Drive, and the page lands on the
+keyrings page with it, its vaults on its card; otherwise Connect & sync
+runs. A keyring recovered with a passphrase stops the plan for its words,
+typed in place of the list; once they let this browser in, it keeps Drive
+the same way. Checking which passkey opens an identity
 decrypts in memory and changes nothing.
 -->
 <script lang="ts">
@@ -164,8 +166,8 @@ decrypts in memory and changes nothing.
   async function runPlan(): Promise<void> {
     if (planned.length > 0) {
       working = true
-      // A keyring the plan brings here opens its vault next.
-      const brought = planned.find(
+      // A keyring the plan brings here keeps Drive, with its vaults.
+      const brought = planned.some(
         (entry) =>
           entry.decision === 'addToBrowser' ||
           entry.decision === 'finishJoining',
@@ -185,8 +187,10 @@ decrypts in memory and changes nothing.
         plan.clear()
         switch (ran.value.kind) {
           case IdentityPlanOutcomeKind.Applied:
-            if (brought && !chooseVaultOf(brought.choice.identity.identityId))
+            if (brought) {
+              await connectRecovered()
               return
+            }
             break
           case IdentityPlanOutcomeKind.AddedBeside:
             break
@@ -292,29 +296,11 @@ decrypts in memory and changes nothing.
       : '',
   )
 
-  /** The vault Connect & sync opens for a keyring just brought here: the
-   * first the folder files under it. Unchosen, a folder holding several
-   * keyrings would list them all again instead of opening it. False when
-   * the choice was refused, which is said. */
-  function chooseVaultOf(identityId: string): boolean {
-    const listed = choices.isOk() ? choices.value : []
-    const [first] = listed
-      .filter((choice) => choice.identity.identityId === identityId)
-      .flatMap((choice) => choice.vaults)
-    if (!first) return true
-    const chosen = vault.chooseRemoteVault(first.storeId)
-    if (chosen.isErr()) {
-      vault.errorMsg = vault.t(chosen.error.translationKey)
-      return false
-    }
-    return true
-  }
-
-  /** Once a recovery passphrase let this browser in, Drive is saved for
-   * its keyring as setup saves it: the Nook folder is bound, the keyring's
-   * log syncs, and the vault it granted opens beside its card. */
+  /** A keyring recovered or joined here keeps Drive: the Nook folder is
+   * bound, the keyring's log syncs, and the page lands on the keyrings page
+   * with it. */
   function connectRecovered(): Promise<boolean> {
-    return new FirstRunActions(vault).connectProviderWith(
+    return new FirstRunActions(vault).connectRecoveredKeyring(
       ProviderFolderBinding.DriveFolder,
     )
   }

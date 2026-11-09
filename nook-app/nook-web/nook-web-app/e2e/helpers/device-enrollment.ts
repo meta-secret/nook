@@ -36,7 +36,7 @@ export async function expectEmptyLocalFolderRejected(
   )
   await page.getByTestId('login-connect-local-folder-btn').click()
   await expect(page.getByTestId('vault-error')).toContainText(
-    'No existing vault was found in this provider',
+    'No keyring was found on this provider',
   )
   await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
 }

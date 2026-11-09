@@ -35,7 +35,7 @@
     type StartSentinelGenesisArgs,
   } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
-  import type { ProviderKind, StorageProvider } from '$lib/auth/providers'
+  import type { ProviderKind } from '$lib/auth/providers'
   import { WorkspaceRoute } from '$lib/app/workspace-route'
   import { WorkspaceSectionRoute } from '$lib/vault/ui'
   import { IdentityPages } from '$lib/vault/identity-pages'
@@ -89,7 +89,6 @@
   let {
     vault,
     appKind,
-    providers,
     loginSetup,
     isVerifying,
     isInitializing,
@@ -119,7 +118,6 @@
   }: {
     vault: VaultState
     appKind: VaultApplication
-    providers: StorageProvider[]
     loginSetup: LoginSetup
     isVerifying: boolean
     isInitializing: boolean
@@ -211,17 +209,15 @@
     return props
   })
 
-  /** Back from restore returns to the first screen even with saved rows. */
-  let firstScreenRequested = $state(false)
   let newVaultOpen = $state(false)
 
   /** Close what is open beside the card (New vault, keyring recovery,
    * provider setup) when another panel opens there. */
   function closeSidePanels(): void {
     newVaultOpen = false
-    if (vault.vaultImportOpen) {
-      vault.cancelExistingVaultOpen()
-      vault.vaultImportOpen = false
+    if (vault.keyringRecoveryOpen) {
+      vault.cancelKeyringRecovery()
+      vault.keyringRecoveryOpen = false
     }
     if (addProviderOpen) onCancelAddProvider?.()
     if (showSetup) onCancelSetup()
@@ -236,8 +232,8 @@
   // Recover keyring started from the unlocked workspace locked the
   // identity to continue here.
   onMount(() => {
-    if (vault.vaultImportOpen && !vault.loginRequiresExistingVault)
-      vault.beginExistingVaultOpen()
+    if (vault.keyringRecoveryOpen && !vault.keyringRecoveryActive)
+      vault.beginKeyringRecovery()
   })
 
   /** Opening a locked vault's row selects that vault without unlocking it. */
@@ -255,8 +251,8 @@
    * provider's keyrings beside the cards. */
   function recoverKeyring(): void {
     newVaultOpen = false
-    vault.beginExistingVaultOpen()
-    vault.vaultImportOpen = true
+    vault.beginKeyringRecovery()
+    vault.keyringRecoveryOpen = true
   }
 
   /** A page chosen from Manage on a locked card: unlock, then open it. An
@@ -406,7 +402,6 @@
     vault.newIdentity = NewIdentityStage.Name
   }
 
-  const hasProviders = $derived(providers.length > 0)
   /** Identity cards carry the vaults; the storage sheet then opens only
    * when asked for (New vault, Add provider). */
   let identityCardsShown = $state(false)
@@ -421,7 +416,7 @@
     )
   }
   const showVaultPicker = $derived(
-    vault.showLoginVaultPicker && !vault.vaultImportOpen,
+    vault.showLoginVaultPicker && !vault.keyringRecoveryOpen,
   )
   const sentinelPresentation = $derived(
     new SentinelLoginPresentationReader(vault),
@@ -441,7 +436,7 @@
       vault.sentinelGenesisPhase !== SentinelGenesisPhase.DeliveringShares &&
       !showSetup &&
       !addProviderOpen &&
-      !vault.vaultImportOpen &&
+      !vault.keyringRecoveryOpen &&
       !showVaultPicker,
   )
   const activeLoginVault = $derived.by((): LoginVaultEntry => {
@@ -479,18 +474,17 @@
     (vault.sentinelGenesisPhase === SentinelGenesisPhase.DeliveringShares ||
       (!vault.localVaultPresent &&
         vault.localVaults.length === 0 &&
-        (!identityCardsShown || appKind === VaultApplication.Sentinel) &&
-        (!hasProviders || firstScreenRequested))) &&
+        (!identityCardsShown || appKind === VaultApplication.Sentinel))) &&
       !showQrOnboarding &&
       !showSetup &&
       !addProviderOpen &&
-      !vault.vaultImportOpen &&
+      !vault.keyringRecoveryOpen &&
       !showVaultPicker,
   )
+  // A browser without a keyring creates one or recovers one: provider
+  // setup opens here only for keyring recovery or to add a provider.
   const showProviderSetup = $derived(
-    (vault.vaultImportOpen ||
-      addProviderOpen ||
-      (hasProviders && !vault.localVaultPresent && !identityCardsShown)) &&
+    (vault.keyringRecoveryOpen || addProviderOpen) &&
       !showSetup &&
       !showLocalUnlock &&
       !showCreateVault,
@@ -528,7 +522,7 @@
       !showSetup &&
       !addProviderOpen
     ) {
-      vault.vaultImportOpen = false
+      vault.keyringRecoveryOpen = false
     }
     if (showLocalUnlock && !vault.isInitializing) {
       untrack(() => void vault.prepareLocalLogin())
@@ -563,9 +557,8 @@
     {sentinelOnboardingPackage}
     {...createVaultChooserOptionalProps}
     onConnectStorage={() => {
-      vault.beginExistingVaultOpen()
-      vault.vaultImportOpen = true
-      firstScreenRequested = false
+      vault.beginKeyringRecovery()
+      vault.keyringRecoveryOpen = true
     }}
   />
 {/snippet}
@@ -614,14 +607,13 @@
         : ''}"
     >
       <!-- Recovery opened from the first screen goes back from its title. -->
-      {#if showProviderSetup && !showSetup && (vault.vaultImportOpen || !vault.localVaultPresent) && !addProviderOpen}
+      {#if showProviderSetup && !showSetup && !addProviderOpen}
         <BackButton
           label={vault.t(I18N_KEYS.FirstRunBack)}
           testId="login-back-to-get-started"
           onBack={() => {
-            vault.cancelExistingVaultOpen()
-            vault.vaultImportOpen = false
-            firstScreenRequested = true
+            vault.cancelKeyringRecovery()
+            vault.keyringRecoveryOpen = false
           }}
         />
       {/if}
@@ -639,7 +631,7 @@
             })()}
           {:else if addProviderOpen}
             {vault.t(I18N_KEYS.OnboardingAddProvider)}
-          {:else if vault.loginRequiresExistingVault}
+          {:else if vault.keyringRecoveryActive}
             {vault.t(I18N_KEYS.FirstRunRestoreTitle)}
           {:else}
             {vault.t(I18N_KEYS.OnboardingSetupStorage)}
@@ -680,7 +672,7 @@
           {...sentinelCeremonyOptionalProps}
         />
       {:else if showSetup}
-        {#if vault.remoteVaultChoices.vaults.length > 0}
+        {#if vault.remoteVaultChoices.identities.length > 0}
           <RemoteVaultChoice {vault} busy={isVerifying} onApplied={onUnlock} />
         {:else if setupView.kind === SetupDraftForm.OAuth}
           <OAuthProviderSetupWizard

@@ -40,19 +40,6 @@ pub struct ShouldShowLoginVaultPickerRequest {
 }
 
 #[derive(Clone, Copy)]
-pub struct ExistingVaultIdentityRecoveryRequiredRequest {
-    pub existing_vault_required: crate::VaultExistenceRequirement,
-    pub provider_setup_active: crate::ProviderSetupState,
-    pub device_protection_ready: crate::DeviceProtectionReadiness,
-}
-
-#[derive(Clone, Copy)]
-pub struct RemoteVaultAssessDecisionRequest {
-    pub access_status: crate::VaultAccessStatus,
-    pub existing_vault_required: crate::VaultExistenceRequirement,
-}
-
-#[derive(Clone, Copy)]
 pub struct VaultConnectProbeDecisionRequest {
     pub access_status: crate::VaultAccessStatus,
     pub authenticated: crate::VaultAuthenticationState,

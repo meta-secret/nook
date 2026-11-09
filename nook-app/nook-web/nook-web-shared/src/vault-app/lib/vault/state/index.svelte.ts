@@ -57,7 +57,7 @@ const uiKeys = [
   "newIdentityName",
   "vaultPanelStoreId",
   "unlockReturn",
-  "vaultImportOpen",
+  "keyringRecoveryOpen",
   "identityDirectory",
   "identityJoin",
   "keyringRecovery",
@@ -81,11 +81,8 @@ const providerKeys = [
   "loginSetup",
   "activateLoginSetup",
   "clearLoginSetup",
-  "loginRequiresExistingVault",
+  "keyringRecoveryActive",
   "remoteVaultChoices",
-  "recoveryDiscovery",
-  "recordExistingVaultRecovery",
-  "clearExistingVaultRecoverySummary",
   "addProviderOpen",
   "providerDraft",
   "stageProviderDraft",
@@ -207,7 +204,7 @@ class VaultStateSlicesImplementation {
   declare newIdentityName: VaultUiState["newIdentityName"];
   declare vaultPanelStoreId: VaultUiState["vaultPanelStoreId"];
   declare readonly unlockReturn: VaultUiState["unlockReturn"];
-  declare vaultImportOpen: VaultUiState["vaultImportOpen"];
+  declare keyringRecoveryOpen: VaultUiState["keyringRecoveryOpen"];
   declare identityDirectory: VaultUiState["identityDirectory"];
   declare identityJoin: VaultUiState["identityJoin"];
   declare keyringRecovery: VaultUiState["keyringRecovery"];
@@ -229,11 +226,8 @@ class VaultStateSlicesImplementation {
   declare readonly loginSetup: VaultProviderState["loginSetup"];
   declare activateLoginSetup: VaultProviderState["activateLoginSetup"];
   declare clearLoginSetup: VaultProviderState["clearLoginSetup"];
-  declare loginRequiresExistingVault: VaultProviderState["loginRequiresExistingVault"];
+  declare keyringRecoveryActive: VaultProviderState["keyringRecoveryActive"];
   declare remoteVaultChoices: VaultProviderState["remoteVaultChoices"];
-  declare readonly recoveryDiscovery: VaultProviderState["recoveryDiscovery"];
-  declare recordExistingVaultRecovery: VaultProviderState["recordExistingVaultRecovery"];
-  declare clearExistingVaultRecoverySummary: VaultProviderState["clearExistingVaultRecoverySummary"];
   declare addProviderOpen: VaultProviderState["addProviderOpen"];
   declare readonly providerDraft: VaultProviderState["providerDraft"];
   declare stageProviderDraft: VaultProviderState["stageProviderDraft"];

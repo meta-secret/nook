@@ -89,11 +89,11 @@
     "create_vault_title": "Get started",
     "path_local_title": "New vault",
     "path_local_btn": "Create vault",
-    "path_cloud_title": "Restore from a sync provider",
+    "path_cloud_title": "Recover from a sync provider",
     "path_join_description": "Use a code from an app that already belongs to your keyring.",
-    "path_cloud_description": "Connect the provider that already holds your encrypted vault. Its stored architecture determines what opens.",
-    "path_cloud_description_simple": "Connect the provider that already holds your encrypted Simple vault.",
-    "path_cloud_description_sentinel": "Connect the provider holding your encrypted Sentinel vault. Quorum authorization is still required.",
+    "path_cloud_description": "Recover your keyring from the sync provider that keeps it. Its vaults come with it.",
+    "path_cloud_description_simple": "Recover your keyring from the sync provider that keeps it. Its Simple vaults come with it.",
+    "path_cloud_description_sentinel": "Recover your keyring from the sync provider that keeps it. Its Sentinel vaults still open only through their quorum ceremony.",
     "open_vault_title": "Open a vault",
     "open_vault_subtitle": "This browser can hold multiple vaults. Unlock one below or start fresh.",
     "vault_on_device": "On this device",
@@ -196,7 +196,7 @@
     "create_wizard_create_title": "Create your Simple vault",
     "create_wizard_sentinel_label": "Sentinel setup",
     "create_wizard_continue": "Continue",
-    "existing_vault_alternative": "Already have a vault?",
+    "existing_keyring_alternative": "Already have a keyring?",
     "sentinel_genesis_intro_title": "Sentinel starts with its participants",
     "sentinel_genesis_intro_description": "Choose the quorum and authenticate every participant device. After genesis, connect storage and issue each member an encrypted invitation.",
     "sentinel_genesis_policy_title": "Set the Sentinel policy",
@@ -897,14 +897,6 @@
     "recovery_survivor_complete": "Keyring removed. Unlock a remaining keyring to continue.",
     "recovery_failed": "Could not safely reset this browser's device key."
   },
-  "vault_recovery": {
-    "passkey_title": "Passkeys for this vault",
-    "passkey_description": "In the passkey chooser, look for a saved Nook passkey whose name ends with one of these device IDs. Standard-mode passkeys can recover that device; high-security passkeys also require its local browser key.",
-    "device_hint": "device {hint}",
-    "unnamed_device": "Enrolled device",
-    "no_device_hints": "This backup does not expose a current device ID.",
-    "sentinel_required": "This is a Sentinel vault. Passkeys identify participants, but opening the vault requires the configured participant quorum."
-  },
   "architecture_modes": {
     "vault_type_title": "Vault type",
     "vault_type_simple_title": "Simple",
@@ -1155,7 +1147,7 @@
     "vault_folder_holds_another_vault": "This vault's folder on the sync provider holds another vault's events, so it was not synced.",
     "github_token_rejected": "GitHub rejected this token (401). Check that it is active and has access to the selected repository.",
     "duplicate_sync_provider": "This sync provider is already connected with the same storage target.",
-    "existing_vault_not_found": "No existing vault was found in this provider. Choose another provider, or go back and create a new vault.",
+    "keyring_not_found": "No keyring was found on this provider. Choose another provider.",
     "local_folder_choose_err": "Choose a local backup folder before connecting.",
     "local_folder_detected_vaults": "Detected vaults",
     "local_folder_detected_vaults_unknown": "More than one vault",
@@ -1355,9 +1347,7 @@
     "get_access_subheader": "Choose how to unlock",
     "available_after_connect": "Available after connection",
     "back_to_unlock": "Back to unlock",
-    "choose_store_vault": "Choose where to store your vault",
-    "add_provider_desc": "Pick another place that keeps this keyring and its vaults. Each saved provider replicates the same keyring.",
-    "before_connect_desc": "Before you can connect, pick a sync provider — Google Drive, iCloud, GitHub, or S3-compatible storage."
+    "add_provider_desc": "Pick another place that keeps this keyring and its vaults. Each saved provider replicates the same keyring."
   },
   "join_enrollment": {
     "title_join": "Join this keyring",

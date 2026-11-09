@@ -1,6 +1,5 @@
 import { expect, test } from './fixtures'
 import { ExtensionConnectStepKind } from '../../nook-web-shared/src/extension/extension-connect-progress'
-import { VaultAccessStatus } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
 import {
   beginAddSyncProvider,
   openOpenVaultPanel,
@@ -181,36 +180,6 @@ test.describe('vault connect flow', () => {
         Reflect.get(window, '__nookConnectedTo'),
       ),
     ).toEqual(['side-panel-extension/side-panel-connect'])
-  })
-
-  test('does not create a new vault when open existing finds an empty provider', async ({
-    page,
-  }) => {
-    await page.goto('/app/')
-    await openLoginProviderSetup(page)
-
-    const blocked = await page.evaluate(async (status: VaultAccessStatus) => {
-      const vault = (
-        window as Window & {
-          __nookVault?: {
-            handleRemoteVaultAssessStatus: (
-              status: VaultAccessStatus,
-            ) => Promise<boolean>
-          }
-        }
-      ).__nookVault
-      if (!vault) {
-        throw new Error('E2E vault state is not exposed')
-      }
-      return vault.handleRemoteVaultAssessStatus(status)
-    }, VaultAccessStatus.RemoteMissing)
-
-    expect(blocked).toBe(true)
-    await expect(page.getByTestId('vault-error')).toContainText(
-      'No existing vault was found in this provider',
-    )
-    await expect(page.getByTestId('provider-picker-list')).toBeVisible()
-    await expect(page.getByTestId('vault-panel')).toHaveCount(0)
   })
 
   test('shows login gate on first visit', async ({ page }) => {

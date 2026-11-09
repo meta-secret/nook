@@ -43,24 +43,20 @@
     <h2 class="text-sm font-semibold text-foreground">
       {#if addingProvider}
         {vault.t(I18N_KEYS.OnboardingAddProvider)}
-      {:else if vault.loginRequiresExistingVault}
-        {vault.t(I18N_KEYS.FirstRunRestorePick)}
       {:else}
-        {vault.t(I18N_KEYS.LoginWizardChooseStoreVault)}
+        {vault.t(I18N_KEYS.FirstRunRestorePick)}
       {/if}
     </h2>
     <p class="text-xs text-muted-foreground text-pretty">
       {#if addingProvider}
         {vault.t(I18N_KEYS.LoginWizardAddProviderDesc)}
-      {:else if vault.loginRequiresExistingVault}
-        {vault.t(I18N_KEYS.FirstRunRestoreBody)}
       {:else}
-        {vault.t(I18N_KEYS.LoginWizardBeforeConnectDesc)}
+        {vault.t(I18N_KEYS.FirstRunRestoreBody)}
       {/if}
     </p>
   </div>
 
-  {#if !addingProvider && vault.loginRequiresExistingVault}
+  {#if !addingProvider}
     <FirstRunDiagram diagram={firstRunRecoveryDiagram(vault)} />
   {/if}
 

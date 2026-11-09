@@ -26,13 +26,6 @@ pub enum VaultSwitchDecision {
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RemoteVaultAssessDecision {
-    Continue,
-    RejectMissingExistingVault,
-}
-
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VaultConnectProbeDecision {
     UseConfiguredStorage,
     ReassessFirstSyncProvider,
@@ -47,44 +40,6 @@ pub enum VaultConnectGateDecision {
 }
 
 impl VaultClientPolicy {
-    #[must_use]
-    pub const fn existing_vault_identity_recovery_required(
-        request: crate::ExistingVaultIdentityRecoveryRequiredRequest,
-    ) -> bool {
-        matches!(
-            request.existing_vault_required,
-            crate::VaultExistenceRequirement::ExistingRequired
-        ) && matches!(
-            request.provider_setup_active,
-            crate::ProviderSetupState::Active
-        ) && !matches!(
-            request.device_protection_ready,
-            crate::DeviceProtectionReadiness::Ready
-        )
-    }
-
-    #[must_use]
-    pub const fn remote_vault_assess_decision(
-        request: crate::RemoteVaultAssessDecisionRequest,
-    ) -> RemoteVaultAssessDecision {
-        match request.access_status {
-            VaultAccessStatus::RemoteMissing
-                if matches!(
-                    request.existing_vault_required,
-                    crate::VaultExistenceRequirement::ExistingRequired
-                ) =>
-            {
-                RemoteVaultAssessDecision::RejectMissingExistingVault
-            }
-            // An empty provider just receives the keyring's logs.
-            VaultAccessStatus::RemoteMissing
-            | VaultAccessStatus::NewVault
-            | VaultAccessStatus::Ready
-            | VaultAccessStatus::NeedsEnrollment
-            | VaultAccessStatus::JoinPending => RemoteVaultAssessDecision::Continue,
-        }
-    }
-
     #[must_use]
     pub const fn vault_connect_probe_decision(
         request: crate::VaultConnectProbeDecisionRequest,
@@ -139,68 +94,6 @@ impl VaultClientPolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn existing_vault_import_recovers_identity_before_provider_connect() {
-        assert!(
-            VaultClientPolicy::existing_vault_identity_recovery_required(
-                crate::ExistingVaultIdentityRecoveryRequiredRequest {
-                    existing_vault_required: (true).into(),
-                    provider_setup_active: (true).into(),
-                    device_protection_ready: (false).into()
-                }
-            )
-        );
-        assert!(
-            !VaultClientPolicy::existing_vault_identity_recovery_required(
-                crate::ExistingVaultIdentityRecoveryRequiredRequest {
-                    existing_vault_required: (false).into(),
-                    provider_setup_active: (true).into(),
-                    device_protection_ready: (false).into()
-                }
-            )
-        );
-        assert!(
-            !VaultClientPolicy::existing_vault_identity_recovery_required(
-                crate::ExistingVaultIdentityRecoveryRequiredRequest {
-                    existing_vault_required: (true).into(),
-                    provider_setup_active: (false).into(),
-                    device_protection_ready: (false).into()
-                }
-            )
-        );
-        assert!(
-            !VaultClientPolicy::existing_vault_identity_recovery_required(
-                crate::ExistingVaultIdentityRecoveryRequiredRequest {
-                    existing_vault_required: (true).into(),
-                    provider_setup_active: (true).into(),
-                    device_protection_ready: (true).into()
-                }
-            )
-        );
-    }
-
-    #[test]
-    fn a_missing_remote_vault_continues_unless_an_existing_vault_was_required() {
-        assert_eq!(
-            VaultClientPolicy::remote_vault_assess_decision(
-                crate::RemoteVaultAssessDecisionRequest {
-                    access_status: VaultAccessStatus::RemoteMissing,
-                    existing_vault_required: (true).into(),
-                }
-            ),
-            RemoteVaultAssessDecision::RejectMissingExistingVault
-        );
-        assert_eq!(
-            VaultClientPolicy::remote_vault_assess_decision(
-                crate::RemoteVaultAssessDecisionRequest {
-                    access_status: VaultAccessStatus::RemoteMissing,
-                    existing_vault_required: (false).into(),
-                }
-            ),
-            RemoteVaultAssessDecision::Continue
-        );
-    }
 
     #[test]
     fn connect_probe_uses_remote_only_for_unauthenticated_enrollment_states() {

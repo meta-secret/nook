@@ -225,7 +225,6 @@ class SentinelFinalizationFixture {
     this.state.sentinelGenesisPhase = SentinelGenesisPhase.Inactive
     this.state.clearSelectedLoginVaultStore()
     this.state.clearActiveVaultStore()
-    this.state.clearExistingVaultRecoverySummary()
     this.state.useThisBrowser()
     this.state.prepareLocalLogin = vi.fn()
     this.state.refreshSentinelUnlockStatus = vi.fn()
@@ -294,7 +293,6 @@ class SentinelFinalizationFixture {
       onUnlock: this.openVault,
       onUnlockOnCard: this.openVault,
       appKind: VaultApplication.UnifiedDevelopment,
-      providers: [],
       loginSetup: { kind: LoginSetupKind.Inactive },
       onBeginSetup: vi.fn(),
       onCancelSetup: vi.fn(),

@@ -26,7 +26,7 @@
   } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
   import BackButton from "$lib/components/workspace/BackButton.svelte";
-  import LoginExistingVaultPaths from "$lib/components/login/LoginExistingVaultPaths.svelte";
+  import LoginExistingKeyringPaths from "$lib/components/login/LoginExistingKeyringPaths.svelte";
   import FirstVaultStart from "$lib/components/login/FirstVaultStart.svelte";
   import SentinelUnlockParticipantHelper from "$lib/components/login/SentinelUnlockParticipantHelper.svelte";
   import SentinelGenesisJoinFlow from "$lib/components/login/SentinelGenesisJoinFlow.svelte";
@@ -118,7 +118,7 @@
   });
 
   type JoinIdentityProps = Partial<
-    Pick<ComponentProps<typeof LoginExistingVaultPaths>, "onUseEnrollmentCode">
+    Pick<ComponentProps<typeof LoginExistingKeyringPaths>, "onUseEnrollmentCode">
   >;
   const joinIdentityProps = $derived.by(() => {
     const props: JoinIdentityProps = {};
@@ -271,7 +271,7 @@
       return sentinelGenesisBrowser.buildSentinelGenesisRequestLink(linkArgs);
     })(),
   );
-  const existingVaultDescription = $derived(
+  const keyringRecoveryDescription = $derived(
     appKind === VaultApplication.Simple
       ? vault.t(I18N_KEYS.LoginPathCloudDescriptionSimple)
       : appKind === VaultApplication.Sentinel
@@ -751,11 +751,11 @@
               {/each}
             </ol>
             {#if wizardStep === VaultCreationWizardStep.Choose}
-              <LoginExistingVaultPaths
+              <LoginExistingKeyringPaths
                 {vault}
                 {isBusy}
                 {isVerifying}
-                restoreDescription={existingVaultDescription}
+                restoreDescription={keyringRecoveryDescription}
                 {onConnectStorage}
                 {...joinIdentityProps}
               />

@@ -84,7 +84,6 @@ function connectionScenario(
   )
   state.syncProviderById = syncProviderById
   state.assessVaultConnectStatus = assessVaultConnectStatus
-  state.handleRemoteVaultAssessStatus = vi.fn(async () => false)
   state.loadSecretPage = vi.fn<VaultState['loadSecretPage']>(async () =>
     ok({
       displayedSecretCount: 0,

@@ -15,7 +15,6 @@ use nook_core::{
 mod extension_import;
 mod provider_io;
 mod provider_sync;
-pub(in crate::manager) use provider_sync::VaultDiscovery;
 mod provider_sync_export;
 mod records;
 mod security_epoch;

@@ -69,7 +69,7 @@ function providerState({ kind, draft }: SaveSetup): AdapterState {
     providerDraft: draft,
     stageProviderDraft: vi.fn(),
     errorMsg: '',
-    loginRequiresExistingVault: true,
+    keyringRecoveryActive: true,
     t: (request: TranslationRequest) =>
       typeof request === 'string' ? request : request.key,
     clearLoginSetup: vi.fn(),

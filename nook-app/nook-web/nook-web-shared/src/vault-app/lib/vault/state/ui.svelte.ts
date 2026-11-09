@@ -175,7 +175,7 @@ export class VaultUiState {
   /** Recovering a keyring from a sync provider (Recover keyring). The
    * unlocked workspace sets it before locking, so the locked identities
    * page continues the recovery beside the cards. */
-  vaultImportOpen = $state(false);
+  keyringRecoveryOpen = $state(false);
   /** The identity directory as last read, shared by every identities hub:
    * the workspace that replaces the login screen as a vault opens shows the
    * same cards at once and reads them again behind them. */

@@ -265,7 +265,7 @@ band, the scrolling page and the status line.
    * page continues it beside the cards. */
   function recoverKeyringFromProvider(): void {
     newVaultOpen = false
-    vault.vaultImportOpen = true
+    vault.keyringRecoveryOpen = true
     vault.lockVault()
   }
 

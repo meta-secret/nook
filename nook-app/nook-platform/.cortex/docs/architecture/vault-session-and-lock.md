@@ -177,23 +177,17 @@ It never deletes:
   the pre-vault reverse-onboarding ceremony in
   [sentinel-genesis.md](sentinel-genesis.md).
 
-- **Provider recovery:** Recover an authorized device identity before
-  attempting `connect`.
-- **Provider preflight:** Discover the remote `store_id` from signed encrypted
-  events without decrypting the vault.
-  - The website then shows its own passkey/PIN device gate. It never asks
-    the extension for its key.
+- **Provider recovery:** Connecting a sync provider for recovery lists the
+  keyrings it holds, read without any key. It never discovers or opens one
+  vault on its own.
   - Treat discovery as a bounded busy operation.
-  - Reject an empty or incorrect provider when `store_id` is missing, before
-    device authorization.
-  - Keep the discovered identifier staged until the provider connects
-    successfully with that exact `store_id`.
-- **Safe recovery metadata:** Project only these values from signed events:
-
-- active device labels/IDs (matching the `device …` suffix written into Nook
-  passkey display names); and
-- whether Sentinel quorum is required.
-
+  - Reject a provider that holds no keyring before device authorization;
+    another provider can be picked.
+  - Each keyring's way in asks for this browser's key when it needs one:
+    its passkey, or the website's own passkey/PIN device gate. The website
+    never asks the extension for its key.
+  - A recovered or joined keyring keeps the provider and lands on the
+    keyrings page; its vaults open from its card.
 - **Staged credential continuity:** Device authorization may reload sealed
   provider state.
   - Keep the exact staged credentials or local-folder handle in memory.

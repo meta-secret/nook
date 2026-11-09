@@ -198,7 +198,7 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await expect(page.getByTestId('identity-vault-row').first()).toBeVisible()
 })
 
-test('opens the existing-vault workflow without starting creation', async ({
+test('opens keyring recovery without starting creation', async ({
   page,
 }, testInfo) => {
   const expectedKind =

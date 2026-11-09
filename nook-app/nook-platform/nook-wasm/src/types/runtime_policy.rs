@@ -278,23 +278,6 @@ impl NookVaultClientPolicy {
 
     #[wasm_bindgen]
     #[must_use]
-    pub fn existing_vault_identity_recovery_required(
-        &self,
-        existing_vault_required: bool,
-        provider_setup_active: bool,
-        device_protection_ready: bool,
-    ) -> bool {
-        VaultClientPolicy::existing_vault_identity_recovery_required(
-            nook_core::ExistingVaultIdentityRecoveryRequiredRequest {
-                existing_vault_required: (existing_vault_required).into(),
-                provider_setup_active: (provider_setup_active).into(),
-                device_protection_ready: (device_protection_ready).into(),
-            },
-        )
-    }
-
-    #[wasm_bindgen]
-    #[must_use]
     #[allow(clippy::too_many_arguments)]
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
@@ -320,21 +303,6 @@ impl NookVaultClientPolicy {
                 provider_setup_active: (provider_setup_active).into(),
                 add_provider_open: (add_provider_open).into(),
                 session_explicitly_locked: (session_explicitly_locked).into(),
-            },
-        )
-    }
-
-    #[wasm_bindgen]
-    #[must_use]
-    pub fn remote_vault_assess_decision(
-        &self,
-        access_status: nook_core::VaultAccessStatus,
-        existing_vault_required: bool,
-    ) -> nook_core::RemoteVaultAssessDecision {
-        VaultClientPolicy::remote_vault_assess_decision(
-            nook_core::RemoteVaultAssessDecisionRequest {
-                access_status,
-                existing_vault_required: (existing_vault_required).into(),
             },
         )
     }
@@ -623,10 +591,6 @@ mod tests {
         let policy = NookVaultClientPolicy::new();
 
         assert_eq!(
-            policy.remote_vault_assess_decision(nook_core::VaultAccessStatus::RemoteMissing, true),
-            nook_core::RemoteVaultAssessDecision::RejectMissingExistingVault
-        );
-        assert_eq!(
             policy.vault_connect_probe_decision(
                 nook_core::VaultAccessStatus::NeedsEnrollment,
                 false,
@@ -747,7 +711,6 @@ mod browser_tests {
             );
         }
         let _ = policy.should_auto_unlock(false, true, 1, false, false);
-        let _ = policy.existing_vault_identity_recovery_required(true, false, false);
         let _ = policy.should_show_login_vault_picker(false, 2, false, false, false, true);
         for status in [
             nook_core::VaultAccessStatus::RemoteMissing,
@@ -755,7 +718,6 @@ mod browser_tests {
             nook_core::VaultAccessStatus::Ready,
             nook_core::VaultAccessStatus::JoinPending,
         ] {
-            let _ = policy.remote_vault_assess_decision(status, true);
             let _ = policy.vault_connect_probe_decision(status, false, 1);
             let _ = policy.vault_connect_gate_decision(status);
             let _ = policy.unauthenticated_sync_decision(

@@ -67,23 +67,9 @@ enum LocalVaultCreationState {
   Committed = "committed",
 }
 
-export enum LocalVaultPresence {
-  Absent = "absent",
-  Present = "present",
-}
-
 export enum ActiveVaultAuthSyncOutcome {
   NotRequired = "not-required",
   Synchronized = "synchronized",
-}
-
-export enum ConnectedExistingVaultActivationOutcome {
-  Activated = "activated",
-}
-
-export interface ExistingVaultImportSlotPrepared {
-  readonly activeVaultPresence: LocalVaultPresence;
-  readonly localLoginPreparation: LocalLoginPreparationState.Idle;
 }
 
 interface StorageResultOperation<T, E> {
@@ -342,44 +328,6 @@ export class VaultLoginActions {
         }),
       ),
     );
-  }
-
-  async prepareExistingVaultImportSlot(): Promise<
-    Result<ExistingVaultImportSlotPrepared, StorageOperationFailure>
-  > {
-    const state = this.state;
-    try {
-      await prepare_new_local_vault_slot();
-    } catch (failure) {
-      return storageErr(new NativeVaultStorageFailure(failure));
-    }
-    if (state.hasManager) {
-      const reset = await state.enqueueStorage(async () => {
-        const manager = state.admitManager();
-        if (manager.isErr()) return storageErr(manager.error);
-        try {
-          manager.value.reset_vault_session();
-          return storageOk(manager.value);
-        } catch (failure) {
-          return storageErr(new NativeVaultStorageFailure(failure));
-        }
-      });
-      if (reset.isErr()) return storageErr(reset.error);
-    }
-    state.clearActiveVaultStore();
-    try {
-      state.localVaultPresent = await has_active_local_vault();
-    } catch (failure) {
-      return storageErr(new NativeVaultStorageFailure(failure));
-    }
-    state.localLoginPreparation = LocalLoginPreparationState.Idle;
-    const prepared: ExistingVaultImportSlotPrepared = {
-      activeVaultPresence: state.localVaultPresent
-        ? LocalVaultPresence.Present
-        : LocalVaultPresence.Absent,
-      localLoginPreparation: LocalLoginPreparationState.Idle,
-    };
-    return storageOk(prepared);
   }
 
   async createLocalVaultWithDeviceKeys({
@@ -666,39 +614,5 @@ export class VaultLoginActions {
     return persisted.isErr()
       ? storageErr(persisted.error)
       : storageOk(ActiveVaultAuthSyncOutcome.Synchronized);
-  }
-
-  async activateConnectedExistingVault({
-    storeId,
-  }: LoginVaultActionRequest): Promise<
-    Result<ConnectedExistingVaultActivationOutcome, StorageOperationFailure>
-  > {
-    const state = this.state;
-    if (!state.isAuthenticated)
-      return storageErr(
-        new StorageOperationFailure(
-          StorageOperationFailureKind.DeviceAuthorizationRequired,
-        ),
-      );
-    const connectedStore = this.connectedVaultStoreId();
-    if (connectedStore.isErr()) return storageErr(connectedStore.error);
-    if (connectedStore.value !== storeId)
-      return storageErr(
-        new StorageOperationFailure(
-          StorageOperationFailureKind.VaultSelectionFailed,
-        ),
-      );
-    try {
-      await set_active_vault(storeId);
-    } catch (failure) {
-      return storageErr(new NativeVaultStorageFailure(failure));
-    }
-    state.openActiveVault(storeId);
-    const catalog = await this.refreshLocalVaultCatalog();
-    if (catalog.isErr()) return storageErr(catalog.error);
-    const synchronized = await this.syncActiveVaultStoreIdToAuth();
-    return synchronized.isErr()
-      ? storageErr(synchronized.error)
-      : storageOk(ConnectedExistingVaultActivationOutcome.Activated);
   }
 }

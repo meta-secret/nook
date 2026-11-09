@@ -15,6 +15,7 @@ import {
   AccessCheckTargetKind,
 } from '$lib/vault/access-check'
 import { IdentityJoinWaitKind } from '$lib/vault/identity-join-wait'
+import { FirstRunActions, ProviderFolderBinding } from '$lib/vault/first-run'
 import {
   RemoteVaultChoices,
   type RemoteVaultChoiceList,
@@ -76,9 +77,12 @@ function choice({ storeId, identity }: ChoiceRequest): ProviderVaultSummary {
   }
 }
 
-function renderChoice(vaults: ProviderVaultSummary[]) {
+function renderChoice(
+  vaults: ProviderVaultSummary[],
+  identities: FilingIdentity[] = [],
+) {
   const vault = VaultStateTestFixture.create()
-  const choices: RemoteVaultChoiceList = { vaults, identities: [] }
+  const choices: RemoteVaultChoiceList = { vaults, identities }
   vault.remoteVaultChoices = new RemoteVaultChoices(choices)
   const onApplied = vi.fn()
   const props = { vault, busy: false, onApplied } satisfies ComponentProps<
@@ -177,7 +181,15 @@ describe('Recovery vault choice', () => {
     expect(decisionsOf(strangerCard)).toEqual(['askToJoin'])
   })
 
-  test('a keyring recovered with its passkey opens its vault next', async () => {
+  test('a keyring that owns no vault is listed with its ways in', () => {
+    const { view } = renderChoice([], [strangerWhoseJoinIs('notAsked')])
+
+    const [card] = view.getAllByTestId('provider-identity')
+    expect(card?.dataset.storeIds).toBe('')
+    expect(decisionsOf(card)).toEqual(['addToBrowser', 'askToJoin'])
+  })
+
+  test('a keyring recovered with its passkey keeps the provider and opens none of its vaults', async () => {
     const report: CredentialCheckReport = {
       credential: { fingerprint: 'passkey_a1b2c3d4e5f60708' },
       identities: [
@@ -213,9 +225,9 @@ describe('Recovery vault choice', () => {
       .mockResolvedValue(addedFamily)
     vi.spyOn(vault, 'admitManager').mockReturnValue(ok(manager))
     VaultStateTestFixture.runStorageImmediately(vault)
-    const chosen = vi
-      .spyOn(vault, 'chooseRemoteVault')
-      .mockReturnValue(ok(true))
+    const keep = vi
+      .spyOn(FirstRunActions.prototype, 'connectRecoveredKeyring')
+      .mockResolvedValue(true)
     const [whichPasskey] = view.getAllByTestId('provider-identity-find-passkey')
     if (!whichPasskey) throw new Error('no passkey check offered')
     await fireEvent.click(whichPasskey)
@@ -229,10 +241,13 @@ describe('Recovery vault choice', () => {
     await fireEvent.click(recover)
     await fireEvent.click(view.getByTestId('remote-vault-choice-apply'))
 
-    await vi.waitFor(() => expect(onApplied).toHaveBeenCalledOnce())
+    // The keyring keeps this provider with its vaults, and the page lands
+    // on the keyrings page: no vault is imported, and nothing is listed again.
+    await vi.waitFor(() =>
+      expect(keep).toHaveBeenCalledExactlyOnceWith(ProviderFolderBinding.Named),
+    )
     expect(added).toHaveBeenCalledOnce()
-    // The other keyring's vault stays where it is.
-    expect(chosen).toHaveBeenCalledExactlyOnceWith('store_familyvault')
+    expect(onApplied).not.toHaveBeenCalled()
   })
 
   test('asking to join with no protected key queues the join for the device protection gate', async () => {

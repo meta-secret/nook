@@ -11,21 +11,10 @@ use zeroize::Zeroize;
 
 use crate::NookError;
 
-/// The vault a provider import should open when the provider holds several.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(in crate::manager) enum ChosenProviderVault {
-    #[default]
-    Unchosen,
-    Chosen(StoreId),
-}
-
-/// The storage of one session: what it reads and writes, and the vault it
-/// opens when the provider holds several.
+/// The storage of one session: what it reads and writes.
 #[derive(Default)]
 pub(in crate::manager) struct StorageSession {
     pub(in crate::manager) provider: PreparedProvider,
-    /// The vault to open when the prepared provider holds several.
-    pub(in crate::manager) chosen_vault: ChosenProviderVault,
 }
 
 impl StorageSession {

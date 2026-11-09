@@ -33,7 +33,6 @@ import {
   provider_draft_credential_readiness,
   provider_draft_label,
   remove_local_folder_handle,
-  RemoteVaultAssessDecision,
   staged_storage_args,
   local_vault_storage_args,
   type NookStorageConnection,
@@ -77,10 +76,6 @@ type VaultConnectStatusDiscoveryCompletion = {
   >;
   readonly releaseLateValue: (status: VaultAccessStatus) => void;
 };
-
-export interface RemoteVaultAssessmentHandling {
-  readonly accessStatus: VaultAccessStatus;
-}
 
 export interface ProviderLoadOptions {
   readonly ensureLocalRow: boolean;
@@ -281,23 +276,6 @@ export class VaultProviderActions {
     });
   }
 
-  async handleRemoteVaultAssessStatus({
-    accessStatus,
-  }: RemoteVaultAssessmentHandling): Promise<boolean> {
-    const state = this.state;
-    const decision = state.clientPolicy.remote_vault_assess_decision(
-      accessStatus,
-      state.loginRequiresExistingVault,
-    );
-    switch (decision) {
-      case RemoteVaultAssessDecision.RejectMissingExistingVault:
-        state.errorMsg = state.t(I18N_KEYS.AuthStorageExistingVaultNotFound);
-        return true;
-      case RemoteVaultAssessDecision.Continue:
-        return false;
-    }
-  }
-
   private resetICloudSignInState() {
     const state = this.state;
     state.icloudOAuthPreparing = false;
@@ -425,7 +403,6 @@ export class VaultProviderActions {
     state.activateLoginSetup(kind);
     state.stageProviderDraft(begin_provider_draft(kind));
     this.resetSignInStateFor(kind);
-    state.clearExistingVaultRecoverySummary();
     state.errorMsg = "";
     state.dismissSuccess();
     log.debug("provider setup started");
@@ -469,7 +446,6 @@ export class VaultProviderActions {
     this.resetICloudSignInState();
     state.addProviderOpen = false;
     state.clearLoginSetup();
-    state.clearExistingVaultRecoverySummary();
     state.applyActiveProviderCredentials();
     state.errorMsg = "";
   }
@@ -487,13 +463,11 @@ export class VaultProviderActions {
       state.loginSetup.kind === LoginSetupKind.Active
     ) {
       state.clearLoginSetup();
-      state.clearExistingVaultRecoverySummary();
       state.applyActiveProviderCredentials();
       state.errorMsg = "";
       return;
     }
     state.clearLoginSetup();
-    state.clearExistingVaultRecoverySummary();
     state.addProviderOpen = false;
     state.applyActiveProviderCredentials();
     state.errorMsg = "";

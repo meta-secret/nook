@@ -50,7 +50,7 @@ mod multi_device;
 mod passkeys;
 mod personal_fill;
 mod prepared_provider;
-mod remote_vault_choice;
+mod keyring_discovery;
 mod search_catalog;
 mod secrets;
 mod self_enrollment;
@@ -80,7 +80,7 @@ pub(in crate::manager) use prepared_provider::{
     PreparedProvider, PreparedRemote, ProviderPreparation, ProviderSwitch,
 };
 pub(in crate::manager) use session::{
-    CeremonyState, ChosenProviderVault, EventLogSessionState, OutboxTarget, SearchCatalogRestore,
+    CeremonyState, EventLogSessionState, OutboxTarget, SearchCatalogRestore,
     SearchCatalogState, StorageSession, SyncOutbox, VaultCryptoState, VaultNameState,
     VaultSessionState,
 };

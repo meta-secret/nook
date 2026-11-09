@@ -8,7 +8,6 @@ import {
   type FilingIdentity,
   type ProviderVaultSummary,
   type StoreId,
-  type VaultRecoverySummary,
 } from "$app-wasm";
 import type {
   ProviderDraft,
@@ -77,16 +76,8 @@ export enum LocalVaultCatalogKind {
 export type LocalVaultCatalog =
   | { kind: LocalVaultCatalogKind.Empty }
   | { kind: LocalVaultCatalogKind.Available; first: NookLocalVaultEntry };
-export enum RecoveryDiscoveryKind {
-  NotFound = "not-found",
-  Found = "found",
-}
-
-export type RecoveryDiscovery =
-  | { kind: RecoveryDiscoveryKind.NotFound }
-  | { kind: RecoveryDiscoveryKind.Found; summary: VaultRecoverySummary };
-/** What a provider being imported offers for the user's choice: several
- * vaults, or one whose keyring a recovery passphrase can open. */
+/** The keyrings a provider being recovered from keeps, one card each,
+ * with the vaults filed under them. */
 export type RemoteVaultChoiceList = {
   readonly vaults: readonly ProviderVaultSummary[];
   readonly identities: readonly FilingIdentity[];
@@ -175,25 +166,11 @@ export class VaultProviderState {
   clearLoginSetup(): void {
     this.loginSetupState = { kind: LoginSetupKind.Inactive };
   }
-  loginRequiresExistingVault = $state(false);
-  /** The vaults and identities the provider being imported holds when it
-   * holds several. */
+  /** Recovering a keyring from a sync provider: Connect lists its keyrings. */
+  keyringRecoveryActive = $state(false);
+  /** The keyrings the provider being recovered from keeps, with their
+   * vaults. */
   remoteVaultChoices = $state.raw<RemoteVaultChoices>(RemoteVaultChoices.NONE);
-  private recoverySummaryState = $state<RecoveryDiscovery>({
-    kind: RecoveryDiscoveryKind.NotFound,
-  });
-  get recoveryDiscovery(): RecoveryDiscovery {
-    return this.recoverySummaryState;
-  }
-  recordExistingVaultRecovery(value: VaultRecoverySummary): void {
-    this.recoverySummaryState = {
-      kind: RecoveryDiscoveryKind.Found,
-      summary: value,
-    };
-  }
-  clearExistingVaultRecoverySummary(): void {
-    this.recoverySummaryState = { kind: RecoveryDiscoveryKind.NotFound };
-  }
   addProviderOpen = $state(false);
 
   /** The provider being set up or in use: the one Rust-owned draft. Its
@@ -241,9 +218,8 @@ export class VaultProviderState {
     this.clearSelectedLoginVaultStore();
     this.localLoginPreparation = LocalLoginPreparationState.Idle;
     this.clearLoginSetup();
-    this.loginRequiresExistingVault = false;
+    this.keyringRecoveryActive = false;
     this.remoteVaultChoices = RemoteVaultChoices.NONE;
-    this.clearExistingVaultRecoverySummary();
     this.addProviderOpen = false;
     this.useThisBrowser();
     this.googleOAuthBusy = false;

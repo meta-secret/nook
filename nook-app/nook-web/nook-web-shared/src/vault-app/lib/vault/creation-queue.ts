@@ -1,7 +1,5 @@
 import type { EnrollmentCodeUseRequest } from "$lib/app/app-interaction-types";
 import type { StartSentinelGenesisArgs } from "$app-wasm";
-import type { ActiveVault } from "$lib/vault/state/provider.svelte";
-import type { ProviderDraft, ProviderKind } from "$lib/auth/providers";
 
 export enum PendingVaultCreationKind {
   Simple = "simple",
@@ -31,26 +29,6 @@ export type VaultCreationQueue =
   | {
       kind: VaultCreationQueueKind.WaitingForDevice;
       request: PendingVaultCreation;
-    };
-
-export type PendingExistingVaultImport = {
-  storeId: string;
-  previousActiveVault: ActiveVault;
-  /** The setup's provider kind and its draft, restaged after the unlock. */
-  kind: ProviderKind;
-  draft: ProviderDraft;
-};
-
-export enum ExistingVaultImportQueueKind {
-  Idle = "idle",
-  WaitingForDevice = "waiting-for-device",
-}
-
-export type ExistingVaultImportQueue =
-  | { kind: ExistingVaultImportQueueKind.Idle }
-  | {
-      kind: ExistingVaultImportQueueKind.WaitingForDevice;
-      request: PendingExistingVaultImport;
     };
 
 export type PendingEnrollmentSubmit = EnrollmentCodeUseRequest;

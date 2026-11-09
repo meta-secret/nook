@@ -13,8 +13,8 @@ mod join_connect;
 mod sync_policy;
 
 pub use connection::{
-    ActiveVaultStore, JoinEnrollmentState, RemoteVaultAssessDecision, VaultConnectGateDecision,
-    VaultConnectProbeDecision, VaultSwitchDecision,
+    ActiveVaultStore, JoinEnrollmentState, VaultConnectGateDecision, VaultConnectProbeDecision,
+    VaultSwitchDecision,
 };
 pub use join_connect::{JoinConnectEnrollment, JoinConnectRequest, JoinConnectSource};
 pub use sync_policy::{

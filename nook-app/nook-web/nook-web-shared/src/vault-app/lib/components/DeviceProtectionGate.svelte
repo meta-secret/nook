@@ -13,7 +13,6 @@
   import type { VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
   import DeviceModeSelect from '$lib/components/DeviceModeSelect.svelte'
-  import ExistingVaultRecoverySummary from '$lib/components/ExistingVaultRecoverySummary.svelte'
   import DeviceRecoveryAction from '$lib/components/DeviceRecoveryAction.svelte'
   import { DeviceRecoveryKind } from './device-recovery'
   import {
@@ -149,10 +148,6 @@
       ? 'px-0'
       : ''}"
   >
-    {#if !creationOnly}
-      <ExistingVaultRecoverySummary {vault} />
-    {/if}
-
     {#if vault.deviceProtectionStatus === DeviceProtectionStatus.PinSetup}
       <div class="space-y-2">
         <label class="block text-sm font-medium" for="device-protection-pin">

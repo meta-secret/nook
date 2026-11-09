@@ -28,7 +28,7 @@ import {
   type IdentityPlanRun,
 } from '$lib/vault/identity-plan-actions'
 import { IdentityActionOutcome } from '$lib/vault/identity-control.svelte'
-import { StagedVaultDiscoveryKind } from '$lib/vault/provider-connection'
+import { StagedKeyringDiscovery } from '$lib/vault/provider-connection'
 import { NewIdentityStage } from '$lib/vault/state/ui.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
@@ -278,8 +278,8 @@ describe('recovering a keyring with a passphrase from an identity plan', () => {
   test('a key made on the recovery screen stages its provider again before the words', async () => {
     const session = new JoinSession('current-key').unlocked()
     const staged = vi
-      .spyOn(session.vault, 'discoverStagedVault')
-      .mockResolvedValue(ok({ kind: StagedVaultDiscoveryKind.Choose }))
+      .spyOn(session.vault, 'discoverStagedKeyrings')
+      .mockResolvedValue(ok(StagedKeyringDiscovery.Listed))
     const current = {
       source: { kind: 'currentProvider' },
       identityId: IDENTITY,

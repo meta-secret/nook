@@ -188,8 +188,6 @@ export class VaultConnectionActions {
         }
       }
 
-      if (await state.handleRemoteVaultAssessStatus(accessStatus)) return;
-
       const gateDecision =
         state.clientPolicy.vault_connect_gate_decision(accessStatus);
       if (gateDecision !== VaultConnectGateDecision.Connect) {

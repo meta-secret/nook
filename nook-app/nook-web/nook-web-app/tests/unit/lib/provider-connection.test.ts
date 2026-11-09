@@ -5,6 +5,8 @@ import {
   NookVaultManager,
   ProviderSyncFailureHandling,
   ProviderSyncVisibility,
+  type FilingIdentity,
+  type ProviderKeyringDiscovery,
   type StorageConnection,
 } from '$app-wasm'
 import { scopedProviderVault, type StorageProvider } from '$lib/auth/providers'
@@ -24,6 +26,8 @@ import {
   StagedRemoteStorageKind,
 } from '$lib/vault/state/provider.svelte'
 import { ProviderDraftFixture, ProviderRowFixture } from '../provider-fixtures'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 
 vi.mock('$lib/runtime/log', () => ({
   browserLogRuntime: {
@@ -235,5 +239,62 @@ describe('local-folder provider connection', () => {
     expect(scenario.state.providerConnectionPhase).toBe(
       ProviderConnectionPhase.Idle,
     )
+  })
+})
+
+describe('keyring recovery from a sync provider', () => {
+  const keyring: FilingIdentity = {
+    identityId: 'idn_strangerabc',
+    shortId: 'stranger',
+    name: { state: 'unknown' },
+    words: ['amber', 'falcon', 'tide'],
+    log: { state: 'absent' },
+  }
+
+  /** The recovery screen with a picked folder staged, and what the folder
+   * keeps. */
+  function recoveryScenario(found: ProviderKeyringDiscovery) {
+    const state = vaultState()
+    state.isVerifying = false
+    state.errorMsg = ''
+    state.beginKeyringRecovery()
+    state.activateLoginSetup(ProviderSetupKinds.LOCAL_FOLDER)
+    state.stageProviderDraft(ProviderDraftFixture.localFolderSelected())
+    const manager = new NookVaultManager()
+    state.openManager(manager)
+    ownedManagers.push({ manager, state })
+    VaultStateTestFixture.runStorageImmediately(state)
+    vi.spyOn(state, 'admitManager').mockReturnValue(ok(manager))
+    const discover = vi
+      .spyOn(manager, 'discover_backup_folder_keyrings')
+      .mockResolvedValue(found)
+    return { actions: new ProviderConnectionActions(state), discover, state }
+  }
+
+  test('lists every keyring the provider keeps, one that owns no vault too', async () => {
+    const { actions, discover, state } = recoveryScenario({
+      state: 'listed',
+      vaults: [],
+      identities: [keyring],
+    })
+
+    await actions.listKeyringsForRecovery()
+
+    expect(discover).toHaveBeenCalledOnce()
+    expect(state.remoteVaultChoices.identities).toEqual([keyring])
+    expect(state.errorMsg).toBe('')
+    expect(state.isVerifying).toBe(false)
+  })
+
+  test('a provider that keeps no keyring says so and lists nothing', async () => {
+    const { actions, state } = recoveryScenario({ state: 'empty' })
+
+    await actions.listKeyringsForRecovery()
+
+    expect(state.remoteVaultChoices.identities).toEqual([])
+    expect(state.errorMsg).toBe(state.t(I18N_KEYS.AuthStorageKeyringNotFound))
+    // The provider picker stays open for another provider.
+    expect(state.keyringRecoveryActive).toBe(true)
+    expect(state.loginSetup.kind).toBe(LoginSetupKind.Active)
   })
 })

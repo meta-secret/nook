@@ -24,7 +24,7 @@ use super::{
     LocalFolderHandles, NookDatabase, NookError, NookVaultManager, RemoteEventLogClassification,
     VaultCryptoState,
 };
-use crate::manager::{ChosenProviderVault, PreparedProvider, SyncOutbox};
+use crate::manager::{PreparedProvider, SyncOutbox};
 
 mod outbox;
 use outbox::{OutboxIndexScope, PendingOutboxEvent};
@@ -35,7 +35,7 @@ pub(in crate::manager) enum VaultDiscovery {
     Empty,
     Chosen,
     /// The provider holds several vaults and none was chosen.
-    Several(Vec<StoreId>),
+    Several,
 }
 impl NookVaultManager {
     async fn persist_projected_key_epoch(
@@ -321,26 +321,19 @@ impl NookVaultManager {
         self.choose_discovered_vault(&store_ids).await
     }
 
-    /// The vault the user chose wins when the target holds it; one vault is
-    /// chosen on its own.
+    /// One vault is chosen on its own; several are left unchosen.
     async fn choose_discovered_vault(
         &mut self,
         store_ids: &[StoreId],
     ) -> Result<VaultDiscovery, NookError> {
-        let candidates = match &self.storage.chosen_vault {
-            ChosenProviderVault::Chosen(chosen) if store_ids.contains(chosen) => {
-                vec![chosen.clone()]
-            }
-            ChosenProviderVault::Chosen(_) | ChosenProviderVault::Unchosen => store_ids.to_vec(),
-        };
-        match candidates.as_slice() {
+        match store_ids {
             [] => Ok(VaultDiscovery::Empty),
             [store_id] => {
                 self.vault.store_id = store_id.as_str().to_owned();
                 self.activate_event_log_mode().await?;
                 Ok(VaultDiscovery::Chosen)
             }
-            _ => Ok(VaultDiscovery::Several(candidates)),
+            _ => Ok(VaultDiscovery::Several),
         }
     }
 

@@ -291,7 +291,7 @@ export class IdentityJoinActions {
         ? IdentityPlanFailureKind.Join
         : IdentityPlanFailureKind.Recover,
     );
-    const staged = await this.vault.discoverStagedVault();
+    const staged = await this.vault.discoverStagedKeyrings();
     if (staged.isErr())
       return err(failure.because(staged.error.translationKey));
     return ok(true);

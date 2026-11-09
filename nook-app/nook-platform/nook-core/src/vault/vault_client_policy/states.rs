@@ -123,21 +123,6 @@ impl From<bool> for VaultSelectionState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VaultExistenceRequirement {
-    MayCreate,
-    ExistingRequired,
-}
-impl From<bool> for VaultExistenceRequirement {
-    fn from(observed: bool) -> Self {
-        if observed {
-            Self::ExistingRequired
-        } else {
-            Self::MayCreate
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeviceProtectionReadiness {
     Locked,
     Ready,
