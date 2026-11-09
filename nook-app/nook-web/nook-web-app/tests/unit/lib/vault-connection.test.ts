@@ -223,7 +223,7 @@ describe('vault connection', () => {
       expect(scenario.manager.connect).not.toHaveBeenCalled()
       expect(scenario.state.isAuthenticated).toBe(false)
       expect(scenario.state.errorMsg).toBe(
-        I18N_KEYS.AuthStorageVaultNotInThisKeyring,
+        scenario.state.t(I18N_KEYS.AuthStorageVaultNotInThisKeyring),
       )
     },
   )

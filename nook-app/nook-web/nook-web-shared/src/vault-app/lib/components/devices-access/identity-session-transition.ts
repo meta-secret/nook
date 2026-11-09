@@ -13,5 +13,7 @@ export class IdentitySessionTransition {
     this.vault.providersLoaded = false;
     // A vault panel left open beside the prior identity's card closes too.
     this.vault.vaultPanelStoreId = "";
+    // So does its keyring log: its vaults must not show on the next card.
+    this.vault.identityControl.forgetIdentity();
   }
 }

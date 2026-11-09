@@ -209,6 +209,13 @@ export class IdentityControlModel {
     return this.loadSnapshot();
   }
 
+  /** Another keyring is now in use: the prior one's log, with its vaults
+   * and mounts, no longer describes this browser's keyring. */
+  forgetIdentity(): void {
+    this.view = { kind: IdentityControlViewKind.Loading };
+    this.mounts = [];
+  }
+
   /** Project the identity log this app already holds, without creating one. */
   async loadSnapshot(): Promise<
     Result<IdentityActionOutcome, VaultStorageFailure>
