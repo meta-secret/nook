@@ -102,10 +102,14 @@ export async function openVaultPage(page: Page): Promise<void> {
     .toBe(true)
 }
 
-/** Open the identities hub while a vault session is open. */
+/** Open the identities hub from the header while a vault session is open;
+ * a page already showing it, as after a recovery with no vault open yet,
+ * stays. */
 export async function openIdentitiesPage(page: Page): Promise<void> {
+  const hub = page.getByTestId('identities-hub')
+  if (await hub.isVisible()) return
   await page.getByTestId('header-identities-btn').click()
-  await expect(page.getByTestId('identities-hub')).toBeVisible({
+  await expect(hub).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
 }
