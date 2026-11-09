@@ -204,7 +204,6 @@ describe('portable vault client policy', () => {
       ).toBe(VaultSyncTimerTickDecision.Sync)
       expect(
         policy.vault_storage_sync_decision(
-          false,
           ProviderSyncFreshness.Forced,
           false,
           true,
@@ -218,7 +217,6 @@ describe('portable vault client policy', () => {
       ).toBe(VaultStorageSyncDecision.SyncFirstProviderUnauthenticated)
       expect(
         policy.vault_storage_sync_decision(
-          false,
           ProviderSyncFreshness.Forced,
           false,
           false,
@@ -232,7 +230,6 @@ describe('portable vault client policy', () => {
       ).toBe(VaultStorageSyncDecision.SyncProviders)
       expect(
         policy.vault_storage_sync_decision(
-          false,
           ProviderSyncFreshness.Scheduled,
           false,
           true,
@@ -246,7 +243,6 @@ describe('portable vault client policy', () => {
       ).toBe(VaultStorageSyncDecision.Skip)
       expect(
         policy.vault_storage_sync_decision(
-          false,
           ProviderSyncFreshness.Forced,
           false,
           false,

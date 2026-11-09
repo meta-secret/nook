@@ -5,34 +5,6 @@ use crate::VaultAccessStatus;
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum RemoteVaultRecoveryState {
-    #[default]
-    None,
-    PromptWithCache,
-    PromptMissingOnly,
-    ConnectFromCache,
-    ConnectFresh,
-}
-
-impl RemoteVaultRecoveryState {
-    #[must_use]
-    pub const fn prompt_visible(self) -> bool {
-        matches!(self, Self::PromptWithCache | Self::PromptMissingOnly)
-    }
-
-    #[must_use]
-    pub const fn prompt_has_cache(self) -> bool {
-        matches!(self, Self::PromptWithCache)
-    }
-
-    #[must_use]
-    pub const fn connect_confirmed(self) -> bool {
-        matches!(self, Self::ConnectFromCache | Self::ConnectFresh)
-    }
-}
-
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum JoinEnrollmentState {
     #[default]
     None,
@@ -54,15 +26,6 @@ pub enum VaultSwitchDecision {
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RemoteVaultAssessDecision {
-    Continue,
-    PromptRecoveryFromCache,
-    PromptMissingRemote,
-    RejectMissingExistingVault,
-}
-
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VaultConnectProbeDecision {
     UseConfiguredStorage,
     ReassessFirstSyncProvider,
@@ -77,54 +40,6 @@ pub enum VaultConnectGateDecision {
 }
 
 impl VaultClientPolicy {
-    #[must_use]
-    pub const fn existing_vault_identity_recovery_required(
-        request: crate::ExistingVaultIdentityRecoveryRequiredRequest,
-    ) -> bool {
-        matches!(
-            request.existing_vault_required,
-            crate::VaultExistenceRequirement::ExistingRequired
-        ) && matches!(
-            request.provider_setup_active,
-            crate::ProviderSetupState::Active
-        ) && !matches!(
-            request.device_protection_ready,
-            crate::DeviceProtectionReadiness::Ready
-        )
-    }
-
-    #[must_use]
-    pub const fn remote_vault_assess_decision(
-        request: crate::RemoteVaultAssessDecisionRequest,
-    ) -> RemoteVaultAssessDecision {
-        match request.access_status {
-            VaultAccessStatus::RemoteMissingLocalCache => {
-                RemoteVaultAssessDecision::PromptRecoveryFromCache
-            }
-            VaultAccessStatus::RemoteMissing
-                if matches!(
-                    request.existing_vault_required,
-                    crate::VaultExistenceRequirement::ExistingRequired
-                ) =>
-            {
-                RemoteVaultAssessDecision::RejectMissingExistingVault
-            }
-            VaultAccessStatus::RemoteMissing
-                if matches!(
-                    request.provider_setup_active,
-                    crate::ProviderSetupState::Active
-                ) =>
-            {
-                RemoteVaultAssessDecision::Continue
-            }
-            VaultAccessStatus::RemoteMissing => RemoteVaultAssessDecision::PromptMissingRemote,
-            VaultAccessStatus::NewVault
-            | VaultAccessStatus::Ready
-            | VaultAccessStatus::NeedsEnrollment
-            | VaultAccessStatus::JoinPending => RemoteVaultAssessDecision::Continue,
-        }
-    }
-
     #[must_use]
     pub const fn vault_connect_probe_decision(
         request: crate::VaultConnectProbeDecisionRequest,
@@ -153,8 +68,7 @@ impl VaultClientPolicy {
             VaultAccessStatus::JoinPending => VaultConnectGateDecision::AwaitJoinApproval,
             VaultAccessStatus::NewVault
             | VaultAccessStatus::Ready
-            | VaultAccessStatus::RemoteMissing
-            | VaultAccessStatus::RemoteMissingLocalCache => VaultConnectGateDecision::Connect,
+            | VaultAccessStatus::RemoteMissing => VaultConnectGateDecision::Connect,
         }
     }
 
@@ -180,90 +94,6 @@ impl VaultClientPolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn existing_vault_import_recovers_identity_before_provider_connect() {
-        assert!(
-            VaultClientPolicy::existing_vault_identity_recovery_required(
-                crate::ExistingVaultIdentityRecoveryRequiredRequest {
-                    existing_vault_required: (true).into(),
-                    provider_setup_active: (true).into(),
-                    device_protection_ready: (false).into()
-                }
-            )
-        );
-        assert!(
-            !VaultClientPolicy::existing_vault_identity_recovery_required(
-                crate::ExistingVaultIdentityRecoveryRequiredRequest {
-                    existing_vault_required: (false).into(),
-                    provider_setup_active: (true).into(),
-                    device_protection_ready: (false).into()
-                }
-            )
-        );
-        assert!(
-            !VaultClientPolicy::existing_vault_identity_recovery_required(
-                crate::ExistingVaultIdentityRecoveryRequiredRequest {
-                    existing_vault_required: (true).into(),
-                    provider_setup_active: (false).into(),
-                    device_protection_ready: (false).into()
-                }
-            )
-        );
-        assert!(
-            !VaultClientPolicy::existing_vault_identity_recovery_required(
-                crate::ExistingVaultIdentityRecoveryRequiredRequest {
-                    existing_vault_required: (true).into(),
-                    provider_setup_active: (true).into(),
-                    device_protection_ready: (true).into()
-                }
-            )
-        );
-    }
-
-    #[test]
-    fn remote_missing_policy_distinguishes_recovery_creation_and_open() {
-        assert_eq!(
-            VaultClientPolicy::remote_vault_assess_decision(
-                crate::RemoteVaultAssessDecisionRequest {
-                    access_status: VaultAccessStatus::RemoteMissingLocalCache,
-                    existing_vault_required: (false).into(),
-                    provider_setup_active: (false).into()
-                }
-            ),
-            RemoteVaultAssessDecision::PromptRecoveryFromCache
-        );
-        assert_eq!(
-            VaultClientPolicy::remote_vault_assess_decision(
-                crate::RemoteVaultAssessDecisionRequest {
-                    access_status: VaultAccessStatus::RemoteMissing,
-                    existing_vault_required: (true).into(),
-                    provider_setup_active: (false).into()
-                }
-            ),
-            RemoteVaultAssessDecision::RejectMissingExistingVault
-        );
-        assert_eq!(
-            VaultClientPolicy::remote_vault_assess_decision(
-                crate::RemoteVaultAssessDecisionRequest {
-                    access_status: VaultAccessStatus::RemoteMissing,
-                    existing_vault_required: (false).into(),
-                    provider_setup_active: (true).into()
-                }
-            ),
-            RemoteVaultAssessDecision::Continue
-        );
-        assert_eq!(
-            VaultClientPolicy::remote_vault_assess_decision(
-                crate::RemoteVaultAssessDecisionRequest {
-                    access_status: VaultAccessStatus::RemoteMissing,
-                    existing_vault_required: (false).into(),
-                    provider_setup_active: (false).into()
-                }
-            ),
-            RemoteVaultAssessDecision::PromptMissingRemote
-        );
-    }
 
     #[test]
     fn connect_probe_uses_remote_only_for_unauthenticated_enrollment_states() {
@@ -328,32 +158,6 @@ mod tests {
             VaultClientPolicy::vault_connect_gate_decision(VaultAccessStatus::Ready),
             VaultConnectGateDecision::Connect
         );
-    }
-
-    #[test]
-    fn remote_recovery_state_exposes_only_prompt_variants_to_the_ui() {
-        assert!((RemoteVaultRecoveryState::PromptWithCache).prompt_visible());
-        assert!((RemoteVaultRecoveryState::PromptMissingOnly).prompt_visible());
-        assert!(!(RemoteVaultRecoveryState::ConnectFromCache).prompt_visible());
-        assert!((RemoteVaultRecoveryState::PromptWithCache).prompt_has_cache());
-        assert!(!(RemoteVaultRecoveryState::PromptMissingOnly).prompt_has_cache());
-    }
-
-    #[test]
-    fn remote_recovery_connect_requires_an_explicit_confirmation_state() {
-        for state in [
-            RemoteVaultRecoveryState::None,
-            RemoteVaultRecoveryState::PromptWithCache,
-            RemoteVaultRecoveryState::PromptMissingOnly,
-        ] {
-            assert!(!(state).connect_confirmed());
-        }
-        for state in [
-            RemoteVaultRecoveryState::ConnectFromCache,
-            RemoteVaultRecoveryState::ConnectFresh,
-        ] {
-            assert!((state).connect_confirmed());
-        }
     }
 
     #[test]

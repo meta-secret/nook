@@ -84,7 +84,6 @@ fn vault_apps_keep_rust_owned_runtime_boundaries() {
     for browser_lifecycle_enum in [
         "PendingVaultCreationKind",
         "VaultCreationQueueKind",
-        "ExistingVaultImportQueueKind",
         "EnrollmentSubmitQueueKind",
     ] {
         assert!(browser_operations.contains(browser_lifecycle_enum));

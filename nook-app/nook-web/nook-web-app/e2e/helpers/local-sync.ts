@@ -18,7 +18,6 @@ import {
 } from './github-sync'
 import {
   assertVaultReady,
-  dismissSyncConflictIfVisible,
   ensureLoginLocalUnlockReady,
   expectLoginGateAfterLoad,
   invokeInitializedVaultProviderReload,
@@ -495,7 +494,6 @@ export async function reloadUnlockLocalVaultWithSync(
     ).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await dismissSyncConflictIfVisible(page)
     await expect
       .poll(
         () => page.evaluate(() => window.__nookVault?.isVerifying === false),
@@ -626,7 +624,6 @@ export async function reloadUnlockWithSyncProvider(
   ).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await dismissSyncConflictIfVisible(page)
   await forceVaultQuiescentForE2e(page)
   await waitForVaultOperationsIdle(page)
   await waitForLoadedSyncProviders(page)

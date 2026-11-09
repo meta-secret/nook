@@ -8,7 +8,7 @@ so a native submission could never carry them into a URL.
 -->
 <script lang="ts">
   import { ChoiceChips, type ChoiceChip } from '$lib/components/ui/choice-chips'
-  import { onMount, tick, type Component, type Snippet } from 'svelte'
+  import { onMount, tick, type Component } from 'svelte'
   import {
     ExternalLink,
     RefreshCw,
@@ -39,10 +39,8 @@ so a native submission could never carry them into a URL.
     submitTestId,
     busy,
     busyLabel,
-    submitDisabled = false,
     error,
     onConnect,
-    beforeConnect,
   }: {
     vault: VaultState
     idPrefix: string
@@ -56,12 +54,9 @@ so a native submission could never carry them into a URL.
     busy: boolean
     /** The submit button's words while the form waits. */
     busyLabel: string
-    /** A question above the action is still unanswered. */
-    submitDisabled?: boolean
     /** Why the last attempt failed, in the user's words; empty if none did. */
     error: string
     onConnect: (configuration: S3Connection) => void | Promise<void>
-    beforeConnect?: Snippet
   } = $props()
 
   let draft = $state<S3ConnectionDraft>({
@@ -462,14 +457,12 @@ so a native submission could never carry them into a URL.
     </p>
   {/if}
 
-  {@render beforeConnect?.()}
-
   <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
     <Button
       type="submit"
       class="h-11 w-full sm:h-10 sm:w-auto sm:min-w-[180px]"
       data-testid={submitTestId}
-      disabled={busy || submitDisabled}
+      disabled={busy}
     >
       {#if busy}
         <RefreshCw class="size-4 animate-spin motion-reduce:animate-none" />

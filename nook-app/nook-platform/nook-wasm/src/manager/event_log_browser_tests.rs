@@ -4,7 +4,6 @@ use crate::VaultSnapshotLookup;
 use crate::identity_record::NookIdentityDirectorySelectionKind;
 use crate::manager::{OutboxTarget, ProviderCacheRef, SyncOutbox};
 use crate::storage::identity_record::StoredIdentityProtection;
-use crate::storage::indexed_db::ImportVaultLabel;
 use crate::test_fixtures::WasmFixture;
 use crate::{
     DeviceProtectionDeviceModeState, IdbPutStringRequest, ImportVaultBlobRequest, NookDatabase,
@@ -556,7 +555,6 @@ async fn replacement_manager(
     )?;
     NookDatabase::import_vault_blob(ImportVaultBlobRequest {
         content: previous_projection.as_str(),
-        label: ImportVaultLabel::Override("Previous vault"),
     })
     .await?;
     NookDatabase::switch_active_vault(&previous_store_id).await?;
@@ -745,7 +743,6 @@ async fn locked_external_import_preserves_prior_vault() -> anyhow::Result<()> {
     )?;
     NookDatabase::import_vault_blob(ImportVaultBlobRequest {
         content: previous_projection.as_str(),
-        label: ImportVaultLabel::Override("Empty local vault"),
     })
     .await?;
     NookDatabase::switch_active_vault(&previous_store_id).await?;

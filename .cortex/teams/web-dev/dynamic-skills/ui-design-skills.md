@@ -22,8 +22,9 @@ change around that element.
   control to draw attention to it.
 - Prefer a visual element over an explanatory sentence. Use an icon tile, a
   tag, a slot, or a state mark. Keep any remaining copy to one short line.
-- Match the visual's weight to the screen. Diagrams belong to setup and
-  approval steps, not to settings panels.
+- Match the visual's weight to the screen. Standalone diagrams belong to setup
+  and approval steps, not to settings panels. A panel shows how its parts
+  relate by [connecting its own components](#relationships-between-components).
 - Remove or demote what a new element competes with before adding it.
 - Review the result before reporting it. Can a first-time user tell what to do
   next? Does the most important element dominate? Does anything look important
@@ -34,6 +35,41 @@ its neighbours. Then add an amber row below it that repeats the same action.
 
 **Preferred:** make the blocking action the panel's single primary control.
 Show what it unblocks as a quiet locked row that names the step first.
+
+### Relationships between components
+
+A Nook page can be a regular dashboard and a graph at once. Instead of a flat
+set of components, it leads the user through a visual language. That language
+shows what comes from what and how one part relates to another.
+
+The [relationship dashboard reference](../assets/relationship-dashboard-reference.png)
+shows the idea: one lead component, the units it splits into, the workers they
+feed, and the result they return to. It is a UX reference for structure and
+flow only.
+
+- Do not copy its visual style. Its terminal frame, colours, monospace type,
+  progress bars, and text are not a Nook design or UI reference. Build the page
+  from Nook's [existing visual system](#existing-visual-system).
+- Keep the page a working dashboard. Panels, rows, and actions stay where a
+  user expects them; the relationships are drawn between them.
+- Show a relationship only where one exists. When one component comes from,
+  feeds, or depends on another, place them in reading order and join them with
+  a quiet connector. A result can also sit nested under its source.
+- Leave independent components unconnected. Arrows on every component make a
+  mess and hide the relationships that matter.
+- Let the connections lead the eye from a source to what it produces and on to
+  the next action. Name a connection with one short verb only when the
+  relationship is not obvious.
+- Keep connectors quieter than the components they join. Motion is not
+  required; use it only when it explains a change of state.
+
+**Prohibited:** show a keyring, its vaults, its sync providers, and this
+browser's settings as four equal, unconnected cards. Alternatively, draw an
+arrow between every pair of them.
+
+**Preferred:** lead from the keyring to the vaults it opens and to the sync
+providers that carry it, with one quiet connector each. Leave this browser's
+unrelated settings as an ordinary panel without connectors.
 
 ### Existing visual system
 

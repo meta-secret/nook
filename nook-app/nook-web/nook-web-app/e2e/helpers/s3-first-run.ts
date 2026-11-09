@@ -79,7 +79,7 @@ export async function addS3FromProtection(
   location: E2eS3Location,
 ): Promise<void> {
   const protection = page.getByTestId('identity-protection-toggle')
-  await expect(protection).toContainText('0 of 2 done')
+  await expect(protection).toContainText('0 of 3 done')
   await protection.click()
   await page.getByTestId('identity-protection-action').click()
   await page.getByTestId('provider-option-s3').click()

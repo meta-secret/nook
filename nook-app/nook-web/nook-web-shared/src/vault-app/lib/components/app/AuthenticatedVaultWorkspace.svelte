@@ -260,12 +260,12 @@ band, the scrolling page and the status line.
     vault.lockIdentity()
   }
 
-  /** "Import from sync provider" under New vault. Bringing a vault in from
-   * a provider is the locked page's restore, so the identity locks and
-   * that page continues it beside the card. */
-  function importVaultFromProvider(): void {
+  /** Recover keyring on the keyrings page. Bringing a keyring in from a
+   * provider is the locked page's restore, so the open vault locks and that
+   * page continues it beside the cards. */
+  function recoverKeyringFromProvider(): void {
     newVaultOpen = false
-    vault.vaultImportOpen = true
+    vault.keyringRecoveryOpen = true
     vault.lockVault()
   }
 
@@ -386,7 +386,6 @@ band, the scrolling page and the status line.
     isVerifying={vault.isVerifying}
     isInitializing={vault.isInitializing}
     onCreateVault={createVaultFromCard}
-    onImportVault={importVaultFromProvider}
     onClose={() => (newVaultOpen = false)}
   />
 {/snippet}
@@ -531,6 +530,7 @@ band, the scrolling page and the status line.
       {...newVaultOpen ? { vaultSetup: newVaultPanel } : {}}
       vaultSetupOpen={newVaultOpen}
       onNewIdentity={newIdentity}
+      onRecoverIdentity={recoverKeyringFromProvider}
       onUseIdentity={useIdentity}
       currentHealth={identityHealth}
       overview={identityOverview}
@@ -576,7 +576,6 @@ band, the scrolling page and the status line.
         isSyncing={vault.isSyncActivityVisible}
         successMsg={vault.successMsg}
         errorMsg={vault.errorMsg}
-        syncConflictLabel={vault.syncConflictLabel}
         {appVersion}
         onRefresh={syncAll}
         onDismissSuccess={() => vault.dismissSuccess()}
@@ -669,7 +668,6 @@ band, the scrolling page and the status line.
         isSyncing={vault.isSyncActivityVisible}
         successMsg={vault.successMsg}
         errorMsg={vault.errorMsg}
-        syncConflictLabel={vault.syncConflictLabel}
         {appVersion}
         onRefresh={syncAll}
         onDismissSuccess={() => vault.dismissSuccess()}

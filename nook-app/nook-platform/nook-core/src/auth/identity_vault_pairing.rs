@@ -91,6 +91,7 @@ mod tests {
             members: Vec::new(),
             devices: Vec::new(),
             device_count: 0,
+            extension_on_this_device: crate::BrowserExtensionMembership::NotJoined,
             join_requests: Vec::new(),
             vaults,
             mounts: Vec::new(),

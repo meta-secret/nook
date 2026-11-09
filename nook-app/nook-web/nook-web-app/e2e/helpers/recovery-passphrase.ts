@@ -66,9 +66,18 @@ export async function openStoreId(page: Page): Promise<string> {
   return storeIdOfVaultYaml(await readLocalVaultYamlFromIdb(page))
 }
 
+/** The store id of the vault open on this browser, or none right after a
+ * recovery, which opens no vault by itself. */
+async function openStoreIdOrNone(device: Page): Promise<string> {
+  const yaml = await readLocalVaultYamlFromIdb(device)
+  const storeId = yaml.match(/^store_id:\s*(\S+)/m)?.[1]
+  return storeId ? storeId : ''
+}
+
 /** Open one of the keyring's vaults from its row on the hub: one this
  * browser holds unlocks and opens from its panel; one only granted to it
- * opens from the panel's away action, through the keyring's provider. */
+ * opens from the keyring's provider as its row is picked, then from its
+ * panel. */
 async function openKeyringVault(device: Page, storeId: string): Promise<void> {
   await openIdentitiesPage(device)
   const row = device.locator(
@@ -77,7 +86,6 @@ async function openKeyringVault(device: Page, storeId: string): Promise<void> {
   await expect(row).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click()
   const controls = [
-    device.getByTestId('vault-panel-open-away'),
     device.getByTestId('vault-panel-unlock'),
     device.getByTestId('vault-panel-open'),
   ]
@@ -91,7 +99,7 @@ async function openKeyringVault(device: Page, storeId: string): Promise<void> {
     .poll(
       async () => {
         if (
-          (await openStoreId(device)) === storeId &&
+          (await openStoreIdOrNone(device)) === storeId &&
           (await unlocked.isVisible())
         )
           return 'open'

@@ -35,14 +35,6 @@ export type EventOutboxRequest =
       provider: StorageProvider;
     };
 
-export enum ConflictProviderSaveKind {
-  NotSaved = "not-saved",
-  Saved = "saved",
-}
-
-export type ConflictProviderSave =
-  | { kind: ConflictProviderSaveKind.NotSaved }
-  | { kind: ConflictProviderSaveKind.Saved; providerId: string };
 export class ProviderEventOutbox {
   constructor(private readonly provider: StorageProvider) {}
   request(): EventOutboxRequest {

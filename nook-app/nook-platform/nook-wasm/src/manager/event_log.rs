@@ -13,10 +13,8 @@ use nook_core::{
     VaultSessionProjection, VaultStoreIdentityRef, VaultVersionWrite,
 };
 mod extension_import;
-mod import_as_local;
 mod provider_io;
 mod provider_sync;
-pub(in crate::manager) use provider_sync::VaultDiscovery;
 mod provider_sync_export;
 mod records;
 mod security_epoch;
@@ -26,7 +24,7 @@ pub(in crate::manager) use records::{
 };
 pub(in crate::manager) use security_epoch::SecurityEpochRotationFailure;
 
-use super::{EventLogSyncIssueState, NookVaultManager, VaultCryptoState, VaultNameState};
+use super::{NookVaultManager, VaultCryptoState, VaultNameState};
 
 use crate::storage::event_db::{EventAppend, VaultEventPersistence};
 

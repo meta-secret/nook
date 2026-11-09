@@ -914,7 +914,7 @@ mod projection_tests {
         assert_eq!(renamed[0].display_label("Fallback"), "Browser vault");
 
         NookDatabase::prepare_new_local_vault_slot().await?;
-        let imported = import_named_local_vault_blob(content, "Imported vault".to_owned()).await?;
+        let imported = import_local_vault_blob(content).await?;
         assert_eq!(imported, store_id);
         set_active_vault(imported.clone()).await?;
         let selected_again = get_active_vault_selection().await?;

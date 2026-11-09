@@ -6,11 +6,9 @@
 //! and any other vault's name stays sealed under its key.
 use super::wasm_bindgen;
 use crate::DriveStorageClient;
+use crate::TypedOutput;
 use crate::storage::provider_vault_listing::{DriveVaultListing, ProviderLocation};
-use crate::{TypedInput, TypedOutput};
-use nook_core::{
-    DriveEventParent, DriveVaultFolderSelection, LocalVaultOccupancy, ProviderVaultListing,
-};
+use nook_core::{DriveEventParent, DriveVaultFolderSelection, ProviderVaultListing};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::JsError;
@@ -26,14 +24,12 @@ pub enum NookGoogleDriveVaultListing {
 }
 
 /// List the vaults in the account's Nook root without creating it, each with
-/// how this device can open it and what the user may do with it. A root the user
-/// duplicated by hand fails with `GoogleDriveVaultFolderAmbiguous`.
+/// how this device can open it. A root the user duplicated by hand fails
+/// with `GoogleDriveVaultFolderAmbiguous`.
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn list_google_drive_vaults(
     access_token: &str,
-    local_vault: &tsify::Ts<LocalVaultOccupancy>,
 ) -> Result<tsify::Ts<NookGoogleDriveVaultListing>, JsError> {
-    let local_vault = local_vault.decode()?;
     let token = DriveStorageClient::access_token(access_token)?;
     let listing = match DriveStorageClient::new(&token)
         .find_vault_folder()
@@ -47,7 +43,7 @@ pub enum NookGoogleDriveVaultListing {
                     token: &token,
                     root,
                 }
-                .listing(&local_vault)
+                .listing()
                 .await?,
             }
         }
@@ -85,7 +81,6 @@ mod tests {
             listing: ProviderVaultListing {
                 vaults: Vec::new(),
                 identities: Vec::new(),
-                replacement: nook_core::EmptyVaultReplacement::Unavailable,
             },
         })?;
         assert_eq!(
@@ -95,7 +90,6 @@ mod tests {
                 "listing": {
                     "vaults": [],
                     "identities": [],
-                    "replacement": { "state": "unavailable" },
                 },
             })
         );

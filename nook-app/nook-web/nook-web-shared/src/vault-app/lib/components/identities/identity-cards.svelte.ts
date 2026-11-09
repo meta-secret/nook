@@ -1,4 +1,5 @@
 import { untrack } from "svelte";
+import { SvelteSet } from "svelte/reactivity";
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
@@ -38,6 +39,16 @@ export class IdentityCards {
       void vault.localVaults.length;
       void untrack(() => vault.identityControl.loadSnapshot());
     });
+    // The names of its vaults this browser does not hold, read from their
+    // provider once the identity is unlocked and its log is read.
+    $effect(() => {
+      if (!(vault.isAuthenticated || vault.deviceProtectionReady)) return;
+      if (vault.identityControl.snapshot === false) return;
+      const held = new SvelteSet(
+        vault.localVaults.map((entry) => entry.storeId),
+      );
+      void untrack(() => vault.identityControl.readAwayVaultNames(held));
+    });
   }
 
   get localVaults(): IdentityLocalVault[] {
@@ -73,6 +84,7 @@ export class IdentityCards {
           : [],
       localVaults: this.localVaults,
       currentLogVaults: this.currentLogVaults,
+      awayVaultNames: this.vault.identityControl.awayVaultNames,
       openStoreId:
         activeVault.kind === ActiveVaultKind.Open ? activeVault.storeId : "",
       authenticated: this.vault.isAuthenticated,

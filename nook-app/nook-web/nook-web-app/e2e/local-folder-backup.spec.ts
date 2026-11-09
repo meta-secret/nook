@@ -9,10 +9,13 @@ import {
   expectEmptyLocalFolderRejected,
   installPasskeyMock,
   openStorageSettings,
+  openStoreId,
+  readSecretOfVault,
   uniqueSecretKey,
   waitForVaultOperationsIdle,
   openVaultPage,
 } from './helpers'
+import type { KeptVault } from './helpers'
 import {
   installLocalFolderPickerMock,
   localFolderPickerInvocationCount,
@@ -74,7 +77,7 @@ test.describe('local folder backup provider', () => {
     await expectEmptyLocalFolderRejected(page)
   })
 
-  test('keeps the chosen folder staged through passkey authorization', async ({
+  test('lists the keyring of a folder holding one vault, which then opens from its card', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -90,14 +93,13 @@ test.describe('local folder backup provider', () => {
     await connectLocalFolderProviderFromSettings(page)
     await openVaultPage(page)
     await assertVaultReady(page)
-    const sourceSecretKey = uniqueSecretKey('existing-folder-source')
-    await addSecret(page, sourceSecretKey, 'existing-folder-value')
+    const kept: KeptVault = {
+      storeId: await openStoreId(page),
+      key: uniqueSecretKey('existing-folder-source'),
+      value: 'existing-folder-value',
+    }
+    await addSecret(page, kept.key, kept.value)
     await waitForLocalFolderEventRecords(page)
-    const passkeyLabel = await page.evaluate(() =>
-      ((v) => (v ? v : ''))(localStorage.getItem('nook_e2e_passkey_label')),
-    )
-    const passkeyDeviceHint = passkeyLabel.split(' - device ')[1]
-    expect(passkeyDeviceHint).toBeTruthy()
 
     await clearBrowserVault(page)
     await page.reload()
@@ -107,26 +109,33 @@ test.describe('local folder backup provider', () => {
     await expect.poll(() => localFolderPickerInvocationCount(page)).toBe(1)
     await page.getByTestId('login-connect-local-folder-btn').click()
 
-    await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible()
-    await expect(page.getByTestId('device-protection-gate')).toBeVisible()
-    const recoverySummary = page.getByTestId('existing-vault-recovery-summary')
-    await expect(recoverySummary).toBeVisible()
-    await expect(page.getByTestId('existing-vault-passkey-hints')).toBeVisible()
-    await expect(recoverySummary).toContainText(`device ${passkeyDeviceHint}`)
-    await expect(page.locator('body')).not.toContainText(
-      "Authorize before using this browser's device key.",
-    )
-
-    await page.getByTestId('device-protection-use-existing-choice').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
+    // The folder keeps a keyring, not a vault: its one vault does not open
+    // on its own, and its keyring is listed with its ways in.
+    await expect(page.getByTestId('remote-vault-choice')).toBeVisible({
       timeout: 30_000,
     })
+    await expect(page.getByTestId('vault-panel')).toHaveCount(0)
+    const card = page.locator(
+      `[data-testid="provider-identity"][data-store-ids~="${kept.storeId}"]`,
+    )
+    await card
+      .locator(
+        '[data-testid="provider-identity-decision"][data-decision="addToBrowser"]',
+      )
+      .click()
+    await page.getByTestId('remote-vault-choice-apply').click()
+
+    // The keyring is recovered with its vault, which stays on its card.
+    await expect(
+      page.locator(
+        `[data-testid="identity-vault-row"][data-store-id="${kept.storeId}"]`,
+      ),
+    ).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByTestId('remote-vault-choice')).toHaveCount(0)
+    await expect(page.getByTestId('vault-panel')).toHaveCount(0)
     await expect(page.getByTestId('local-folder-setup')).toHaveCount(0)
     await expect.poll(() => localFolderPickerInvocationCount(page)).toBe(1)
-    await expect(
-      page.getByTestId('secret-row').filter({ hasText: sourceSecretKey }),
-    ).toBeVisible()
-    await expect(recoverySummary).toHaveCount(0)
+    expect(await readSecretOfVault(page, kept)).toBe(kept.value)
   })
 
   test('explains the automated browser directory-picker boundary', async ({
@@ -227,16 +236,13 @@ test.describe('local folder backup provider', () => {
     await page.goto('/app/')
     const { sharedFolder } = await backUpTwoVaultsToOneFolder(page)
 
-    await expect(page.getByTestId('vault-sync-conflict-dialog')).toHaveCount(0)
     // Each browser filed its vault under the identity it created.
     const vaults = filedVaults(sharedFolder)
     expect(vaults).toHaveLength(2)
     expect(new Set(vaults.map((vault) => vault.identityId)).size).toBe(2)
   })
 
-  test('offers a vault choice when a folder holds several vaults', async ({
-    page,
-  }) => {
+  test('lists each keyring when a folder holds several', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('nook_e2e_manual_passkey', 'true')
     })
@@ -271,14 +277,16 @@ test.describe('local folder backup provider', () => {
       )
       .click()
     await page.getByTestId('remote-vault-choice-apply').click()
-    await expect(page.getByTestId('remote-vault-choice')).toHaveCount(0)
-    await expect(page.getByTestId('device-protection-gate')).toBeVisible({
+    await expect(page.getByTestId('remote-vault-choice')).toHaveCount(0, {
       timeout: 30_000,
     })
-    await page.getByTestId('device-protection-use-existing-choice').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: 30_000,
-    })
-    await expect(page.getByTestId('secret-row')).toHaveCount(1)
+    // The keyring lands on the keyrings page with its vault on its card;
+    // no vault opens on its own.
+    await expect(
+      page.locator(
+        `[data-testid="identity-vault-row"][data-store-id="${latestStoreId}"]`,
+      ),
+    ).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByTestId('vault-panel')).toHaveCount(0)
   })
 })

@@ -2,7 +2,7 @@ import { KeyRound, Puzzle, Vault } from "@lucide/svelte";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import {
-  FirstRunDiagramArrow,
+  FirstRunDiagramArrowKind,
   type FirstRunDiagramView,
 } from "./login/first-run-diagram";
 
@@ -23,25 +23,31 @@ export function extensionConnectDiagram({
     testId: "extension-connect-diagram",
     nodes: [
       {
-        icon: Puzzle,
+        icons: [Puzzle],
         label: vault.t(I18N_KEYS.ExtensionConsentDiagramExtension),
         testId: "extension-connect-diagram-extension",
         current: true,
-        arrow: FirstRunDiagramArrow.Forward,
+        arrow: { kind: FirstRunDiagramArrowKind.Start },
       },
       {
-        icon: KeyRound,
+        icons: [KeyRound],
         label: keyring,
         testId: "extension-connect-diagram-keyring",
         current: false,
-        arrow: FirstRunDiagramArrow.Forward,
+        arrow: {
+          kind: FirstRunDiagramArrowKind.Forward,
+          label: vault.t(I18N_KEYS.ExtensionConsentDiagramJoins),
+        },
       },
       {
-        icon: Vault,
+        icons: [Vault],
         label: vault.t(I18N_KEYS.ExtensionConsentDiagramVaults),
         testId: "extension-connect-diagram-vaults",
         current: false,
-        arrow: FirstRunDiagramArrow.Forward,
+        arrow: {
+          kind: FirstRunDiagramArrowKind.Forward,
+          label: vault.t(I18N_KEYS.FirstRunDiagramOpens),
+        },
       },
     ],
   };

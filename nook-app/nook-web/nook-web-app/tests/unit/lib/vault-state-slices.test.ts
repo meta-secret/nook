@@ -1,10 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import {
-  NookBrowserLocale,
-  NookLocalFolderHealth,
-  NookLocalFolderHealthState,
-  NookVaultLastSyncState,
-} from '$app-wasm'
+import { NookBrowserLocale, NookVaultLastSyncState } from '$app-wasm'
 import { VaultStateSlices } from '$lib/vault/state/index.svelte'
 import { VaultRuntimeState } from '$lib/vault/state/runtime.svelte'
 import {
@@ -46,18 +41,5 @@ describe('vault state slice transitions', () => {
     state.markSynced(syncedAt)
     expect(state.lastSync.state).toBe(NookVaultLastSyncState.Synced)
     expect(state.lastSync.syncedAtUnixMilliseconds).toBe(syncedAt)
-
-    const localFolderIssue = NookLocalFolderHealth.multiple_vaults(
-      'provider-1',
-      'Local folder',
-      ['store-1', 'store-2'],
-      'Folder contains multiple vaults.',
-    )
-    state.reportLocalFolderMultipleVaults(localFolderIssue)
-    expect(state.localFolderHealth.state).toBe(
-      NookLocalFolderHealthState.MultipleVaults,
-    )
-    expect(state.localFolderHealth.providerId).toBe('provider-1')
-    expect(state.localFolderHealth.storeIds).toEqual(['store-1', 'store-2'])
   })
 })

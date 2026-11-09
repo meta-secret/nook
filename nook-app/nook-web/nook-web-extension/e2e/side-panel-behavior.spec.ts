@@ -496,6 +496,44 @@ test('approval on the connect page shows the new identity in the panel at once',
   expect(await panel.pageDisconnected(port)).toBe(true)
 })
 
+test('approving a keyring that has no vault yet shows it on This site at once', async ({
+  page,
+}) => {
+  const panel = new SidePanelStubPage(page)
+  // The Nook tab is a page Nook does not fill, and nothing is connected yet.
+  const nookTab: SidePanelSiteListing = {
+    kind: SidePanelSiteListingKind.PageUnavailable,
+  }
+  await panel.open({
+    ...unlockedScenario,
+    vaults: SidePanelStubVaults.None,
+    listing: nookTab,
+  })
+  await page.getByTestId('side-panel-connect-start').click()
+  const port = await panel.connectPage()
+  await panel.pageSends({
+    port,
+    message: { kind: ExtensionConnectStepKind.Consent },
+  })
+  // The keyring was approved before it had a vault: connected, no vault.
+  await panel.update({ vaults: SidePanelStubVaults.KeyringWithoutVault })
+  await panel.pageSends({
+    port,
+    message: { kind: ExtensionConnectStepKind.Approved },
+  })
+
+  const connected = page.getByTestId('side-panel-connected-identity')
+  await expect(connected).toHaveCount(1)
+  await expect(
+    connected.getByTestId('side-panel-connected-keyring'),
+  ).toHaveText('Alice Martin')
+  await expect(
+    connected.getByTestId('side-panel-connected-keyring-no-vaults'),
+  ).toHaveText('No vaults in this keyring yet')
+  await expect(page.getByTestId('side-panel-connected-vault')).toHaveCount(0)
+  await expect(page.getByTestId('side-panel-connect-card')).toHaveCount(0)
+})
+
 test('with no identity the card leads with one Connect, and closing the Nook tab brings it back', async ({
   page,
 }) => {

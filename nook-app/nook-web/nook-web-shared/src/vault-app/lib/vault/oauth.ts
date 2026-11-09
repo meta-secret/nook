@@ -28,7 +28,6 @@ import {
   type GoogleDriveAccess,
   type ICloudAccess,
   type ICloudSignIn,
-  type LocalVaultOccupancy,
   type NookDriveRootOrigin,
   type NookGoogleDriveVaultListing,
   type ProviderDraft,
@@ -445,17 +444,14 @@ export class VaultOAuthActions {
    * creating it: each vault's created and last-activity times, event count,
    * short id, and whether it belongs to this identity. Nothing is decrypted.
    */
-  async listGoogleDriveVaults(
-    localVault: LocalVaultOccupancy,
-  ): Promise<Result<NookGoogleDriveVaultListing, OAuthFailure>> {
+  async listGoogleDriveVaults(): Promise<
+    Result<NookGoogleDriveVaultListing, OAuthFailure>
+  > {
     const access = this.driveAccess(this.state.providerDraft);
     if (access.isErr()) return err(access.error);
     try {
       return ok(
-        await list_google_drive_vaults(
-          access.value.authorization.accessToken,
-          localVault,
-        ),
+        await list_google_drive_vaults(access.value.authorization.accessToken),
       );
     } catch (failure) {
       const report: DriveRootFailureReport = {

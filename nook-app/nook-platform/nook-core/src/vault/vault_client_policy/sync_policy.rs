@@ -71,12 +71,11 @@ impl VaultClientPolicy {
     pub const fn should_sync_from_providers(
         request: crate::ShouldSyncFromProvidersRequest,
     ) -> bool {
-        !matches!(request.sync_blocked, crate::VaultSyncPermission::Blocked)
-            && (matches!(request.force, crate::VaultSyncIntent::Forced)
-                || (!matches!(request.verifying, crate::VaultVerificationState::Verifying)
-                    && !matches!(request.saving, crate::VaultSaveActivity::Saving)
-                    && !matches!(request.invite_busy, crate::VaultInviteActivity::Busy)
-                    && !matches!(request.syncing, crate::VaultSyncActivity::Syncing)))
+        (matches!(request.force, crate::VaultSyncIntent::Forced)
+            || (!matches!(request.verifying, crate::VaultVerificationState::Verifying)
+                && !matches!(request.saving, crate::VaultSaveActivity::Saving)
+                && !matches!(request.invite_busy, crate::VaultInviteActivity::Busy)
+                && !matches!(request.syncing, crate::VaultSyncActivity::Syncing)))
             && request.sync_provider_count.is_nonzero()
     }
 
@@ -175,10 +174,7 @@ impl VaultClientPolicy {
     pub const fn vault_storage_sync_decision(
         request: crate::VaultStorageSyncDecisionRequest,
     ) -> VaultStorageSyncDecision {
-        match request.sync_blocked {
-            crate::VaultSyncPermission::Blocked => VaultStorageSyncDecision::Skip,
-            crate::VaultSyncPermission::Allowed => request.allowed_sync_decision(),
-        }
+        request.allowed_sync_decision()
     }
 }
 
@@ -285,7 +281,6 @@ mod tests {
     fn provider_sync_guard_respects_busy_and_forced_states() {
         assert!(VaultClientPolicy::should_sync_from_providers(
             crate::ShouldSyncFromProvidersRequest {
-                sync_blocked: (false).into(),
                 force: (false).into(),
                 verifying: (false).into(),
                 saving: (false).into(),
@@ -296,7 +291,6 @@ mod tests {
         ));
         assert!(!VaultClientPolicy::should_sync_from_providers(
             crate::ShouldSyncFromProvidersRequest {
-                sync_blocked: (false).into(),
                 force: (false).into(),
                 verifying: (false).into(),
                 saving: (true).into(),
@@ -307,23 +301,11 @@ mod tests {
         ));
         assert!(VaultClientPolicy::should_sync_from_providers(
             crate::ShouldSyncFromProvidersRequest {
-                sync_blocked: (false).into(),
                 force: (true).into(),
                 verifying: (false).into(),
                 saving: (true).into(),
                 invite_busy: (true).into(),
                 syncing: (true).into(),
-                sync_provider_count: 1.into()
-            }
-        ));
-        assert!(!VaultClientPolicy::should_sync_from_providers(
-            crate::ShouldSyncFromProvidersRequest {
-                sync_blocked: (true).into(),
-                force: (true).into(),
-                verifying: (false).into(),
-                saving: (false).into(),
-                invite_busy: (false).into(),
-                syncing: (false).into(),
                 sync_provider_count: 1.into()
             }
         ));
@@ -491,7 +473,6 @@ mod tests {
         assert_eq!(
             VaultClientPolicy::vault_storage_sync_decision(
                 crate::VaultStorageSyncDecisionRequest {
-                    sync_blocked: (false).into(),
                     freshness: ProviderSyncFreshness::Scheduled,
                     verifying: (false).into(),
                     saving: (true).into(),
@@ -508,7 +489,6 @@ mod tests {
         assert_eq!(
             VaultClientPolicy::vault_storage_sync_decision(
                 crate::VaultStorageSyncDecisionRequest {
-                    sync_blocked: (false).into(),
                     freshness: ProviderSyncFreshness::Forced,
                     verifying: (false).into(),
                     saving: (true).into(),
@@ -525,7 +505,6 @@ mod tests {
         assert_eq!(
             VaultClientPolicy::vault_storage_sync_decision(
                 crate::VaultStorageSyncDecisionRequest {
-                    sync_blocked: (false).into(),
                     freshness: ProviderSyncFreshness::Forced,
                     verifying: (false).into(),
                     saving: (false).into(),
@@ -542,7 +521,6 @@ mod tests {
         assert_eq!(
             VaultClientPolicy::vault_storage_sync_decision(
                 crate::VaultStorageSyncDecisionRequest {
-                    sync_blocked: (false).into(),
                     freshness: ProviderSyncFreshness::Forced,
                     verifying: (false).into(),
                     saving: (false).into(),
@@ -559,7 +537,6 @@ mod tests {
         assert_eq!(
             VaultClientPolicy::vault_storage_sync_decision(
                 crate::VaultStorageSyncDecisionRequest {
-                    sync_blocked: (false).into(),
                     freshness: ProviderSyncFreshness::Forced,
                     verifying: (false).into(),
                     saving: (false).into(),

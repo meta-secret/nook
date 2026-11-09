@@ -282,14 +282,14 @@ test.describe('S3-compatible storage as the sync provider', () => {
     page,
   }) => {
     // A keyring kept on this browser only, with no vault, then S3 from its
-    // card's "Protect this keyring" checklist.
+    // card's "Set up this keyring" checklist.
     const card = await keepIdentityWithoutVault(page, KEYRING_NAME)
     await addS3FromProtection(page, {
       keyPrefix: uniqueS3KeyPrefix('protect'),
       identity: LocalS3Identity.DeviceA,
     })
     const protection = card.getByTestId('identity-protection-toggle')
-    await expect(protection).toContainText('1 of 2 done', {
+    await expect(protection).toContainText('1 of 3 done', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await openIdentityPanel(page)
@@ -312,7 +312,7 @@ test.describe('S3-compatible storage as the sync provider', () => {
     await expect(card).toHaveAttribute('data-status', 'unlocked', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(protection).toContainText('1 of 2 done')
+    await expect(protection).toContainText('1 of 3 done')
     await openIdentityPanel(page)
     await expect(s3Row).toBeVisible()
   })

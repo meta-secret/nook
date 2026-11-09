@@ -6,21 +6,6 @@ use thiserror::Error;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VaultSyncConflictState {
-    Clear,
-    Conflicted,
-}
-impl From<bool> for VaultSyncConflictState {
-    fn from(observed: bool) -> Self {
-        if observed {
-            Self::Conflicted
-        } else {
-            Self::Clear
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VaultSecretCreationPermission {
     Denied,
     Allowed,
@@ -138,21 +123,6 @@ impl From<bool> for VaultSelectionState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VaultExistenceRequirement {
-    MayCreate,
-    ExistingRequired,
-}
-impl From<bool> for VaultExistenceRequirement {
-    fn from(observed: bool) -> Self {
-        if observed {
-            Self::ExistingRequired
-        } else {
-            Self::MayCreate
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeviceProtectionReadiness {
     Locked,
     Ready,
@@ -219,21 +189,6 @@ pub enum VaultSaveActivity {
 impl From<bool> for VaultSaveActivity {
     fn from(observed: bool) -> Self {
         if observed { Self::Saving } else { Self::Idle }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VaultSyncPermission {
-    Allowed,
-    Blocked,
-}
-impl From<bool> for VaultSyncPermission {
-    fn from(observed: bool) -> Self {
-        if observed {
-            Self::Blocked
-        } else {
-            Self::Allowed
-        }
     }
 }
 

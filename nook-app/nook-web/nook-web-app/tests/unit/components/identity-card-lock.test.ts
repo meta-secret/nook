@@ -8,6 +8,13 @@ import {
   IdentityVaultRowState,
   type IdentityCardView,
 } from '$lib/components/identities/identity-card-model'
+import { err, ok } from 'neverthrow'
+import { IdentityActionOutcome } from '$lib/vault/identity-control.svelte'
+import {
+  VaultStorageFailure,
+  VaultStorageFailureKind,
+} from '$lib/runtime/storage-failure'
+import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 function card(status: IdentityCardStatus): IdentityCardView {
@@ -217,5 +224,79 @@ describe('identity card width beside a vault panel', () => {
     await fireEvent.click(view.getByTestId('identity-vault-row'))
     await tick()
     expect(article.dataset.spread).toBe('false')
+  })
+})
+
+describe('a vault of the unlocked keyring that is not on this browser', () => {
+  /** The same card once the vault opened from its provider. */
+  function openCard(): IdentityCardView {
+    return {
+      ...card(IdentityCardStatus.Unlocked),
+      vaults: [
+        {
+          storeId: 'store-qwe',
+          label: 'Travel',
+          state: IdentityVaultRowState.Open,
+        },
+      ],
+    }
+  }
+
+  function renderAway(status: IdentityCardStatus) {
+    const vault = VaultStateTestFixture.create()
+    const view: IdentityCardView = {
+      ...card(status),
+      vaults: [
+        {
+          storeId: 'store-qwe',
+          label: 'store-qwe',
+          state: IdentityVaultRowState.Unavailable,
+        },
+      ],
+    }
+    const props: ComponentProps<typeof IdentityCard> = {
+      vault,
+      card: view,
+      onOpenVault: () => {},
+    }
+    return { vault, view: render(IdentityCard, props) }
+  }
+
+  test('opens from the sync provider as its row is picked and keeps its panel on the keyrings page', async () => {
+    const { vault, view } = renderAway(IdentityCardStatus.Unlocked)
+    const openVault = vi
+      .spyOn(vault.identityControl, 'openVault')
+      .mockResolvedValue(ok(IdentityActionOutcome.Completed))
+    const openSection = vi.spyOn(vault, 'openSection').mockReturnValue()
+
+    await fireEvent.click(view.getByTestId('identity-vault-row'))
+    await tick()
+
+    expect(openVault).toHaveBeenCalledExactlyOnceWith('store-qwe')
+    expect(openSection).toHaveBeenCalledExactlyOnceWith(
+      WorkspaceSection.Identities,
+    )
+    expect(vault.vaultPanelStoreId).toBe('store-qwe')
+    // No panel for it until it is open: no Open step from the provider.
+    expect(view.queryByTestId('vault-panel-beside')).not.toBeTruthy()
+
+    await view.rerender({ card: openCard() })
+    expect(view.getByTestId('vault-panel-beside')).toBeTruthy()
+    expect(view.getByTestId('vault-panel-open')).toBeTruthy()
+  })
+
+  test('a failed open says why', async () => {
+    const { vault, view } = renderAway(IdentityCardStatus.Unlocked)
+    vi.spyOn(vault.identityControl, 'openVault').mockResolvedValue(
+      err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
+    )
+    vi.spyOn(vault, 'openSection').mockReturnValue()
+
+    await fireEvent.click(view.getByTestId('identity-vault-row'))
+    await tick()
+
+    expect(vault.errorMsg).not.toBe('')
+    expect(vault.vaultPanelStoreId).toBe('')
+    expect(view.queryByTestId('vault-panel-beside')).not.toBeTruthy()
   })
 })

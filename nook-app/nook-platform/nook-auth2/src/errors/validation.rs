@@ -117,15 +117,6 @@ pub enum ValidationError {
     #[error("{}", i18n_keys::ERRORS_VALIDATION_GITHUB_REPO_CHARS)]
     GithubRepoChars,
 
-    #[error("{}", i18n_keys::ERRORS_VALIDATION_DRIVE_FILE_NAME_LENGTH)]
-    DriveFileNameLength,
-
-    #[error("{}", i18n_keys::ERRORS_VALIDATION_DRIVE_FILE_NAME_INVALID)]
-    DriveFileNameInvalid,
-
-    #[error("{}", i18n_keys::ERRORS_VALIDATION_DRIVE_FILE_NAME_CHARS)]
-    DriveFileNameChars,
-
     #[error("{}", i18n_keys::ERRORS_VALIDATION_OAUTH_ACCESS_TOKEN_EMPTY)]
     OauthAccessTokenEmpty,
 

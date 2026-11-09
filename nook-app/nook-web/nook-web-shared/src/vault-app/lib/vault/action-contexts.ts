@@ -2,7 +2,6 @@ import type {
   ProviderSyncMetadataUpdateOutcome,
   VaultSynchronizationResult,
 } from "$lib/vault/sync.svelte";
-import type { StagedProviderConflictOutcome } from "$lib/vault/provider-conflict";
 import type { ActiveVaultAuthSyncOutcome } from "$lib/vault/local-login";
 import type { ProviderSyncOutcome } from "$lib/vault/provider-sync.svelte";
 import type { Result } from "neverthrow";
@@ -11,10 +10,8 @@ import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import type { NookStorageConnection } from "$app-wasm";
 export type { NookStorageConnection } from "$app-wasm";
 import type {
-  NookPendingSyncConflict,
   NookProviderSyncRevision,
   NookRuntimeConfig,
-  NookSyncConflictReview,
   ProviderSyncFailureHandling,
   ProviderSyncFreshness,
   ProviderSyncVisibility,
@@ -134,11 +131,8 @@ type ProviderStateFields = Pick<
   VaultProviderState,
   | "activeVault"
   | "addProviderOpen"
-  | "clearExistingVaultRecoverySummary"
   | "clearLoginSetup"
   | "activateLoginSetup"
-  | "recoveryDiscovery"
-  | "recordExistingVaultRecovery"
   | "hasActiveVaultStore"
   | "icloudOAuthBusy"
   | "icloudOAuthPreparing"
@@ -147,7 +141,7 @@ type ProviderStateFields = Pick<
   | "localVaultCatalog"
   | "localVaults"
   | "localVaultPresent"
-  | "loginRequiresExistingVault"
+  | "keyringRecoveryActive"
   | "loginSetup"
   | "providerDraft"
   | "stageProviderDraft"
@@ -170,11 +164,7 @@ type ProviderRuntimeFields = Pick<
 
 type ProviderSessionFields = Pick<
   VaultSessionState,
-  | "isAuthenticated"
-  | "joinEnrollmentPrompt"
-  | "hasManager"
-  | "admitManager"
-  | "remoteVaultRecoveryState"
+  "isAuthenticated" | "joinEnrollmentPrompt" | "hasManager" | "admitManager"
 >;
 
 interface SharedStorageActionsContext {
@@ -212,23 +202,12 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   flushRemoteEventOutboxNow(
     request: EventOutboxRequest,
   ): Promise<Result<EventOutboxFlushOutcome, VaultStorageFailure>>;
-  handleRemoteVaultAssessStatus(
-    accessStatus: VaultAccessStatus,
-  ): Promise<boolean>;
   loadDb(): Promise<void>;
   persistProviders(
     options: ProviderPersistenceOptions,
   ): Promise<Result<ProviderPersistenceOutcome, VaultStorageFailure>>;
   resetVaultSessionState(resetManager?: boolean): void;
   showSuccess(message: string): void;
-  stageStagedProviderSyncIssue(
-    args: NookStorageConnection,
-  ): Promise<
-    Result<
-      StagedProviderConflictOutcome | VaultOperationStale,
-      VaultStorageFailure
-    >
-  >;
   stagedRemoteStorageArgs(): StagedRemoteStorage;
   syncProviderById(
     request: ProviderSyncRequest,
@@ -239,8 +218,7 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
 export type ProviderActionsContext = ProviderStateFields &
   ProviderRuntimeFields &
   ProviderSessionFields &
-  ProviderActionPorts &
-  Pick<VaultSyncState, "localFolderHealth">;
+  ProviderActionPorts;
 
 export type ActiveProviderCredentialsContext = Pick<
   ProviderActionsContext,
@@ -262,7 +240,7 @@ export type ProviderSaveContext = Pick<
   | "hasActiveVaultStore"
   | "hasManager"
   | "isAuthenticated"
-  | "loginRequiresExistingVault"
+  | "keyringRecoveryActive"
   | "loginSetup"
   | "providerDraft"
   | "stageProviderDraft"
@@ -314,7 +292,6 @@ type SyncSessionFields = Pick<
   | "hasManager"
   | "admitManager"
   | "pendingJoins"
-  | "remoteVaultRecoveryState"
   | "sessionExpiredByIdle"
   | "vaultMembers"
 >;
@@ -327,19 +304,15 @@ export type SyncScheduleRequest = {
 type SyncStateFields = Pick<
   VaultSyncState,
   | "beginManualProviderSync"
-  | "clearLocalFolderMultipleVaultsIssue"
   | "clearSyncingProvider"
   | "isFanOutSyncing"
   | "isSyncing"
-  | "localFolderHealth"
   | "manualProviderSync"
   | "markSynced"
   | "clearProjectionConflicts"
   | "replacementConflicts"
   | "replaceProjectionConflicts"
-  | "reportLocalFolderMultipleVaults"
   | "securityConflicts"
-  | "syncConflictReview"
 > & {
   fanOutSyncChain: Promise<void>;
   isSyncScheduled(): boolean;
@@ -368,13 +341,10 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   readonly deviceProtectionReady: boolean;
   readonly localDataDeletionStarted: boolean;
   readonly runtimeConfig: NookRuntimeConfig;
-  readonly syncBlocked: boolean;
   readonly syncProviders: StorageProvider[];
   applyVaultSyncResult(
     result: NookVaultSyncResult,
   ): Result<VaultSyncApplicationOutcome, VaultStorageFailure>;
-  clearPendingSyncConflict(): void;
-  clearLocalFolderMultipleVaultsIssue(): void;
   clearSyncingProvider(): void;
   stopScheduledSync(): boolean;
   clearUnlockedSession(resetManager?: boolean): void;
@@ -387,12 +357,6 @@ interface SyncActionPorts extends SharedStorageActionsContext {
       OAuthFailure | VaultStorageFailure
     >
   >;
-  ensureProviderSavedAfterConflict(
-    conflict: NookSyncConflictReview,
-  ): Promise<Result<string, VaultStorageFailure>>;
-  finishStagedProviderConnectAfterConflict(
-    conflict: NookSyncConflictReview,
-  ): void;
   hasRemoteCredentials(): boolean;
   credentialReadiness(): ProviderCredentialReadiness;
   hydrateMultiDeviceState(): Promise<
@@ -439,7 +403,6 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   showSuccess(message: string): void;
   stagedProviderLabel(): string;
   stagedRemoteStorageArgs(): StagedRemoteStorage;
-  stageSyncConflict(conflict: NookPendingSyncConflict): void;
   stopVaultSync(): void;
   syncActiveVaultStoreIdToAuth(): Promise<
     Result<ActiveVaultAuthSyncOutcome, VaultStorageFailure>
@@ -489,8 +452,6 @@ export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
     VaultSessionState,
     | "awaitingJoinApproval"
     | "enrollmentCode"
-    | "enrollMembersKey"
-    | "enrollSecretsKey"
     | "isAuthenticated"
     | "joinEnrollmentPrompt"
     | "hasManager"

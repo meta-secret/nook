@@ -57,9 +57,7 @@ const uiKeys = [
   "newIdentityName",
   "vaultPanelStoreId",
   "unlockReturn",
-  "vaultImportOpen",
-  "emptyVaultReplacement",
-  "forgetEmptyVaultReplacement",
+  "keyringRecoveryOpen",
   "identityDirectory",
   "identityJoin",
   "keyringRecovery",
@@ -83,11 +81,8 @@ const providerKeys = [
   "loginSetup",
   "activateLoginSetup",
   "clearLoginSetup",
-  "loginRequiresExistingVault",
+  "keyringRecoveryActive",
   "remoteVaultChoices",
-  "recoveryDiscovery",
-  "recordExistingVaultRecovery",
-  "clearExistingVaultRecoverySummary",
   "addProviderOpen",
   "providerDraft",
   "stageProviderDraft",
@@ -120,11 +115,8 @@ const sessionKeys = [
   "devicePublicKey",
   "pendingJoins",
   "vaultMembers",
-  "enrollSecretsKey",
-  "enrollMembersKey",
   "joinEnrollmentPrompt",
   "awaitingJoinApproval",
-  "remoteVaultRecoveryState",
   "isInviteBusy",
   "enrollmentCode",
   "prefillEnrollmentCode",
@@ -176,15 +168,6 @@ const syncKeys = [
   "replaceProjectionConflicts",
   "clearProjectionConflicts",
   "stageSecurityConflictForTesting",
-  "stageContentSyncConflictForTesting",
-  "stageStoreIdSyncConflictForTesting",
-  "syncConflictReview",
-  "syncConflictRequiresDecision",
-  "stageSyncConflict",
-  "clearPendingSyncConflict",
-  "localFolderHealth",
-  "reportLocalFolderMultipleVaults",
-  "clearLocalFolderMultipleVaultsIssue",
 ] as const satisfies readonly (keyof VaultSyncState)[];
 
 class VaultStateSlicesImplementation {
@@ -221,9 +204,7 @@ class VaultStateSlicesImplementation {
   declare newIdentityName: VaultUiState["newIdentityName"];
   declare vaultPanelStoreId: VaultUiState["vaultPanelStoreId"];
   declare readonly unlockReturn: VaultUiState["unlockReturn"];
-  declare vaultImportOpen: VaultUiState["vaultImportOpen"];
-  declare emptyVaultReplacement: VaultUiState["emptyVaultReplacement"];
-  declare forgetEmptyVaultReplacement: VaultUiState["forgetEmptyVaultReplacement"];
+  declare keyringRecoveryOpen: VaultUiState["keyringRecoveryOpen"];
   declare identityDirectory: VaultUiState["identityDirectory"];
   declare identityJoin: VaultUiState["identityJoin"];
   declare keyringRecovery: VaultUiState["keyringRecovery"];
@@ -245,11 +226,8 @@ class VaultStateSlicesImplementation {
   declare readonly loginSetup: VaultProviderState["loginSetup"];
   declare activateLoginSetup: VaultProviderState["activateLoginSetup"];
   declare clearLoginSetup: VaultProviderState["clearLoginSetup"];
-  declare loginRequiresExistingVault: VaultProviderState["loginRequiresExistingVault"];
+  declare keyringRecoveryActive: VaultProviderState["keyringRecoveryActive"];
   declare remoteVaultChoices: VaultProviderState["remoteVaultChoices"];
-  declare readonly recoveryDiscovery: VaultProviderState["recoveryDiscovery"];
-  declare recordExistingVaultRecovery: VaultProviderState["recordExistingVaultRecovery"];
-  declare clearExistingVaultRecoverySummary: VaultProviderState["clearExistingVaultRecoverySummary"];
   declare addProviderOpen: VaultProviderState["addProviderOpen"];
   declare readonly providerDraft: VaultProviderState["providerDraft"];
   declare stageProviderDraft: VaultProviderState["stageProviderDraft"];
@@ -280,11 +258,8 @@ class VaultStateSlicesImplementation {
   declare devicePublicKey: VaultSessionState["devicePublicKey"];
   declare pendingJoins: VaultSessionState["pendingJoins"];
   declare vaultMembers: VaultSessionState["vaultMembers"];
-  declare enrollSecretsKey: VaultSessionState["enrollSecretsKey"];
-  declare enrollMembersKey: VaultSessionState["enrollMembersKey"];
   declare joinEnrollmentPrompt: VaultSessionState["joinEnrollmentPrompt"];
   declare awaitingJoinApproval: VaultSessionState["awaitingJoinApproval"];
-  declare remoteVaultRecoveryState: VaultSessionState["remoteVaultRecoveryState"];
   declare isInviteBusy: VaultSessionState["isInviteBusy"];
   declare enrollmentCode: VaultSessionState["enrollmentCode"];
   declare prefillEnrollmentCode: VaultSessionState["prefillEnrollmentCode"];
@@ -330,20 +305,6 @@ class VaultStateSlicesImplementation {
   declare replaceProjectionConflicts: VaultSyncState["replaceProjectionConflicts"];
   declare clearProjectionConflicts: VaultSyncState["clearProjectionConflicts"];
   declare stageSecurityConflictForTesting: VaultSyncState["stageSecurityConflictForTesting"];
-  declare stageContentSyncConflictForTesting: VaultSyncState["stageContentSyncConflictForTesting"];
-  declare stageStoreIdSyncConflictForTesting: VaultSyncState["stageStoreIdSyncConflictForTesting"];
-  declare readonly syncConflictReview: VaultSyncState["syncConflictReview"];
-  declare readonly syncConflictRequiresDecision: VaultSyncState["syncConflictRequiresDecision"];
-  stageSyncConflict(
-    value: Parameters<VaultSyncState["stageSyncConflict"]>[0],
-  ): ReturnType<VaultSyncState["stageSyncConflict"]> {
-    void value;
-    throw new Error("Vault state delegate was not initialized");
-  }
-  declare clearPendingSyncConflict: VaultSyncState["clearPendingSyncConflict"];
-  declare readonly localFolderHealth: VaultSyncState["localFolderHealth"];
-  declare reportLocalFolderMultipleVaults: VaultSyncState["reportLocalFolderMultipleVaults"];
-  declare clearLocalFolderMultipleVaultsIssue: VaultSyncState["clearLocalFolderMultipleVaultsIssue"];
 
   private delegateState<State extends VaultStateSlice>({
     target,

@@ -56,10 +56,11 @@ manager imports keep "identities" for their person and address items.
   opening from their rows (which starts key recovery). Local vaults no card lists, or every local vault when the
   identity directory cannot be read, are listed on their own so they always
   open.
-- **New vault** on the current identity's card creates a vault for it.
+- **New vault** on the current identity's card only creates a vault for it.
   **New identity** starts the new-identity flow (below). Beside it, a
   quieter **Check access** opens the check of which identity a passkey
-  opens; the header carries no such button.
+  opens, and **Recover keyring** opens [recovery](#recovery); the header
+  carries no such button.
 - A browser extension asking to connect is answered beside the current
   identity's card, never on a page of its own. While locked, that panel
   unlocks the identity; once unlocked, the approval itself (the extension
@@ -80,9 +81,10 @@ Simple and unified apps. Sentinel is never offered.
 The identity is settled before any vault exists. The step bar counts
 Passkey, Sync provider, Identity, and Vault. Each step is one centred column
 with a short title. A diagram appears once per new idea, in place of a
-paragraph: Your passkey → Your identity → Your vaults on the Passkey step,
-This device → Sync provider ← Your other devices on the Sync step. A line of
-text stays only for a requirement, a consequence, or a promise.
+paragraph: Your passkey —unlocks→ Your identity —opens→ Your vaults on the
+Passkey step, This device —syncs→ Sync provider ←syncs— Your other devices on
+the Sync step. A short verb on each arrow says what one box does to the next.
+A line of text stays only for a requirement, a consequence, or a promise.
 
 - **Start**: "Create your identity" and one Create identity button, with no
   subtitle: the Passkey step explains the passkey. Under an "or", the other paths are equal rows, each an
@@ -96,12 +98,12 @@ text stays only for a requirement, a consequence, or a promise.
   [identity decisions](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md)
   record describes. A link below checks which passkey opens what, before
   anything is recovered.
-- **Passkey** ("One passkey opens it all"): the diagram says what it is for,
-  and one line makes the promise: no password, no Nook server. A new
-  passkey, or one made for Nook before, makes this browser's key. Back
-  returns to Start.
-- **Sync provider**: before sign-in, one line and a small diagram (This
-  device → Sync provider ← Your other devices) say what it is for. Google
+- **Passkey** ("One passkey opens it all"): the diagram says
+  what it is for. A new passkey, or one made for Nook before, makes this
+  browser's key. Back returns to Start.
+- **Sync provider**: before sign-in, no line of text: a small diagram (This
+  device —syncs→ Your cloud storage ←syncs— Your other devices, the cloud box
+  drawn with the Google Drive and iCloud marks) says what it is for. Google
   Drive signs in, and Nook lists the identities in its Nook folder. Each card has the one action Rust decides from this
   browser's key ([setup action](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md#setup-action)):
   - **Continue** when the key is a member: the identity is added here and
@@ -148,9 +150,12 @@ passphrase-protected code, so joining shows no sign-in.
 ### Recovery
 
 For a browser with no device left that has the identity: pick the sync
-provider that holds the vault, then unlock with a passkey synced to this
-device. If another device still has the
-identity, joining from it is the path instead.
+provider that keeps the identity, then recover it with a passkey synced to
+this device or a recovery passphrase. Its vaults come with it. If another
+device still has the identity, joining from it is the path instead. A sync
+provider keeps identities, not vaults, as
+[recover a keyring from a sync provider](../../../nook-platform/.cortex/docs/architecture/identity-vault-architecture.md#recover-a-keyring-from-a-sync-provider)
+states.
 
 ### New identity
 

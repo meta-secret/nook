@@ -20,7 +20,6 @@ function renderWithoutFolderAccess() {
   const props = {
     vault,
     onSelect: vi.fn(),
-    local: PickerRow.Offered,
     localFolder: PickerRow.Offered,
   } satisfies ComponentProps<typeof ProviderPicker>
   return render(ProviderPicker, props)
@@ -38,7 +37,6 @@ function renderFor(replication: ReplicationType) {
   const props = {
     vault,
     onSelect,
-    local: PickerRow.Offered,
     localFolder: PickerRow.Offered,
   } satisfies ComponentProps<typeof ProviderPicker>
   return { view: render(ProviderPicker, props), onSelect }

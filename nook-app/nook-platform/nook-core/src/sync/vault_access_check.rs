@@ -264,6 +264,37 @@ impl IdentityCheck {
     }
 }
 
+/// What reading a granted vault's name found.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(
+    tag = "state",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum GrantedVaultNameRead {
+    /// The vault's events were read; a vault never named has no name.
+    Read { name: ProviderVaultName },
+    /// No provider this browser saved replicates the vault yet, as right
+    /// after joining its keyring: the name is read once one does.
+    NotReplicatedHereYet,
+}
+
+/// One vault the keyring granted this browser, as its provider holds it.
+/// Its name lives inside the vault, sealed with its secrets key: a browser
+/// that never opened the vault reads it with the key the keyring granted.
+pub struct GrantedVaultEvents {
+    pub store_id: StoreId,
+    pub events: Vec<LocalEventWrite>,
+}
+
+impl GrantedVaultEvents {
+    /// The name the vault's own log carries, decrypted with its secrets key;
+    /// a vault its log never named has none. Nothing is stored or opened.
+    pub fn name(self, secrets_key: &SymmetricKey) -> VaultResult<ProviderVaultName> {
+        CheckedVaultSource::load(&self.store_id, self.events)?.name(secrets_key)
+    }
+}
+
 /// One vault's causal graph and projection, built in memory.
 pub(crate) struct CheckedVaultSource {
     graph: EventGraph,
@@ -323,6 +354,7 @@ mod tests {
         store_id: StoreId,
         identity_logs: Vec<ProviderIdentityLogEvents>,
         vault_events: Vec<LocalEventWrite>,
+        keys: VaultKeys,
     }
 
     impl NamedIdentity {
@@ -423,6 +455,7 @@ mod tests {
                         .collect(),
                 }],
                 vault_events,
+                keys,
             })
         }
 
@@ -503,6 +536,46 @@ mod tests {
                 .iter()
                 .all(|vault| vault.outcome == VaultCheckOutcome::DoesNotOpen)
         );
+        Ok(())
+    }
+
+    fn granted(named: &NamedIdentity, events: Vec<LocalEventWrite>) -> GrantedVaultEvents {
+        GrantedVaultEvents {
+            store_id: named.store_id.clone(),
+            events,
+        }
+    }
+
+    #[test]
+    fn a_granted_vault_reads_the_name_its_own_log_carries() -> anyhow::Result<()> {
+        let named = NamedIdentity::new()?;
+        let events = named.checked_vaults().remove(0).events;
+
+        let name = granted(&named, events).name(&named.keys.secrets_key)?;
+
+        assert_eq!(name, ProviderVaultName::named("Family"));
+        Ok(())
+    }
+
+    #[test]
+    fn another_vault_key_cannot_read_the_name() -> anyhow::Result<()> {
+        let named = NamedIdentity::new()?;
+        let events = named.checked_vaults().remove(0).events;
+        let other = VaultKeys::generate()?;
+
+        assert!(granted(&named, events).name(&other.secrets_key).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn a_vault_its_log_never_named_has_no_name() -> anyhow::Result<()> {
+        let named = NamedIdentity::new()?;
+        let mut events = named.checked_vaults().remove(0).events;
+        events.truncate(1);
+
+        let name = granted(&named, events).name(&named.keys.secrets_key)?;
+
+        assert_eq!(name, ProviderVaultName::Unknown);
         Ok(())
     }
 }

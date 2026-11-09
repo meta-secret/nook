@@ -253,7 +253,7 @@ impl BrowserPasskeyClient {
         let label = BrowserPasskeyClient::normalized_passkey_label(passkey_label);
         let device_id = DeviceId::parse(device_id).map_or_else(
             |_| device_id.trim().to_owned(),
-            |id| nook_core::VaultRecoveryDevice::passkey_hint_for(&id),
+            |id| nook_core::PasskeyDeviceHint::of(&id),
         );
         format!("{label} - device {device_id}")
     }

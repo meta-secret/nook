@@ -4,23 +4,19 @@ import type { VaultStorageFailure } from "$lib/runtime/storage-failure";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import { ExtensionSyncPublication } from "$lib/vault/sync-extension-bridge";
 import { KeyringProvidersHandOver } from "$lib/extension/keyring-providers";
-import { VaultAccessStatus, type NookVaultSyncResult } from "$lib/nook";
+import type { NookVaultSyncResult } from "$lib/nook";
 import {
   DeviceIdentityInitializationMode,
   is_vault_session_locked,
   set_vault_session_locked,
   ProviderSyncFreshness,
   ProviderSyncVisibility,
-  RemoteVaultRecoveryState,
-  type NookPendingSyncConflict,
   type NookProviderSyncRevision,
-  type NookSyncConflictReview,
   type NookSecretPage,
   type StartSentinelGenesisArgs,
   type StoreId,
 } from "$app-wasm";
 import type { ProviderKind } from "$lib/auth/providers";
-import type { ProviderVaultIdentitySelection } from "$lib/vault/provider-vault-decision";
 import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import type {
   ProviderActionsContext,
@@ -31,7 +27,6 @@ import type {
 import * as providersActions from "$lib/vault/providers.svelte";
 import * as localLoginActions from "$lib/vault/local-login";
 import * as syncActions from "$lib/vault/sync.svelte";
-import * as providerConflictActions from "$lib/vault/provider-conflict";
 import * as architectureActions from "$lib/vault/architecture";
 import * as sessionActions from "$lib/vault/session";
 import * as uiActions from "$lib/vault/ui";
@@ -237,28 +232,12 @@ export class VaultState extends VaultRuntimeState {
       : ok(selection.success);
   }
 
-  async prepareExistingVaultImportSlot() {
-    return this.localLoginActions.prepareExistingVaultImportSlot();
-  }
-
   async reloadProvidersForActiveVault() {
     return this.localLoginActions.reloadProvidersForActiveVault();
   }
 
   async syncActiveVaultStoreIdToAuth() {
     return this.localLoginActions.syncActiveVaultStoreIdToAuth();
-  }
-
-  async activateConnectedExistingVault(
-    storeId: StoreId,
-  ): Promise<
-    Result<
-      localLoginActions.ConnectedExistingVaultActivationOutcome,
-      VaultStorageFailure
-    >
-  > {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.localLoginActions.activateConnectedExistingVault({ storeId });
   }
 
   beginLoginVaultPicker() {
@@ -330,16 +309,13 @@ export class VaultState extends VaultRuntimeState {
     );
   }
 
-  beginExistingVaultOpen() {
-    this.loginRequiresExistingVault = true;
-    this.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
+  beginKeyringRecovery() {
+    this.keyringRecoveryActive = true;
     this.errorMsg = "";
   }
 
-  cancelExistingVaultOpen() {
-    this.loginRequiresExistingVault = false;
-    this.forgetEmptyVaultReplacement();
-    this.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
+  cancelKeyringRecovery() {
+    this.keyringRecoveryActive = false;
     this.errorMsg = "";
   }
 
@@ -357,24 +333,6 @@ export class VaultState extends VaultRuntimeState {
     ).cancelProviderSetup();
   }
 
-  clearRemoteVaultRecovery() {
-    return new syncActions.SyncConflictActions(this).clearRemoteVaultRecovery();
-  }
-
-  /** User chose to restore a deleted remote vault from the browser cache. */
-  async confirmRecoverRemoteVault(): Promise<void> {
-    return new syncActions.SyncConflictActions(
-      this,
-    ).confirmRecoverRemoteVault();
-  }
-
-  /** User chose to create a fresh vault file on remote storage. */
-  async confirmCreateFreshRemoteVault(): Promise<void> {
-    return new syncActions.SyncConflictActions(
-      this,
-    ).confirmCreateFreshRemoteVault();
-  }
-
   async assessVaultConnectStatus(args: NookStorageConnection) {
     return new providersActions.VaultProviderActions(
       this,
@@ -382,15 +340,6 @@ export class VaultState extends VaultRuntimeState {
     ).assessVaultConnectStatus({
       args,
     });
-  }
-
-  async handleRemoteVaultAssessStatus(
-    accessStatus: VaultAccessStatus,
-  ): Promise<boolean> {
-    return new providersActions.VaultProviderActions(
-      this,
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    ).handleRemoteVaultAssessStatus({ accessStatus });
   }
 
   /** Clear wasm session + login password preview so UI matches the active provider. */
@@ -595,82 +544,6 @@ export class VaultState extends VaultRuntimeState {
     );
   }
 
-  dismissLocalFolderMultipleVaultsIssue() {
-    return new syncActions.VaultSyncActions(
-      this,
-    ).dismissLocalFolderMultipleVaultsIssue();
-  }
-
-  async disconnectLocalFolderMultipleVaultsProvider(): Promise<void> {
-    return new syncActions.VaultSyncActions(
-      this,
-    ).disconnectLocalFolderMultipleVaultsProvider();
-  }
-
-  async chooseReplacementLocalFolderForIssue(): Promise<void> {
-    return new syncActions.VaultSyncActions(
-      this,
-    ).chooseReplacementLocalFolderForIssue();
-  }
-
-  /** E2E / dev: open the conflict dialog without reaching remote storage. */
-  override stageSyncConflict(conflict: NookPendingSyncConflict) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return new syncActions.VaultSyncActions(this).stageSyncConflict({
-      conflict,
-    });
-  }
-
-  async stageStagedProviderSyncIssue(args: NookStorageConnection) {
-    const stagedProviderSyncIssueAssessment: Parameters<
-      typeof providerConflictActions.ProviderConflictActions.prototype.stageStagedProviderSyncIssue
-    >[0] = { args };
-    return new providerConflictActions.ProviderConflictActions(
-      this,
-    ).stageStagedProviderSyncIssue(stagedProviderSyncIssueAssessment);
-  }
-
-  async resolveSyncConflictImportRemote(
-    identitySelection: ProviderVaultIdentitySelection,
-  ): Promise<void> {
-    const request: syncActions.ProviderVaultImportRequest = {
-      identitySelection,
-    };
-    return new syncActions.SyncConflictActions(
-      this,
-    ).resolveSyncConflictImportRemote(request);
-  }
-
-  async resolveSyncConflictKeepLocal(): Promise<void> {
-    return new syncActions.SyncConflictActions(
-      this,
-    ).resolveSyncConflictKeepLocal();
-  }
-
-  async resolveSyncConflictKeepRemote(): Promise<void> {
-    return new syncActions.SyncConflictActions(
-      this,
-    ).resolveSyncConflictKeepRemote();
-  }
-
-  finishStagedProviderConnectAfterConflict(
-    conflict: NookSyncConflictReview,
-  ): void {
-    return new providerConflictActions.ProviderConflictActions(
-      this,
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    ).finishStagedProviderConnectAfterConflict({ conflict });
-  }
-
-  async ensureProviderSavedAfterConflict(conflict: NookSyncConflictReview) {
-    return new providerConflictActions.ProviderConflictActions(
-      this,
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    ).ensureProviderSavedAfterConflict({
-      conflict,
-    });
-  }
-
   /** Settings: connect a new sync provider and reconcile with local vault. */
   async connectAndSyncStagedProvider(): Promise<void> {
     await new providersActions.ProviderConnectionActions(
@@ -688,16 +561,16 @@ export class VaultState extends VaultRuntimeState {
     if (mounted.isErr()) this.errorMsg = this.t(mounted.error.translationKey);
   }
 
-  async discoverStagedVault() {
+  async discoverStagedKeyrings() {
     return new providersActions.ProviderConnectionActions(
       this,
-    ).discoverStagedVault();
+    ).discoverStagedKeyrings();
   }
 
-  chooseRemoteVault(storeId: string) {
+  async listKeyringsForRecovery() {
     return new providersActions.ProviderConnectionActions(
       this,
-    ).chooseRemoteVault(storeId);
+    ).listKeyringsForRecovery();
   }
 
   /** Navigate to one page of the unified identity and vault workspace. */
@@ -784,14 +657,6 @@ export class VaultState extends VaultRuntimeState {
   /** Refresh event-log joins from providers (manual sync + provider poll). */
   async refreshPendingJoinsFromProviders() {
     return this.multiDeviceActions.refreshPendingJoinsFromProviders();
-  }
-
-  async createFreshVault() {
-    return this.lifecycleActions.createFreshVault();
-  }
-
-  async enrollAndConnect() {
-    return this.multiDeviceActions.enrollAndConnect();
   }
 
   async connectStagedProvider(): Promise<void> {

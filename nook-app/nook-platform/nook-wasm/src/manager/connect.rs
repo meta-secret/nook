@@ -14,7 +14,7 @@
 mod identity_completion;
 
 use super::verified_access::VerifiedVaultAccessFlow;
-use super::{NextConnect, NookVaultManager, SyncOutbox, VaultNameState};
+use super::{NookVaultManager, SyncOutbox, VaultNameState};
 use crate::IdentityDbEnsureLocalIdentityForAppKey;
 use crate::NookDatabase;
 use crate::TypedInput;
@@ -33,7 +33,6 @@ use nook_core::{
     ConnectAccessStatus, EventGraphAuthorizationProjection, EventId, IdentityVaultDekEpoch,
     IdentityVaultEventId, StorageConnection, StorageMode, StoreId, VaultAccessStatus,
 };
-use std::mem;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -189,8 +188,7 @@ mod tests {
             reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
         )
     )]
-    async fn local_assessment_reports_new_vault_and_connect_recovery_is_toggleable()
-    -> Result<(), JsError> {
+    async fn local_assessment_reports_new_vault_and_stays_local() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
         manager.delete_local_browser_data().await?;
         let identity = nook_core::DeviceIdentity::generate()?;
@@ -204,10 +202,6 @@ mod tests {
                 .expect("local assessment succeeds"),
             VaultAccessStatus::NewVault
         );
-        manager.prepare_connect_from_local_cache();
-        assert_eq!(manager.storage.next_connect, NextConnect::FromLocalCache);
-        manager.clear_connect_recovery();
-        assert_eq!(manager.storage.next_connect, NextConnect::FromProvider);
         manager.restore_local_after_provider_assessment().await?;
         assert_eq!(manager.storage.mode(), StorageMode::Local);
 
@@ -367,6 +361,16 @@ mod tests {
 }
 
 impl NookVaultManager {
+    /// Return a session to local storage after a provider assessment is
+    /// rejected. The rejected provider must not remain the destination for
+    /// later local event-log outbox entries.
+    async fn restore_local_after_provider_assessment(&mut self) -> Result<(), NookError> {
+        self.prepare_storage_preserving_vault_metadata(&StorageConnection::Local)
+            .await?;
+        self.sync_outbox = SyncOutbox::Unbound;
+        Ok(())
+    }
+
     async fn assess_vault_connect_inner(
         &mut self,
         connection: &StorageConnection,
@@ -388,12 +392,6 @@ impl NookVaultManager {
                         .send(format!("ASSESS_{}_{}", self.storage.mode(), status)),
                 );
                 return Ok(status);
-            }
-            if let VaultSnapshotLookup::Stored(cached) =
-                NookDatabase::load_vault_local_cache(&self.local_cache_ref()).await?
-                && !cached.trim().is_empty()
-            {
-                return Ok(VaultAccessStatus::RemoteMissingLocalCache);
             }
             return Ok(VaultAccessStatus::RemoteMissing);
         }
@@ -442,6 +440,8 @@ impl NookVaultManager {
 #[wasm_bindgen]
 impl NookVaultManager {
     /// Return the typed, core-owned connect status for the selected provider.
+    /// A provider whose vault folder holds another vault's events stops being
+    /// this session's storage, so later local events never queue for it.
     pub async fn assess_vault_connect(
         &mut self,
         connection: &tsify::Ts<NookStorageConnection>,
@@ -449,20 +449,13 @@ impl NookVaultManager {
         let connection = connection
             .decode()
             .map_err(|error| JsNativeError::new(&error.to_string()))?;
-        self.assess_vault_connect_inner(&connection)
-            .await
-            .map_err(|error| JsNativeError::new(&error.to_string()))
-    }
-
-    /// Return an authenticated local session to local storage after a staged
-    /// provider assessment is rejected. The rejected provider must not remain
-    /// the destination for later local event-log outbox entries.
-    #[wasm_bindgen]
-    pub async fn restore_local_after_provider_assessment(&mut self) -> Result<(), JsError> {
-        self.prepare_storage_preserving_vault_metadata(&StorageConnection::Local)
-            .await?;
-        self.sync_outbox = SyncOutbox::Unbound;
-        Ok(())
+        let assessed = self.assess_vault_connect_inner(&connection).await;
+        if let Err(NookError::VaultFolderHoldsAnotherVault) = &assessed {
+            self.restore_local_after_provider_assessment()
+                .await
+                .map_err(|error| JsNativeError::new(&error.to_string()))?;
+        }
+        assessed.map_err(|error| JsNativeError::new(&error.to_string()))
     }
 
     // Connects to storage (loads, decrypts, and updates session state).
@@ -485,18 +478,6 @@ impl NookVaultManager {
         let connection = connection.decode()?;
         self.connect_internal(&connection, nook_core::VaultGenesisIntent::ForceFresh)
             .await
-    }
-
-    /// Next `connect` loads the browser-local vault cache and recreates the
-    /// remote file after a successful unlock.
-    #[wasm_bindgen]
-    pub fn prepare_connect_from_local_cache(&mut self) {
-        self.storage.next_connect = NextConnect::FromLocalCache;
-    }
-
-    #[wasm_bindgen]
-    pub fn clear_connect_recovery(&mut self) {
-        self.storage.next_connect = NextConnect::FromProvider;
     }
 
     async fn connect_internal(
@@ -628,22 +609,6 @@ impl NookVaultManager {
     }
 
     async fn load_connect_content(&mut self) -> Result<(String, bool), NookError> {
-        // The local-cache recovery serves one connect only.
-        if let NextConnect::FromLocalCache =
-            mem::replace(&mut self.storage.next_connect, NextConnect::FromProvider)
-        {
-            let cached = match NookDatabase::load_vault_local_cache(&self.local_cache_ref()).await?
-            {
-                VaultSnapshotLookup::Stored(cache) if !cache.trim().is_empty() => cache,
-                VaultSnapshotLookup::Stored(_) | VaultSnapshotLookup::NotStored => {
-                    return Err(NookError::Database(
-                        "No local vault copy is available to recover.".to_owned(),
-                    ));
-                }
-            };
-            return Ok((cached, true));
-        }
-
         if self.storage.mode() != StorageMode::Local {
             self.sync_events_from_current_provider().await?;
             return Ok((String::new(), false));

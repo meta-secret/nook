@@ -144,15 +144,6 @@ impl ProviderSetupNameRequest {
     }
 }
 
-/// Whether a draft can enter the existing-vault import. Only a local folder
-/// is gathered by a browser step the import cannot run without; every other
-/// draft is validated when its connection is projected.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExistingVaultProviderReadiness {
-    Ready,
-    MissingLocalFolder,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
 pub enum OAuthFilePreset {

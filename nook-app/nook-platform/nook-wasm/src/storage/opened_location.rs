@@ -9,7 +9,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use nook_core::{EventStorageBytes, IdentityId, LocalVaultOccupancy, ProviderVaultListing};
+use nook_core::{EventStorageBytes, IdentityId, LocalEventWrite, ProviderVaultListing, StoreId};
 
 use super::github_events::GitHubRepository;
 use super::icloud::ICloudLocation;
@@ -41,18 +41,28 @@ impl OpenedLocation<'_> {
         }
     }
 
-    /// What the location holds, related to this browser's keys and the vault
-    /// it has open.
-    pub(crate) async fn listing(
+    /// One vault's events, read without its keys.
+    pub(crate) async fn listed_vault_events(
         &self,
-        local_vault: &LocalVaultOccupancy,
-    ) -> Result<ProviderVaultListing, NookError> {
+        store_id: &StoreId,
+    ) -> Result<Vec<LocalEventWrite>, NookError> {
         match self {
-            Self::Github(location) => location.listing(local_vault).await,
-            Self::GoogleDrive(location) => location.listing(local_vault).await,
-            Self::ICloud(location) => location.listing(local_vault).await,
-            Self::S3(location) => location.listing(local_vault).await,
-            Self::LocalFolder(location) => location.listing(local_vault).await,
+            Self::Github(location) => location.listed_vault_events(store_id).await,
+            Self::GoogleDrive(location) => location.listed_vault_events(store_id).await,
+            Self::ICloud(location) => location.listed_vault_events(store_id).await,
+            Self::S3(location) => location.listed_vault_events(store_id).await,
+            Self::LocalFolder(location) => location.listed_vault_events(store_id).await,
+        }
+    }
+
+    /// What the location holds, related to this browser's keys.
+    pub(crate) async fn listing(&self) -> Result<ProviderVaultListing, NookError> {
+        match self {
+            Self::Github(location) => location.listing().await,
+            Self::GoogleDrive(location) => location.listing().await,
+            Self::ICloud(location) => location.listing().await,
+            Self::S3(location) => location.listing().await,
+            Self::LocalFolder(location) => location.listing().await,
         }
     }
 

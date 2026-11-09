@@ -96,9 +96,9 @@ These crates and their generated consumer bindings are routed through
 - **`NookVaultManager`:** Manages WASM session state including typed `Database`, vault metadata, `secrets_key`, `members_key`, `VaultCrypto`, device identity, and GitHub SHA.
 - **Storage I/O:** Manages IndexedDB (`rexie`) and GitHub REST API (`reqwest`) network and database calls. It also executes the S3 requests that `nook-core` builds.
 - **Device protection:** Persists and migrates wrapped identities, builds WebAuthn PRF option payloads via `1Password/passkey-rs` `passkey-types`, and exposes typed setup/unlock values to the web layer.
-- **Exported methods:** Exposes `connect`, `add_secret`, `approve_join_request`, `enroll_and_connect`, and search query APIs.
+- **Exported methods:** Exposes `connect`, `add_secret`, `approve_join_request`, and search query APIs.
 - **No domain logic in WASM:** Validation, crypto, format conversions, and session decisions delegate directly to `nook-core`.
-- **Runtime wrappers:** Runtime policy, secret forms, diagnostics, Sentinel session state, sync conflicts, and recovery issues are core-owned values exposed through typed wrappers.
+- **Runtime wrappers:** Runtime policy, secret forms, diagnostics, and Sentinel session state are core-owned values exposed through typed wrappers.
 
 ---
 

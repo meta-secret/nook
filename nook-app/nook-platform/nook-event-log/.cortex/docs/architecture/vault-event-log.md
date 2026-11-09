@@ -317,7 +317,12 @@ events.
 
 ### Provider vault listing
 
-Setup and recovery list the vaults a target holds before anything is written.
+A target keeps identities, and each identity's mount replicates every vault it
+owns, as
+[recover a keyring from a sync provider](../../../../.cortex/docs/architecture/identity-vault-architecture.md#recover-a-keyring-from-a-sync-provider)
+states. Setup and identity recovery read the vault namespaces a target holds
+before anything is written, to describe each identity; the user decides per
+identity, never per vault.
 Each listed namespace becomes a `ProviderVaultSummary` computed in Rust from
 transport metadata. Only the events of a vault no identity on this browser
 holds are downloaded, to read whether this app asked for or was granted
@@ -342,7 +347,8 @@ Transports report what their listings carry cheaply:
   Their times stay `Unreported` and the UI omits them.
 
 A namespace duplicated by hand fails the listing closed, as sync does. How
-setup classifies and acts on each listed vault is owned by
+setup groups listed vaults under their identities and decides per identity is
+owned by
 [auth-providers.md](../../../../.cortex/docs/architecture/auth-providers.md#what-the-provider-already-holds).
 
 ### Provider synchronization
@@ -376,8 +382,9 @@ Apply these rules during provider sync:
 - **Invalid event bytes**
   - **Action:** Fail closed before any write
 
-The user must choose an explicit recovery/import path. The current local vault
-must not silently take over provider data.
+Another vault's events in the vault's folder stop sync with an observable
+error. Nothing is imported or repaired, and the current local vault must not
+silently take over provider data.
 
 Event-log provider sync never writes the materialized projection. Normal
 provider fan-out appends YAML event files. It repairs missing provider events

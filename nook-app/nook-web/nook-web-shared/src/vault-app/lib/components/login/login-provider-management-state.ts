@@ -1,10 +1,5 @@
 import { PickerRow } from "$lib/components/provider-picker-state";
 
-export enum LoginProviderManagementVariant {
-  Setup = "setup",
-  Manage = "manage",
-}
-
 /** The local-folder row is hidden while a Sentinel vault delivers its
  * shares. */
 export class LocalFolderPickerRow {

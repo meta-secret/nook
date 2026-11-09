@@ -10,7 +10,14 @@ its location lists, its keyrings show the same way.
 <script lang="ts">
   import { tick, untrack } from 'svelte'
   import { ok, type Result } from 'neverthrow'
-  import { Archive, ArrowRight, Cloud, Plus, RefreshCw } from '@lucide/svelte'
+  import {
+    Archive,
+    ArrowRight,
+    MonitorSmartphone,
+    Plus,
+    RefreshCw,
+  } from '@lucide/svelte'
+  import GoogleDriveMark from '$lib/components/provider-marks/GoogleDriveMark.svelte'
   import {
     provider_draft_label,
     s3_provider_draft,
@@ -45,6 +52,7 @@ its location lists, its keyrings show the same way.
   import FirstRunDiagram from './FirstRunDiagram.svelte'
   import {
     firstRunSyncDiagram,
+    FirstRunSyncDiagramProvider,
     type FirstRunSyncDiagramRequest,
   } from './first-run-diagram'
   import FirstRunProgress from './FirstRunProgress.svelte'
@@ -100,7 +108,7 @@ its location lists, its keyrings show the same way.
   const diagram = $derived.by(() => {
     const request: FirstRunSyncDiagramRequest = {
       vault,
-      provider: vault.t(I18N_KEYS.JoinNodeProvider),
+      provider: FirstRunSyncDiagramProvider.Any,
     }
     return firstRunSyncDiagram(request)
   })
@@ -259,11 +267,11 @@ its location lists, its keyrings show the same way.
         connected ? I18N_KEYS.FirstRunSyncChooseTitle : I18N_KEYS.FirstRunSyncTitle,
       )}
     </h1>
-    <p class="text-sm text-pretty text-muted-foreground">
-      {vault.t(
-        connected ? I18N_KEYS.FirstRunSyncChooseBody : I18N_KEYS.FirstRunSyncBody,
-      )}
-    </p>
+    {#if connected}
+      <p class="text-sm text-pretty text-muted-foreground">
+        {vault.t(I18N_KEYS.FirstRunSyncChooseBody)}
+      </p>
+    {/if}
   </div>
 
   {#if !connected}
@@ -309,7 +317,7 @@ its location lists, its keyrings show the same way.
     >
       <div class="flex flex-wrap items-center gap-3 px-4 py-3">
         <span class="nk-tile nk-tile-sm" aria-hidden="true">
-          <Cloud class="size-4" />
+          <GoogleDriveMark class="size-4" />
         </span>
         <span class="min-w-0 flex-1 text-sm font-semibold text-foreground">
           {vault.t(I18N_KEYS.ProviderPickerGoogleDrive)}
@@ -449,11 +457,14 @@ its location lists, its keyrings show the same way.
   <div class="flex justify-center">
     <Button
       type="button"
+      class="min-w-44 bg-accent/50 text-foreground hover:bg-accent"
       variant="ghost"
+      size="sm"
       data-testid="first-run-sync-skip"
       disabled={busy}
       onclick={() => actions.nameNew(FirstRunPlace.ThisBrowser)}
     >
+      <MonitorSmartphone class="size-4" aria-hidden="true" />
       {vault.t(I18N_KEYS.FirstRunSyncSkip)}
     </Button>
   </div>

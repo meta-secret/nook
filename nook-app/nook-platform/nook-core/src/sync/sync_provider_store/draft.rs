@@ -17,10 +17,9 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{
-    DraftStorageConnection, ExistingVaultProviderReadiness, GithubPat, GithubProvider,
-    LocalFolderProvider, ProviderKind, ProviderSecretText, S3Connection, S3DraftValidation,
-    S3KeyDraft, S3Location, StagedStorageConnection, StorageConnection, StoredGithubRepository,
-    StoredProvider,
+    DraftStorageConnection, GithubPat, GithubProvider, LocalFolderProvider, ProviderKind,
+    ProviderSecretText, S3Connection, S3DraftValidation, S3KeyDraft, S3Location,
+    StagedStorageConnection, StorageConnection, StoredGithubRepository, StoredProvider,
 };
 
 mod oauth_file;
@@ -254,22 +253,6 @@ impl ProviderDraft {
         }
     }
 
-    /// Whether the draft can enter the existing-vault import: only a local
-    /// folder must be chosen first.
-    #[must_use]
-    pub const fn existing_vault_readiness(&self) -> ExistingVaultProviderReadiness {
-        match self {
-            Self::LocalFolder(LocalFolderDraft::AwaitingFolder {}) => {
-                ExistingVaultProviderReadiness::MissingLocalFolder
-            }
-            Self::Local {}
-            | Self::LocalFolder(LocalFolderDraft::Selected(_))
-            | Self::Github(_)
-            | Self::OauthFile(_)
-            | Self::S3(_) => ExistingVaultProviderReadiness::Ready,
-        }
-    }
-
     /// An S3 draft that names its location, with a key typed for it: the
     /// key is validated field by field as the setup form's is.
     pub fn with_s3_key(self, key: &S3KeyDraft) -> ValidationResult<S3DraftValidation> {
@@ -348,9 +331,8 @@ mod tests {
         ProviderCredentialReadiness, ProviderDraft, ProviderDraftGap, S3Draft,
     };
     use crate::{
-        DraftStorageConnection, ExistingVaultProviderReadiness, OAuthFilePreset, ProviderKind,
-        S3Connection, StagedStorageConnection, StorageConnection, StoredGithubRepository,
-        StoredProvider,
+        DraftStorageConnection, OAuthFilePreset, ProviderKind, S3Connection,
+        StagedStorageConnection, StorageConnection, StoredGithubRepository, StoredProvider,
     };
     use nook_app_common::i18n_keys;
     use serde_json::json;
@@ -404,10 +386,6 @@ mod tests {
             assert_eq!(
                 draft.credential_readiness(),
                 ProviderCredentialReadiness::Ready
-            );
-            assert_eq!(
-                draft.existing_vault_readiness(),
-                ExistingVaultProviderReadiness::Ready
             );
             let wire = serde_json::to_value(&draft)?;
             assert_eq!(serde_json::from_value::<ProviderDraft>(wire)?, draft);
@@ -497,23 +475,6 @@ mod tests {
             ),
         ] {
             assert_eq!(gap.translation_key(), connect);
-        }
-    }
-
-    #[test]
-    fn only_a_folder_without_its_handle_waits_before_the_import() {
-        for kind in KINDS {
-            let expected = match kind {
-                ProviderKind::LocalFolder => ExistingVaultProviderReadiness::MissingLocalFolder,
-                ProviderKind::Local
-                | ProviderKind::Github
-                | ProviderKind::OauthFile(_)
-                | ProviderKind::S3 => ExistingVaultProviderReadiness::Ready,
-            };
-            assert_eq!(
-                ProviderDraft::begin(kind).existing_vault_readiness(),
-                expected
-            );
         }
     }
 

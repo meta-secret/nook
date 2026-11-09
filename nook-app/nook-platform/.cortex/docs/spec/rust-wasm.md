@@ -159,9 +159,7 @@ distinguish wasm-bindgen's generated ABI code from authored code.
 - **`NookVaultSyncResult`**
   - **Use:** `sync_vault_from_storage` payload (`changed`, `accessStatus`, `secrets`, `pendingJoins`, `vaultMembers`)
 - **`NookVaultClientPolicy`**
-  - **Use:** Portable login, lock, sync, join, remote-recovery, vault-switch, and pagination decisions
-- **`NookResolveConflictKeepLocalResult` / `NookResolveConflictKeepRemoteResult`**
-  - **Use:** conflict resolution
+  - **Use:** Portable login, lock, sync, join, vault-switch, and pagination decisions
 - **`NookSecretFormFields`**
   - **Use:** WASM wrapper over core-owned variant-specific `SecretFormFields`; static constructors select the variant
 

@@ -192,32 +192,28 @@ describe('Google Drive sign-in and its vault folder', () => {
     expect(wasm.connectGoogleDriveVaultFolder).not.toHaveBeenCalled()
   })
 
-  test('lists the Nook root with the token and the open vault, failing visibly', async () => {
+  test('lists the Nook root with the token, failing visibly', async () => {
     mockGoogleTokenApplication()
     const state = signedInDriveSetup()
     const oauthActions = new VaultOAuthActions(state)
     await oauthActions.signInWithGoogle()
-    const closed: Parameters<typeof oauthActions.listGoogleDriveVaults>[0] = {
-      state: 'closed',
-    }
     wasm.listGoogleDriveVaults.mockResolvedValue({ root: 'absent' })
 
-    await expect(oauthActions.listGoogleDriveVaults(closed)).resolves.toEqual(
+    await expect(oauthActions.listGoogleDriveVaults()).resolves.toEqual(
       ok({ root: 'absent' }),
     )
     expect(wasm.listGoogleDriveVaults).toHaveBeenCalledWith(
       GOOGLE_TOKENS.accessToken,
-      closed,
     )
 
     wasm.listGoogleDriveVaults.mockRejectedValue(
       new Error(I18N_KEYS.ErrorsValidationGoogleDriveVaultFolderAmbiguous),
     )
-    await expect(oauthActions.listGoogleDriveVaults(closed)).resolves.toEqual(
+    await expect(oauthActions.listGoogleDriveVaults()).resolves.toEqual(
       err(new OAuthFailure(OAuthFailureKind.GoogleVaultFolderAmbiguous)),
     )
     wasm.listGoogleDriveVaults.mockRejectedValue(new Error('status 500'))
-    await expect(oauthActions.listGoogleDriveVaults(closed)).resolves.toEqual(
+    await expect(oauthActions.listGoogleDriveVaults()).resolves.toEqual(
       err(new OAuthFailure(OAuthFailureKind.GoogleVaultListing)),
     )
   })

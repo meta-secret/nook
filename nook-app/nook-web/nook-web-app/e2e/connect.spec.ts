@@ -1,12 +1,10 @@
 import { expect, test } from './fixtures'
 import { ExtensionConnectStepKind } from '../../nook-web-shared/src/extension/extension-connect-progress'
-import { VaultAccessStatus } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
 import {
   beginAddSyncProvider,
   openOpenVaultPanel,
   authorizeDeviceProtection,
   createLocalVaultOnLogin,
-  dismissSyncConflictIfVisible,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   expectAppLogMilestones,
   flushNookLogPersistQueue,
@@ -75,7 +73,7 @@ test.describe('vault connect flow', () => {
     await openOpenVaultPanel(page)
     await expect(page.getByTestId('vault-extension-install')).toBeVisible()
     const protection = page.getByTestId('identity-protection-toggle')
-    await expect(protection).toContainText('0 of 2 done')
+    await expect(protection).toContainText('0 of 3 done')
     await protection.click()
     await expect(page.getByTestId('identity-protection-risk')).toContainText(
       'Only this browser has your vaults',
@@ -182,36 +180,6 @@ test.describe('vault connect flow', () => {
         Reflect.get(window, '__nookConnectedTo'),
       ),
     ).toEqual(['side-panel-extension/side-panel-connect'])
-  })
-
-  test('does not create a new vault when open existing finds an empty provider', async ({
-    page,
-  }) => {
-    await page.goto('/app/')
-    await openLoginProviderSetup(page)
-
-    const blocked = await page.evaluate(async (status: VaultAccessStatus) => {
-      const vault = (
-        window as Window & {
-          __nookVault?: {
-            handleRemoteVaultAssessStatus: (
-              status: VaultAccessStatus,
-            ) => Promise<boolean>
-          }
-        }
-      ).__nookVault
-      if (!vault) {
-        throw new Error('E2E vault state is not exposed')
-      }
-      return vault.handleRemoteVaultAssessStatus(status)
-    }, VaultAccessStatus.RemoteMissing)
-
-    expect(blocked).toBe(true)
-    await expect(page.getByTestId('vault-error')).toContainText(
-      'No existing vault was found in this provider',
-    )
-    await expect(page.getByTestId('provider-picker-list')).toBeVisible()
-    await expect(page.getByTestId('vault-panel')).toHaveCount(0)
   })
 
   test('shows login gate on first visit', async ({ page }) => {
@@ -360,7 +328,6 @@ test.describe('vault connect flow', () => {
       ],
     })
 
-    await dismissSyncConflictIfVisible(page)
     await openManagePage(page, ManagePage.Sync)
     const driveProvider = page.getByTestId('settings-provider-oauth-file')
     await expect(driveProvider).toBeVisible()

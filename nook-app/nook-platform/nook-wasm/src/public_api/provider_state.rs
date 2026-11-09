@@ -2,40 +2,10 @@ use super::{NookStorageConnection, wasm_bindgen};
 use crate::NookLocalFolderConfig;
 use crate::{TypedInput, TypedOutput};
 use nook_core::{
-    DraftStorageConnection, ExistingVaultProviderReadiness, GithubDraft, GithubPat, GithubPatMask,
-    LocalFolderDraft, ProviderDraft, ProviderSelection, S3Draft, StagedStorageConnection,
-    StorageConnection,
+    DraftStorageConnection, GithubDraft, GithubPat, GithubPatMask, LocalFolderDraft, ProviderDraft,
+    ProviderSelection, S3Draft, StagedStorageConnection, StorageConnection,
 };
 use wasm_bindgen::JsError;
-
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NookExistingVaultProviderReadiness {
-    Ready,
-    MissingLocalFolder,
-}
-
-impl From<nook_core::ExistingVaultProviderReadiness> for NookExistingVaultProviderReadiness {
-    fn from(value: nook_core::ExistingVaultProviderReadiness) -> Self {
-        match value {
-            ExistingVaultProviderReadiness::Ready => Self::Ready,
-            ExistingVaultProviderReadiness::MissingLocalFolder => Self::MissingLocalFolder,
-        }
-    }
-}
-
-/// Whether the draft can enter the existing-vault import.
-#[wasm_bindgen]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn existing_vault_provider_readiness(
-    draft: &tsify::Ts<ProviderDraft>,
-) -> Result<NookExistingVaultProviderReadiness, wasm_bindgen::JsError> {
-    let draft = draft.decode()?;
-    Ok(draft.existing_vault_readiness().into())
-}
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -428,10 +398,6 @@ mod tests {
             NookStagedStorageArgsState::Incomplete
         );
         let folder = begin_provider_draft(&ts(&ProviderKind::LocalFolder)?)?;
-        assert_eq!(
-            existing_vault_provider_readiness(&folder)?,
-            NookExistingVaultProviderReadiness::MissingLocalFolder
-        );
         assert_eq!(
             draft_storage_args(&folder)?.to_rust()?,
             DraftStorageConnection::Ready {

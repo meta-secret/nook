@@ -7,10 +7,7 @@ import {
   AuthenticatedWorkspaceState,
   type AuthenticatedWorkspaceVisibility,
 } from './authenticated-workspace'
-import {
-  dismissJoinEnrollmentDialog,
-  keepVaultIdleLockDisabled,
-} from './device-enrollment'
+import { keepVaultIdleLockDisabled } from './device-enrollment'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
 import {
   beginAddSyncProvider,
@@ -161,7 +158,6 @@ export async function connectGithubSyncProviderFromSettings(
   page: Page,
   repoName: string,
   pat = 'ghp_test_token',
-  options?: { expectConflict?: boolean },
 ) {
   await openStorageSettings(page)
   await expandSettingsSection(page, 'storage')
@@ -174,11 +170,6 @@ export async function connectGithubSyncProviderFromSettings(
   await page.getByTestId('github-pat-input').fill(pat)
   await page.getByTestId('connect-provider-btn').click()
   await waitForVaultOperationsIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
-  if (!options?.expectConflict) {
-    await expect(
-      page.getByTestId('vault-sync-conflict-dialog'),
-    ).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
-  }
 }
 
 export const SETTINGS_SECTION_TEST_IDS = {
@@ -206,20 +197,9 @@ export async function expandSettingsSection(
   ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 }
 
-export async function dismissSyncConflictIfVisible(page: Page) {
-  const dialog = page.getByTestId('vault-sync-conflict-dialog')
-  if (!(await dialog.isVisible())) return
-  await page.getByTestId('sync-conflict-keep-local-btn').click()
-  await expect(dialog).not.toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-}
-
 /** Reconnect after reload — unlock via login gate when auto-unlock is off. */
 export async function reconnectSyncVault(page: Page) {
   await page.goto('/app/')
-  await dismissSyncConflictIfVisible(page)
-  await dismissJoinEnrollmentDialog(page)
 
   const vaultReady = async () =>
     (await page.getByTestId('vault-panel').isVisible()) ||
@@ -247,7 +227,6 @@ export async function reconnectSyncVault(page: Page) {
 export async function connectGoogleDriveSyncProviderFromSettings(
   page: Page,
   accessToken = E2E_OAUTH_ONBOARD_PROVIDER.accessToken,
-  options?: { expectConflict?: boolean },
 ) {
   await installGoogleOAuthMock(page, accessToken)
   await openStorageSettings(page)
@@ -262,11 +241,6 @@ export async function connectGoogleDriveSyncProviderFromSettings(
   // Connect & sync opens or creates the account's one Nook root folder.
   await page.getByTestId('connect-provider-btn').click()
   await waitForVaultOperationsIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
-  if (!options?.expectConflict) {
-    await expect(
-      page.getByTestId('vault-sync-conflict-dialog'),
-    ).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
-  }
 }
 
 /** An open vault session shows the vault shell, the hub, an identity page,
@@ -696,7 +670,6 @@ export async function openVaultPanelAndUnlock(page: Page, storeId = '') {
           case false:
             break
         }
-        await dismissSyncConflictIfVisible(page)
         await pressIfReady(closedRow)
         return VaultPanelUnlockProgress.Waiting
       },

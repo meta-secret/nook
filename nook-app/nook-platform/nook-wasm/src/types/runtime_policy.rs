@@ -30,33 +30,6 @@ impl NookVaultClientPolicy {
         })
     }
 
-    #[wasm_bindgen]
-    #[must_use]
-    pub fn remote_recovery_prompt_visible(
-        &self,
-        state: nook_core::RemoteVaultRecoveryState,
-    ) -> bool {
-        (state).prompt_visible()
-    }
-
-    #[wasm_bindgen]
-    #[must_use]
-    pub fn remote_recovery_prompt_has_cache(
-        &self,
-        state: nook_core::RemoteVaultRecoveryState,
-    ) -> bool {
-        (state).prompt_has_cache()
-    }
-
-    #[wasm_bindgen]
-    #[must_use]
-    pub fn remote_recovery_connect_confirmed(
-        &self,
-        state: nook_core::RemoteVaultRecoveryState,
-    ) -> bool {
-        (state).connect_confirmed()
-    }
-
     #[wasm_bindgen(constructor)]
     #[must_use]
     pub fn new() -> Self {
@@ -75,12 +48,10 @@ impl NookVaultClientPolicy {
     pub fn edit_block_reason(
         &self,
         security_conflict_count: u32,
-        has_sync_conflict: bool,
         architecture_allows_secret_creation: bool,
     ) -> nook_core::VaultEditDecision {
         VaultClientPolicy::edit_block_reason(nook_core::EditBlockReasonRequest {
             security_conflict_count: (security_conflict_count as usize).into(),
-            has_sync_conflict: (has_sync_conflict).into(),
             architecture_allows_secret_creation: (architecture_allows_secret_creation).into(),
         })
     }
@@ -97,12 +68,10 @@ impl NookVaultClientPolicy {
     pub fn edits_blocked(
         &self,
         security_conflict_count: u32,
-        has_sync_conflict: bool,
         architecture_allows_secret_creation: bool,
     ) -> bool {
         VaultClientPolicy::edits_blocked(nook_core::EditsBlockedRequest {
             security_conflict_count: (security_conflict_count as usize).into(),
-            has_sync_conflict: (has_sync_conflict).into(),
             architecture_allows_secret_creation: (architecture_allows_secret_creation).into(),
         })
     }
@@ -118,14 +87,12 @@ impl NookVaultClientPolicy {
     pub fn edit_block_message(
         &self,
         security_conflict_count: u32,
-        has_sync_conflict: bool,
         architecture_allows_secret_creation: bool,
         catalog_json: &str,
         locale: &str,
     ) -> Result<String, wasm_bindgen::JsError> {
         match VaultClientPolicy::edit_block_message(nook_core::EditBlockMessageRequest {
             security_conflict_count: (security_conflict_count as usize).into(),
-            has_sync_conflict: (has_sync_conflict).into(),
             architecture_allows_secret_creation: (architecture_allows_secret_creation).into(),
             catalog_json,
             locale,
@@ -176,7 +143,6 @@ impl NookVaultClientPolicy {
     )]
     pub fn should_sync_from_providers(
         &self,
-        sync_blocked: bool,
         force: bool,
         verifying: bool,
         saving: bool,
@@ -185,7 +151,6 @@ impl NookVaultClientPolicy {
         sync_provider_count: u32,
     ) -> bool {
         VaultClientPolicy::should_sync_from_providers(nook_core::ShouldSyncFromProvidersRequest {
-            sync_blocked: (sync_blocked).into(),
             force: (force).into(),
             verifying: (verifying).into(),
             saving: (saving).into(),
@@ -261,7 +226,6 @@ impl NookVaultClientPolicy {
     )]
     pub fn vault_storage_sync_decision(
         &self,
-        sync_blocked: bool,
         freshness: nook_core::ProviderSyncFreshness,
         verifying: bool,
         saving: bool,
@@ -273,7 +237,6 @@ impl NookVaultClientPolicy {
         local_vault_present: bool,
     ) -> nook_core::VaultStorageSyncDecision {
         VaultClientPolicy::vault_storage_sync_decision(nook_core::VaultStorageSyncDecisionRequest {
-            sync_blocked: (sync_blocked).into(),
             freshness,
             verifying: (verifying).into(),
             saving: (saving).into(),
@@ -315,23 +278,6 @@ impl NookVaultClientPolicy {
 
     #[wasm_bindgen]
     #[must_use]
-    pub fn existing_vault_identity_recovery_required(
-        &self,
-        existing_vault_required: bool,
-        provider_setup_active: bool,
-        device_protection_ready: bool,
-    ) -> bool {
-        VaultClientPolicy::existing_vault_identity_recovery_required(
-            nook_core::ExistingVaultIdentityRecoveryRequiredRequest {
-                existing_vault_required: (existing_vault_required).into(),
-                provider_setup_active: (provider_setup_active).into(),
-                device_protection_ready: (device_protection_ready).into(),
-            },
-        )
-    }
-
-    #[wasm_bindgen]
-    #[must_use]
     #[allow(clippy::too_many_arguments)]
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
@@ -357,23 +303,6 @@ impl NookVaultClientPolicy {
                 provider_setup_active: (provider_setup_active).into(),
                 add_provider_open: (add_provider_open).into(),
                 session_explicitly_locked: (session_explicitly_locked).into(),
-            },
-        )
-    }
-
-    #[wasm_bindgen]
-    #[must_use]
-    pub fn remote_vault_assess_decision(
-        &self,
-        access_status: nook_core::VaultAccessStatus,
-        existing_vault_required: bool,
-        provider_setup_active: bool,
-    ) -> nook_core::RemoteVaultAssessDecision {
-        VaultClientPolicy::remote_vault_assess_decision(
-            nook_core::RemoteVaultAssessDecisionRequest {
-                access_status,
-                existing_vault_required: (existing_vault_required).into(),
-                provider_setup_active: (provider_setup_active).into(),
             },
         )
     }
@@ -542,19 +471,14 @@ mod tests {
         let policy = NookVaultClientPolicy::new();
 
         assert_eq!(
-            policy.edit_block_reason(1, true, false),
+            policy.edit_block_reason(1, false),
             nook_core::VaultEditDecision::BlockedSecurityConflict
         );
-        assert_eq!(
-            policy.edit_block_reason(0, true, false),
-            nook_core::VaultEditDecision::BlockedSyncConflict
-        );
-        assert!(policy.edits_blocked(0, false, false));
-        assert!(!policy.edits_blocked(0, false, true));
+        assert!(policy.edits_blocked(0, false));
+        assert!(!policy.edits_blocked(0, true));
 
-        assert!(policy.should_sync_from_providers(false, false, false, false, false, false, 1));
-        assert!(policy.should_sync_from_providers(false, true, true, true, true, true, 1));
-        assert!(!policy.should_sync_from_providers(true, true, false, false, false, false, 1));
+        assert!(policy.should_sync_from_providers(false, false, false, false, false, 1));
+        assert!(policy.should_sync_from_providers(true, true, true, true, true, 1));
         assert_eq!(
             policy.vault_sync_timer_start_decision(
                 false,
@@ -620,7 +544,6 @@ mod tests {
         );
         assert_eq!(
             policy.vault_storage_sync_decision(
-                false,
                 nook_core::ProviderSyncFreshness::Scheduled,
                 false,
                 true,
@@ -635,7 +558,6 @@ mod tests {
         );
         assert_eq!(
             policy.vault_storage_sync_decision(
-                false,
                 nook_core::ProviderSyncFreshness::Forced,
                 false,
                 false,
@@ -650,7 +572,6 @@ mod tests {
         );
         assert_eq!(
             policy.vault_storage_sync_decision(
-                false,
                 nook_core::ProviderSyncFreshness::Forced,
                 false,
                 false,
@@ -669,14 +590,6 @@ mod tests {
     fn policy_wrappers_project_connection_paths() {
         let policy = NookVaultClientPolicy::new();
 
-        assert_eq!(
-            policy.remote_vault_assess_decision(
-                nook_core::VaultAccessStatus::RemoteMissing,
-                true,
-                false,
-            ),
-            nook_core::RemoteVaultAssessDecision::RejectMissingExistingVault
-        );
         assert_eq!(
             policy.vault_connect_probe_decision(
                 nook_core::VaultAccessStatus::NeedsEnrollment,
@@ -725,22 +638,6 @@ mod tests {
         assert_eq!(policy.normalized_secret_page_offset(0, 20, 5), 20);
         assert_eq!(policy.normalized_secret_page_offset(10, 20, 5), 5);
         assert_eq!(policy.normalized_secret_page_offset(10, 4, 5), 4);
-        for state in [
-            nook_core::RemoteVaultRecoveryState::None,
-            nook_core::RemoteVaultRecoveryState::PromptMissingOnly,
-            nook_core::RemoteVaultRecoveryState::ConnectFromCache,
-            nook_core::RemoteVaultRecoveryState::ConnectFresh,
-        ] {
-            let expected_visible = matches!(
-                state,
-                nook_core::RemoteVaultRecoveryState::PromptMissingOnly
-                    | nook_core::RemoteVaultRecoveryState::PromptWithCache
-            );
-            assert_eq!(
-                policy.remote_recovery_prompt_visible(state),
-                expected_visible
-            );
-        }
     }
 
     #[wasm_bindgen_test]
@@ -780,26 +677,15 @@ mod browser_tests {
     #[wasm_bindgen_test]
     fn policy_adapter_executes_sync_connection_and_projection_paths_in_wasm() {
         let policy = NookVaultClientPolicy::new();
-        for state in [
-            nook_core::RemoteVaultRecoveryState::None,
-            nook_core::RemoteVaultRecoveryState::PromptMissingOnly,
-            nook_core::RemoteVaultRecoveryState::PromptWithCache,
-            nook_core::RemoteVaultRecoveryState::ConnectFromCache,
-            nook_core::RemoteVaultRecoveryState::ConnectFresh,
-        ] {
-            let _ = policy.remote_recovery_prompt_visible(state);
-            let _ = policy.remote_recovery_prompt_has_cache(state);
-            let _ = policy.remote_recovery_connect_confirmed(state);
-        }
         let _ = policy.manual_sync_has_target(true, 1);
         let _ = policy.manual_sync_has_target(false, 0);
-        let _ = policy.edit_block_reason(1, true, false);
-        let _ = policy.edit_block_reason(0, false, true);
-        let _ = policy.edits_blocked(1, false, false);
-        let _ = policy.edits_blocked(0, false, true);
-        let _ = policy.edit_block_message(1, true, false, "{}", "en");
+        let _ = policy.edit_block_reason(1, false);
+        let _ = policy.edit_block_reason(0, true);
+        let _ = policy.edits_blocked(1, false);
+        let _ = policy.edits_blocked(0, true);
+        let _ = policy.edit_block_message(1, false, "{}", "en");
         let _ = policy.is_sync_activity_visible(true, false, false, false);
-        let _ = policy.should_sync_from_providers(false, true, true, true, true, true, 1);
+        let _ = policy.should_sync_from_providers(true, true, true, true, true, 1);
         let _ = policy.vault_sync_timer_start_decision(
             true,
             false,
@@ -821,11 +707,10 @@ mod browser_tests {
             nook_core::ProviderSyncFreshness::Forced,
         ] {
             let _ = policy.vault_storage_sync_decision(
-                false, freshness, false, false, false, false, true, 1, true, true,
+                freshness, false, false, false, false, true, 1, true, true,
             );
         }
         let _ = policy.should_auto_unlock(false, true, 1, false, false);
-        let _ = policy.existing_vault_identity_recovery_required(true, false, false);
         let _ = policy.should_show_login_vault_picker(false, 2, false, false, false, true);
         for status in [
             nook_core::VaultAccessStatus::RemoteMissing,
@@ -833,7 +718,6 @@ mod browser_tests {
             nook_core::VaultAccessStatus::Ready,
             nook_core::VaultAccessStatus::JoinPending,
         ] {
-            let _ = policy.remote_vault_assess_decision(status, true, false);
             let _ = policy.vault_connect_probe_decision(status, false, 1);
             let _ = policy.vault_connect_gate_decision(status);
             let _ = policy.unauthenticated_sync_decision(

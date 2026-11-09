@@ -61,6 +61,12 @@ its address, the panel's visibility or the lock state changes.
   } from './side-panel-state'
   import { ThisSiteFocus } from './this-site-focus'
   import {
+    ConnectedRowKind,
+    connectedRowKey,
+    connectedRows,
+    type ConnectedVault,
+  } from './connected-rows'
+  import {
     ThisSiteBodyKind,
     ThisSiteFillAction,
     ThisSiteFillActivity,
@@ -230,24 +236,20 @@ its address, the panel's visibility or the lock state changes.
       : translatePlain(I18N_KEYS.LoginVaultPickerUnnamed)
   }
 
-  /** One connected vault in its keyring's group. */
-  type ConnectedVault = {
-    readonly group: PairedVaultGroup
-    readonly vault: PairedVaultSummary
-  }
+  /** Every connected vault, or a keyring with none yet, in the groups'
+   * order. */
+  const rows = $derived(connectedRows(groups))
 
-  /** Every connected vault with its keyring's group, in the groups' order. */
-  const connectedVaults = $derived(
-    groups.flatMap((group) =>
-      group.vaults.map((vault): ConnectedVault => ({ group, vault })),
-    ),
-  )
+  /** A keyring's name, or the generic one for a keyring with none. */
+  function keyringName(group: PairedVaultGroup): string {
+    return group.identityLabel
+      ? group.identityLabel
+      : translatePlain(I18N_KEYS.ExtensionCompanionOtherVaults)
+  }
 
   /** Its keyring's name under a connected vault, when the two differ. */
   function keyringLines({ group, vault }: ConnectedVault): readonly string[] {
-    const keyring = group.identityLabel
-      ? group.identityLabel
-      : translatePlain(I18N_KEYS.ExtensionCompanionOtherVaults)
+    const keyring = keyringName(group)
     return keyring === vaultName(vault) ? [] : [keyring]
   }
 
@@ -463,33 +465,54 @@ its address, the panel's visibility or the lock state changes.
 
 <!-- A page Nook does not fill still lists every connected vault, so a keyring
 connected a moment ago shows at once: a letter tile, the vault's name, its
-keyring's name below when the two differ, and the other-keyring tag. -->
+keyring's name below when the two differ, and the other-keyring tag. A keyring
+with no vault yet shows as itself, its empty line below its name. -->
 {#snippet connectedSections()}
   <div class="side-panel-connected">
     <h2 class="side-panel-label side-panel-connected-caption">
       {translatePlain(I18N_KEYS.ExtensionCompanionVaultsTitle)}
     </h2>
     <ul class="side-panel-connected-list">
-      {#each connectedVaults as connected (connected.vault.vaultStoreId)}
+      {#each rows as row (connectedRowKey(row))}
         <li
           class="side-panel-connected-row"
           data-testid="side-panel-connected-identity"
         >
-          <span class="side-panel-vault-tile" aria-hidden="true">
-            {vaultName(connected.vault).slice(0, 1)}
-          </span>
-          <span class="side-panel-connected-copy">
-            <span
-              class="side-panel-connected-name"
-              data-testid="side-panel-connected-vault"
-            >
-              {vaultName(connected.vault)}
+          {#if row.kind === ConnectedRowKind.Vault}
+            <span class="side-panel-vault-tile" aria-hidden="true">
+              {vaultName(row.vault).slice(0, 1)}
             </span>
-            {#each keyringLines(connected) as keyring (keyring)}
-              <span class="side-panel-connected-keyring">{keyring}</span>
-            {/each}
-          </span>
-          {#if groupRelation(connected.group) === SidePanelIdentityRelation.Other}
+            <span class="side-panel-connected-copy">
+              <span
+                class="side-panel-connected-name"
+                data-testid="side-panel-connected-vault"
+              >
+                {vaultName(row.vault)}
+              </span>
+              {#each keyringLines(row) as keyring (keyring)}
+                <span class="side-panel-connected-keyring">{keyring}</span>
+              {/each}
+            </span>
+          {:else}
+            <span class="side-panel-vault-tile is-empty" aria-hidden="true">
+              {keyringName(row.group).slice(0, 1)}
+            </span>
+            <span class="side-panel-connected-copy">
+              <span
+                class="side-panel-connected-name"
+                data-testid="side-panel-connected-keyring"
+              >
+                {keyringName(row.group)}
+              </span>
+              <span
+                class="side-panel-connected-keyring"
+                data-testid="side-panel-connected-keyring-no-vaults"
+              >
+                {translatePlain(I18N_KEYS.ExtensionCompanionKeyringNoVaults)}
+              </span>
+            </span>
+          {/if}
+          {#if groupRelation(row.group) === SidePanelIdentityRelation.Other}
             <span class="side-panel-tag">
               {translatePlain(I18N_KEYS.ExtensionActionOtherIdentity)}
             </span>

@@ -270,51 +270,6 @@ impl ProviderVaultAccess {
     }
 }
 
-/// What the user may do with one listed vault. A listing names the
-/// recommended action first.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-pub enum ProviderVaultAction {
-    /// Swap the empty open vault for this one, after a confirmation.
-    UseInstead,
-    /// Add it beside the open vault.
-    ImportSeparately,
-    /// Ask a device that can open it to grant this device access.
-    RequestAccess,
-}
-
-/// The vault this device has open, as far as the offered actions need it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum OpenVaultContents {
-    /// No vault is open on this device.
-    Closed,
-    /// The open vault holds nothing and nobody else shares it.
-    Empty,
-    /// The open vault holds records or another app shares it, so it is
-    /// never replaced.
-    Occupied,
-}
-
-impl OpenVaultContents {
-    /// The actions one vault with this access offers.
-    pub(crate) fn actions(self, access: &ProviderVaultAccess) -> Vec<ProviderVaultAction> {
-        match access {
-            ProviderVaultAccess::Syncs
-            | ProviderVaultAccess::OtherIdentityHere { .. }
-            | ProviderVaultAccess::Requested => Vec::new(),
-            ProviderVaultAccess::Locked => vec![ProviderVaultAction::RequestAccess],
-            ProviderVaultAccess::Unchecked => vec![ProviderVaultAction::ImportSeparately],
-            ProviderVaultAccess::Granted => match self {
-                Self::Closed | Self::Occupied => vec![ProviderVaultAction::ImportSeparately],
-                Self::Empty => vec![
-                    ProviderVaultAction::UseInstead,
-                    ProviderVaultAction::ImportSeparately,
-                ],
-            },
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -362,53 +317,6 @@ mod tests {
             ProviderVaultAccess::Unchecked
         );
         Ok(())
-    }
-
-    #[test]
-    fn actions_follow_what_the_open_vault_holds() {
-        use ProviderVaultAction::{ImportSeparately, RequestAccess, UseInstead};
-        let granted = ProviderVaultAccess::Granted;
-        assert_eq!(
-            OpenVaultContents::Empty.actions(&granted),
-            [UseInstead, ImportSeparately]
-        );
-        assert_eq!(
-            OpenVaultContents::Occupied.actions(&granted),
-            [ImportSeparately]
-        );
-        assert_eq!(
-            OpenVaultContents::Closed.actions(&granted),
-            [ImportSeparately]
-        );
-        for contents in [
-            OpenVaultContents::Closed,
-            OpenVaultContents::Empty,
-            OpenVaultContents::Occupied,
-        ] {
-            assert!(contents.actions(&ProviderVaultAccess::Requested).is_empty());
-            assert_eq!(
-                contents.actions(&ProviderVaultAccess::Unchecked),
-                [ImportSeparately]
-            );
-        }
-        for contents in [
-            OpenVaultContents::Closed,
-            OpenVaultContents::Empty,
-            OpenVaultContents::Occupied,
-        ] {
-            assert_eq!(
-                contents.actions(&ProviderVaultAccess::Locked),
-                [RequestAccess]
-            );
-            assert!(contents.actions(&ProviderVaultAccess::Syncs).is_empty());
-            assert!(
-                contents
-                    .actions(&ProviderVaultAccess::OtherIdentityHere {
-                        identity_label: "Travel".to_owned()
-                    })
-                    .is_empty()
-            );
-        }
     }
 
     /// Two identities on one browser, each with its own app key and vault.
@@ -663,10 +571,6 @@ mod tests {
         assert_eq!(
             serde_json::to_value(ProviderVaultAccess::Locked)?,
             serde_json::json!({ "state": "locked" })
-        );
-        assert_eq!(
-            serde_json::to_value(ProviderVaultAction::ImportSeparately)?,
-            serde_json::json!("importSeparately")
         );
         Ok(())
     }

@@ -36,11 +36,6 @@
     vault.beginProviderSetup(kind)
   }
 
-  async function removeProvider(id: string): Promise<void> {
-    const removed = await vault.removeProvider(id)
-    if (removed.isErr()) vault.errorMsg = vault.t(removed.error.translationKey)
-  }
-
   let {
     vault,
     showAccessGate,
@@ -77,7 +72,7 @@
     onUnlockOnCard: () => Promise<void>
     onUseEnrollmentCode: (args: EnrollmentCodeUnlock) => Promise<void>
     onAcceptSentinelOnboardingPackage: (packageJson: string) => Promise<void>
-    onSentinelUnlocked: () => Promise<void>
+    onSentinelUnlocked: () => void
     onCreateDeviceVault: (label: string) => Promise<void>
     onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>
     onCreateSentinelParticipantKey: () => Promise<SentinelActionResult<string>>
@@ -157,7 +152,6 @@
       <LoginGate
         {vault}
         appKind={APP_KIND}
-        providers={vault.providers}
         loginSetup={vault.loginSetup}
         addProviderOpen={vault.addProviderOpen}
         isVerifying={vault.isVerifying}
@@ -166,7 +160,6 @@
         {onUnlock}
         {onUnlockOnCard}
         {...identityHealth ? { identityHealth } : {}}
-        onBeginAddProvider={() => vault.beginAddProvider()}
         onCancelAddProvider={() => vault.cancelAddProvider()}
         onBeginSetup={beginProviderSetup}
         onCancelSetup={() => vault.cancelProviderSetup()}
@@ -185,7 +178,6 @@
         {onStartSentinelGenesis}
         onCreateSentinelGenesisPublicKeyAnnouncement={onCreateSentinelParticipantKey}
         onCreateSentinelGenesisParticipantResponse={onCreateSentinelParticipantResponse}
-        onRemoveProvider={removeProvider}
       />
     {/if}
     <VaultStatusBar

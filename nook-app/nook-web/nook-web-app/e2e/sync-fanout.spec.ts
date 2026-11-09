@@ -28,7 +28,7 @@ test.describe('sync fan-out on save', () => {
     // second device.
     await openIdentitiesPage(page)
     const protection = page.getByTestId('identity-protection-toggle')
-    await expect(protection).toContainText('1 of 2 done')
+    await expect(protection).toContainText('1 of 3 done')
     await protection.click()
     const steps = page.getByTestId('identity-protection-step')
     await expect(steps.nth(0)).toHaveAttribute('data-state', 'done')

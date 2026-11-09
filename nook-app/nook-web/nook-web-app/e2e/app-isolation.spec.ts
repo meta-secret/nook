@@ -60,7 +60,7 @@ test('exposes only the project capability and rejects the opposite vault type', 
     await expect(page.getByTestId('get-started-path-simple')).toHaveCount(0)
     await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible()
     await expect(page.getByTestId('login-connect-storage-btn')).toContainText(
-      'Restore from a sync provider',
+      'Recover from a sync provider',
     )
     await expect(page.getByTestId('create-vault-wizard-create')).toHaveCount(0)
     await expect(page.getByTestId('sibling-vault-app-link')).toHaveAttribute(
@@ -198,7 +198,7 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await expect(page.getByTestId('identity-vault-row').first()).toBeVisible()
 })
 
-test('opens the existing-vault workflow without starting creation', async ({
+test('opens keyring recovery without starting creation', async ({
   page,
 }, testInfo) => {
   const expectedKind =

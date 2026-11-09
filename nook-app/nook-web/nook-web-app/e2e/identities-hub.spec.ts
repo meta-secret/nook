@@ -114,7 +114,7 @@ test.describe('identities hub', () => {
     await expect(page.getByTestId('login-gate')).toBeVisible()
     await expect(
       current.getByTestId('identity-protection-toggle'),
-    ).toContainText('0 of 2 done')
+    ).toContainText('0 of 3 done')
     await current.getByTestId('identity-protection-toggle').click()
     await expect(page.getByTestId('identity-protection-risk')).toContainText(
       'Only this browser has your vaults',
@@ -285,7 +285,8 @@ test.describe('an identity without a vault', () => {
       page.getByText(
         enLocale.provider_identities.set_up_here.replace('{identity}', 'Solo'),
       ),
-    ).toBeVisible()
+      // Said once the keyring's log is synced to Drive.
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     await expect(page.getByTestId('authenticated-shell')).toHaveCount(0)
     await solo.getByTestId('identity-overview-toggle').click()
     await expect(

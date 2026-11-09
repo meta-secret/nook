@@ -37,7 +37,9 @@ import {
   type IdentityPlanRun,
 } from "$lib/vault/identity-plan-actions";
 import { VaultOAuthActions } from "$lib/vault/oauth";
-import { ProviderVaultActions } from "$lib/vault/provider-vaults";
+import { DeviceProtectionActions } from "$lib/vault/device-protection.svelte";
+import { IdentityPages } from "$lib/vault/identity-pages";
+import { IdentityDirectoryLoader } from "$lib/components/identities/identity-directory-loader.svelte";
 import {
   FirstRunPlace,
   FirstRunStage,
@@ -301,12 +303,11 @@ export class FirstRunActions {
    * from. An S3 key the server refuses says so; Rust reads the refusal. */
   async listVaults(source: FirstRunProviderSource): Promise<FirstRunVaultRead> {
     const vault = this.vault;
-    const localVault = new ProviderVaultActions(vault).localVaultOccupancy();
     switch (source.kind) {
       case "googleDrive": {
-        const listed = await new VaultOAuthActions(vault).listGoogleDriveVaults(
-          localVault,
-        );
+        const listed = await new VaultOAuthActions(
+          vault,
+        ).listGoogleDriveVaults();
         if (listed.isErr())
           return {
             kind: FirstRunInventoryKind.Failed,
@@ -319,10 +320,7 @@ export class FirstRunActions {
       }
       case "s3":
         try {
-          const listing = await list_s3_vaults(
-            source.configuration,
-            localVault,
-          );
+          const listing = await list_s3_vaults(source.configuration);
           return { kind: FirstRunInventoryKind.Loaded, listing };
         } catch (cause) {
           const keyRequest: Parameters<
@@ -540,10 +538,54 @@ export class FirstRunActions {
     }
   }
 
-  /** Connect the provider a keyring was just brought here through, outside
-   * setup too: the recovery screen ends a passphrase recovery the same way.
-   * The binding says whether its folder is opened first. */
+  /** Connect the provider a keyring was just brought here through during
+   * setup. The binding says whether its folder is opened first. */
   async connectProviderWith(binding: ProviderFolderBinding): Promise<boolean> {
+    const vault = this.vault;
+    if (!(await this.keepProvider(binding))) return false;
+    const away = vault.identityControl.grantedVaultElsewhere();
+    if (away !== false) {
+      const opened = await vault.identityControl.openVault(away.storeId);
+      if (opened.isErr()) {
+        vault.errorMsg = vault.t(opened.error.translationKey);
+        return false;
+      }
+    }
+    vault.firstRun = FirstRunStage.Off;
+    vault.openSection(WorkspaceSection.Identities);
+    if (away !== false) vault.vaultPanelStoreId = away.storeId;
+    return true;
+  }
+
+  /** The recovery screen's end: a keyring recovered or joined there keeps
+   * the provider it came through, and the page lands on the keyrings page
+   * with that keyring. Its vaults come with it and open from its card, as
+   * vaults kept elsewhere do; none opens on its own. A keyring a passkey
+   * recovered is unlocked with that passkey first, as its card's Unlock
+   * does, since its provider is saved sealed to its key. */
+  async connectRecoveredKeyring(
+    binding: ProviderFolderBinding,
+  ): Promise<boolean> {
+    const vault = this.vault;
+    if (!vault.deviceProtectionReady) {
+      const identityOnly: Parameters<
+        DeviceProtectionActions["unlockDeviceProtection"]
+      >[0] = { initializeSession: false };
+      await new DeviceProtectionActions(vault).unlockDeviceProtection(
+        identityOnly,
+      );
+      if (!vault.deviceProtectionReady) return false;
+    }
+    if (!(await this.keepProvider(binding))) return false;
+    vault.keyringRecoveryOpen = false;
+    await new IdentityDirectoryLoader(vault).reload();
+    new IdentityPages(vault).show(WorkspaceSection.Identities);
+    return true;
+  }
+
+  /** Bind the provider's folder, save it for the keyring, and copy the
+   * keyring's log there. A step that fails says why. */
+  private async keepProvider(binding: ProviderFolderBinding): Promise<boolean> {
     const vault = this.vault;
     vault.errorMsg = "";
     const bound = await this.bindProvider(binding);
@@ -561,17 +603,6 @@ export class FirstRunActions {
       vault.errorMsg = vault.t(mounted.error.translationKey);
       return false;
     }
-    const away = vault.identityControl.grantedVaultElsewhere();
-    if (away !== false) {
-      const opened = await vault.identityControl.openVault(away.storeId);
-      if (opened.isErr()) {
-        vault.errorMsg = vault.t(opened.error.translationKey);
-        return false;
-      }
-    }
-    vault.firstRun = FirstRunStage.Off;
-    vault.openSection(WorkspaceSection.Identities);
-    if (away !== false) vault.vaultPanelStoreId = away.storeId;
     return true;
   }
 

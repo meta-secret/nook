@@ -593,6 +593,13 @@ html:has(.side-panel-body) {
   text-transform: uppercase;
 }
 
+/* A keyring with no vault yet: an empty slot where its vaults go. */
+.side-panel-vault-tile.is-empty {
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
 .side-panel-connected-copy {
   display: grid;
   gap: 1px;

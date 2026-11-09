@@ -35,7 +35,6 @@ the identity without a vault, and its card offers New vault later.
     </p>
   </div>
 
-
   <LoginVaultNameForm
     {vault}
     isVerifying={vault.isVerifying}
@@ -43,17 +42,18 @@ the identity without a vault, and its card offers New vault later.
     submitLabel={vault.t(I18N_KEYS.FirstRunVaultCreate)}
     hint={VaultNameHint.Hidden}
     onCreate={(name: string) => actions.createFirstVault(name)}
-  />
-
-  <div class="flex justify-center">
-    <Button
-      type="button"
-      variant="ghost"
-      data-testid="first-run-vault-skip"
-      disabled={vault.isVerifying}
-      onclick={() => actions.skipFirstVault()}
-    >
-      {vault.t(I18N_KEYS.FirstRunVaultSkip)}
-    </Button>
-  </div>
+  >
+    {#snippet beside()}
+      <Button
+        type="button"
+        variant="ghost"
+        class="w-full text-muted-foreground hover:text-foreground sm:w-auto"
+        data-testid="first-run-vault-skip"
+        disabled={vault.isVerifying}
+        onclick={() => actions.skipFirstVault()}
+      >
+        {vault.t(I18N_KEYS.FirstRunVaultSkip)}
+      </Button>
+    {/snippet}
+  </LoginVaultNameForm>
 </section>

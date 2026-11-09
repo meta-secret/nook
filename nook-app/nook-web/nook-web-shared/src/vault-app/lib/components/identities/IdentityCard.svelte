@@ -132,10 +132,10 @@ panel sits inside the card, which then spans the full row.
   const managesHere = $derived(Boolean(onManageSection) && !preview && live)
   const addsVault = $derived(canAddVault && live)
   let protectionOpen = $state(false)
-  /** The checklist row shows while the unlocked identity is at risk, and
-   * leaves once both protections are done. */
+  /** The checklist row shows while the unlocked identity has a step left,
+   * and leaves once every row is done, the browser extension's included. */
   const protection = $derived(
-    live && !preview && health && onProtect && !health.isProtected
+    live && !preview && health && onProtect && !health.isComplete
       ? health
       : false,
   )
@@ -193,8 +193,14 @@ panel sits inside the card, which then spans the full row.
    * what belongs to that vault alone. Kept on the vault state, so the
    * panel stays open while the vault unlocks. */
   const vaultOpenId = $derived(vault.vaultPanelStoreId)
+  // A vault not on this browser has no panel: picking it opens it, and the
+  // panel shows once it is open.
   const vaultOpenRow = $derived(
-    card.vaults.find((row) => row.storeId === vaultOpenId),
+    card.vaults.find(
+      (row) =>
+        row.storeId === vaultOpenId &&
+        row.state !== IdentityVaultRowState.Unavailable,
+    ),
   )
   /** A panel beside the card: the card spreads across its whole row. */
   const spread = $derived(
@@ -215,7 +221,12 @@ panel sits inside the card, which then spans the full row.
     closeOthers()
     vault.vaultPanelStoreId = storeId
     const row = card.vaults.find((candidate) => candidate.storeId === storeId)
-    if (row?.state === IdentityVaultRowState.Unavailable) return
+    if (row?.state === IdentityVaultRowState.Unavailable) {
+      // The unlocked keyring opens it from its sync provider right here:
+      // the panel shows the open vault, with no second Open step.
+      if (live) void openAwayVault(storeId)
+      return
+    }
     // An unlocked identity opens its vault in place with no prompt, so the
     // panel offers the vault's own actions straight away.
     if (live && row?.state === IdentityVaultRowState.Available && onUnlockVault)
@@ -257,22 +268,27 @@ panel sits inside the card, which then spans the full row.
   })
 
   /** A vault this browser does not hold opens only on the unlocked
-   * identity, which can delete it everywhere. */
+   * identity, from its sync provider. */
   function rowDisabled(row: IdentityVaultRow): boolean {
     return busy || (row.state === IdentityVaultRowState.Unavailable && !live)
   }
 
   /** A vault of the unlocked identity this browser does not hold opens from
-   * its sync provider, with the key the identity granted this browser. */
+   * its sync provider, with the key the identity granted this browser, in
+   * place: the keyrings page stays, with the open vault's panel beside its
+   * card. */
   async function openAwayVault(storeId: string): Promise<void> {
+    // Settled before the open: once it opens, this page may give way to
+    // the workspace, which keeps the keyrings page and this panel.
+    vault.openSection(WorkspaceSection.Identities)
+    vault.vaultPanelStoreId = storeId
     const opened = await vault.identityControl.openVault(storeId)
-    if (opened.isErr()) vault.errorMsg = vault.t(opened.error.translationKey)
+    if (opened.isErr()) {
+      vault.errorMsg = vault.t(opened.error.translationKey)
+      vault.vaultPanelStoreId = ''
+    }
   }
 
-  async function deleteAwayVault(storeId: string): Promise<void> {
-    const deleted = await vault.identityControl.deleteVaultEverywhere(storeId)
-    if (deleted.isOk()) vault.vaultPanelStoreId = ''
-  }
 </script>
 
 {#snippet panelRow(
@@ -657,12 +673,6 @@ panel sits inside the card, which then spans the full row.
           }
           onManageVault?.(target)
         }}
-        {...live && vaultOpenRow.state === IdentityVaultRowState.Unavailable
-          ? {
-              onDelete: () => deleteAwayVault(vaultOpenRow.storeId),
-              onOpenAway: () => openAwayVault(vaultOpenRow.storeId),
-            }
-          : {}}
         onClose={() => (vault.vaultPanelStoreId = '')}
       />
     </div>

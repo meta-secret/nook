@@ -52,10 +52,6 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::GithubRepoInvalid
             | ValidationError::GithubRepoChars => NookError::GitHub(err.to_string()),
 
-            ValidationError::DriveFileNameLength
-            | ValidationError::DriveFileNameInvalid
-            | ValidationError::DriveFileNameChars => NookError::Drive(err.to_string()),
-
             ValidationError::OauthAccessTokenEmpty
             | ValidationError::SharedJoinerIdentityRequired
             | ValidationError::SharedJoinerIdentityInvalid

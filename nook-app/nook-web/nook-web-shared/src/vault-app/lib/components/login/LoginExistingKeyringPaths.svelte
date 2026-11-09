@@ -1,7 +1,7 @@
 <!--
-Ways to reach a vault that already exists. Joining the identity from another
-app is the usual path for a second device; restoring from a sync provider is
-the recovery path when no other app is at hand.
+Ways to reach a keyring that already exists, with its vaults. Joining it from
+another app is the usual path for a second device; recovering it from the
+sync provider that keeps it is the path when no other app is at hand.
 -->
 <script lang="ts">
   import { VaultWorkspaceActions } from '$lib/vault/ui'
@@ -38,7 +38,7 @@ the recovery path when no other app is at hand.
     class="mb-3 flex items-center gap-3 text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border"
   >
     <span class="text-center text-xs">
-      {vault.t(I18N_KEYS.LoginExistingVaultAlternative)}
+      {vault.t(I18N_KEYS.LoginExistingKeyringAlternative)}
     </span>
   </div>
   <div class="grid gap-2">

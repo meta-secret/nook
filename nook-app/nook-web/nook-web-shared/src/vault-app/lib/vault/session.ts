@@ -162,8 +162,6 @@ export class VaultSessionActions {
     state.vaultMembers = [];
     state.clearProjectionConflicts();
     state.joinEnrollmentPrompt = JoinEnrollmentState.None;
-    state.enrollSecretsKey = "";
-    state.enrollMembersKey = "";
     state.workspaceSection = WorkspaceSection.Vault;
     state.enrollmentCode = "";
     state.errorMsg = "";

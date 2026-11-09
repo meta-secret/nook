@@ -144,7 +144,7 @@ It never deletes:
     cancelled passkey attempts.
 - **Gate meaning:** Present **Device setup — Step 1 of 2**, not vault login.
   - Explain that it prepares or unlocks the browser's protected device identity.
-  - Explain that vault selection, creation, or import follows.
+  - Explain that vault selection, vault creation, or identity recovery follows.
   - Choose device protection mode only here.
   - Vault creation reuses that persisted choice and does not render another
     selector.
@@ -170,40 +170,38 @@ It never deletes:
 
 - **Multiple local vaults** → vault picker (`login-vault-picker`); unlock chosen vault.
 - **Single local vault** → unlock with device keys.
-- **No local vault yet** → create on device or connect a sync provider to pull
-  an existing vault. Choosing Simple creates locally. Choosing Sentinel starts
+- **No local vault yet** → create on device, or recover or join an identity
+  from a sync provider; its vaults come with it, as
+  [recover a keyring from a sync provider](identity-vault-architecture.md#recover-a-keyring-from-a-sync-provider)
+  states. Choosing Simple creates locally. Choosing Sentinel starts
   the pre-vault reverse-onboarding ceremony in
   [sentinel-genesis.md](sentinel-genesis.md).
 
-- **Existing-vault import:** Recover an authorized device identity before
-  attempting `connect`.
-- **Provider preflight:** Discover the remote `store_id` from signed encrypted
-  events without decrypting the vault.
-  - The website then shows its own passkey/PIN device gate. It never asks
-    the extension for its key.
+- **Provider recovery:** Connecting a sync provider for recovery lists the
+  keyrings it holds, read without any key. It never discovers or opens one
+  vault on its own.
   - Treat discovery as a bounded busy operation.
-  - Reject an empty or incorrect provider when `store_id` is missing, before
-    device authorization.
-  - Keep the discovered identifier staged until that exact provider vault
-    connects successfully.
-- **Safe recovery metadata:** Project only these values from signed events:
-
-- active device labels/IDs (matching the `device …` suffix written into Nook
-  passkey display names); and
-- whether Sentinel quorum is required.
-
+  - Reject a provider that holds no keyring before device authorization;
+    another provider can be picked.
+  - Each keyring's way in asks for this browser's key when it needs one:
+    its passkey, or the website's own passkey/PIN device gate. The website
+    never asks the extension for its key.
+  - A recovered or joined keyring keeps the provider and lands on the
+    keyrings page; its vaults open from its card.
 - **Staged credential continuity:** Device authorization may reload sealed
   provider state.
   - Keep the exact staged credentials or local-folder handle in memory.
-  - Resume the staged import after successful authorization without asking the
-    user to choose the provider again.
+  - Resume the staged recovery after successful authorization without asking
+    the user to choose the provider again.
   - Never call provider connect first and expose internal
     `authorization_required` to the user.
-- **Login workflow choice:** Present **Open existing**, **Create new**, and
-  **Import** as mutually exclusive workflows.
+- **Login workflow choice:** Present **Open existing** and **New vault** as
+  mutually exclusive workflows. New vault only creates a vault.
   - With local vaults, default to Open existing: choose a vault, then authorize
     its unlock.
-  - Create and Import replace open/unlock controls while selected.
+  - New vault replaces open/unlock controls while selected.
+  - Provider recovery is the keyrings page's **Recover keyring**, never a
+    workflow inside New vault.
 - **Lock purpose:** Treat Lock as the safe “step away from this browser” action.
   It keeps the encrypted database file like password-manager logout.
 
@@ -232,7 +230,7 @@ It never deletes:
 - **Local cache**
   - **Behavior:** Multiple `vault:{store_id}` blobs + `vault_registry` in `nook_db`
 - **Login gate**
-  - **Behavior:** Vault picker when >1 vault: open / create new / import from provider
+  - **Behavior:** Vault picker when >1 vault: open / create new; provider recovery is the keyrings page's **Recover keyring**
 - **Sync providers**
   - **Behavior:** Mount the identity; each replicates every vault of it in that vault's own namespace
 - **Lock / switch**
@@ -250,16 +248,18 @@ Vault projection caches use `vault:{store_id}`. Code: `nook-app/nook-platform/no
   - **Correct action:** Login → **Create vault** → Sentinel policy and reverse onboarding; no provider until atomic genesis is complete
 - **Replicate this vault**
   - **Correct action:** Settings → Sync providers → Add GitHub / Drive
-- **Open a vault from elsewhere**
-  - **Correct action:** Login → **Connect sync provider** or **Import as new vault**
-- **Provider or folder holds several vaults**
-  - **Correct action:** Login → connect it; Nook lists the vaults it holds, with their created and last-activity times, event counts, and short ids, and opens the one chosen
-- **Provider holds another identity's vault**
-  - **Correct action:** Nook says how this device can open it. A vault that opens imports as a separate one; an empty open vault may give way after confirmation; a vault nothing here opens can only be requested. See [auth-providers.md](auth-providers.md#what-the-provider-already-holds)
+- **Bring vaults kept elsewhere to this browser**
+  - **Correct action:** Keyrings page → **Recover keyring**; recover the identity with its passkey or a recovery passphrase, or ask to join it. Its vaults come with it
+- **Provider or folder holds several identities**
+  - **Correct action:** Nook lists the identities, each with its device and vault counts and one decision. See [provider-identity-decisions.md](provider-identity-decisions.md)
+- **Provider holds another identity**
+  - **Correct action:** Recover it or ask to join it; none of its vaults is imported or opened on its own
 
-A second vault of the identity writes beside the first in its own namespace
-(`meta-secret-nook/{identity_id}/{store_id}/`); Nook never merges unrelated vaults. See
-[unified-vault.md](unified-vault.md).
+A sync provider keeps identities, not vaults, as
+[recover a keyring from a sync provider](identity-vault-architecture.md#recover-a-keyring-from-a-sync-provider)
+states. A second vault of the identity writes beside the first in its own
+namespace (`meta-secret-nook/{identity_id}/{store_id}/`); Nook never merges
+unrelated vaults. See [unified-vault.md](unified-vault.md).
 
 ---
 
@@ -268,13 +268,13 @@ A second vault of the identity writes beside the first in its own namespace
 - **Header Lock / Switch vault**
   - **Purpose:** End session; switch vault when multiple exist
 - **Login gate chooser**
-  - **Purpose:** Vault picker, create local vault, or connect sync provider
+  - **Purpose:** Vault picker, create local vault, or recover an identity from a sync provider
 - **Settings → Sync providers**
   - **Purpose:** Manage the identity's mounts; one the open vault's mode cannot use is marked unavailable for it
 - **Settings → Delete local vault data**
   - **Purpose:** Remove every Nook vault and credential persisted by this browser; remote replicas remain
 
-**Test ids:** `header-lock-vault-btn`, `header-switch-vault-btn`, `login-vault-picker`, `login-vault-option`, `login-create-additional-vault-btn`, `sync-conflict-import-new-vault-btn`, `unlock-vault-btn`, `login-create-device-vault-btn`, `login-connect-storage-btn`, `add-provider-btn`.
+**Test ids:** `header-lock-vault-btn`, `header-switch-vault-btn`, `login-vault-picker`, `login-vault-option`, `login-create-additional-vault-btn`, `unlock-vault-btn`, `login-create-device-vault-btn`, `login-connect-storage-btn`, `add-provider-btn`.
 
 ---
 

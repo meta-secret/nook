@@ -17,6 +17,7 @@ mod passkey_addition;
 mod provider_share;
 mod recovery_passphrase;
 mod vault_access;
+mod vault_names;
 mod vault_removal;
 
 use crate::{TypedInput, TypedOutput};

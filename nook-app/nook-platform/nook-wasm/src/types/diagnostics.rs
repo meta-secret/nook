@@ -18,6 +18,8 @@ pub enum NookIdentityNextStep {
     AddSyncProvider,
     AddCloudProvider,
     AddDevice,
+    InstallExtension,
+    ConnectExtension,
     Done,
 }
 
@@ -30,12 +32,51 @@ pub enum NookIdentityNudge {
     Urge,
 }
 
-/// One loss an identity is protected against, in the order they are built.
+/// One checklist task: the two protections, then the browser extension.
 #[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NookIdentityProtectionTask {
     CopyOutsideBrowser,
     SecondDevice,
+    BrowserExtension,
+}
+
+/// Whether the app offers the browser extension here, and whether this
+/// browser has it installed.
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NookBrowserExtensionInstallation {
+    NotOffered,
+    NotInstalled,
+    Installed,
+}
+
+impl NookBrowserExtensionInstallation {
+    pub(crate) const fn to_core(self) -> nook_core::BrowserExtensionInstallation {
+        match self {
+            Self::NotOffered => nook_core::BrowserExtensionInstallation::NotOffered,
+            Self::NotInstalled => nook_core::BrowserExtensionInstallation::NotInstalled,
+            Self::Installed => nook_core::BrowserExtensionInstallation::Installed,
+        }
+    }
+}
+
+/// Whether a browser extension on this device has joined the identity, as
+/// the identity snapshot reports it.
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NookBrowserExtensionMembership {
+    Joined,
+    NotJoined,
+}
+
+impl NookBrowserExtensionMembership {
+    pub(crate) const fn to_core(self) -> nook_core::BrowserExtensionMembership {
+        match self {
+            Self::Joined => nook_core::BrowserExtensionMembership::Joined,
+            Self::NotJoined => nook_core::BrowserExtensionMembership::NotJoined,
+        }
+    }
 }
 
 /// Where one protection task stands.
@@ -63,6 +104,9 @@ impl NookIdentityProtectionStep {
             }
             nook_core::IdentityProtectionTask::SecondDevice => {
                 NookIdentityProtectionTask::SecondDevice
+            }
+            nook_core::IdentityProtectionTask::BrowserExtension => {
+                NookIdentityProtectionTask::BrowserExtension
             }
         }
     }
@@ -92,6 +136,8 @@ impl NookIdentityNextStep {
             nook_core::IdentityNextStep::AddSyncProvider => Self::AddSyncProvider,
             nook_core::IdentityNextStep::AddCloudProvider => Self::AddCloudProvider,
             nook_core::IdentityNextStep::AddDevice => Self::AddDevice,
+            nook_core::IdentityNextStep::InstallExtension => Self::InstallExtension,
+            nook_core::IdentityNextStep::ConnectExtension => Self::ConnectExtension,
             nook_core::IdentityNextStep::Done => Self::Done,
         }
     }
@@ -118,13 +164,13 @@ impl NookIdentityHealth {
         NookIdentityNextStep::from_core(self.0.next_step)
     }
 
-    /// Both protection tasks in order, finished ones included.
+    /// Both protection tasks in order, then the browser extension where the
+    /// app offers it; finished ones included.
     #[wasm_bindgen(getter)]
     pub fn checklist(&self) -> Vec<NookIdentityProtectionStep> {
         self.0
             .checklist
-            .iter()
-            .copied()
+            .steps()
             .map(NookIdentityProtectionStep)
             .collect()
     }
@@ -133,6 +179,12 @@ impl NookIdentityHealth {
     #[wasm_bindgen(getter, js_name = isProtected)]
     pub fn is_protected(&self) -> bool {
         self.0.is_protected()
+    }
+
+    /// Every checklist row is done, the browser extension's included.
+    #[wasm_bindgen(getter, js_name = isComplete)]
+    pub fn is_complete(&self) -> bool {
+        self.0.is_complete()
     }
 
     #[wasm_bindgen(getter)]
@@ -436,6 +488,8 @@ mod browser_tests {
                 device_join_provider_count: joinable.into(),
                 device_count: apps.into(),
                 stored_item_count: items.into(),
+                extension_installation: nook_core::BrowserExtensionInstallation::NotOffered,
+                extension_membership: nook_core::BrowserExtensionMembership::NotJoined,
             },
         ))
     }

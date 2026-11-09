@@ -12,11 +12,6 @@ pub(crate) enum RegistryLabelUpdate<'a> {
     Set(&'a str),
 }
 
-pub(crate) enum ImportVaultLabel<'a> {
-    FromDocument,
-    Override(&'a str),
-}
-
 /// Named values required by `NookDatabase::upsert_registry_entry`.
 pub(crate) struct UpsertRegistryEntryRequest<'a> {
     pub(crate) registry: &'a mut VaultRegistry,
@@ -59,7 +54,6 @@ pub(crate) struct SetLocalVaultLabelRequest<'a> {
 /// Named values required by `NookDatabase::import_vault_blob`.
 pub(crate) struct ImportVaultBlobRequest<'a> {
     pub(crate) content: &'a str,
-    pub(crate) label: ImportVaultLabel<'a>,
 }
 
 /// Presence of an encrypted local vault snapshot or provider cache.
@@ -377,19 +371,6 @@ impl NookDatabase {
 }
 
 impl NookDatabase {
-    pub(crate) async fn load_vault_local_cache(
-        cache_ref: &str,
-    ) -> Result<VaultSnapshotLookup, NookError> {
-        Ok(
-            match NookDatabase::idb_get_string(&NookDatabase::vault_cache_key(cache_ref)).await? {
-                StoredStringRecord::Stored(content) => VaultSnapshotLookup::Stored(content),
-                StoredStringRecord::MissingKey => VaultSnapshotLookup::NotStored,
-            },
-        )
-    }
-}
-
-impl NookDatabase {
     pub(crate) async fn save_to_indexed_db(content: &str) -> Result<(), NookError> {
         if content.trim().is_empty() {
             return Err(NookError::Database(
@@ -468,18 +449,14 @@ impl NookDatabase {
     pub(crate) async fn import_vault_blob(
         request: ImportVaultBlobRequest<'_>,
     ) -> Result<String, NookError> {
-        let ImportVaultBlobRequest { content, label } = request;
+        let ImportVaultBlobRequest { content } = request;
         let store_id = NookDatabase::store_id_from_yaml(content)?;
         NookDatabase::save_vault_blob(SaveVaultBlobRequest {
             store_id: &store_id,
             content,
         })
         .await?;
-        let label = match label {
-            ImportVaultLabel::FromDocument => NookDatabase::label_from_yaml(content)?,
-            ImportVaultLabel::Override(label) => VaultName::Named(label.to_owned()),
-        };
-        if let VaultName::Named(label) = label {
+        if let VaultName::Named(label) = NookDatabase::label_from_yaml(content)? {
             let mut registry = NookDatabase::load_vault_registry().await?;
             NookDatabase::upsert_registry_entry(UpsertRegistryEntryRequest {
                 registry: &mut registry,

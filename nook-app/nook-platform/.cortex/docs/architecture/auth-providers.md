@@ -239,7 +239,7 @@ wasm; the web shim is adapters + i18n only.
 - **List and classify the vaults a provider holds**
   - **Home:** `nook-app/nook-platform/nook-core/src/sync/provider_vault_listing.rs`,
     exported by `nook-app/nook-platform/nook-wasm/src/public_api/provider_vault_listing.rs`
-    and routed by [`vault/provider-vaults.ts`](../../../../nook-web/nook-web-shared/src/vault-app/lib/vault/provider-vaults.ts)
+    and read by [`vault/first-run.ts`](../../../../nook-web/nook-web-shared/src/vault-app/lib/vault/first-run.ts)
 
 **Enrollment and web presentation**
 
@@ -791,7 +791,7 @@ Shared components live under
   - **Purpose:** Create/authorize passkey, or PIN fallback when PRF is unavailable, before loading device-sealed data
 - **`LoginGate`**
   - **When shown:** Vault locked
-  - **Purpose:** Get started chooser, unlock local cache, connect sync provider, enrollment
+  - **Purpose:** Get started chooser, unlock local cache, recover an identity from a sync provider, enrollment
 - **`SecretVault`**
   - **When shown:** Authenticated
   - **Purpose:** Primary app — secrets CRUD
@@ -818,7 +818,7 @@ gate.
 ### Login gate (current)
 
 - **No**
-  - **Primary UI:** **Get started** — create local vault (device keys) or connect cloud storage
+  - **Primary UI:** **Get started** — create local vault (device keys), or recover or join an identity from a sync provider ([recover a keyring from a sync provider](identity-vault-architecture.md#recover-a-keyring-from-a-sync-provider))
 - **Yes**
   - **Primary UI:** Unlock with device keys
 

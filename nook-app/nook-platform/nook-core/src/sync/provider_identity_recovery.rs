@@ -11,7 +11,7 @@
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-use crate::{IdentitySetup, ProviderIdentityChoices, ProviderIdentityLog, ProviderLogCount};
+use crate::{IdentitySetup, ProviderIdentityLog, ProviderLogCount};
 
 /// Whether setup offers to recover an identity with one of its recovery
 /// passphrases, beside asking to join it. It does when this browser may join
@@ -45,31 +45,17 @@ impl IdentityRecoveryOffer {
     }
 }
 
-impl ProviderIdentityChoices<'_> {
-    /// Whether a keyring listed here can be recovered with one of its
-    /// recovery passphrases. A provider holding only one vault then shows
-    /// its keyring for the user's choice too, instead of opening that vault
-    /// for a passkey that may be lost with every device.
-    #[must_use]
-    pub fn recoverable_with_passphrase(&self) -> bool {
-        self.choices()
-            .iter()
-            .any(|choice| choice.recovery == IdentityRecoveryOffer::Offered)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
         FilingIdentity, IdentityDecision, IdentityId, IdentitySession, IdentityWords,
-        ProviderIdentityChoice, ProviderIdentityJoin, ProviderVaultAccess, ProviderVaultName,
-        ProviderVaultSummary, ProviderVaultTime, StoreId,
+        ProviderIdentityChoice, ProviderIdentityChoices, ProviderIdentityJoin, ProviderVaultName,
+        ProviderVaultTime,
     };
 
     const MINE: &str = "idn_mineabcdefg";
     const OTHER: &str = "idn_otherabcdef";
-    const OTHER_VAULT: &str = "store_otherabcdeg";
 
     struct Fixture;
 
@@ -91,24 +77,6 @@ mod tests {
                 words: IdentityWords::of(&identity_id),
                 identity_id,
                 log,
-            })
-        }
-
-        fn vault(
-            store: &str,
-            identity: &FilingIdentity,
-            access: ProviderVaultAccess,
-        ) -> anyhow::Result<ProviderVaultSummary> {
-            Ok(ProviderVaultSummary {
-                store_id: StoreId::parse(store)?,
-                short_id: store.to_owned(),
-                name: ProviderVaultName::Unknown,
-                identity: identity.clone(),
-                created: ProviderVaultTime::Unreported,
-                last_activity: ProviderVaultTime::Unreported,
-                event_count: crate::ProviderEventCount::default(),
-                access,
-                actions: Vec::new(),
             })
         }
     }
@@ -237,41 +205,6 @@ mod tests {
             )?,
             vec![IdentityDecision::FinishJoining]
         );
-        Ok(())
-    }
-
-    /// One vault whose keyring lists a recovery passphrase waits for the
-    /// user's choice; one this browser already holds, or a keyring without a
-    /// passphrase, opens as before.
-    #[test]
-    fn a_listing_is_recoverable_with_a_passphrase_only_for_a_keyring_this_browser_may_join()
-    -> anyhow::Result<()> {
-        let recoverable = |count: u32, this_browser: bool| -> anyhow::Result<bool> {
-            let log = ProviderIdentityLog::Read {
-                devices: crate::ProviderLogCount::from(1),
-                newest_device: ProviderVaultTime::Unreported,
-                vaults: crate::ProviderLogCount::from(1),
-                recovery_passphrases: crate::ProviderLogCount::from(count),
-                this_browser,
-                join: ProviderIdentityJoin::NotAsked,
-            };
-            let other = Fixture::identity(OTHER, log)?;
-            let vaults = [Fixture::vault(
-                OTHER_VAULT,
-                &other,
-                ProviderVaultAccess::Unchecked,
-            )?];
-            Ok(ProviderIdentityChoices {
-                vaults: &vaults,
-                identities: &[],
-                checks: &[],
-                session: IdentitySession::NoIdentity,
-            }
-            .recoverable_with_passphrase())
-        };
-        assert!(recoverable(1, false)?);
-        assert!(!recoverable(0, false)?);
-        assert!(!recoverable(1, true)?);
         Ok(())
     }
 }

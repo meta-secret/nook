@@ -94,12 +94,11 @@ function strangerVault(): ProviderVaultSummary {
     lastActivity: { state: 'reported', at: Date.UTC(2026, 9, 2) },
     eventCount: 2,
     access: { state: 'locked' },
-    actions: ['requestAccess'],
   }
 }
 
 function listing(vaults: ProviderVaultSummary[]): ProviderVaultListing {
-  return { vaults, identities: [], replacement: { state: 'unavailable' } }
+  return { vaults, identities: [] }
 }
 
 describe('first-run Sync step on S3 storage', () => {

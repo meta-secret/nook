@@ -5,10 +5,8 @@
     VaultStorageFailureKind,
   } from '$lib/runtime/storage-failure'
   import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
-  import { I18N_KEYS } from '../generated/i18n-keys'
   import { onMount, untrack } from 'svelte'
   import { VaultState } from '$lib/vault.svelte'
-  import { StagedVaultDiscoveryKind } from '$lib/vault/provider-connection'
   import {
     DeviceProtectionStatus,
     set_vault_session_locked,
@@ -29,6 +27,7 @@
     ExtensionSetupOfferModel,
     type ExtensionSetupOfferSource,
   } from '$lib/app/extension-setup-offer.svelte'
+  import { extensionInstallationFor } from '$lib/app/extension-setup'
   import {
     APP_SHELL_WIDTH,
     APP_VERSION,
@@ -49,8 +48,6 @@
   } from '$lib/vault/device-key-unlock'
   import { ExistingVaultUnlockWait } from '$lib/vault/existing-vault-unlock.svelte'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
-  import { ExistingVaultImportLifecycle } from '$lib/vault/existing-vault-import.svelte'
-  import { ProviderVaultActions } from '$lib/vault/provider-vaults'
   import { FirstRunActions } from '$lib/vault/first-run'
   import {
     THEME_STORAGE_KEY,
@@ -71,22 +68,10 @@
   const IS_SENTINEL_APP = configured_vault_application_is_sentinel()
   const SUPPORTS_EXTENSION = configured_vault_application_supports_extension()
   const vault = new VaultState()
-  const existingVaultImportLifecycle = new ExistingVaultImportLifecycle(vault)
 
   function setSecretsAddOpen(open: boolean): void {
     secretsAddOpen = open
   }
-  /** Day-2 health of the identity: a copy elsewhere, then a second device. */
-  const identityHealth = $derived(
-    assess_identity_health(
-      vault.syncProviders.length,
-      vault.syncProviders.filter((provider) =>
-        provider_carries_device_join(provider),
-      ).length,
-      vault.identityControl.deviceCount(vault.vaultMembers.length),
-      vault.secretTotal,
-    ),
-  )
   let colorMode = $state<ColorMode>(browserColorMode.systemColorMode())
   let followsSystemColorMode = $state(true)
   let pendingVaultCreationState = $state<VaultCreationQueue>({
@@ -115,6 +100,20 @@
   }
   const extensionSetupOffer = new ExtensionSetupOfferModel(
     extensionSetupOfferSource,
+  )
+  /** Day-2 health of the identity: a copy elsewhere, then a second device,
+   * then the browser extension where this app offers it. */
+  const identityHealth = $derived(
+    assess_identity_health(
+      vault.syncProviders.length,
+      vault.syncProviders.filter((provider) =>
+        provider_carries_device_join(provider),
+      ).length,
+      vault.identityControl.deviceCount(vault.vaultMembers.length),
+      vault.secretTotal,
+      extensionInstallationFor(extensionSetupOffer.browser),
+      vault.identityControl.extensionMembership(),
+    ),
   )
   $effect(() => {
     if (!vault.isAuthenticated || !('window' in globalThis)) return
@@ -185,43 +184,23 @@
   }: VaultUnlockRequest): Promise<void> {
     // The person's own unlock ends their explicit lock.
     set_vault_session_locked(false)
-    const existingVaultImport =
-      vault.loginRequiresExistingVault &&
-      vault.loginSetup.kind === LoginSetupKind.Active
-    const existingVaultImportNeedsIdentity =
-      vault.clientPolicy.existing_vault_identity_recovery_required(
-        vault.loginRequiresExistingVault,
-        vault.loginSetup.kind === LoginSetupKind.Active,
-        vault.deviceProtectionReady,
-      )
     if (
       vault.addProviderOpen &&
-      vault.loginSetup.kind === LoginSetupKind.Active &&
-      !existingVaultImportNeedsIdentity
+      vault.loginSetup.kind === LoginSetupKind.Active
     ) {
       await vault.connectStagedProvider()
       return
     }
-    if (existingVaultImport) {
-      const discovered = await vault.discoverStagedVault()
-      if (discovered.isErr()) {
-        vault.errorMsg = vault.t(discovered.error.translationKey)
-        return
-      }
-      const found = discovered.value
-      switch (found.kind) {
-        // The keyrings wait for the user's choice; the import continues
-        // once one is chosen.
-        case StagedVaultDiscoveryKind.Choose:
-          return
-        case StagedVaultDiscoveryKind.NotFound:
-          vault.errorMsg = vault.t(I18N_KEYS.AuthStorageExistingVaultNotFound)
-          return
-        case StagedVaultDiscoveryKind.Found:
-          existingVaultImportLifecycle.remember(found.storeId)
-      }
+    // Keyring recovery's Connect lists the provider's keyrings; each one's
+    // card recovers or joins it with its vaults. No vault opens on its own.
+    if (
+      vault.keyringRecoveryActive &&
+      vault.loginSetup.kind === LoginSetupKind.Active
+    ) {
+      await vault.listKeyringsForRecovery()
+      return
     }
-    if (existingVaultNeedsDeviceUnlock || existingVaultImportNeedsIdentity) {
+    if (existingVaultNeedsDeviceUnlock) {
       // A card shows its key unlock, a failure, and recovery itself: no
       // sheet. The sheet stays for setting up a key this browser lacks.
       const sheetRequest: DeviceKeySheetRequest = {
@@ -238,10 +217,6 @@
         ).unlockDeviceProtection(deviceProtectionUnlockRequest)
       }
       existingVaultUnlock.settle(vault.deviceProtectionReady)
-      return
-    }
-    if (existingVaultImport) {
-      await existingVaultImportLifecycle.resume()
       return
     }
     if (vault.loginSetup.kind === LoginSetupKind.Active) {
@@ -289,7 +264,6 @@
   const requiresPasskeyFirst = $derived(
     vault.localVaultPresent ||
       vault.localVaults.length > 0 ||
-      vault.loginRequiresExistingVault ||
       urlEnrollmentPending,
   )
   const existingVaultNeedsDeviceUnlock = $derived(
@@ -451,11 +425,6 @@
     return extensionSetupOffer.follow()
   })
 
-  // A confirmed empty-vault swap finishes once the chosen vault is open.
-  $effect(() => {
-    void new ProviderVaultActions(vault).completeEmptyVaultReplacement()
-  })
-
   $effect(() => {
     if (
       vault.helpOpen &&
@@ -503,9 +472,7 @@
       return
     }
     existingVaultUnlock.pending = false
-    void (existingVaultImportLifecycle.waitingForDevice
-      ? existingVaultImportLifecycle.resume()
-      : vault.loadDb())
+    void vault.loadDb()
   })
 
   // `#enroll=` lands on an empty browser: open device protection immediately so
@@ -577,7 +544,6 @@
     onAcceptSentinelOnboardingPackage: handleAcceptSentinelOnboarding,
     onSentinelUnlocked: () => {
       routeCoordinator.sentinelInvitationRequest = ''
-      return existingVaultImportLifecycle.finish()
     },
     onCreateDeviceVault: handleCreateDeviceVault,
     onStartSentinelGenesis: handleStartSentinelGenesis,
@@ -588,7 +554,6 @@
     onDismissPasskey: () => {
       if (showExistingVaultPasskeyOverlay) {
         existingVaultUnlock.pending = false
-        existingVaultImportLifecycle.cancel()
         return
       }
       if (showEnrollmentPasskeyOverlay) {

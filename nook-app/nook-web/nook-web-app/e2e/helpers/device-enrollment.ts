@@ -36,7 +36,7 @@ export async function expectEmptyLocalFolderRejected(
   )
   await page.getByTestId('login-connect-local-folder-btn').click()
   await expect(page.getByTestId('vault-error')).toContainText(
-    'No existing vault was found in this provider',
+    'No keyring was found on this provider',
   )
   await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
 }
@@ -129,15 +129,6 @@ export async function connectGithubGenesisDevice(
   await clearBrowserVault(page)
   await page.reload()
   await connectGithubVault(page, pat, repoName, stub)
-}
-
-export async function dismissJoinEnrollmentDialog(page: Page) {
-  for (const testId of ['join-enrollment-dismiss', 'join-enrollment-close']) {
-    const button = page.getByTestId(testId)
-    if (await button.isVisible()) {
-      await button.click()
-    }
-  }
 }
 
 /**

@@ -5,7 +5,6 @@ import {
 } from "$lib/vault/locale";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
-import { VaultOperationStale } from "$lib/runtime/vault-operation-stale";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 import {
   VaultStorageFailure as StorageOperationFailure,
@@ -23,7 +22,6 @@ import {
   DeviceProtectionStatus,
   configured_vault_application,
   has_active_local_vault,
-  prepare_new_local_vault_slot,
   set_active_vault,
   type NookVaultManager,
 } from "$app-wasm";
@@ -31,8 +29,6 @@ import {
   unlockDeviceProtection,
   type PasskeyCeremonyFailure,
 } from "$lib/auth/passkey-device-protection";
-import { JoinEnrollmentState } from "$app-wasm";
-import * as localLoginActions from "$lib/vault/local-login";
 import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
 import {
   ActiveVaultKind,
@@ -42,11 +38,6 @@ import {
   EnrollmentLinkKind,
   VaultInitializationKind,
 } from "$lib/vault/state/lifecycle.svelte";
-import {
-  VaultDiscoveryTimeout,
-  type DiscoveryCompletion,
-} from "$lib/vault/vault-discovery-timeout";
-import { VaultChangeOutcome } from "$lib/vault/vault-change-outcome";
 
 const log = browserLogRuntime.createLogger("vault-lifecycle");
 
@@ -387,114 +378,6 @@ export class VaultInitializationActions {
     const completion = state.initOnce();
     state.beginInitialization(completion);
     return completion;
-  }
-
-  async createFreshVault() {
-    const state = this.state;
-    if (!state.hasManager) return;
-    state.errorMsg = "";
-    state.dismissSuccess();
-    state.isVerifying = true;
-    log.info("creating fresh remote vault");
-    try {
-      const initialized = await state.initDeviceIdentity();
-      if (initialized.isErr()) {
-        state.errorMsg = state.t(initialized.error.translationKey);
-        return;
-      }
-      const creatingAdditionalVault = state.localVaults.length > 0;
-      if (creatingAdditionalVault) {
-        await prepare_new_local_vault_slot();
-      }
-      const created = await state.enqueueStorage(async () => {
-        const storageArgs = state.wasmStorageArgs();
-        if (storageArgs.isErr()) return storageErr(storageArgs.error);
-        const admitted = state.admitManager();
-        if (admitted.isErr()) return storageErr(admitted.error);
-        const operation = (async () => {
-          try {
-            if (creatingAdditionalVault) admitted.value.reset_vault_session();
-            await admitted.value.connect_fresh(storageArgs.value);
-            return storageOk(VaultChangeOutcome.Completed);
-          } catch (nativeFailure) {
-            return storageErr(new NativeVaultStorageFailure(nativeFailure));
-          }
-        })();
-
-        const deadlineRequest: ConstructorParameters<
-          typeof VaultDiscoveryTimeout
-        >[0] = { timeoutMs: 30_000 };
-        const completion: DiscoveryCompletion<
-          VaultChangeOutcome,
-          StorageOperationFailure
-        > = {
-          operation,
-          releaseLateValue: () => {},
-        };
-        return new VaultDiscoveryTimeout(deadlineRequest).waitFor(completion);
-      });
-      if (created.isErr()) {
-        state.errorMsg = state.t(created.error.translationKey);
-        return;
-      }
-      const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
-        query: "",
-        requestedOffset: 0,
-      };
-      const secretRefresh1 = await state.loadSecretPage(loadPageArgs);
-      if (secretRefresh1.isErr()) {
-        state.errorMsg = state.t(secretRefresh1.error.translationKey);
-        return;
-      }
-      if (secretRefresh1.value instanceof VaultOperationStale) return;
-      const unlocked = state.markVaultUnlocked();
-      if (unlocked.isErr()) {
-        state.errorMsg = state.t(unlocked.error.translationKey);
-        return;
-      }
-      const connectedStore = new localLoginActions.VaultLoginActions(
-        state,
-      ).connectedVaultStoreId();
-      if (connectedStore.isErr()) {
-        state.errorMsg = state.t(connectedStore.error.translationKey);
-        return;
-      }
-      state.openActiveVault(connectedStore.value);
-      const catalogRefresh2 = await new localLoginActions.VaultLoginActions(
-        state,
-      ).refreshLocalVaultCatalog();
-      if (catalogRefresh2.isErr()) {
-        state.errorMsg = state.t(catalogRefresh2.error.translationKey);
-        return;
-      }
-      const savedProvider1 = await state.ensureProviderSaved();
-      if (savedProvider1.isErr()) {
-        state.errorMsg = state.t(savedProvider1.error.translationKey);
-        return;
-      }
-      const activeVaultPersistence = await state.syncActiveVaultStoreIdToAuth();
-      if (activeVaultPersistence.isErr()) {
-        state.errorMsg = state.t(activeVaultPersistence.error.translationKey);
-        return;
-      }
-      const rosterRefresh1 = await state.hydrateMultiDeviceState();
-      if (rosterRefresh1.isErr()) {
-        state.errorMsg = state.t(rosterRefresh1.error.translationKey);
-        return;
-      }
-      state.joinEnrollmentPrompt = JoinEnrollmentState.None;
-      log.info("fresh remote vault created");
-      state.showSuccess(state.t(I18N_KEYS.ToastsVaultCreated));
-      state.startIdleSessionTracking();
-    } catch (e) {
-      state.isAuthenticated = false;
-      const message =
-        e instanceof Error ? e.message : "Failed to create a new vault.";
-      log.warn("fresh vault create failed");
-      state.errorMsg = message;
-    } finally {
-      state.isVerifying = false;
-    }
   }
 }
 

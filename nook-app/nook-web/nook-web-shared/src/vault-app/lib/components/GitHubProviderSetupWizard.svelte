@@ -9,11 +9,6 @@
   import { cn } from '$lib/utils'
   import type { VaultState } from '$lib/vault.svelte'
   import type { GithubProviderDraft } from '$lib/vault/provider-draft-reads'
-  import {
-    ConnectQuestionKind,
-    ConnectQuestions,
-    type ConnectQuestion,
-  } from '$lib/components/connect-button-state'
   import { GithubDraftText } from '$lib/components/github-provider-setup-state'
 
   let {
@@ -21,7 +16,6 @@
     draft,
     isVerifying,
     isInitializing,
-    question,
     onCancelSetup,
     onConnect,
   }: {
@@ -30,8 +24,6 @@
     draft: GithubProviderDraft
     isVerifying: boolean
     isInitializing: boolean
-    /** What the host asks before Connect. */
-    question: ConnectQuestion
     onCancelSetup: () => void
     onConnect: () => void | Promise<void>
   } = $props()
@@ -201,17 +193,12 @@
         {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
       </p>
 
-      {#if question.kind === ConnectQuestionKind.Asked}
-        {@render question.prompt()}
-      {/if}
-
       <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
         <Button
           type="button"
           class="sm:min-w-[180px]"
           data-testid="connect-provider-btn"
           disabled={!githubCredentialsReady ||
-            ConnectQuestions.holdsConnect(question) ||
             isVerifying ||
             isInitializing}
           onclick={() => void onConnect()}

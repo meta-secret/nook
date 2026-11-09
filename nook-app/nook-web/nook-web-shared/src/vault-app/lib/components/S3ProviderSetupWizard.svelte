@@ -7,11 +7,6 @@ stays beside the form, where the user acted.
 <script lang="ts">
   import { Archive, ShieldCheck } from '@lucide/svelte'
   import { s3_provider_draft, type S3Connection } from '$app-wasm'
-  import {
-    ConnectQuestionKind,
-    ConnectQuestions,
-    type ConnectQuestion,
-  } from '$lib/components/connect-button-state'
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   import S3ConnectionPanel from '$lib/components/S3ConnectionPanel.svelte'
@@ -22,7 +17,6 @@ stays beside the form, where the user acted.
     idPrefix,
     isVerifying,
     isInitializing,
-    question,
     onCancelSetup,
     onConnect,
   }: {
@@ -30,8 +24,6 @@ stays beside the form, where the user acted.
     idPrefix: string
     isVerifying: boolean
     isInitializing: boolean
-    /** What the host asks before Connect; Connect waits while it is open. */
-    question: ConnectQuestion
     onCancelSetup: () => void
     onConnect: () => void | Promise<void>
   } = $props()
@@ -59,12 +51,6 @@ stays beside the form, where the user acted.
       error = vault.errorMsg
   }
 </script>
-
-{#snippet hostQuestion()}
-  {#if question.kind === ConnectQuestionKind.Asked}
-    {@render question.prompt()}
-  {/if}
-{/snippet}
 
 <div class="space-y-4" data-testid="s3-setup">
   <div class="flex items-center gap-2 text-sm">
@@ -101,10 +87,8 @@ stays beside the form, where the user acted.
           ? I18N_KEYS.OnboardingLoadingEngine
           : I18N_KEYS.AuthStorageSyncConnecting,
       )}
-      submitDisabled={ConnectQuestions.holdsConnect(question)}
       {error}
       onConnect={connect}
-      beforeConnect={hostQuestion}
     />
   </SetupWizardStep>
 </div>

@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 use super::identity_control::ReplicatedIdentityStanding;
-use crate::{IdentityMountCapability, StorageProvider};
+use crate::{BrowserExtensionMembership, IdentityMountCapability, StorageProvider};
 
 /// This installation's standing in its identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -178,6 +178,9 @@ pub struct IdentityControlSnapshot {
         )
     )]
     pub device_count: usize,
+    /// Whether a browser extension beside this installation, on its device,
+    /// is a member: the extension joins as an app on the web app's device.
+    pub extension_on_this_device: BrowserExtensionMembership,
     /// Devices asking to join, which this installation can answer as a member.
     pub join_requests: Vec<IdentityJoinRequestView>,
     pub vaults: Vec<IdentityVaultView>,
@@ -238,6 +241,7 @@ impl IdentityControlSnapshot {
             members: Vec::new(),
             devices: Vec::new(),
             device_count: 0,
+            extension_on_this_device: BrowserExtensionMembership::NotJoined,
             join_requests: Vec::new(),
             vaults: Vec::new(),
             mounts: Vec::new(),
@@ -286,6 +290,17 @@ impl IdentityControlSnapshot {
                 }
             })
             .collect::<Vec<_>>();
+        let extension_on_this_device = if state.app_members().any(|(member, device)| {
+            matches!(
+                device,
+                MemberDevice::SameAs { app_id }
+                    if app_id == *current_app_id || &member.keys.app_id == *current_app_id
+            )
+        }) {
+            BrowserExtensionMembership::Joined
+        } else {
+            BrowserExtensionMembership::NotJoined
+        };
         Self {
             identity_id: state.identity_id.as_str().to_owned(),
             identity_label: (*identity_label).to_owned(),
@@ -296,6 +311,7 @@ impl IdentityControlSnapshot {
                 .collect(),
             device_count: devices.len(),
             devices,
+            extension_on_this_device,
             // Only a member answers join requests.
             join_requests: match standing {
                 IdentityControlStanding::Member => state

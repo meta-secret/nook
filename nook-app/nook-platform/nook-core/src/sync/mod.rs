@@ -17,7 +17,6 @@ pub(crate) mod sync_provider_store;
 pub(crate) mod validation;
 pub(crate) mod vault_access_check;
 pub(crate) mod vault_sync;
-pub(crate) mod vault_sync_conflict;
 pub(crate) mod vault_sync_session;
 pub(crate) mod vault_sync_state;
 pub(crate) mod vault_sync_store;

@@ -156,26 +156,25 @@ pub use types::{
     NookAuthenticationOutcomeObservation, NookAuthenticationOutcomeVerdict,
     NookAuthenticationPageObservation, NookAuthenticationPageObservations,
     NookAuthenticationWorkflowMatch, NookAuthenticationWorkflowMatchState,
-    NookAuthenticationWorkflowSnapshot, NookBrowserLocale, NookClientRunMode,
-    NookClientRunModeUtil, NookDecryptedEnrollmentPayload, NookDiagnosticEpochState,
-    NookEnrollmentIssueInput, NookEnrollmentProvider, NookEventLogSyncIssue, NookGoogleDriveFolder,
-    NookIdentityHealth, NookIdentityHealthStage, NookIdentityNextStep, NookIdentityNudge,
-    NookIdentityProtectionStep, NookIdentityProtectionTask, NookIdentityProtectionTaskState,
-    NookImportResult, NookJoinRequest, NookLocalFolderHealth, NookLocalFolderHealthState,
+    NookAuthenticationWorkflowSnapshot, NookBrowserExtensionInstallation,
+    NookBrowserExtensionMembership, NookBrowserLocale, NookClientRunMode, NookClientRunModeUtil,
+    NookDecryptedEnrollmentPayload, NookDiagnosticEpochState, NookEnrollmentIssueInput,
+    NookEnrollmentProvider, NookGoogleDriveFolder, NookIdentityHealth, NookIdentityHealthStage,
+    NookIdentityNextStep, NookIdentityNudge, NookIdentityProtectionStep,
+    NookIdentityProtectionTask, NookIdentityProtectionTaskState, NookImportResult, NookJoinRequest,
     NookLoginAccount, NookLoginFillCredential, NookManualProviderSync, NookManualProviderSyncState,
     NookOtpauthPreview, NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyDetails,
     NookPasskeyNameState, NookPasskeyRegistration, NookPasskeySetup, NookPasskeyUnlockOptions,
-    NookPendingSyncConflict, NookProviderReplicationCapability, NookReplacementCandidate,
-    NookReplacementConflict, NookRuntimeConfig, NookSecretFormFields, NookSecretHistory,
-    NookSecretOriginDeviceState, NookSecretPage, NookSecretRevisionState, NookSecurityConflict,
-    NookSentinelGenesisDelivery, NookSentinelGenesisFinalizeResult,
-    NookSentinelGenesisParticipantStatus, NookSentinelGenesisStatus,
-    NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus, NookStorageConnection,
-    NookStoreId, NookStoreIdPresence, NookStoreIdPresenceState, NookSyncConflictReview,
-    NookSyncConflictReviewState, NookTotpCode, NookVaultAccessReport, NookVaultArchitecture,
-    NookVaultClientPolicy, NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic,
-    NookVaultLastSync, NookVaultLastSyncState, NookVaultMember, NookVaultSecretAccessDiagnostic,
-    NookVaultSyncResult, NookWebsiteLoginSaveDecision, NookWebsiteLoginSavePlan,
+    NookProviderReplicationCapability, NookReplacementCandidate, NookReplacementConflict,
+    NookRuntimeConfig, NookSecretFormFields, NookSecretHistory, NookSecretOriginDeviceState,
+    NookSecretPage, NookSecretRevisionState, NookSecurityConflict, NookSentinelGenesisDelivery,
+    NookSentinelGenesisFinalizeResult, NookSentinelGenesisParticipantStatus,
+    NookSentinelGenesisStatus, NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus,
+    NookStorageConnection, NookStoreId, NookStoreIdPresence, NookStoreIdPresenceState,
+    NookTotpCode, NookVaultAccessReport, NookVaultArchitecture, NookVaultClientPolicy,
+    NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic, NookVaultLastSync,
+    NookVaultLastSyncState, NookVaultMember, NookVaultSecretAccessDiagnostic, NookVaultSyncResult,
+    NookWebsiteLoginSaveDecision, NookWebsiteLoginSavePlan,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -279,6 +278,12 @@ pub enum NookError {
     /// `provider_failure_code` like every other refusal.
     #[error("{}", i18n_keys::AUTH_STORAGE_GITHUB_TOKEN_REJECTED)]
     GitHubTokenRejected,
+
+    /// A vault's folder on a provider holds another vault's events, so
+    /// sync stops there. Its message is its translation key, classified like
+    /// every other refusal.
+    #[error("{}", i18n_keys::AUTH_STORAGE_VAULT_FOLDER_HOLDS_ANOTHER_VAULT)]
+    VaultFolderHoldsAnotherVault,
 
     #[error("Drive error: {0}")]
     Drive(String),
@@ -476,10 +481,7 @@ pub use application::ConfiguredVaultApplication;
 
 pub(crate) use storage::session::VaultSessionLock;
 
-pub(crate) use identity_record::{
-    BrowserProviderVaultIdentityObservations,
-    BrowserProviderVaultIdentityObservationsFromProjection, BrowserSelectedVaultContextKind,
-};
+pub(crate) use identity_record::BrowserSelectedVaultContextKind;
 
 pub(crate) use device_access::{
     BrowserDeviceAccessSnapshotForSessionWithProtected, BrowserDeviceVaultAccessForIdentity,

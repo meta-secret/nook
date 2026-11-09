@@ -24,10 +24,8 @@ pub enum VaultAccessStatus {
     Ready,
     NeedsEnrollment,
     JoinPending,
-    /// The selected remote provider has no vault and no usable local cache.
+    /// The selected remote provider holds none of this vault's events yet.
     RemoteMissing,
-    /// The selected remote provider has no vault, but a local recovery cache exists.
-    RemoteMissingLocalCache,
 }
 
 impl VaultAccessStatus {
@@ -39,7 +37,6 @@ impl VaultAccessStatus {
             Self::NeedsEnrollment => "needs_enrollment",
             Self::JoinPending => "join_pending",
             Self::RemoteMissing => "remote_missing",
-            Self::RemoteMissingLocalCache => "remote_missing_local_cache",
         }
     }
 }
@@ -291,10 +288,6 @@ mod tests {
         );
         assert_eq!(VaultAccessStatus::JoinPending.as_str(), "join_pending");
         assert_eq!(VaultAccessStatus::RemoteMissing.as_str(), "remote_missing");
-        assert_eq!(
-            VaultAccessStatus::RemoteMissingLocalCache.as_str(),
-            "remote_missing_local_cache"
-        );
     }
     use crate::{
         DeviceMode, ReplicationType, SentinelPolicy, StoreId, VaultKeys, VaultRecordSet,

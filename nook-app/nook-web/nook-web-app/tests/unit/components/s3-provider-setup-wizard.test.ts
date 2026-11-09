@@ -1,18 +1,13 @@
 import { fireEvent, render } from '@testing-library/svelte'
-import { createRawSnippet, type ComponentProps } from 'svelte'
+import type { ComponentProps } from 'svelte'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { s3_provider_draft } from '$app-wasm'
-import {
-  ConnectQuestions,
-  type ConnectQuestion,
-} from '$lib/components/connect-button-state'
 import {
   DraftS3ConnectionKind,
   S3DraftReads,
 } from '$lib/vault/provider-draft-reads'
 import S3ProviderSetupWizard from '../../../../nook-web-shared/src/vault-app/lib/components/S3ProviderSetupWizard.svelte'
 import { S3ConnectionFixture } from '../s3-connection-fixture'
-import { requireButtonElement } from '../test-dom-helpers'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 afterEach(() => vi.restoreAllMocks())
@@ -23,27 +18,18 @@ type FormView = {
   readonly getByTestId: (testId: string) => HTMLElement
 }
 
-/** A recovery question the host still waits on. */
-function openQuestion(): ConnectQuestion {
-  return ConnectQuestions.asked({
-    prompt: createRawSnippet(() => ({ render: () => '<p>Which vault?</p>' })),
-    open: true,
-  })
-}
-
 /** The Sync page's S3 wizard, whose host connect is a spy. */
 class WizardFixture {
   readonly vault = VaultStateTestFixture.create()
   readonly onCancelSetup = vi.fn<WizardProps['onCancelSetup']>()
   readonly onConnect = vi.fn<WizardProps['onConnect']>()
 
-  render(question: ConnectQuestion) {
+  render() {
     const props: WizardProps = {
       vault: this.vault,
       idPrefix: 'unit',
       isVerifying: false,
       isInitializing: false,
-      question,
       onCancelSetup: this.onCancelSetup,
       onConnect: this.onConnect,
     }
@@ -73,7 +59,7 @@ describe('S3 provider setup wizard', () => {
     fixture.onConnect.mockImplementation(() => {
       staged.push(S3DraftReads.connection(fixture.vault.providerDraft).kind)
     })
-    const view = fixture.render(ConnectQuestions.NONE)
+    const view = fixture.render()
 
     await fixture.connect(view)
 
@@ -89,7 +75,7 @@ describe('S3 provider setup wizard', () => {
     fixture.onConnect.mockImplementation(() => {
       fixture.vault.errorMsg = 'The key was refused.'
     })
-    const view = fixture.render(ConnectQuestions.NONE)
+    const view = fixture.render()
 
     await fixture.connect(view)
 
@@ -101,19 +87,10 @@ describe('S3 provider setup wizard', () => {
 
   test('Change provider leaves the S3 setup', async () => {
     const fixture = new WizardFixture()
-    const view = fixture.render(ConnectQuestions.NONE)
+    const view = fixture.render()
 
     await fireEvent.click(view.getByTestId('cancel-provider-setup'))
 
     expect(fixture.onCancelSetup).toHaveBeenCalledOnce()
-  })
-
-  test('an unanswered recovery question holds Connect & sync back', () => {
-    const fixture = new WizardFixture()
-    const view = fixture.render(openQuestion())
-
-    expect(
-      requireButtonElement(view.getByTestId('connect-provider-btn')).disabled,
-    ).toBe(true)
   })
 })

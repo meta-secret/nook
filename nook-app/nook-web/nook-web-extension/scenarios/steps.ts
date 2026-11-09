@@ -159,7 +159,7 @@ export async function runScenario(steps: ScenarioSteps): Promise<void> {
  * protection prompt that is already showing. With passkeys unavailable the
  * prompt reaches its PIN form through its own steps: the existing-passkey
  * attempt finds none, the new-key choice, then setup. */
-async function protectWithPin(page: Page): Promise<void> {
+export async function protectWithPin(page: Page): Promise<void> {
   const pinInput = page.getByTestId('device-protection-pin-input')
   const createChoice = page.getByTestId('device-protection-create-new-choice')
   const setup = page.getByTestId('device-protection-setup-btn')
@@ -315,11 +315,9 @@ export async function reloadAndUnlockWithPin(page: Page): Promise<void> {
   // The unlocked keyring keeps its vault selected but closed: its row opens
   // the vault panel, whose Open enters the vault.
   await page.getByTestId('identity-vault-row').first().click()
-  const open = page
-    .getByTestId('vault-panel-open')
-    .or(page.getByTestId('vault-panel-open-away'))
-    .first()
-  await open.click()
+  // A vault not on this browser opens from the provider as its row is
+  // picked; the panel's Open vault then goes into it.
+  await page.getByTestId('vault-panel-open').click()
   await expect(page.getByTestId('vault-panel')).toBeVisible()
 }
 
@@ -349,9 +347,45 @@ export async function expectUnlockedKeyringCountsBothDevices(
   })
 }
 
+/** One step of a keyring's set-up journey as the panel shows it. */
+type JourneyStep = readonly [task: string, state: string]
+
+/** What the keyring's set-up journey shows on this device. */
+export type ExpectedJourney = {
+  readonly keyringName: string
+  /** The card row's progress, as "2 of 3 done". */
+  readonly progress: string
+  readonly steps: readonly JourneyStep[]
+  /** The one leading action's label. */
+  readonly lead: string
+}
+
+/** Open the keyring's set-up journey from its card and check every step
+ * and the one action it leads with, then close it. */
+export async function expectJourney(
+  page: Page,
+  expected: ExpectedJourney,
+): Promise<void> {
+  await openIdentitiesPage(page)
+  const card = page.getByRole('article', { name: expected.keyringName })
+  const toggle = card.getByTestId('identity-protection-toggle')
+  await expect(toggle).toContainText(expected.progress, { timeout: 90_000 })
+  await toggle.click()
+  const steps = page.getByTestId('identity-protection-step')
+  await expect(steps).toHaveCount(expected.steps.length)
+  for (const [index, [task, state]] of expected.steps.entries()) {
+    await expect(steps.nth(index)).toHaveAttribute('data-task', task)
+    await expect(steps.nth(index)).toHaveAttribute('data-state', state)
+  }
+  await expect(page.getByTestId('identity-protection-action')).toHaveText(
+    expected.lead,
+  )
+  await page.getByTestId('identity-protection-close').click()
+}
+
 /** The keyring on this device knows both devices without being asked to
- * sync: the keyrings page shows it by name with its protection checklist
- * complete, so the checklist is gone. */
+ * sync: the keyrings page shows it by name with its set-up journey complete
+ * (both protections and this browser's extension), so the row is gone. */
 export async function expectBothDevicesCounted(
   page: Page,
   keyringName: string,

@@ -193,6 +193,7 @@ describe('IdentityPages', () => {
       members: [],
       devices: [],
       deviceCount: 0,
+      extensionOnThisDevice: 'notJoined',
       joinRequests: [],
       vaults: [
         {

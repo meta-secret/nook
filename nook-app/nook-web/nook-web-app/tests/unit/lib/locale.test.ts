@@ -113,7 +113,6 @@ describe('locale', () => {
       I18N_KEYS.ErrorsVaultCreationFailed,
       I18N_KEYS.ErrorsVaultRenameFailed,
       I18N_KEYS.ErrorsConflictResolutionFailed,
-      I18N_KEYS.ErrorsWholeVaultConflictResolutionRetired,
       I18N_KEYS.ToastsGoogleDriveConnected,
       I18N_KEYS.ToastsSecretConflictResolved,
       I18N_KEYS.AppSecretSyncConflicts,

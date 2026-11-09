@@ -32,8 +32,6 @@ import {
 } from "$lib/nook";
 import {
   NookManagerStoreScope,
-  NookLocalFolderHealthState,
-  NookPendingSyncConflict,
   NookProviderSyncRevision,
   ProviderSyncFailureHandling,
   ProviderSyncFreshness,
@@ -43,7 +41,6 @@ import {
   VaultSyncTimerStartDecision,
   VaultSyncTimerTickDecision,
 } from "$app-wasm";
-import { ProviderSetupKinds } from "$lib/vault/provider-setup-kinds";
 import {
   activeVaultScope,
   type AuthProvidersSnapshot,
@@ -56,7 +53,6 @@ import {
   type EventOutboxRequest,
   type EventOutboxTarget,
 } from "$lib/vault/sync-operation-state";
-import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 import { ExtensionSyncPublication } from "$lib/vault/sync-extension-bridge";
 import { ProviderSyncActions } from "$lib/vault/provider-sync.svelte";
@@ -68,8 +64,6 @@ export { VaultSyncRuntimeActions } from "$lib/vault/sync-runtime";
 export { ExtensionSyncPublication };
 
 export * from "$lib/vault/sync-resolution";
-
-export { SyncConflictPresentation } from "$lib/vault/sync-conflict-label";
 
 export type VaultSynchronizationResult = Result<
   ProviderSyncOutcome,
@@ -100,10 +94,6 @@ interface ProviderSyncMetadataUpdate {
   readonly providerId: string;
   readonly yaml: string;
   readonly revision: NookProviderSyncRevision;
-}
-
-interface SyncConflictStaging {
-  readonly conflict: NookPendingSyncConflict;
 }
 
 type SyncFromProvidersExecution = SyncFromProvidersRequest;
@@ -284,7 +274,6 @@ export class VaultSyncActions {
     let shouldSync: boolean;
     try {
       shouldSync = state.clientPolicy.should_sync_from_providers(
-        state.syncBlocked,
         freshness === ProviderSyncFreshness.Forced,
         state.isVerifying,
         state.isSaving,
@@ -323,7 +312,6 @@ export class VaultSyncActions {
     const state = this.state;
     let outcome = ProviderSyncOutcome.Synced;
     for (const provider of state.syncProviders) {
-      if (state.syncBlocked) return storageOk(ProviderSyncOutcome.Skipped);
       const syncRequest: Parameters<typeof state.syncProviderById>[0] = {
         providerId: provider.id,
         visibility,
@@ -379,7 +367,6 @@ export class VaultSyncActions {
     }
     const outboxFlushes: EventOutboxFlushOutcome[] = [];
     for (const provider of state.syncProviders) {
-      if (state.syncBlocked) break;
       const flushed = await state.flushRemoteEventOutboxNow(
         new ProviderEventOutbox(provider).request(),
       );
@@ -558,43 +545,6 @@ export class VaultSyncActions {
     }
   }
 
-  dismissLocalFolderMultipleVaultsIssue(): void {
-    const state = this.state;
-    state.clearLocalFolderMultipleVaultsIssue();
-  }
-
-  async disconnectLocalFolderMultipleVaultsProvider(): Promise<void> {
-    const state = this.state;
-    const health = state.localFolderHealth;
-    if (health.state !== NookLocalFolderHealthState.MultipleVaults) return;
-    const providerId = health.providerId;
-    const removed = await state.removeProvider(providerId);
-    if (removed.isErr()) {
-      state.errorMsg = state.t(removed.error.translationKey);
-      return;
-    }
-    state.clearLocalFolderMultipleVaultsIssue();
-  }
-
-  async chooseReplacementLocalFolderForIssue(): Promise<void> {
-    const state = this.state;
-    const health = state.localFolderHealth;
-    if (health.state !== NookLocalFolderHealthState.MultipleVaults) return;
-    const providerId = health.providerId;
-    if (state.providers.some((provider) => provider.id === providerId)) {
-      const removed = await state.removeProvider(providerId);
-      if (removed.isErr()) {
-        state.errorMsg = state.t(removed.error.translationKey);
-        return;
-      }
-    }
-    state.clearLocalFolderMultipleVaultsIssue();
-    state.errorMsg = "";
-    state.openSection(WorkspaceSection.Sync);
-    state.beginAddProvider();
-    state.beginProviderSetup(ProviderSetupKinds.LOCAL_FOLDER);
-  }
-
   startVaultSync() {
     const state = this.state;
     state.stopVaultSync();
@@ -684,7 +634,6 @@ export class VaultSyncActions {
     const remoteCredentials = state.hasRemoteCredentials();
     try {
       decision = state.clientPolicy.vault_storage_sync_decision(
-        state.syncBlocked,
         freshness,
         state.isVerifying,
         state.isSaving,
@@ -796,8 +745,7 @@ export class VaultSyncActions {
     const state = this.state;
     const manager = state.admitManager();
     if (manager.isErr()) return storageErr(manager.error);
-    if (state.syncBlocked || state.isSyncing)
-      return storageOk(ProviderSyncOutcome.Skipped);
+    if (state.isSyncing) return storageOk(ProviderSyncOutcome.Skipped);
     let hasTarget: boolean;
     try {
       hasTarget = state.clientPolicy.manual_sync_has_target(
@@ -847,11 +795,7 @@ export class VaultSyncActions {
     const state = this.state;
     const manager = state.admitManager();
     if (manager.isErr()) return storageErr(manager.error);
-    if (
-      !state.isAuthenticated ||
-      state.syncBlocked ||
-      state.syncProviders.length === 0
-    )
+    if (!state.isAuthenticated || state.syncProviders.length === 0)
       return storageOk(ProviderSyncOutcome.Skipped);
     const run = state.fanOutSyncChain.then(() =>
       state.runFanOutSyncToProviders(visibility),
@@ -859,12 +803,5 @@ export class VaultSyncActions {
     // The shared promise is only a completion barrier; each caller receives its own outcome.
     state.fanOutSyncChain = run.then(() => {});
     return run;
-  }
-
-  stageSyncConflict({ conflict }: SyncConflictStaging) {
-    const state = this.state;
-    log.warn("sync conflict staged");
-    state.stageSyncConflict(conflict);
-    state.errorMsg = "";
   }
 }

@@ -222,7 +222,6 @@ belong to another identity stored here stay on that identity's card.
           {vault}
           {isVerifying}
           {isInitializing}
-          importable={false}
           onCreateVault={createVault}
           onClose={() => (newVaultOpen = false)}
         />

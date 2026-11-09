@@ -18,6 +18,7 @@ import {
   ProviderFixtureCredentials,
 } from '../provider-fixtures'
 import { VaultOAuthActions } from '$lib/vault/oauth'
+import { FirstRunActions, ProviderFolderBinding } from '$lib/vault/first-run'
 import type { OAuthProviderDraft } from '$lib/vault/provider-draft-reads'
 import { ProviderSetupKinds } from '$lib/vault/provider-setup-kinds'
 import {
@@ -89,7 +90,6 @@ const DRIVE_SOURCE = {
 function summary(
   storeId: string,
   access: ProviderVaultSummary['access'],
-  actions: ProviderVaultSummary['actions'],
 ): ProviderVaultSummary {
   return {
     storeId,
@@ -114,7 +114,6 @@ function summary(
     lastActivity: { state: 'reported', at: Date.UTC(2024, 2, 1) },
     eventCount: 4,
     access,
-    actions,
   }
 }
 
@@ -123,11 +122,9 @@ function joinedSummary(
   identityId: string,
   join: ProviderIdentityJoin,
 ): ProviderVaultSummary {
-  const base = summary(
-    `store_${identityId.slice('idn_'.length)}`,
-    { state: 'locked' },
-    ['requestAccess'],
-  )
+  const base = summary(`store_${identityId.slice('idn_'.length)}`, {
+    state: 'locked',
+  })
   return {
     ...base,
     identity: {
@@ -163,6 +160,7 @@ function useIdentity(vault: VaultState): void {
     ],
     devices: [],
     deviceCount: 1,
+    extensionOnThisDevice: 'notJoined',
     joinRequests: [],
     vaults: [],
     mounts: [],
@@ -268,7 +266,7 @@ describe('Google Drive provider setup', () => {
       listing: {
         vaults: [
           {
-            ...summary('store_ownvault001', { state: 'syncs' }, []),
+            ...summary('store_ownvault001', { state: 'syncs' }),
             name: { state: 'named', name: 'Family' },
             identity: {
               identityId: 'idn_personalide',
@@ -278,11 +276,10 @@ describe('Google Drive provider setup', () => {
               log: { state: 'absent' },
             },
           },
-          summary('store_othervault1', { state: 'locked' }, ['requestAccess']),
-          summary('store_othervault2', { state: 'locked' }, ['requestAccess']),
+          summary('store_othervault1', { state: 'locked' }),
+          summary('store_othervault2', { state: 'locked' }),
         ],
         identities: [],
-        replacement: { state: 'unavailable' },
       },
     })
     const { view, vault } = renderWizard(signedInDrive())
@@ -347,11 +344,8 @@ describe('Google Drive provider setup', () => {
     const listed = listVaults({
       root: 'found',
       listing: {
-        vaults: [
-          summary('store_othervault1', { state: 'locked' }, ['requestAccess']),
-        ],
+        vaults: [summary('store_othervault1', { state: 'locked' })],
         identities: [],
-        replacement: { state: 'unavailable' },
       },
     })
     const applied: IdentityPlanOutcome = {
@@ -387,7 +381,6 @@ describe('Google Drive provider setup', () => {
           joinedSummary('idn_requestedab', 'requested'),
         ],
         identities: [],
-        replacement: { state: 'unavailable' },
       },
     })
     const applied: IdentityPlanOutcome = {
@@ -446,7 +439,6 @@ describe('Google Drive provider setup', () => {
       listing: {
         vaults: [joinedSummary('idn_approvedabc', 'approved')],
         identities: [],
-        replacement: { state: 'unavailable' },
       },
     })
     const { view, vault } = renderWizard(signedInDrive())
@@ -468,11 +460,8 @@ describe('Google Drive provider setup', () => {
     listVaults({
       root: 'found',
       listing: {
-        vaults: [
-          summary('store_othervault1', { state: 'locked' }, ['requestAccess']),
-        ],
+        vaults: [summary('store_othervault1', { state: 'locked' })],
         identities: [],
-        replacement: { state: 'unavailable' },
       },
     })
     const { view, vault } = renderWizard(signedInDrive())
@@ -506,7 +495,7 @@ describe('Google Drive provider setup', () => {
       listing: {
         vaults: [
           {
-            ...summary('store_ownvault001', { state: 'syncs' }, []),
+            ...summary('store_ownvault001', { state: 'syncs' }),
             identity: {
               identityId: 'idn_personalide',
               shortId: 'personal',
@@ -525,7 +514,6 @@ describe('Google Drive provider setup', () => {
           },
         ],
         identities: [],
-        replacement: { state: 'unavailable' },
       },
     })
     const check = vi.spyOn(AccessCheckActions.prototype, 'checkPasskey')
@@ -544,20 +532,15 @@ describe('Google Drive provider setup', () => {
     expect(check).not.toHaveBeenCalled()
   })
 
-  test('on the recovery screen, finding the passkey offers adding it, and the plan runs before Connect & sync', async () => {
+  test('on the recovery screen, finding the passkey offers adding it, and the keyring it adds keeps Drive without opening a vault', async () => {
     listVaults({
       root: 'found',
       listing: {
         vaults: [
-          summary('store_othervault1', { state: 'unchecked' }, [
-            'importSeparately',
-          ]),
-          summary('store_othervault2', { state: 'unchecked' }, [
-            'importSeparately',
-          ]),
+          summary('store_othervault1', { state: 'unchecked' }),
+          summary('store_othervault2', { state: 'unchecked' }),
         ],
         identities: [],
-        replacement: { state: 'unavailable' },
       },
     })
     const opens: CredentialCheckReport = {
@@ -598,11 +581,9 @@ describe('Google Drive provider setup', () => {
     const run = vi
       .spyOn(IdentityPlanActions.prototype, 'run')
       .mockResolvedValue(ok(applied))
-    const connect = vi
-      .spyOn(VaultOAuthActions.prototype, 'connectGoogleVaultFolder')
-      .mockResolvedValue(
-        ok({ name: 'Nook', origin: NookDriveRootOrigin.Existing }),
-      )
+    const keep = vi
+      .spyOn(FirstRunActions.prototype, 'connectRecoveredKeyring')
+      .mockResolvedValue(true)
     const { view, vault, onConnect } = renderWizard(signedInDrive())
 
     const identity = await view.findByTestId('provider-identity')
@@ -645,16 +626,15 @@ describe('Google Drive provider setup', () => {
         .getAllByTestId('provider-identity-decision')
         .map((button) => button.dataset.decision),
     ).toEqual(['addToBrowser'])
-    const choose = vi
-      .spyOn(vault, 'chooseRemoteVault')
-      .mockReturnValue(ok(true))
-
     await fireEvent.click(await DecisionButtons.of(view, 'addToBrowser'))
     await fireEvent.click(view.getByTestId('connect-provider-btn'))
 
-    await vi.waitFor(() => expect(onConnect).toHaveBeenCalledOnce())
-    // The recovered keyring's vault opens next, not the folder's whole list.
-    expect(choose).toHaveBeenCalledWith('store_othervault1')
+    // The recovered keyring keeps Drive, with its vaults; none of them is
+    // opened, and Connect & sync does not run.
+    await vi.waitFor(() =>
+      expect(keep).toHaveBeenCalledWith(ProviderFolderBinding.DriveFolder),
+    )
+    expect(onConnect).not.toHaveBeenCalled()
     expect(run).toHaveBeenCalledOnce()
     const call = run.mock.calls.at(0)
     if (!call) throw new Error('the plan did not run')
@@ -663,18 +643,14 @@ describe('Google Drive provider setup', () => {
     expect(request.planned.map((entry) => entry.decision)).toEqual([
       'addToBrowser',
     ])
-    expect(connect).toHaveBeenCalledOnce()
   })
 
   test('with an identity in use, an action that fails says so and connects nothing', async () => {
     listVaults({
       root: 'found',
       listing: {
-        vaults: [
-          summary('store_othervault1', { state: 'locked' }, ['requestAccess']),
-        ],
+        vaults: [summary('store_othervault1', { state: 'locked' })],
         identities: [],
-        replacement: { state: 'unavailable' },
       },
     })
     vi.spyOn(IdentityPlanActions.prototype, 'run').mockResolvedValue(
@@ -697,9 +673,8 @@ describe('Google Drive provider setup', () => {
     listVaults({
       root: 'found',
       listing: {
-        vaults: [summary('store_othervault1', { state: 'unchecked' }, [])],
+        vaults: [summary('store_othervault1', { state: 'unchecked' })],
         identities: [],
-        replacement: { state: 'unavailable' },
       },
     })
     const none: CredentialCheckReport = {
@@ -751,7 +726,6 @@ describe('Google Drive provider setup', () => {
       listing: {
         vaults: [],
         identities: [],
-        replacement: { state: 'unavailable' },
       },
     })
     vi.spyOn(

@@ -20,6 +20,11 @@ export type ExtensionSetupOfferSource = {
  */
 export class ExtensionSetupOfferModel {
   offer = $state<ExtensionSetupOffer>({ kind: ExtensionSetupOfferKind.Hidden });
+  /** The extension in this browser whether or not a vault is open: the
+   * keyring's checklist offers it from the card. */
+  browser = $state<ExtensionSetupOffer>({
+    kind: ExtensionSetupOfferKind.Hidden,
+  });
 
   private readonly vault: VaultState;
   private readonly supported: boolean;
@@ -30,10 +35,15 @@ export class ExtensionSetupOfferModel {
   }
 
   refresh(): void {
-    this.offer =
-      this.supported && this.vault.isAuthenticated
-        ? extensionSetupBrowser.loadExtensionSetupOffer()
-        : { kind: ExtensionSetupOfferKind.Hidden };
+    // Runs inside an effect: it writes both offers and reads neither back,
+    // or the effect would depend on its own writes.
+    const browser: ExtensionSetupOffer = this.supported
+      ? extensionSetupBrowser.loadExtensionSetupOffer()
+      : { kind: ExtensionSetupOfferKind.Hidden };
+    this.browser = browser;
+    this.offer = this.vault.isAuthenticated
+      ? browser
+      : { kind: ExtensionSetupOfferKind.Hidden };
   }
 
   /** Refresh now and whenever the extension's presence changes; returns the
@@ -45,13 +55,16 @@ export class ExtensionSetupOfferModel {
     );
   }
 
-  /** Pair this vault from its page; Devices owns install and its errors. */
   /** Show the connected extension's side panel beside this vault, or say
    * why it did not open. */
   async openSidePanel(): Promise<void> {
-    if (await extensionSetupBrowser.openExtensionSidePanel()) return;
-    this.vault.errorMsg = this.vault.t(
-      I18N_KEYS.ExtensionSetupVaultPanelFailed,
-    );
+    await showExtensionSidePanel(this.vault);
   }
+}
+
+/** Show the installed extension's side panel in this window, where it
+ * connects and unlocks, or say why it did not open. */
+export async function showExtensionSidePanel(vault: VaultState): Promise<void> {
+  if (await extensionSetupBrowser.openExtensionSidePanel()) return;
+  vault.errorMsg = vault.t(I18N_KEYS.ExtensionSetupVaultPanelFailed);
 }

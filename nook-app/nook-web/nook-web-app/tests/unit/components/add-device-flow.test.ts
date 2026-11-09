@@ -44,6 +44,7 @@ function snapshot(
     members: [],
     devices: [],
     deviceCount: 0,
+    extensionOnThisDevice: 'notJoined',
     joinRequests: [],
     vaults: [],
     mounts: [],

@@ -5,8 +5,11 @@ its passkey, ask one of its devices to let this browser join, or finish a
 join a device approved, or join it with one of its recovery passphrases,
 whose words are typed in place of the list. Asking and recovering need
 this browser's own protected key, so the device protection gate runs first
-when there is none. Picking a decision runs nothing; Apply runs the plan. Checking which passkey opens an
-identity decrypts in memory and changes nothing.
+when there is none. Picking a decision runs nothing; Apply runs the plan. A
+keyring the plan brings here keeps this provider, and the page lands on the
+keyrings page with it: its vaults come with it and open from its card.
+Checking which passkey opens an identity decrypts in memory and changes
+nothing.
 -->
 <script lang="ts">
   import { RefreshCw } from '@lucide/svelte'
@@ -48,7 +51,8 @@ identity decrypts in memory and changes nothing.
   }: {
     vault: VaultState
     busy: boolean
-    /** After the plan ran: open what it recovered. */
+    /** After a plan that brought no keyring here, as after asking to join:
+     * list the provider's keyrings again. */
     onApplied: () => void | Promise<void>
   } = $props()
 
@@ -92,10 +96,11 @@ identity decrypts in memory and changes nothing.
 
   async function apply(): Promise<void> {
     working = true
-    // A keyring recovered here opens its vault next: the import continues
-    // with that vault, as with one picked from a list of vaults.
-    const recovered = planned.find((entry) => entry.decision === 'addToBrowser')
-    const [recoveredVault] = recovered ? recovered.choice.vaults : []
+    // A keyring the plan brings here keeps this provider, with its vaults.
+    const brought = planned.some(
+      (entry) =>
+        entry.decision === 'addToBrowser' || entry.decision === 'finishJoining',
+    )
     try {
       const run: IdentityPlanRun = {
         source: recoveryProviderSource(vault),
@@ -117,23 +122,19 @@ identity decrypts in memory and changes nothing.
         case IdentityPlanOutcomeKind.RecoveryWordsNext:
           return
       }
-      if (recoveredVault) {
-        const chosen = vault.chooseRemoteVault(recoveredVault.storeId)
-        if (chosen.isErr()) {
-          vault.errorMsg = vault.t(chosen.error.translationKey)
-          return
-        }
+      if (brought) {
+        await connectRecovered()
+        return
       }
     } finally {
       working = false
     }
     await onApplied()
   }
-  /** Once a recovery passphrase let this browser in, the provider is saved
-   * for its keyring as setup saves it: the keyring's log syncs, and the
-   * vault it granted opens beside its card. The location names itself. */
+  /** A keyring recovered or joined here keeps this provider, and the page
+   * lands on the keyrings page with it. The location names itself. */
   function connectRecovered(): Promise<boolean> {
-    return new FirstRunActions(vault).connectProviderWith(
+    return new FirstRunActions(vault).connectRecoveredKeyring(
       ProviderFolderBinding.Named,
     )
   }

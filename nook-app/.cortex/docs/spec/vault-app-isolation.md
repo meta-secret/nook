@@ -39,14 +39,16 @@ share one audited, generated WASM package. Common Svelte presentation and typed
 browser adapters live under `nook-web-shared/src/vault-app`.
 
 The public site chooses the product, not the storage workflow. On an empty
-origin, the selected vault app presents **Create a new vault** and **Open an
-existing vault** as sibling intents. Creation stays within that app's fixed
-vault type; opening connects the sync provider that already holds a compatible
-encrypted vault. Provider import is never a later step inside new-vault
-creation, and the internal combined harness is not exposed as a universal
-production manager. Opening an existing vault fails closed when the selected
-provider is empty; only explicit creation or adding a provider to an
-authenticated vault may initialize empty provider storage with genesis state.
+origin, the selected vault app starts with the identity: create one, join one,
+or recover one from the sync provider that keeps it. Creating a vault stays
+within that app's fixed vault type. A provider keeps identities, not vaults, so
+its compatible vaults arrive only with a recovered or joined identity, as
+[recover a keyring from a sync provider](../../../nook-platform/.cortex/docs/architecture/identity-vault-architecture.md#recover-a-keyring-from-a-sync-provider)
+states. Identity recovery is never a step inside new-vault creation, and the
+internal combined harness is not exposed as a universal production manager.
+Recovery fails closed when the selected provider is empty; only explicit
+creation or adding a provider to an authenticated identity may initialize
+empty provider storage with genesis state.
 
 ## Enforcement
 

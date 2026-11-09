@@ -257,7 +257,7 @@ export class ProviderPersistenceActions {
       }
       state.stageProviderDraft(outcome.draft);
       state.clearLoginSetup();
-      state.loginRequiresExistingVault = false;
+      state.keyringRecoveryActive = false;
       state.addProviderOpen = false;
       state.applyActiveProviderCredentials();
       log.info("sync provider saved");
