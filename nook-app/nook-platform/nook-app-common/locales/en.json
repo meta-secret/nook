@@ -2256,7 +2256,7 @@
     "connect_retry": "Try again",
     "connect_skip": "Not now",
     "fact_encrypted": "Encrypted in this browser",
-    "fact_no_server": "No Nook server",
+    "fact_no_server": "No central server",
     "how_it_works": "How Nook works",
     "restore_title": "Recover your keyring",
     "restore_pick": "Pick the sync provider that holds it",

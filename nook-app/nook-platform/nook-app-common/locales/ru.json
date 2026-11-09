@@ -2256,7 +2256,7 @@
     "connect_retry": "Повторить",
     "connect_skip": "Не сейчас",
     "fact_encrypted": "Шифруется в этом браузере",
-    "fact_no_server": "Без сервера Nook",
+    "fact_no_server": "Без центрального сервера",
     "how_it_works": "Как работает Nook",
     "restore_title": "Восстановление связки ключей",
     "restore_pick": "Выберите провайдер синхронизации, где он хранится",
