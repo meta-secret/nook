@@ -84,7 +84,6 @@ async function openKeyringVault(device: Page, storeId: string): Promise<void> {
     `[data-testid="identity-vault-row"][data-store-id="${storeId}"]`,
   )
   await expect(row).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-  if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click()
   const controls = [
     device.getByTestId('vault-panel-unlock'),
     device.getByTestId('vault-panel-open'),
@@ -95,22 +94,34 @@ async function openKeyringVault(device: Page, storeId: string): Promise<void> {
     .getByTestId('vault-panel-open')
     .or(device.getByTestId('vault-panel'))
     .first()
-  await expect
-    .poll(
-      async () => {
-        if (
-          (await openStoreIdOrNone(device)) === storeId &&
-          (await unlocked.isVisible())
-        )
-          return 'open'
-        for (const control of controls) {
-          if (await pressIfReady(control)) break
-        }
-        return 'waiting'
-      },
-      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-    )
-    .toBe('open')
+  try {
+    await expect
+      .poll(
+        async () => {
+          if (
+            (await openStoreIdOrNone(device)) === storeId &&
+            (await unlocked.isVisible())
+          )
+            return 'open'
+          // Picking the row opens a vault not on this browser; an open that
+          // failed (its vault not at the provider yet) closes the row, and
+          // it is picked again, as a person would.
+          if ((await row.getAttribute('aria-expanded')) !== 'true') {
+            await pressIfReady(row)
+            return 'waiting'
+          }
+          for (const control of controls) {
+            if (await pressIfReady(control)) break
+          }
+          return 'waiting'
+        },
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+      )
+      .toBe('open')
+  } catch (error) {
+    await reportRecoveredDevice(device, 'openKeyringVault')
+    throw error
+  }
 }
 
 /** Print a recovered browser's state, page, and app logs. The fixture
