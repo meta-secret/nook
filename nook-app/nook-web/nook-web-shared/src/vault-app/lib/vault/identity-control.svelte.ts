@@ -35,6 +35,7 @@ type MountVaultDeletion = {
 import { IdentityStandingPresentation } from "$lib/components/identity-control/identity-standing";
 import { browserLogRuntime } from "$lib/runtime/log";
 import type { VaultState } from "$lib/vault.svelte";
+import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 
 const log = browserLogRuntime.createLogger("identity-control");
@@ -605,7 +606,14 @@ export class IdentityControlModel {
   > {
     this.busy = true;
     try {
-      return await this.openGrantedVault(storeId);
+      const opened = await this.openGrantedVault(storeId);
+      if (opened.isErr()) {
+        const failure = opened.error;
+        log.warn(
+          `granted vault open failed: ${failure.kind} (${failure.translationKey}${failure instanceof VaultStorageFailure ? `, ${failure.cause}` : ""})`,
+        );
+      }
+      return opened;
     } finally {
       this.busy = false;
     }
@@ -631,7 +639,8 @@ export class IdentityControlModel {
     return this.completeVaultConnect(page.value);
   }
 
-  /** Finish a vault opened through the identity like any connected vault. */
+  /** Finish a vault opened through the identity like any connected vault,
+   * and show it: Open vault on the keyrings page lands in the vault. */
   private async completeVaultConnect(
     page: NookSecretPage,
   ): Promise<
@@ -655,6 +664,7 @@ export class IdentityControlModel {
     const unlocked = vault.markVaultUnlocked();
     if (unlocked.isErr()) return err(unlocked.error);
     this.join = { kind: IdentityJoinKind.Idle };
+    vault.openSection(WorkspaceSection.Vault);
     vault.startIdleSessionTracking();
     vault.startVaultSync();
     return ok(IdentityActionOutcome.Completed);

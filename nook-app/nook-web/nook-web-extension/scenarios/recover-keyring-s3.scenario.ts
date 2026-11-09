@@ -4,7 +4,9 @@ import {
   connectS3InFirstRun,
   connectS3OnRecoveryScreen,
   createKeyringOnS3,
+  flushRemoteEventsToSyncProviders,
   ManagePage,
+  openIdentitiesPage,
   openManagePage,
   openStoreId,
   openVaultAfterIdentityJoin,
@@ -161,6 +163,44 @@ test('a fresh device recovers an S3 keyring by asking to join it', async () => {
             .getByTestId('secret-row')
             .first(),
         ).toBeVisible()
+      },
+    )
+    let laterStoreId = ''
+    await devices.step('first device: adds a second vault', async () => {
+      await openIdentitiesPage(vault)
+      await vault.getByTestId('identity-new-vault').click()
+      await vault.getByTestId('login-vault-name-input').fill('Later')
+      await vault.getByTestId('login-create-additional-vault-btn').click()
+      await expect(
+        vault.locator('[data-testid="identity-vault-row"][data-state="open"]', {
+          hasText: 'Later',
+        }),
+      ).toBeVisible()
+      // A person fills the new vault; its events reach S3 before another
+      // device can read it.
+      await openVaultPage(vault)
+      await saveLogin(vault)
+      await flushRemoteEventsToSyncProviders(vault)
+      laterStoreId = await openStoreId(vault)
+    })
+    await devices.step(
+      'second device: opens the new vault from the keyrings page',
+      async () => {
+        // The second device is in its first vault; the new one is not on
+        // this browser yet, so Open vault reads it from the provider and
+        // then shows it, leaving the keyrings page.
+        await openManagePage(joiner, ManagePage.Devices)
+        await joiner.getByTestId('identity-sync-now-btn').click()
+        await openIdentitiesPage(joiner)
+        const away = joiner.locator(
+          `[data-testid="identity-vault-row"][data-store-id="${laterStoreId}"]`,
+        )
+        await expect(away).toHaveAttribute('data-state', 'unavailable')
+        await away.click()
+        await joiner.getByTestId('vault-panel-open-away').click()
+        await expect(joiner.getByTestId('vault-panel')).toBeVisible()
+        await expect(joiner.getByTestId('identities-hub')).toHaveCount(0)
+        expect(await openStoreId(joiner)).toBe(laterStoreId)
       },
     )
   })
