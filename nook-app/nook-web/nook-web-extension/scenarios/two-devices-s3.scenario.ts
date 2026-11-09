@@ -1,8 +1,12 @@
-import { test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 import { LocalS3Identity } from '../scripts/local-s3'
 import {
   connectS3InFirstRun,
   createKeyringOnS3,
+  flushRemoteEventsToSyncProviders,
+  ManagePage,
+  openManagePage,
+  openStoreId,
   openVaultPage,
   uniqueS3KeyPrefix,
 } from '../../nook-web-app/e2e/helpers'
@@ -105,9 +109,7 @@ test('two devices on one S3 keyring, the second joined from an invite', async ()
           lead: 'Connect extension',
         })
         if (process.env.LOOK_OUT) {
-          await joiner
-            .getByTestId('identity-protection-toggle')
-            .click()
+          await joiner.getByTestId('identity-protection-toggle').click()
           await joiner
             .getByTestId('identity-card-protection')
             .screenshot({ path: `${process.env.LOOK_OUT}/second-journey.png` })
@@ -140,5 +142,41 @@ test('two devices on one S3 keyring, the second joined from an invite', async ()
         await expectUnlockedKeyringCountsBothDevices(page, 'S3 keyring')
       })
     }
+    let laterStoreId = ''
+    await devices.step('first device: adds a second vault', async () => {
+      await vault.getByTestId('identity-new-vault').click()
+      await vault.getByTestId('login-vault-name-input').fill('Later')
+      await vault.getByTestId('login-create-additional-vault-btn').click()
+      await openVaultPage(vault)
+      await saveLogin(vault)
+      await flushRemoteEventsToSyncProviders(vault)
+      laterStoreId = await openStoreId(vault)
+    })
+    await devices.step(
+      'second device: opens the new vault from its keyring card',
+      async () => {
+        // The keyring is unlocked with no vault open and the extension
+        // paired, as after reopening the browser. The new vault is not on
+        // this browser yet: Open vault reads it from S3 and goes into it,
+        // and stays there.
+        await openManagePage(joiner, ManagePage.Devices)
+        await joiner.getByTestId('identity-sync-now-btn').click()
+        await joiner.getByTestId('header-identities-btn').click()
+        const away = joiner.locator(
+          `[data-testid="identity-vault-row"][data-store-id="${laterStoreId}"]`,
+        )
+        await expect(away).toHaveAttribute('data-state', 'unavailable')
+        await away.click()
+        await joiner.getByTestId('vault-panel-open-away').click()
+        await expect(joiner.getByTestId('vault-panel')).toBeVisible()
+        await expect(joiner).toHaveURL(/\/vault$/)
+        // Background work after the open (the next sync, the extension
+        // following the session) must not send it back to the keyrings.
+        await joiner.waitForTimeout(12_000)
+        await expect(joiner).toHaveURL(/\/vault$/)
+        await expect(joiner.getByTestId('vault-panel')).toBeVisible()
+        expect(await openStoreId(joiner)).toBe(laterStoreId)
+      },
+    )
   })
 })

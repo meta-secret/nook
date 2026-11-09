@@ -353,11 +353,15 @@ export class IdentityCardProjection {
     local,
     active,
   }: VaultRowStateRequest): IdentityVaultRowState {
+    // The vault open in this session is on this browser, even before its
+    // first local save lists it in the catalog: one just opened from the
+    // sync provider must not still offer to open it from there.
+    const open =
+      this.source.authenticated && storeId === this.source.openStoreId;
+    if (active && open) return IdentityVaultRowState.Open;
     if (!local) return IdentityVaultRowState.Unavailable;
     if (!active) return IdentityVaultRowState.Dormant;
-    return this.source.authenticated && storeId === this.source.openStoreId
-      ? IdentityVaultRowState.Open
-      : IdentityVaultRowState.Available;
+    return IdentityVaultRowState.Available;
   }
 
   private card(entry: IdentityDirectoryEntry): IdentityCardView {

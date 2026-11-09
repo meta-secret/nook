@@ -154,6 +154,20 @@ describe('identity card projection', () => {
     )
   })
 
+  test('a vault just opened from the sync provider is open, not away, before its first local save', () => {
+    const justOpened: IdentityCardSource = {
+      ...source(true),
+      currentLogVaults: ['store_away'],
+      openStoreId: 'store_away',
+    }
+    const [current] = new IdentityCardProjection(justOpened).cards
+    expect(current?.vaults).toContainEqual({
+      storeId: 'store_away',
+      label: 'store_away',
+      state: IdentityVaultRowState.Open,
+    })
+  })
+
   test('never offers another identity vault for opening here', () => {
     const cards = new IdentityCardProjection(source(true)).cards
     expect(cards[1]?.vaults).toEqual([
