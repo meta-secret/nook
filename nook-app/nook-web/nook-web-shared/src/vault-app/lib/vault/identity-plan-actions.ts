@@ -19,6 +19,7 @@ import {
   type WaitingIdentityJoin,
 } from "$lib/vault/identity-join-wait";
 import { NewIdentityStage } from "$lib/vault/state/ui.svelte";
+import { StagedKeyringDiscovery } from "$lib/vault/provider-connection";
 import { I18N_KEYS, type I18nKey } from "../../../generated/i18n-keys";
 
 export enum IdentityPlanOutcomeKind {
@@ -294,7 +295,14 @@ export class IdentityJoinActions {
     const staged = await this.vault.discoverStagedKeyrings();
     if (staged.isErr())
       return err(failure.because(staged.error.translationKey));
-    return ok(true);
+    // Nothing staged again means the provider is gone: the join cannot be
+    // asked there, so it stops and says so.
+    switch (staged.value) {
+      case StagedKeyringDiscovery.Listed:
+        return ok(true);
+      case StagedKeyringDiscovery.NotFound:
+        return err(failure.because(I18N_KEYS.AuthStorageKeyringNotFound));
+    }
   }
 
   /** What the waiting join does with its key. */

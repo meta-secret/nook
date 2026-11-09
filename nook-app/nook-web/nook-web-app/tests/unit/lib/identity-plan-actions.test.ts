@@ -301,6 +301,27 @@ describe('recovering a keyring with a passphrase from an identity plan', () => {
     })
   })
 
+  test('a join whose provider is no longer staged stops and says so, asking nothing', async () => {
+    const session = new JoinSession('current-key').unlocked()
+    vi.spyOn(session.vault, 'discoverStagedKeyrings').mockResolvedValue(
+      ok(StagedKeyringDiscovery.NotFound),
+    )
+    const wait: WaitingIdentityJoin = {
+      kind: IdentityJoinWaitKind.NewKey,
+      join: {
+        source: { kind: 'currentProvider' },
+        identityId: IDENTITY,
+        label: LABEL,
+      },
+      purpose: IdentityJoinPurpose.Ask,
+    }
+
+    const resumed = await new IdentityJoinActions(session.vault).resume(wait)
+
+    expect(resumed.isErr()).toBe(true)
+    expect(session.requested).toEqual([])
+  })
+
   test('a key that belongs to an identity waits for a new identity of its own first', async () => {
     const session = new JoinSession('new-key-staged').unlocked()
 

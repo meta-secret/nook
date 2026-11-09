@@ -11,6 +11,10 @@ import {
 } from "$app-wasm";
 import type { VaultState } from "$lib/vault.svelte";
 import { LoginSetupKind } from "$lib/vault/state/provider.svelte";
+import {
+  DraftS3ConnectionKind,
+  S3DraftReads,
+} from "$lib/vault/provider-draft-reads";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 
 /** A passkey check that could not finish; what it says to the user. */
@@ -137,20 +141,28 @@ type CurrentProviderCheck = {
   readonly run: (manager: NookVaultManager) => Promise<CredentialCheckReport>;
 };
 
-/** The provider a recovery reads: the folder the user picked, or the
- * provider staged for the recovery. */
+/** The provider a recovery reads: the folder the user picked, the S3
+ * location it names, or the provider staged for the recovery. A named
+ * location stays the same when making a key for a join resets the session
+ * that staged it, so the join is asked where the keyring was listed. */
 export function recoveryProviderSource(vault: VaultState): NookProviderSource {
   const draft = vault.providerDraft;
-  if (
-    vault.loginSetup.kind === LoginSetupKind.Active &&
-    draft.type === "local-folder" &&
-    draft.state === "selected"
-  )
+  if (vault.loginSetup.kind !== LoginSetupKind.Active) return currentProvider();
+  if (draft.type === "local-folder" && draft.state === "selected")
     return {
       kind: "remote",
       source: { kind: "localFolder", handleId: draft.handleId },
     };
-  return currentProvider();
+  const s3 = S3DraftReads.connection(draft);
+  switch (s3.kind) {
+    case DraftS3ConnectionKind.Ready:
+      return {
+        kind: "remote",
+        source: { kind: "s3", configuration: s3.connection },
+      };
+    case DraftS3ConnectionKind.NotReady:
+      return currentProvider();
+  }
 }
 
 /** Where a recovery's checks read from: the same provider as its plan. */
