@@ -35,6 +35,18 @@ fn vault_app_library_root_is_package_oriented() -> anyhow::Result<()> {
 }
 
 #[test]
+fn vault_apps_keep_their_own_dev_dependency_caches() {
+    // Both apps link node_modules to the web app's, and the isolation suite
+    // starts their dev servers together: a shared dependency cache lets one
+    // server rewrite what the other's first page is loading.
+    let root = RepositoryFixture::repository_root();
+    let simple_config = root.read("nook-app/nook-web/nook-vault-simple/vite.config.ts");
+    let sentinel_config = root.read("nook-app/nook-web/nook-vault-sentinel/vite.config.ts");
+    assert!(simple_config.contains("cacheDir: new URL(\"./node_modules/.vite-simple\""));
+    assert!(sentinel_config.contains("cacheDir: new URL(\"./node_modules/.vite-sentinel\""));
+}
+
+#[test]
 #[expect(
     clippy::too_many_lines,
     reason = "one runtime contract verifies all Rust-owned application boundaries"

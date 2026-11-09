@@ -53,6 +53,10 @@ const simpleViteConfig: UserConfig = {
     },
   },
   server: { fs: { allow: [".."] } },
+  // node_modules is a link to the web app's: an own dependency cache keeps
+  // this dev server from optimizing into the cache another app's dev
+  // server rewrites at the same time, as the isolation suite starts both.
+  cacheDir: new URL("./node_modules/.vite-simple", import.meta.url).pathname,
 };
 
 export default defineConfig(simpleViteConfig);
