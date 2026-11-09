@@ -1,5 +1,4 @@
 import type { VaultState } from "$lib/vault.svelte";
-import { JoinEnrollmentState } from "$app-wasm";
 
 /** Owns browser orchestration for one multi device context. */
 export class VaultDeviceActions {
@@ -17,10 +16,5 @@ export class VaultDeviceActions {
       state.errorMsg = state.t(rosterRefresh1.error.translationKey);
       return;
     }
-  }
-
-  dismissJoinEnrollment() {
-    const state = this.state;
-    state.joinEnrollmentPrompt = JoinEnrollmentState.None;
   }
 }

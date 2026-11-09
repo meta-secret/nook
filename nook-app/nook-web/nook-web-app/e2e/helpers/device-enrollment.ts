@@ -131,15 +131,6 @@ export async function connectGithubGenesisDevice(
   await connectGithubVault(page, pat, repoName, stub)
 }
 
-export async function dismissJoinEnrollmentDialog(page: Page) {
-  for (const testId of ['join-enrollment-dismiss', 'join-enrollment-close']) {
-    const button = page.getByTestId(testId)
-    if (await button.isVisible()) {
-      await button.click()
-    }
-  }
-}
-
 /**
  * Keep the e2e idle lock (2.5s) suppressed across unlocks.
  *

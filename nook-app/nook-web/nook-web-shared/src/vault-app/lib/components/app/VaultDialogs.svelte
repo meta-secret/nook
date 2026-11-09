@@ -2,11 +2,7 @@
   type SyncConflictReasonCollection = string[]
 
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import { JoinEnrollmentState } from '$app-wasm'
-  import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
-  import { JoinEnrollmentDialogVariant } from '$lib/components/join-enrollment-dialog-state'
   import { Button } from '$lib/components/ui/button'
-  import * as multiDeviceActions from '$lib/vault/multi-device'
   import type { VaultState } from '$lib/vault.svelte'
 
   let { vault }: { vault: VaultState } = $props()
@@ -19,18 +15,6 @@
     return reasons.length > 0 ? reasons.join(', ') : 'key epoch rotation'
   }
 </script>
-
-<JoinEnrollmentDialog
-  {vault}
-  open={vault.joinEnrollmentPrompt !== JoinEnrollmentState.None}
-  variant={vault.joinEnrollmentPrompt === JoinEnrollmentState.Pending
-    ? JoinEnrollmentDialogVariant.Pending
-    : JoinEnrollmentDialogVariant.NeedsRequest}
-  deviceId={vault.deviceId}
-  isBusy={vault.isVerifying}
-  onCancel={() =>
-    new multiDeviceActions.VaultDeviceActions(vault).dismissJoinEnrollment()}
-/>
 
 {#if vault.replacementConflicts.length > 0}
   <div

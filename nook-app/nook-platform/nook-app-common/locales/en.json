@@ -1148,6 +1148,7 @@
     "github_token_rejected": "GitHub rejected this token (401). Check that it is active and has access to the selected repository.",
     "duplicate_sync_provider": "This sync provider is already connected with the same storage target.",
     "keyring_not_found": "No keyring was found on this provider. Choose another provider.",
+    "vault_not_in_this_keyring": "This keyring can't open this vault on this browser. Open it from the keyring that holds it.",
     "local_folder_choose_err": "Choose a local backup folder before connecting.",
     "local_folder_detected_vaults": "Detected vaults",
     "local_folder_detected_vaults_unknown": "More than one vault",
@@ -1348,19 +1349,6 @@
     "available_after_connect": "Available after connection",
     "back_to_unlock": "Back to unlock",
     "add_provider_desc": "Pick another place that keeps this keyring and its vaults. Each saved provider replicates the same keyring."
-  },
-  "join_enrollment": {
-    "title_join": "Join this keyring",
-    "title_pending": "Waiting for approval",
-    "desc_join": "This app does not belong to this vault's keyring yet. Apps join a keyring, which then opens every vault it owns.",
-    "desc_pending": "Your request to join the keyring was sent. Try unlocking again after an app in the keyring approves you.",
-    "this_browser": "This browser",
-    "explainer_item1": "On an app that already belongs to the keyring, open Devices and create a code.",
-    "explainer_item2": "Open the code here and enter its one-time passphrase.",
-    "explainer_item3": "The code carries each vault key sealed with its passphrase; this app wraps them to its own public key, so no plaintext secrets reach the sync provider.",
-    "explainer_item4": "This app joins at once; then open the vault from your keyring.",
-    "approve_on_enrolled": "Open Nook on an app that belongs to the keyring, approve this browser in Devices, then unlock again here.",
-    "got_it": "Got it"
   },
   "provider_picker": {
     "choose_provider": "Choose a storage provider",

@@ -7,10 +7,7 @@ import {
   AuthenticatedWorkspaceState,
   type AuthenticatedWorkspaceVisibility,
 } from './authenticated-workspace'
-import {
-  dismissJoinEnrollmentDialog,
-  keepVaultIdleLockDisabled,
-} from './device-enrollment'
+import { keepVaultIdleLockDisabled } from './device-enrollment'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
 import {
   beginAddSyncProvider,
@@ -203,7 +200,6 @@ export async function expandSettingsSection(
 /** Reconnect after reload — unlock via login gate when auto-unlock is off. */
 export async function reconnectSyncVault(page: Page) {
   await page.goto('/app/')
-  await dismissJoinEnrollmentDialog(page)
 
   const vaultReady = async () =>
     (await page.getByTestId('vault-panel').isVisible()) ||

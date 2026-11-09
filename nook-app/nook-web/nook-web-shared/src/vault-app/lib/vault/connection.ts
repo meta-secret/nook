@@ -198,13 +198,17 @@ export class VaultConnectionActions {
         }
       }
       switch (gateDecision) {
+        // The keyring in use has no key to this vault on this browser: it
+        // opens from the keyring that holds it.
         case VaultConnectGateDecision.RequestEnrollment:
           state.joinEnrollmentPrompt = JoinEnrollmentState.NeedsRequest;
+          state.errorMsg = state.t(I18N_KEYS.AuthStorageVaultNotInThisKeyring);
           state.startVaultSync();
           return;
         case VaultConnectGateDecision.AwaitJoinApproval:
           state.joinEnrollmentPrompt = JoinEnrollmentState.Pending;
           state.awaitingJoinApproval = true;
+          state.errorMsg = state.t(I18N_KEYS.AuthStorageVaultNotInThisKeyring);
           state.startVaultSync();
           return;
         case VaultConnectGateDecision.Connect:

@@ -22,6 +22,7 @@ import {
   OAuthTokenFreshnessKind,
   RosterHydrationKind,
 } from '$lib/vault/action-contexts'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import {
   ProviderFixtureCredentials,
@@ -201,6 +202,28 @@ describe('vault connection', () => {
       expect(scenario.state.isAuthenticated).toBe(true)
       expect(scenario.state.syncFromStorage).toHaveBeenCalledWith(
         ProviderSyncFreshness.Forced,
+      )
+    },
+  )
+
+  test.each([
+    ['asking to enroll', VaultAccessStatus.NeedsEnrollment],
+    ['waiting for an approval', VaultAccessStatus.JoinPending],
+  ] as const)(
+    'a vault the keyring in use cannot open (%s) stays closed and says so in keyring terms',
+    async (_, status) => {
+      const scenario = connectionScenario(ProviderSyncOutcome.Synced)
+      scenario.state.providers = []
+      scenario.state.assessVaultConnectStatus = vi.fn<
+        VaultState['assessVaultConnectStatus']
+      >(async () => ok(status))
+
+      await new VaultConnectionActions(scenario.state).loadDb()
+
+      expect(scenario.manager.connect).not.toHaveBeenCalled()
+      expect(scenario.state.isAuthenticated).toBe(false)
+      expect(scenario.state.errorMsg).toBe(
+        I18N_KEYS.AuthStorageVaultNotInThisKeyring,
       )
     },
   )
