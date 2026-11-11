@@ -924,7 +924,8 @@ Browser OAuth providers are origin-bound.
 - **Simple alias origin:** The browser providers accept the exact origin
   `https://simple.meta-secret.io`. Register it in the Google OAuth client's
   Authorized JavaScript origins and the CloudKit API token's allowed origins
-  before the release that serves it. It is a separate browser origin from
+  before users rely on Google Drive or iCloud there. The alias is served as soon
+  as it is attached. It is a separate browser origin from
   `https://simple.nokey.sh`, so the browser provider treats it as its own app.
 - **Local development:** Register `https://localhost:5173` and the
   multi-worktree fallback `https://localhost:5175` explicitly in both provider

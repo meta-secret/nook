@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Attach and verify isolated production Simple/Sentinel domains. Each spec is
-# domain:zone:project. simple.meta-secret.io serves the same Simple artifact as
-# simple.nokey.sh; the extension keeps pairing only with simple.nokey.sh.
+# Attach and verify isolated production Simple/Sentinel domains.
 #
 # Required env:
 #   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, RELEASE_SHA
@@ -25,17 +23,11 @@ api_json() {
   printf '%s' "$response" | jq -e '.success == true' >/dev/null
   printf '%s' "$response"
 }
-for spec in "simple.nokey.sh:nokey.sh:nokey-simple" "sentinel.nokey.sh:nokey.sh:nokey-sentinel" "simple.meta-secret.io:meta-secret.io:nokey-simple"; do
+zone_id="$(api_json 'https://api.cloudflare.com/client/v4/zones?name=nokey.sh' | jq -er '.result[0].id')"
+for spec in "simple.nokey.sh:nokey-simple" "sentinel.nokey.sh:nokey-sentinel"; do
   domain="${spec%%:*}"
-  zone_and_project="${spec#*:}"
-  zone="${zone_and_project%%:*}"
-  project="${zone_and_project#*:}"
+  project="${spec#*:}"
   app_kind="${domain%%.*}"
-  zone_id="$(api_json "https://api.cloudflare.com/client/v4/zones?name=$zone" | jq -r '.result[0].id // empty')"
-  if [ -z "$zone_id" ]; then
-    echo "Cloudflare zone $zone is not visible to CLOUDFLARE_API_TOKEN" >&2
-    exit 1
-  fi
   pages_host="$project.pages.dev"
   domains="$(api_json "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$project/domains")"
   if [ "$(printf '%s' "$domains" | jq -r --arg domain "$domain" '[.result[]? | select(.name == $domain)] | length')" = 0 ]; then
