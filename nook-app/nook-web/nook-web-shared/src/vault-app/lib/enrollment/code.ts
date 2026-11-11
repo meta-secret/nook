@@ -47,8 +47,7 @@ type EnrollmentUrlCode =
 
 function isIsolatedVaultApplication(appKind: VaultApplication): boolean {
   return (
-    appKind === VaultApplication.Simple ||
-    appKind === VaultApplication.Sentinel
+    appKind === VaultApplication.Simple || appKind === VaultApplication.Sentinel
   );
 }
 
@@ -91,7 +90,9 @@ class EnrollmentBrowser {
       typeof this.enrollmentSiteRoot
     >[0] = {
       appKind,
-      configuredUrl: import.meta.env.VITE_PUBLIC_APP_URL?.trim() ?? "",
+      configuredUrl: ((...[v = ""]) => v)(
+        import.meta.env.VITE_PUBLIC_APP_URL,
+      ).trim(),
       servingOrigin: this.browser.window.location.origin,
       basePath: ((...[v = "/"]) => v)(import.meta.env.BASE_URL).replace(
         /\/$/,
