@@ -123,7 +123,6 @@ test.describe('local folder backup provider', () => {
         '[data-testid="provider-identity-decision"][data-decision="addToBrowser"]',
       )
       .click()
-    await page.getByTestId('remote-vault-choice-apply').click()
 
     // The keyring is recovered with its vault, which stays on its card.
     await expect(
@@ -267,7 +266,7 @@ test.describe('local folder backup provider', () => {
     expect(await localFolderSnapshot(page)).toEqual(sharedFolder)
 
     // This browser's passkey belongs to the identity that wrote last;
-    // recovering it is that identity's decision, run by Apply.
+    // recovering it is that identity's decision, run by its button.
     await page
       .locator(
         `[data-testid="provider-identity"][data-store-ids~="${latestStoreId}"]`,
@@ -276,7 +275,6 @@ test.describe('local folder backup provider', () => {
         '[data-testid="provider-identity-decision"][data-decision="addToBrowser"]',
       )
       .click()
-    await page.getByTestId('remote-vault-choice-apply').click()
     await expect(page.getByTestId('remote-vault-choice')).toHaveCount(0, {
       timeout: 30_000,
     })

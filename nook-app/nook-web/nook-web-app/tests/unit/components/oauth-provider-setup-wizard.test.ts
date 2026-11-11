@@ -456,37 +456,54 @@ describe('Google Drive provider setup', () => {
     )
   })
 
-  test('on the recovery screen, picking a decision plans it, and pressing it again takes it back out', async () => {
-    listVaults({
+  test('on the recovery screen, a way in runs at once: no pick, no plan, no second button', async () => {
+    const listed = listVaults({
       root: 'found',
       listing: {
         vaults: [summary('store_othervault1', { state: 'locked' })],
         identities: [],
       },
     })
-    const { view, vault } = renderWizard(signedInDrive())
+    const applied: IdentityPlanOutcome = {
+      kind: IdentityPlanOutcomeKind.Applied,
+    }
+    const run = vi
+      .spyOn(IdentityPlanActions.prototype, 'run')
+      .mockResolvedValue(ok(applied))
+    const { view, vault, onConnect } = renderWizard(signedInDrive())
 
     const join = await DecisionButtons.of(view, 'askToJoin')
-    // Each way in says what it needs, under its name.
-    expect(join.textContent).toContain(
+    // Each way in says what it needs, as its hint.
+    expect(join.getAttribute('title')).toBe(
       vault.t(I18N_KEYS.ProviderIdentitiesAskToJoinDetail),
     )
-    await fireEvent.click(join)
-
-    expect(join.getAttribute('aria-pressed')).toBe('true')
+    // The most direct way in leads; the others stay quieter beside it.
     expect(
-      view.getByTestId('provider-identity-plan-row').textContent,
-    ).toContain(vault.t(I18N_KEYS.ProviderIdentitiesAskToJoin))
-    expect(view.getByTestId('connect-provider-btn').textContent).toContain(
-      vault.t(I18N_KEYS.ProviderIdentitiesConnectApply),
-    )
-
-    await fireEvent.click(join)
-    expect(join.getAttribute('aria-pressed')).toBe('false')
-    expect(view.queryAllByTestId('provider-identity-plan')).toHaveLength(0)
+      view
+        .getAllByTestId('provider-identity-decision')
+        .map((button) => [button.dataset.decision, button.dataset.lead]),
+    ).toEqual([
+      ['addToBrowser', 'true'],
+      ['askToJoin', 'false'],
+    ])
+    // The step's own button is Connect & sync, whatever is clicked above.
     expect(view.getByTestId('connect-provider-btn').textContent).toContain(
       vault.t(I18N_KEYS.AuthStorageConnectAndSync),
     )
+
+    await fireEvent.click(join)
+
+    // One click asked to join; the folder is read again, nothing connects.
+    await vi.waitFor(() => expect(listed).toHaveBeenCalledTimes(2))
+    expect(run).toHaveBeenCalledOnce()
+    const call = run.mock.calls.at(0)
+    if (!call) throw new Error('the decision did not run')
+    expect(call[0].planned.map((entry) => entry.decision)).toEqual([
+      'askToJoin',
+    ])
+    expect(join.hasAttribute('aria-pressed')).toBe(false)
+    expect(view.queryAllByTestId('provider-identity-plan')).toHaveLength(0)
+    expect(onConnect).not.toHaveBeenCalled()
   })
 
   test('this browser opens an identity it is a device of without a check', async () => {
@@ -627,17 +644,16 @@ describe('Google Drive provider setup', () => {
         .map((button) => button.dataset.decision),
     ).toEqual(['addToBrowser'])
     await fireEvent.click(await DecisionButtons.of(view, 'addToBrowser'))
-    await fireEvent.click(view.getByTestId('connect-provider-btn'))
 
-    // The recovered keyring keeps Drive, with its vaults; none of them is
-    // opened, and Connect & sync does not run.
+    // That one click recovers it: the keyring keeps Drive, with its vaults;
+    // none of them is opened, and Connect & sync does not run.
     await vi.waitFor(() =>
       expect(keep).toHaveBeenCalledWith(ProviderFolderBinding.DriveFolder),
     )
     expect(onConnect).not.toHaveBeenCalled()
     expect(run).toHaveBeenCalledOnce()
     const call = run.mock.calls.at(0)
-    if (!call) throw new Error('the plan did not run')
+    if (!call) throw new Error('the decision did not run')
     const [request] = call
     expect(request.source).toEqual(DRIVE_SOURCE)
     expect(request.planned.map((entry) => entry.decision)).toEqual([

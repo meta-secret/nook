@@ -239,7 +239,8 @@ describe('Recovery vault choice', () => {
       return button
     })
     await fireEvent.click(recover)
-    await fireEvent.click(view.getByTestId('remote-vault-choice-apply'))
+    // The one click recovers it: there is no second button to apply it.
+    expect(view.queryAllByTestId('remote-vault-choice-apply')).toHaveLength(0)
 
     // The keyring keeps this provider with its vaults, and the page lands
     // on the keyrings page: no vault is imported, and nothing is listed again.
@@ -257,7 +258,6 @@ describe('Recovery vault choice', () => {
       .find((button) => button.dataset.decision === 'askToJoin')
     if (!ask) throw new Error('no join offered')
     await fireEvent.click(ask)
-    await fireEvent.click(view.getByTestId('remote-vault-choice-apply'))
 
     await vi.waitFor(() =>
       expect(vault.identityJoin.kind).toBe(IdentityJoinWaitKind.Device),

@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 import type { VaultDebugWindow } from '$lib/app/browser-lifecycle'
 import { dumpNookLogs } from './app-logs'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS } from './environment'
@@ -164,12 +164,12 @@ export async function readSecretOfVault(
 }
 
 /** On the recovery screen, the keyring filing the kept vault offers its
- * passkey, its words, and its devices, with nothing picked and no choice
- * that does nothing. Recovering with its words makes this browser's key
- * first, then the words let it in: the step's button is pressed to apply. */
+ * passkey, its words, and its devices, one button each, the passkey
+ * leading. A button runs at once: recovering with its words makes this
+ * browser's key first, then the words let it in. */
 export async function recoverListedKeyringWithWords(
   device: Page,
-  ...[kept, apply, words]: readonly [KeptVault, Locator, string]
+  ...[kept, words]: readonly [KeptVault, string]
 ): Promise<void> {
   try {
     const card = device.locator(
@@ -183,14 +183,16 @@ export async function recoverListedKeyringWithWords(
         buttons.map((button) => button.getAttribute('data-decision')),
       ),
     ).toEqual(['addToBrowser', 'recoverWithPassphrase', 'askToJoin'])
-    await expect(card.locator('[aria-pressed="true"]')).toHaveCount(0)
+    await expect(card.locator('[data-lead="true"]')).toHaveAttribute(
+      'data-decision',
+      'addToBrowser',
+    )
 
     await card
       .locator(
         '[data-testid="provider-identity-decision"][data-decision="recoverWithPassphrase"]',
       )
       .click()
-    await apply.click()
     const recovery = device.getByTestId('keyring-recovery-words')
     await answerPasskeyPromptBeforeJoin(device, recovery)
     await expect(recovery).toBeVisible({

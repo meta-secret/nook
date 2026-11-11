@@ -29,7 +29,7 @@ function listedKeyring(page: Page, storeId: string) {
   )
 }
 
-/** Pick one of a listed keyring's ways in and apply it. */
+/** Run one of a listed keyring's ways in. */
 async function applyDecision(
   page: Page,
   storeId: string,
@@ -40,7 +40,6 @@ async function applyDecision(
       `[data-testid="provider-identity-decision"][data-decision="${decision}"]`,
     )
     .click()
-  await page.getByTestId('remote-vault-choice-apply').click()
 }
 
 /** From the keyrings page, Recover keyring on the S3 location. */

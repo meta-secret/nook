@@ -5,22 +5,22 @@ its passkey, ask one of its devices to let this browser join, or finish a
 join a device approved, or join it with one of its recovery passphrases,
 whose words are typed in place of the list. Asking and recovering need
 this browser's own protected key, so the device protection gate runs first
-when there is none. Picking a decision runs nothing; Apply runs the plan. A
-keyring the plan brings here keeps this provider, and the page lands on the
-keyrings page with it: its vaults come with it and open from its card.
+when there is none. Each decision is a button that runs at once. A keyring
+it brings here keeps this provider, and the page lands on the keyrings page
+with it: its vaults come with it and open from its card.
 Checking which passkey opens an identity decrypts in memory and changes
 nothing.
 -->
 <script lang="ts">
-  import { RefreshCw } from '@lucide/svelte'
   import type { CredentialCheckReport } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import { Button } from '$lib/components/ui/button'
   import ProviderIdentityList from '$lib/components/provider-vaults/ProviderIdentityList.svelte'
   import {
-    IdentityPlan,
+    IdentityRunKind,
     identityChoices,
     type IdentityChoicesRequest,
+    type IdentityRun,
+    type PlannedDecision,
   } from '$lib/components/provider-vaults/identity-plan.svelte'
   import IdentityJoinKeyGate from '$lib/components/provider-vaults/IdentityJoinKeyGate.svelte'
   import KeyringRecoveryWords from '$lib/components/provider-vaults/KeyringRecoveryWords.svelte'
@@ -51,15 +51,16 @@ nothing.
   }: {
     vault: VaultState
     busy: boolean
-    /** After a plan that brought no keyring here, as after asking to join:
-     * list the provider's keyrings again. */
+    /** After a decision that brought no keyring here, as after asking to
+     * join: list the provider's keyrings again. */
     onApplied: () => void | Promise<void>
   } = $props()
 
   let checks = $state<CredentialCheckReport[]>([])
   let checking = $state(false)
-  let working = $state(false)
-  const plan = new IdentityPlan()
+  // The decision that runs now: one at a time.
+  let running = $state<IdentityRun>({ kind: IdentityRunKind.Idle })
+  const working = $derived(running.kind === IdentityRunKind.Running)
   // A join waiting for its key keeps the page still: one action at a time.
   const joinIdle = $derived(
     vault.identityJoin.kind === IdentityJoinWaitKind.Idle,
@@ -75,7 +76,6 @@ nothing.
     }
     return identityChoices(request)
   })
-  const planned = $derived(choices.isOk() ? plan.planned(choices.value) : [])
 
   /** One passkey tap: which listed identity it opens. */
   async function checkPasskey(): Promise<void> {
@@ -94,24 +94,25 @@ nothing.
     }
   }
 
-  async function apply(): Promise<void> {
-    working = true
-    // A keyring the plan brings here keeps this provider, with its vaults.
-    const brought = planned.some(
-      (entry) =>
-        entry.decision === 'addToBrowser' || entry.decision === 'finishJoining',
-    )
+  /** Run one decision for its keyring, at once. */
+  async function runDecision(entry: PlannedDecision): Promise<void> {
+    running = {
+      kind: IdentityRunKind.Running,
+      pick: {
+        identityId: entry.choice.identity.identityId,
+        decision: entry.decision,
+      },
+    }
     try {
       const run: IdentityPlanRun = {
         source: recoveryProviderSource(vault),
-        planned,
+        planned: [entry],
       }
       const ran = await new IdentityPlanActions(vault).run(run)
       if (ran.isErr()) {
         vault.errorMsg = ran.error.message(vault)
         return
       }
-      plan.clear()
       switch (ran.value.kind) {
         case IdentityPlanOutcomeKind.Applied:
         case IdentityPlanOutcomeKind.AddedBeside:
@@ -122,12 +123,16 @@ nothing.
         case IdentityPlanOutcomeKind.RecoveryWordsNext:
           return
       }
-      if (brought) {
+      // A keyring brought here keeps this provider, with its vaults.
+      if (
+        entry.decision === 'addToBrowser' ||
+        entry.decision === 'finishJoining'
+      ) {
         await connectRecovered()
         return
       }
     } finally {
-      working = false
+      running = { kind: IdentityRunKind.Idle }
     }
     await onApplied()
   }
@@ -164,28 +169,11 @@ nothing.
     <ProviderIdentityList
       {vault}
       choices={choices.value}
-      {plan}
+      run={running}
       {disabled}
       {checking}
+      onDecide={runDecision}
       onFindPasskey={checkPasskey}
     />
-    {#if planned.length > 0}
-      <div class="flex justify-end">
-        <Button
-          type="button"
-          class="sm:min-w-[180px]"
-          data-testid="remote-vault-choice-apply"
-          {disabled}
-          onclick={() => void apply()}
-        >
-          {#if working}
-            <RefreshCw class="size-4 animate-spin" aria-hidden="true" />
-            {vault.t(I18N_KEYS.ProviderIdentitiesApplying)}
-          {:else}
-            {vault.t(I18N_KEYS.ProviderIdentitiesApply)}
-          {/if}
-        </Button>
-      </div>
-    {/if}
   {/if}
 </section>
