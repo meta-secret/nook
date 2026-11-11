@@ -1919,6 +1919,10 @@
       "connect_first_action": "Connect vault",
       "connect_first_opened": "Finish connecting in the Nook tab. This page updates when you are done.",
       "connect_first_failed": "Nook could not open the connect page. Select Connect vault to try again.",
+      "no_vault_status": "No vault yet",
+      "no_vault_title": "Create a vault to use Nook here",
+      "no_vault_description": "Your keyring is connected, but it has no vault yet. Create one in Nook to fill and save logins.",
+      "no_vault_opened": "Create a vault in the Nook tab, then come back to this page.",
       "unlock_first_title": "Unlock Nook to continue",
       "gate_dismiss": "Not now"
     },

@@ -54,6 +54,11 @@ describe('authentication widget vault presentation', () => {
     ).toEqual({ kind: PilotVaultConnectionKind.NotConnected })
     expect(
       pilotVaultConnectionFromSetupState({
+        kind: ExtensionSetupLoadKind.KeyringWithoutVault,
+      }),
+    ).toEqual({ kind: PilotVaultConnectionKind.KeyringWithoutVault })
+    expect(
+      pilotVaultConnectionFromSetupState({
         kind: ExtensionSetupLoadKind.Ready,
         setup: readySetup,
       }),
@@ -94,6 +99,23 @@ describe('authentication widget vault presentation', () => {
     expect(projection.state()).toEqual({
       kind: WidgetVaultPresentationKind.NotConnected,
     })
+  })
+
+  test('shows a connected keyring with no vault as no vault, never as not connected', () => {
+    const keyringOnly: PilotVaultConnection = {
+      kind: PilotVaultConnectionKind.KeyringWithoutVault,
+    }
+    const lockedRequest: WidgetVaultPresentationProjectionArgs = {
+      vaultConnection: keyringOnly,
+      loginMatches: { kind: 'locked' },
+    }
+
+    expect(
+      WidgetVaultPresentationProjection.forConnection(keyringOnly),
+    ).toEqual({ kind: WidgetVaultPresentationKind.NoVault })
+    expect(
+      new WidgetVaultPresentationProjection(lockedRequest).state(),
+    ).toEqual({ kind: WidgetVaultPresentationKind.NoVault })
   })
 
   test('projects a locked session separately from an unavailable session', () => {
@@ -180,6 +202,10 @@ describe('authentication widget vault presentation', () => {
       {
         presentation: { kind: WidgetVaultPresentationKind.NotConnected },
         expected: BROWSER_MESSAGE_KEYS.WidgetConnectFirstDescription,
+      },
+      {
+        presentation: { kind: WidgetVaultPresentationKind.NoVault },
+        expected: BROWSER_MESSAGE_KEYS.WidgetNoVaultDescription,
       },
       {
         presentation: { kind: WidgetVaultPresentationKind.Locked },

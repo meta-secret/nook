@@ -10,12 +10,15 @@ import {
 
 export enum PilotVaultConnectionKind {
   NotConnected = 'not-connected',
+  /** A keyring is connected and has no vault yet. */
+  KeyringWithoutVault = 'keyring-without-vault',
   Connected = 'connected',
   Unavailable = 'unavailable',
 }
 
 export type PilotVaultConnection =
   | { readonly kind: PilotVaultConnectionKind.NotConnected }
+  | { readonly kind: PilotVaultConnectionKind.KeyringWithoutVault }
   | { readonly kind: PilotVaultConnectionKind.Connected }
   | { readonly kind: PilotVaultConnectionKind.Unavailable }
 
@@ -27,6 +30,8 @@ export function pilotVaultConnectionFromSetupState(
       return { kind: PilotVaultConnectionKind.Connected }
     case ExtensionSetupLoadKind.NotConnected:
       return { kind: PilotVaultConnectionKind.NotConnected }
+    case ExtensionSetupLoadKind.KeyringWithoutVault:
+      return { kind: PilotVaultConnectionKind.KeyringWithoutVault }
     case ExtensionSetupLoadKind.Unavailable:
       return { kind: PilotVaultConnectionKind.Unavailable }
   }
@@ -34,6 +39,8 @@ export function pilotVaultConnectionFromSetupState(
 
 export enum WidgetVaultPresentationKind {
   NotConnected = 'vault-not-connected',
+  /** Nook is connected through a keyring that has no vault yet. */
+  NoVault = 'no-vault',
   Connected = 'vault-connected',
   Locked = 'vault-locked',
   NoMatchingCredential = 'no-matching-credential',
@@ -43,6 +50,7 @@ export enum WidgetVaultPresentationKind {
 
 export type WidgetVaultPresentation =
   | { readonly kind: WidgetVaultPresentationKind.NotConnected }
+  | { readonly kind: WidgetVaultPresentationKind.NoVault }
   | { readonly kind: WidgetVaultPresentationKind.Connected }
   | { readonly kind: WidgetVaultPresentationKind.Locked }
   | {
@@ -69,6 +77,7 @@ export class SavedLoginPresentation {
       case WidgetVaultPresentationKind.NoMatchingCredential:
         return SavedLoginPresentationKind.Empty
       case WidgetVaultPresentationKind.NotConnected:
+      case WidgetVaultPresentationKind.NoVault:
       case WidgetVaultPresentationKind.Connected:
       case WidgetVaultPresentationKind.Locked:
       case WidgetVaultPresentationKind.CredentialAvailable:
@@ -92,21 +101,29 @@ export class WidgetVaultPresentationProjection {
   static forConnection(
     connection: PilotVaultConnection,
   ): WidgetVaultPresentation {
-    if (connection.kind === PilotVaultConnectionKind.NotConnected) {
-      return { kind: WidgetVaultPresentationKind.NotConnected }
+    switch (connection.kind) {
+      case PilotVaultConnectionKind.NotConnected:
+        return { kind: WidgetVaultPresentationKind.NotConnected }
+      case PilotVaultConnectionKind.KeyringWithoutVault:
+        return { kind: WidgetVaultPresentationKind.NoVault }
+      case PilotVaultConnectionKind.Unavailable:
+        return { kind: WidgetVaultPresentationKind.Unavailable }
+      case PilotVaultConnectionKind.Connected:
+        return { kind: WidgetVaultPresentationKind.Connected }
     }
-    return connection.kind === PilotVaultConnectionKind.Unavailable
-      ? { kind: WidgetVaultPresentationKind.Unavailable }
-      : { kind: WidgetVaultPresentationKind.Connected }
   }
 
   state(): WidgetVaultPresentation {
     const { vaultConnection, loginMatches } = this.request
-    if (vaultConnection.kind === PilotVaultConnectionKind.NotConnected) {
-      return { kind: WidgetVaultPresentationKind.NotConnected }
-    }
-    if (vaultConnection.kind === PilotVaultConnectionKind.Unavailable) {
-      return { kind: WidgetVaultPresentationKind.Unavailable }
+    switch (vaultConnection.kind) {
+      case PilotVaultConnectionKind.NotConnected:
+        return { kind: WidgetVaultPresentationKind.NotConnected }
+      case PilotVaultConnectionKind.KeyringWithoutVault:
+        return { kind: WidgetVaultPresentationKind.NoVault }
+      case PilotVaultConnectionKind.Unavailable:
+        return { kind: WidgetVaultPresentationKind.Unavailable }
+      case PilotVaultConnectionKind.Connected:
+        break
     }
 
     switch (loginMatches.kind) {
@@ -136,6 +153,8 @@ export function savedLoginDescriptionKey(
   switch (presentation.kind) {
     case WidgetVaultPresentationKind.NotConnected:
       return BROWSER_MESSAGE_KEYS.WidgetConnectFirstDescription
+    case WidgetVaultPresentationKind.NoVault:
+      return BROWSER_MESSAGE_KEYS.WidgetNoVaultDescription
     case WidgetVaultPresentationKind.Connected:
       return BROWSER_MESSAGE_KEYS.WidgetLoginDescription
     case WidgetVaultPresentationKind.Locked:
@@ -161,6 +180,9 @@ export enum WidgetVaultRequirement {
 export enum WidgetVaultGateKind {
   /** No vault is connected: offer Connect vault, never the blocked action. */
   Connect = 'connect',
+  /** A keyring is connected with no vault yet: offer Open vault to create
+   * one, never Connect vault or the blocked action. */
+  CreateVault = 'create-vault',
   /** The connected vault is locked: offer Unlock, never the blocked action. */
   Unlock = 'unlock',
   /** The action can run: offer it. */
@@ -189,6 +211,8 @@ export class WidgetVaultGate {
     switch (request.presentation.kind) {
       case WidgetVaultPresentationKind.NotConnected:
         return WidgetVaultGateKind.Connect
+      case WidgetVaultPresentationKind.NoVault:
+        return WidgetVaultGateKind.CreateVault
       case WidgetVaultPresentationKind.Locked:
         return WidgetVaultGateKind.Unlock
       case WidgetVaultPresentationKind.Connected:

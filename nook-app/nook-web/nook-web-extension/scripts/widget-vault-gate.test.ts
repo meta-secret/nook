@@ -16,6 +16,11 @@ const vaultActionCases: readonly GateCase[] = [
     WidgetVaultGateKind.Connect,
   ],
   [
+    'a connected keyring with no vault offers Open vault to create one',
+    { kind: WidgetVaultPresentationKind.NoVault },
+    WidgetVaultGateKind.CreateVault,
+  ],
+  [
     'a locked vault offers Unlock',
     { kind: WidgetVaultPresentationKind.Locked },
     WidgetVaultGateKind.Unlock,
@@ -54,6 +59,7 @@ describe('widget vault gate', () => {
 
   test.each([
     WidgetVaultPresentationKind.NotConnected,
+    WidgetVaultPresentationKind.NoVault,
     WidgetVaultPresentationKind.Locked,
   ] as const)(
     'an action that needs no vault stays available when the vault is %s',

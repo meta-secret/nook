@@ -1,10 +1,14 @@
-/** The widget's connect-first and unlock-first strings in the shared catalog. */
+/** The widget's connect-first, create-vault-first and unlock-first strings in the shared catalog. */
 export type VaultGateLocaleMessages = {
   connect_first_title: string
   connect_first_description: string
   connect_first_action: string
   connect_first_opened: string
   connect_first_failed: string
+  no_vault_status: string
+  no_vault_title: string
+  no_vault_description: string
+  no_vault_opened: string
   unlock_first_title: string
   gate_dismiss: string
 }
@@ -32,6 +36,10 @@ export class VaultGateChromeMessages {
     widgetConnectFirstAction: 'connect_first_action',
     widgetConnectFirstOpened: 'connect_first_opened',
     widgetConnectFirstFailed: 'connect_first_failed',
+    widgetNoVaultStatus: 'no_vault_status',
+    widgetNoVaultTitle: 'no_vault_title',
+    widgetNoVaultDescription: 'no_vault_description',
+    widgetNoVaultOpened: 'no_vault_opened',
     widgetUnlockFirstTitle: 'unlock_first_title',
     widgetGateDismiss: 'gate_dismiss',
   }

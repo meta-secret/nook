@@ -195,6 +195,7 @@ const WIDGET_PANEL_STYLES = `
       color: var(--nk-success);
     }
     .vault-status[data-state='vault-not-connected'],
+    .vault-status[data-state='no-vault'],
     .vault-status[data-state='vault-locked'],
     .vault-status[data-state='no-matching-credential'],
     .vault-status[data-state='unavailable'] {

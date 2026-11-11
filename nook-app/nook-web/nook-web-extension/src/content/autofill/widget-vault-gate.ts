@@ -12,6 +12,7 @@ import {
   type SiteVaultConnectResponse,
 } from '../../lib/site-vault-connect-messages'
 import type { FocusedCredentialTargetSensor } from './focused-credential-target'
+import { PilotVaultOpening } from './pilot-vault-opening'
 import {
   authenticationRuntimeTransport,
   RuntimeMessageDeliveryKind,
@@ -110,7 +111,10 @@ type VaultGateShell = {
 
 export type WidgetVaultGateMount = {
   readonly shell: VaultGateShell
-  readonly gate: WidgetVaultGateKind.Connect | WidgetVaultGateKind.Unlock
+  readonly gate:
+    | WidgetVaultGateKind.Connect
+    | WidgetVaultGateKind.CreateVault
+    | WidgetVaultGateKind.Unlock
   readonly resume: VaultConnectResumeTarget
 }
 
@@ -121,8 +125,9 @@ type VaultGateCopy = {
 }
 
 /**
- * Renders the connect-first or unlock-first state in place of a widget's
- * vault action. The person can connect or unlock, or leave the page alone.
+ * Renders the connect-first, create-vault-first or unlock-first state in
+ * place of a widget's vault action. The person can connect, open the vault
+ * to create one, or unlock, or leave the page alone.
  */
 export class WidgetVaultGateSurface {
   private constructor(private readonly mount: WidgetVaultGateMount) {}
@@ -141,6 +146,12 @@ export class WidgetVaultGateSurface {
           title: BROWSER_MESSAGE_KEYS.WidgetConnectFirstTitle,
           description: BROWSER_MESSAGE_KEYS.WidgetConnectFirstDescription,
           action: BROWSER_MESSAGE_KEYS.WidgetConnectFirstAction,
+        }
+      case WidgetVaultGateKind.CreateVault:
+        return {
+          title: BROWSER_MESSAGE_KEYS.WidgetNoVaultTitle,
+          description: BROWSER_MESSAGE_KEYS.WidgetNoVaultDescription,
+          action: BROWSER_MESSAGE_KEYS.WidgetOpenVault,
         }
       case WidgetVaultGateKind.Unlock:
         return {
@@ -208,6 +219,17 @@ export class WidgetVaultGateSurface {
       case WidgetVaultGateKind.Unlock:
         SiteSidePanel.open()
         return
+      case WidgetVaultGateKind.CreateVault: {
+        const { continueButton, description } = this.mount.shell
+        const opening: ConstructorParameters<typeof PilotVaultOpening>[0] = {
+          button: continueButton,
+          description,
+          opened: BROWSER_MESSAGE_KEYS.WidgetNoVaultOpened,
+        }
+        vaultConnectResume.remember(this.mount.resume)
+        new PilotVaultOpening(opening).activate()
+        return
+      }
       case WidgetVaultGateKind.Connect:
         vaultConnectResume.remember(this.mount.resume)
         void this.connect()

@@ -8,6 +8,7 @@ import {
   extension_keyring_storage_items,
   extension_pairing_keyrings,
   extension_setup_after_pairing_grant_removal,
+  extension_vault_connection,
   first_extension_pairing_grant,
   ordered_extension_pairing_grants,
   refresh_extension_pairing_grant,
@@ -22,6 +23,7 @@ import type {
   ExtensionPairingState,
   ExtensionReadySetup,
   ExtensionSetupAfterRemoval,
+  ExtensionVaultConnection,
   ImportedExtensionEventLog,
   RefreshExtensionPairingGrantInput,
   SelectedExtensionPairingGrant,
@@ -258,6 +260,14 @@ function joinedKeyrings(
   return extension_pairing_keyrings(stateFromItems(stored))
 }
 
+/** What the extension is connected to: nothing, a keyring with no vault
+ * yet, or a vault that is set up. */
+function vaultConnection(
+  stored: ExtensionPairingItems,
+): ExtensionVaultConnection {
+  return extension_vault_connection(stateFromItems(stored))
+}
+
 export type ExtensionPairingGrantPolicy = {
   pairingGrantStorageKey: typeof pairingGrantStorageKey
   decodeStoredExtensionPairingGrant: typeof decodeStoredExtensionPairingGrant
@@ -271,6 +281,7 @@ export type ExtensionPairingGrantPolicy = {
   firstStoredPairingGrant: typeof firstStoredPairingGrant
   keyringStorageItems: typeof keyringStorageItems
   joinedKeyrings: typeof joinedKeyrings
+  vaultConnection: typeof vaultConnection
 }
 
 export const extensionPairingGrantPolicyReady: Promise<ExtensionPairingGrantPolicy> =
@@ -287,4 +298,5 @@ export const extensionPairingGrantPolicyReady: Promise<ExtensionPairingGrantPoli
     firstStoredPairingGrant,
     keyringStorageItems,
     joinedKeyrings,
+    vaultConnection,
   }))

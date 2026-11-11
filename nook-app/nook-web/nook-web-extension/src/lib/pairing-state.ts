@@ -1,6 +1,9 @@
 /* eslint-disable nook-syntax/no-restricted-syntax -- This dedicated storage decoder uses a predicate to narrow untrusted persisted state. */
 import { Schema } from 'effect'
-import type { ExtensionReadySetup as ExtensionReadySetupState } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  ExtensionReadySetup as ExtensionReadySetupState,
+  ExtensionVaultConnection,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 export enum ExtensionPairingStateQueryMessageType {
   NookExtensionPairingStateQuery = 'nook:extension-pairing-state-query',
@@ -38,6 +41,8 @@ export type ExtensionPairingStateLoaderArgs = {
 
 export enum ExtensionPairingSetupResponseKind {
   NotConnected = 'not-connected',
+  /** A keyring is joined and has no vault for the extension yet. */
+  KeyringWithoutVault = 'keyring-without-vault',
   Ready = 'ready',
 }
 
@@ -53,39 +58,36 @@ export type ExtensionPairingStateQueryResponse =
     }
   | {
       readonly ok: true
+      readonly setupState: ExtensionPairingSetupResponseKind.KeyringWithoutVault
+    }
+  | {
+      readonly ok: true
       readonly setupState: ExtensionPairingSetupResponseKind.Ready
       readonly setup: ExtensionReadySetupState
     }
   | { readonly ok: false; readonly reason: string }
 
-export type ExtensionPairingStateStorageResponseRequest = {
-  readonly stored: unknown
-  readonly setupKey: string
-}
-
-export function extensionPairingStateQueryResponseFromStorage(
-  request: ExtensionPairingStateStorageResponseRequest,
+/** The worker's answer for the connection Rust read from pairing storage. */
+export function extensionPairingStateQueryResponse(
+  connection: ExtensionVaultConnection,
 ): ExtensionPairingStateQueryResponse {
-  const stored = request.stored
-  const setupKey = request.setupKey
-  if (!stored || typeof stored !== 'object') {
-    return { ok: false, reason: 'pairing-state-invalid' }
-  }
-  const setupDescriptor = Object.getOwnPropertyDescriptor(stored, setupKey)
-  if (!setupDescriptor) {
-    return {
-      ok: true,
-      setupState: ExtensionPairingSetupResponseKind.NotConnected,
-    }
-  }
-  const setup: unknown = setupDescriptor.value
-  if (!isExtensionReadySetupState(setup)) {
-    return { ok: false, reason: 'pairing-state-invalid' }
-  }
-  return {
-    ok: true,
-    setupState: ExtensionPairingSetupResponseKind.Ready,
-    setup,
+  switch (connection.kind) {
+    case 'not-connected':
+      return {
+        ok: true,
+        setupState: ExtensionPairingSetupResponseKind.NotConnected,
+      }
+    case 'keyring-without-vault':
+      return {
+        ok: true,
+        setupState: ExtensionPairingSetupResponseKind.KeyringWithoutVault,
+      }
+    case 'ready':
+      return {
+        ok: true,
+        setupState: ExtensionPairingSetupResponseKind.Ready,
+        setup: connection.setup,
+      }
   }
 }
 
@@ -159,6 +161,19 @@ export class ExtensionPairingStateLoader {
               resolve(notConnected)
               return
             }
+            case ExtensionPairingSetupResponseKind.KeyringWithoutVault: {
+              const keyringResponseFields: ExtensionPairingStateResponseFieldsCheck =
+                {
+                  response: runtimeResponse,
+                  expectedFields: ['ok', 'setupState'],
+                }
+              const keyringWithoutVault: ExtensionSetupLoad =
+                hasExactResponseFields(keyringResponseFields)
+                  ? { kind: ExtensionSetupLoadKind.KeyringWithoutVault }
+                  : { kind: ExtensionSetupLoadKind.Unavailable }
+              resolve(keyringWithoutVault)
+              return
+            }
             case ExtensionPairingSetupResponseKind.Ready: {
               const readyResponseFields: ExtensionPairingStateResponseFieldsCheck =
                 {
@@ -227,10 +242,12 @@ export const extensionPairingStateLoader = new ExtensionPairingStateLoader(
 export enum ExtensionSetupLoadKind {
   Ready = 'ready',
   NotConnected = 'not-connected',
+  KeyringWithoutVault = 'keyring-without-vault',
   Unavailable = 'unavailable',
 }
 
 export type ExtensionSetupLoad =
   | { kind: ExtensionSetupLoadKind.Ready; setup: ExtensionReadySetupState }
   | { kind: ExtensionSetupLoadKind.NotConnected }
+  | { kind: ExtensionSetupLoadKind.KeyringWithoutVault }
   | { kind: ExtensionSetupLoadKind.Unavailable }

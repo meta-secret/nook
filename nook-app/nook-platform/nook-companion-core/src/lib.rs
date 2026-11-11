@@ -179,10 +179,10 @@ pub use extension_pairing_state::{
     ExtensionPairingGrantApproval, ExtensionPairingGrantRemovalInput, ExtensionPairingRecord,
     ExtensionPairingState, ExtensionPairingStateError, ExtensionPairingVaultType,
     ExtensionReadySetup, ExtensionReadySetupStatus, ExtensionSetupAfterRemoval,
-    GrantAuthorityResponseError, GrantAuthorityResponseJson, ImportedExtensionEventLog,
-    PairingStorageJson, PairingVaultId, RefreshExtensionPairingGrantInput,
-    SelectedExtensionPairingGrant, StoredExtensionKeyring, StoredExtensionPairingGrant,
-    UnknownExtensionConnectScope, UnknownExtensionPairingVaultType,
+    ExtensionVaultConnection, GrantAuthorityResponseError, GrantAuthorityResponseJson,
+    ImportedExtensionEventLog, PairingStorageJson, PairingVaultId,
+    RefreshExtensionPairingGrantInput, SelectedExtensionPairingGrant, StoredExtensionKeyring,
+    StoredExtensionPairingGrant, UnknownExtensionConnectScope, UnknownExtensionPairingVaultType,
 };
 pub use extension_persistence::{
     ExtensionPersistenceArea, ExtensionPersistenceDatabaseState, ExtensionPersistenceObservation,
