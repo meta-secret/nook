@@ -136,6 +136,11 @@ and manual ecosystem execution in one Actions run named `CI`.
 
 - Restores scoped BuildKit caches, pins an immutable tag, verify/e2e.
 - Deploys `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts.
+- Attaches `simple.meta-secret.io` to the same `nokey-simple` Pages project and
+  verifies it with the identical Simple gate. The `CLOUDFLARE_API_TOKEN` must
+  read the `meta-secret.io` zone and edit its DNS. The domain is probed once,
+  so it must already be an active `nokey-simple` custom domain before the first
+  release that serves it.
 - Publishes GitHub Release.
 
 **`rust-dependency-updates.yml`**
@@ -218,7 +223,11 @@ Cancellation is scoped to work that a newer run actually supersedes:
 Production releases use immutable semantic-version tags. The tag records the
 exact source commit; the GitHub Release records that the tagged build passed the
 production gate and was deployed atomically as the public `nokey.sh` site plus
-the `simple.nokey.sh` and `sentinel.nokey.sh` vault applications.
+the `simple.nokey.sh` and `sentinel.nokey.sh` vault applications. The same
+Simple artifact is also served at `simple.meta-secret.io` for organizations that
+block `.sh` domains. The release step attaches it with a proxied CNAME in the
+`meta-secret.io` zone and fails with "Cloudflare zone meta-secret.io is not
+visible to CLOUDFLARE_API_TOKEN" when the token lacks that zone.
 
 Preferred release flow:
 

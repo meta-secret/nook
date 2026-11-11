@@ -8,7 +8,8 @@
  * - Authorized JavaScript origins: https://localhost:5173,
  *   https://localhost:5175, http://localhost:5173,
  *   https://simple.nokey.sh, https://sentinel.nokey.sh,
- *   https://simple.dev.nokey.sh, https://sentinel.dev.nokey.sh
+ *   https://simple.dev.nokey.sh, https://sentinel.dev.nokey.sh,
+ *   https://simple.meta-secret.io
  * - OAuth consent screen scopes:
  *   - Sign-in and refresh, the vault folder and the files Nook created
  *     (non-sensitive): https://www.googleapis.com/auth/drive.file

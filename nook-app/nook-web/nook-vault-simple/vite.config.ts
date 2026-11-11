@@ -36,7 +36,6 @@ const simpleSpa = vaultSpaPlugin(simpleSpaOptions);
 const simpleViteConfig: UserConfig = {
   base: "./",
   define: {
-    "import.meta.env.VITE_PUBLIC_APP_URL": JSON.stringify(simpleAppUrl),
     "import.meta.env.VITE_SIMPLE_APP_URL": JSON.stringify(simpleAppUrl),
     "import.meta.env.VITE_SITE_URL": JSON.stringify(siteUrl.replace(/\/$/, "")),
   },

@@ -54,6 +54,7 @@ const GOOGLE_AUTHORIZED_ORIGINS: &[&str] = &[
     "https://sentinel.nokey.sh",
     "https://simple.dev.nokey.sh",
     "https://sentinel.dev.nokey.sh",
+    "https://simple.meta-secret.io",
 ];
 
 const ICLOUD_AUTHORIZED_ORIGINS: &[&str] = &[
@@ -63,6 +64,7 @@ const ICLOUD_AUTHORIZED_ORIGINS: &[&str] = &[
     "https://sentinel.nokey.sh",
     "https://simple.dev.nokey.sh",
     "https://sentinel.dev.nokey.sh",
+    "https://simple.meta-secret.io",
 ];
 
 impl OAuthOriginUnsupportedReason {
@@ -257,6 +259,47 @@ mod tests {
                     ..
                 }
             ));
+        }
+    }
+
+    #[test]
+    fn meta_secret_simple_origin_is_authorized_only_by_exact_match() {
+        for provider in [
+            BrowserOAuthProvider::GoogleDrive,
+            BrowserOAuthProvider::ICloud,
+        ] {
+            assert_eq!(
+                provider.origin_support(BrowserOAuthLocation::Observed(
+                    BrowserOAuthLocationEvidence {
+                        origin: "https://simple.meta-secret.io",
+                        hostname: "simple.meta-secret.io"
+                    }
+                )),
+                OAuthOriginSupport::Supported {
+                    origin: "https://simple.meta-secret.io".to_owned()
+                }
+            );
+            for origin in [
+                "https://simple.meta-secret.io/",
+                "https://SIMPLE.meta-secret.io",
+                "http://simple.meta-secret.io",
+                "https://simple.meta-secret.io.evil.test",
+                "https://meta-secret.io",
+                "https://sentinel.meta-secret.io",
+            ] {
+                assert_eq!(
+                    provider.origin_support(BrowserOAuthLocation::Observed(
+                        BrowserOAuthLocationEvidence {
+                            origin,
+                            hostname: "simple.meta-secret.io"
+                        }
+                    )),
+                    OAuthOriginSupport::Unsupported {
+                        origin: origin.to_owned(),
+                        reason: OAuthOriginUnsupportedReason::UnregisteredOrigin
+                    }
+                );
+            }
         }
     }
 

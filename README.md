@@ -290,11 +290,15 @@ statistics are not published there.
 
 ## Deployments
 
-| Channel       | Site                                                        | Simple                                             | Sentinel                                               |
-| ------------- | ----------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------ |
-| Production    | [nokey.sh](https://nokey.sh)                                | [simple.nokey.sh](https://simple.nokey.sh)         | [sentinel.nokey.sh](https://sentinel.nokey.sh)         |
-| Main (dev)    | [dev.nokey.sh](https://dev.nokey.sh)                        | [simple.dev.nokey.sh](https://simple.dev.nokey.sh) | [sentinel.dev.nokey.sh](https://sentinel.dev.nokey.sh) |
-| Pull requests | Cloudflare `pr-<number>.<project>.pages.dev` branch aliases | matching Simple alias                              | matching Sentinel alias                                |
+| Channel       | Site                                                        | Simple                                                                                              | Sentinel                                               |
+| ------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Production    | [nokey.sh](https://nokey.sh)                                | [simple.nokey.sh](https://simple.nokey.sh) · [simple.meta-secret.io](https://simple.meta-secret.io) | [sentinel.nokey.sh](https://sentinel.nokey.sh)         |
+| Main (dev)    | [dev.nokey.sh](https://dev.nokey.sh)                        | [simple.dev.nokey.sh](https://simple.dev.nokey.sh)                                                  | [sentinel.dev.nokey.sh](https://sentinel.dev.nokey.sh) |
+| Pull requests | Cloudflare `pr-<number>.<project>.pages.dev` branch aliases | matching Simple alias                                                                               | matching Sentinel alias                                |
+
+`simple.meta-secret.io` serves the same Simple vault for organizations that block
+`.sh` domains. It is a separate browser origin from `simple.nokey.sh` with its own
+storage and passkeys, and the browser extension does not pair with it.
 
 Each PR site and `dev.nokey.sh` publish a browser-extension ZIP under
 `/downloads/`. Immutable production releases publish the versioned ZIP at

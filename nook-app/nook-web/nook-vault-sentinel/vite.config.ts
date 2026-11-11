@@ -10,8 +10,6 @@ import {
   type VaultSpaOptions,
 } from "../nook-web-shared/vite-config.ts";
 
-const sentinelAppUrl =
-  process.env.VITE_SENTINEL_APP_URL?.trim() || "https://sentinel.nokey.sh";
 const simpleAppUrl =
   process.env.VITE_SIMPLE_APP_URL?.trim() || "https://simple.nokey.sh";
 
@@ -32,7 +30,6 @@ const sentinelSpa = vaultSpaPlugin(sentinelSpaOptions);
 const sentinelViteConfig: UserConfig = {
   base: "./",
   define: {
-    "import.meta.env.VITE_PUBLIC_APP_URL": JSON.stringify(sentinelAppUrl),
     "import.meta.env.VITE_SIMPLE_APP_URL": JSON.stringify(simpleAppUrl),
   },
   publicDir: new URL("../nook-web-app/public", import.meta.url).pathname,

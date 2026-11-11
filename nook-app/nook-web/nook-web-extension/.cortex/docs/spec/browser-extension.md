@@ -51,6 +51,10 @@ application capability checks enforce the vault-type boundary.
 
 - **`simple.nokey.sh`**
   - **Responsibility:** Complete vault UI, unlock, consent, device management, recovery, and settings
+- **`simple.meta-secret.io`**
+  - **Responsibility:** The same Simple vault UI for organizations that block
+    `.sh` domains. It is a separate browser origin with no extension pairing
+    and no consent. The extension treats it as a Nook vault app host.
 - **Extension side panel**
   - **Responsibility:** The panel the toolbar icon opens, docked at full height
     beside the page. It stays open across tab switches in its window. Each
@@ -546,10 +550,12 @@ identity and provider ceremonies are stubbed.
 The manifest and runtime authorization bind each deployed extension to the
 matching isolated Simple origin. Sentinel origins cannot message or approve the
 extension. Autofill and website-WebAuthn content scripts exclude every Simple
-and Sentinel Nook host (production, development, and PR previews), not only the
-build's configured Simple origin, so a mismatched channel never shows the
-in-page auth gate on vault apps. The Simple Vault bridge content script remains
-bound to the configured Simple origin only.
+and Sentinel Nook host (production, development, and PR previews) and the
+production alias `simple.meta-secret.io`, not only the build's configured
+Simple origin, so a mismatched channel never shows the in-page auth gate on
+vault apps. The Simple Vault bridge content script and
+`externally_connectable` remain bound to the configured Simple origin only, so
+the alias never pairs.
 
 ### Side-panel This site and Fill route
 
@@ -614,9 +620,11 @@ resolves it again at Fill time.
      too. The route returns `non-web`, and the panel says that the tab has no
      website.
    - **Nook vault app:** Simple and Sentinel production, development, and PR
-     preview hosts, including their trailing-dot forms. The route returns
-     `page-unavailable`, and the panel says that Nook cannot fill on this
-     page. A lookalike such as `simple.nokey.sh.example.com` stays a website.
+     preview hosts, and the Simple alias `simple.meta-secret.io`, including
+     their trailing-dot forms. The route returns `page-unavailable`, and the
+     panel says that Nook cannot fill on this page. A lookalike such as
+     `simple.nokey.sh.example.com` or `simple.meta-secret.io.example.com`
+     stays a website.
    - Neither non-website result calls the vault session or lists logins.
 5. If the tab query or the classification fails, the listing returns
    `list-failed` and Fill returns `fill-failed`. Such a failure is never shown
@@ -1630,8 +1638,9 @@ counter convergence, and the threat model.
 
 ## Consent
 
-Consent is shown only on `simple.nokey.sh` after normal vault unlock. User-facing
-permissions describe actions instead of implementation details:
+Consent completes only on `simple.nokey.sh` after normal vault unlock. The
+alias `simple.meta-secret.io` serves the same consent route, but the extension
+never opens it there and cannot receive its approval. User-facing permissions describe actions instead of implementation details:
 
 - suggest logins for the current website;
 - fill a selected login;

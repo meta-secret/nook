@@ -16,7 +16,10 @@ building blocks. They are not selectable modes inside one production web app.
 - **Everyday vault**
   - **Project:** `nook-vault-simple`
   - **Production origin:** `https://simple.nokey.sh`
-  - **Vault capability:** Simple only; extension pairing allowed
+  - **Production alias origin:** `https://simple.meta-secret.io`, the same
+    Simple artifact for organizations that block `.sh` domains
+  - **Vault capability:** Simple only; extension pairing allowed on
+    `simple.nokey.sh` only
 - **Quorum safe**
   - **Project:** `nook-vault-sentinel`
   - **Production origin:** `https://sentinel.nokey.sh`
@@ -25,6 +28,16 @@ building blocks. They are not selectable modes inside one production web app.
   - **Project:** `nook-web-extension`
   - **Production origin:** extension origin
   - **Vault capability:** Simple only
+
+The two production Simple origins are separate browser origins:
+
+- Each has its own IndexedDB, WebAuthn RP ID, and session state.
+- A browser that opens `simple.meta-secret.io` is its own app and device. It
+  joins or recovers the keyring and does not see data stored on
+  `simple.nokey.sh` in the same browser.
+- Simple and Sentinel enrollment links, QR codes, and Sentinel genesis ceremony
+  links use the origin serving the page, so a vault on the alias never sends a
+  joining device to `simple.nokey.sh`.
 
 Main mirrors the same origin isolation at `dev.nokey.sh`,
 `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`. Pull requests use native
@@ -88,15 +101,28 @@ of these boundaries in the built production artifacts.
 
 Sentinel's web artifact has no extension-connect route. The extension manifest
 accepts external connections only from `simple.nokey.sh` and excludes
-`sentinel.nokey.sh` from content-script injection. Simple never advertises or
-links to Sentinel in its vault application shell. Sentinel may offer a one-way
-link back to Simple for users leaving the quorum-only product.
+`sentinel.nokey.sh` from content-script injection. It treats
+`simple.meta-secret.io` as a Nook vault app host, with no autofill or website
+WebAuthn injection. A browser on the alias has no extension pairing. Simple
+never advertises or links to Sentinel in its vault application shell. Sentinel
+may offer a one-way link back to Simple for users leaving the quorum-only
+product.
 
 ## Deployment
 
 - **Production release:** Publish `nokey.sh` as the public site and deploy the
   two vaults to separate Cloudflare Pages projects.
   - Attach and verify both custom domains and their proxied CNAME records.
+  - Attach `simple.meta-secret.io` to the same `nokey-simple` project and
+    verify it with the identical Simple gate. Each domain's proxied CNAME is
+    created in its own Cloudflare zone, `nokey.sh` or `meta-secret.io`.
+  - The CI `CLOUDFLARE_API_TOKEN` must read the `meta-secret.io` zone and edit
+    its DNS. Otherwise the attach step fails with "Cloudflare zone
+    meta-secret.io is not visible to CLOUDFLARE_API_TOKEN".
+  - The release probes each domain once, right after attaching it. Before the
+    first release that serves the alias, add `simple.meta-secret.io` as a
+    `nokey-simple` custom domain and wait until Cloudflare shows it active.
+  - Sentinel, Main, the landing site, and PR previews have no alias.
 - **Main and PR deployment:** Deploy all three artifacts independently.
   - Point the landing and both vault custom domains at their Pages
     `development` branch aliases so Main cannot replace a production branch.
@@ -111,6 +137,10 @@ link back to Simple for users leaving the quorum-only product.
 - **External OAuth and WebAuthn:** Register both vault origins when a provider is
   offered in both apps.
   - A Simple-only OAuth client must not register Sentinel.
+  - Google Drive and iCloud also accept the exact origin
+    `https://simple.meta-secret.io`. Register it in the Google OAuth client's
+    Authorized JavaScript origins and the CloudKit API token's allowed origins
+    before the release that serves it.
   - Wildcard subdomains do not satisfy browser OAuth origin checks.
   - WebAuthn ceremonies use the current hostname as RP ID; the apps do not share
     an RP.

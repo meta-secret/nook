@@ -437,6 +437,7 @@ const broadScripts = manifest.content_scripts.filter((script) =>
 )
 for (const requiredExclusion of [
   'https://simple.nokey.sh/*',
+  'https://simple.meta-secret.io/*',
   'https://simple.dev.nokey.sh/*',
   'https://sentinel.dev.nokey.sh/*',
   'https://*.nokey-simple.pages.dev/*',

@@ -31,6 +31,55 @@ describe('enrollment-code links', () => {
     ).toBe('https://sentinel.nokey.sh/')
   })
 
+  test('isolated applications build links from the origin serving the page', () => {
+    const configuredUrl = 'https://simple.nokey.sh'
+    const alias = enrollmentBrowser.enrollmentSiteRoot({
+      appKind: VaultApplication.Simple,
+      configuredUrl,
+      servingOrigin: 'https://simple.meta-secret.io',
+      basePath: '.',
+    })
+    expect(alias).toBe('https://simple.meta-secret.io')
+    expect(
+      enrollmentBrowser.enrollmentAppRootUrl({
+        siteRoot: alias,
+        appKind: VaultApplication.Simple,
+      }),
+    ).toBe('https://simple.meta-secret.io/')
+    expect(
+      enrollmentBrowser.enrollmentSiteRoot({
+        appKind: VaultApplication.Sentinel,
+        configuredUrl: 'https://sentinel.nokey.sh',
+        servingOrigin: 'https://sentinel.dev.nokey.sh',
+        basePath: '.',
+      }),
+    ).toBe('https://sentinel.dev.nokey.sh')
+  })
+
+  test('the unified development application keeps its configured URL and /app route', () => {
+    const siteRoot = enrollmentBrowser.enrollmentSiteRoot({
+      appKind: VaultApplication.UnifiedDevelopment,
+      configuredUrl: 'https://nokey.sh',
+      servingOrigin: 'https://pr-1.nook-1n8.pages.dev',
+      basePath: '',
+    })
+    expect(siteRoot).toBe('https://nokey.sh')
+    expect(
+      enrollmentBrowser.enrollmentAppRootUrl({
+        siteRoot,
+        appKind: VaultApplication.UnifiedDevelopment,
+      }),
+    ).toBe('https://nokey.sh/app/')
+    expect(
+      enrollmentBrowser.enrollmentSiteRoot({
+        appKind: VaultApplication.UnifiedDevelopment,
+        configuredUrl: '',
+        servingOrigin: 'https://localhost:5173',
+        basePath: '/app',
+      }),
+    ).toBe('https://localhost:5173/app')
+  })
+
   test('the unified development application keeps its /app route', () => {
     expect(
       enrollmentBrowser.enrollmentAppRootUrl({

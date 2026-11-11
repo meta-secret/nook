@@ -4,7 +4,8 @@
  * CloudKit Console → Production → iCloud.metasecret.project.com:
  * - API token (Settings -> Tokens & Keys), allowed origins https://nokey.sh,
  *   https://simple.nokey.sh, https://sentinel.nokey.sh,
- *   https://simple.dev.nokey.sh, and https://sentinel.dev.nokey.sh
+ *   https://simple.dev.nokey.sh, https://sentinel.dev.nokey.sh, and
+ *   https://simple.meta-secret.io
  * - Schema: NookLogEvent record type with location, event_id and content
  *   (String), Queryable indexes on recordName, location and event_id,
  *   deployed to Production. `location` holds the log's namespace tag

@@ -910,15 +910,22 @@ Browser OAuth providers are origin-bound.
   - `https://localhost:5175`
   - `http://localhost:5173`
   - `https://simple.nokey.sh`
+  - `https://simple.meta-secret.io`
   - `https://sentinel.nokey.sh`
   - `https://simple.dev.nokey.sh`
   - `https://sentinel.dev.nokey.sh`
 - **CloudKit origins:** Register these groups for the CloudKit JS token:
   - the two interactive localhost origins;
-  - the two production vault origins; and
+  - the two production vault origins, plus the Simple alias
+    `https://simple.meta-secret.io`; and
   - the two stable development vault origins.
   - Treat `https://nokey.sh` and `https://dev.nokey.sh` as public product sites,
     not vault or provider-callback origins.
+- **Simple alias origin:** The browser providers accept the exact origin
+  `https://simple.meta-secret.io`. Register it in the Google OAuth client's
+  Authorized JavaScript origins and the CloudKit API token's allowed origins
+  before the release that serves it. It is a separate browser origin from
+  `https://simple.nokey.sh`, so the browser provider treats it as its own app.
 - **Local development:** Register `https://localhost:5173` and the
   multi-worktree fallback `https://localhost:5175` explicitly in both provider
   consoles.
@@ -931,8 +938,8 @@ Browser OAuth providers are origin-bound.
 - **Branding and public pages:** Use `https://nokey.sh/` as the Google/Auth
   Platform public app home page.
   - The root path is the crawlable product and branding page.
-  - Vault applications live at `https://simple.nokey.sh` and
-    `https://sentinel.nokey.sh`.
+  - Vault applications live at `https://simple.nokey.sh` (also served at
+    `https://simple.meta-secret.io`) and `https://sentinel.nokey.sh`.
   - Do not user-agent fork the root path for Googlebot. A bot-only version is
     cloaking-prone and makes OAuth review differ from real user behavior.
   - Keep `/about.html` as a compatibility alias whose canonical URL is the root
@@ -963,8 +970,8 @@ Browser OAuth providers are origin-bound.
   - Reviewers may still test local, local-folder, and GitHub providers on PR
     previews.
   - Test Google Drive browser OAuth on `https://simple.nokey.sh`,
-    `https://sentinel.nokey.sh`, the matching `*.dev.nokey.sh` vault origin, or
-    local development.
+    `https://simple.meta-secret.io`, `https://sentinel.nokey.sh`, the matching
+    `*.dev.nokey.sh` vault origin, or local development.
   - Per-PR aliases intentionally never receive provider credentials.
 - **CSP:** Vault CSP (`security-headers.ts` to Cloudflare `_headers`) must keep:
   - `https://accounts.google.com/gsi/client` in `script-src`;

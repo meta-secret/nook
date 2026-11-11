@@ -3,6 +3,13 @@ type EnrollmentApplicationRoot = {
   readonly appKind: VaultApplication;
 };
 
+type EnrollmentSiteRootSources = {
+  readonly appKind: VaultApplication;
+  readonly configuredUrl: string;
+  readonly servingOrigin: string;
+  readonly basePath: string;
+};
+
 type EnrollmentLinkRequest = {
   readonly code: string;
   readonly baseUrl: string;
@@ -38,6 +45,12 @@ type EnrollmentUrlCode =
   | { kind: EnrollmentUrlCodeKind.Absent }
   | { kind: EnrollmentUrlCodeKind.Present; code: string };
 
+function isIsolatedVaultApplication(appKind: VaultApplication): boolean {
+  return (
+    appKind === VaultApplication.Simple || appKind === VaultApplication.Sentinel
+  );
+}
+
 /** Owns enrollment URL consumption and history cleanup for its browser host. */
 class EnrollmentBrowser {
   constructor(private readonly browser: typeof globalThis) {}
@@ -47,10 +60,7 @@ class EnrollmentBrowser {
     appKind,
   }: EnrollmentApplicationRoot): string {
     const normalized = siteRoot.replace(/\/$/, "");
-    if (
-      appKind === VaultApplication.Simple ||
-      appKind === VaultApplication.Sentinel
-    ) {
+    if (isIsolatedVaultApplication(appKind)) {
       return `${normalized}/`;
     }
     return normalized.endsWith("/app")
@@ -58,28 +68,44 @@ class EnrollmentBrowser {
       : `${normalized}/app/`;
   }
 
+  /** Isolated vault apps are served at their own root, so links use the origin serving the page. */
+  enrollmentSiteRoot({
+    appKind,
+    configuredUrl,
+    servingOrigin,
+    basePath,
+  }: EnrollmentSiteRootSources): string {
+    if (isIsolatedVaultApplication(appKind)) {
+      return servingOrigin;
+    }
+    return configuredUrl || `${servingOrigin}${basePath}`;
+  }
+
   getEnrollmentLinkBase(): string {
     if (!("window" in this.browser)) {
       return "";
     }
-    const configured = import.meta.env.VITE_PUBLIC_APP_URL?.trim();
-    if (configured) {
-      const enrollmentAppRootUrlArgs: Parameters<
-        typeof this.enrollmentAppRootUrl
-      >[0] = { siteRoot: configured, appKind: configured_vault_application() };
-      return this.enrollmentAppRootUrl(enrollmentAppRootUrlArgs);
-    }
-    const basePath = ((...[v = "/"]) => v)(import.meta.env.BASE_URL).replace(
-      /\/$/,
-      "",
-    );
-    const enrollmentAppRootUrlArgs2: Parameters<
+    const appKind = configured_vault_application();
+    const enrollmentSiteRootArgs: Parameters<
+      typeof this.enrollmentSiteRoot
+    >[0] = {
+      appKind,
+      configuredUrl: ((...[v = ""]) => v)(
+        import.meta.env.VITE_PUBLIC_APP_URL,
+      ).trim(),
+      servingOrigin: this.browser.window.location.origin,
+      basePath: ((...[v = "/"]) => v)(import.meta.env.BASE_URL).replace(
+        /\/$/,
+        "",
+      ),
+    };
+    const enrollmentAppRootUrlArgs: Parameters<
       typeof this.enrollmentAppRootUrl
     >[0] = {
-      siteRoot: `${this.browser.window.location.origin}${basePath}`,
-      appKind: configured_vault_application(),
+      siteRoot: this.enrollmentSiteRoot(enrollmentSiteRootArgs),
+      appKind,
     };
-    return this.enrollmentAppRootUrl(enrollmentAppRootUrlArgs2);
+    return this.enrollmentAppRootUrl(enrollmentAppRootUrlArgs);
   }
 
   buildEnrollmentLink({ code, baseUrl }: EnrollmentLinkRequest): string {

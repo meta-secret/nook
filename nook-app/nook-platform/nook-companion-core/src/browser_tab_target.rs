@@ -377,6 +377,8 @@ mod tests {
             "https://sentinel.dev.nokey.sh./unlock",
             "https://pr-1.nokey-simple.pages.dev./",
             "https://pr-1.nokey-sentinel.pages.dev../",
+            "https://simple.meta-secret.io/vault",
+            "https://SIMPLE.META-SECRET.IO./",
         ] {
             TabKindCase {
                 url,
@@ -403,6 +405,11 @@ mod tests {
                 url: "https://nokey.sh/",
                 origin: "https://nokey.sh",
                 display_host: "nokey.sh",
+            },
+            WebTabCase {
+                url: "https://simple.meta-secret.io.example.com/",
+                origin: "https://simple.meta-secret.io.example.com",
+                display_host: "simple.meta-secret.io.example.com",
             },
         ] {
             case.assert_classified();

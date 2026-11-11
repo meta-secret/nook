@@ -109,7 +109,7 @@ Team owner: web development.
 ### `nook-vault-simple`
 
 - **Simple Vault product boundary:** Provides fixed Simple capability, Simple-only local registry, create/import/open/manage flows, and the extension-consent pairing route.
-- **Origin isolation:** Deploys to `simple.nokey.sh` with its own origin-scoped IndexedDB, WebAuthn RP ID, session state, security headers, and Cloudflare Pages project.
+- **Origin isolation:** Deploys to `simple.nokey.sh` with its own origin-scoped IndexedDB, WebAuthn RP ID, session state, security headers, and Cloudflare Pages project. The same production build is also served at `simple.meta-secret.io`, a separate browser origin with its own storage, RP ID, and session state.
 
 ### `nook-vault-sentinel`
 
@@ -129,7 +129,7 @@ Team owner: web development.
 ### `nook-web-extension`
 
 - **Manifest V3 companion:** Browser extension source in `nook-app/nook-web/nook-web-extension/src` and build output in `dist/`.
-- **Simple Vault pairing:** Pairs exclusively with `simple.nokey.sh` via the extension device-protection widget and consent route. Excludes both vault origins from content script injection.
+- **Simple Vault pairing:** Pairs exclusively with `simple.nokey.sh` via the extension device-protection widget and consent route. Excludes every Simple and Sentinel vault origin, including `simple.meta-secret.io`, from content script injection.
 - **Domain delegation:** TypeScript coordinates Chrome APIs, DOM inspection, WebAuthn ceremonies, and timers, while delegating portable policy, payload validation, and persistence decisions to Rust/WASM.
 
 ### `nook-web-research`

@@ -38,6 +38,7 @@ pub const DEFAULT_SIMPLE_VAULT_URL: &str = "https://simple.nokey.sh/";
 /// Channel-agnostic match patterns for every Simple/Sentinel Nook host.
 const NOOK_VAULT_APP_EXCLUDE_MATCH_PATTERNS: &[&str] = &[
     "https://simple.nokey.sh/*",
+    "https://simple.meta-secret.io/*",
     "https://simple.dev.nokey.sh/*",
     "https://sentinel.nokey.sh/*",
     "https://sentinel.dev.nokey.sh/*",
@@ -173,7 +174,7 @@ impl VaultHostObservation<'_> {
     pub fn is_simple_vault_hostname(&self) -> bool {
         let hostname = self.as_str();
         let host = hostname.to_ascii_lowercase();
-        if host == "simple.nokey.sh" {
+        if host == "simple.nokey.sh" || host == "simple.meta-secret.io" {
             return true;
         }
         if host.starts_with("simple.") && host.ends_with(".nokey.sh") {
@@ -391,6 +392,30 @@ mod tests {
                 hostname: "nokey-simple.pages.dev",
                 expected: VaultAppHostname::Unrelated,
             },
+            VaultAppHostnameCase {
+                hostname: "simple.meta-secret.io",
+                expected: VaultAppHostname::Simple,
+            },
+            VaultAppHostnameCase {
+                hostname: "SIMPLE.META-SECRET.IO.",
+                expected: VaultAppHostname::Simple,
+            },
+            VaultAppHostnameCase {
+                hostname: "simple.meta-secret.io.example.com",
+                expected: VaultAppHostname::Unrelated,
+            },
+            VaultAppHostnameCase {
+                hostname: "meta-secret.io",
+                expected: VaultAppHostname::Unrelated,
+            },
+            VaultAppHostnameCase {
+                hostname: "sentinel.meta-secret.io",
+                expected: VaultAppHostname::Unrelated,
+            },
+            VaultAppHostnameCase {
+                hostname: "xsimple.meta-secret.io",
+                expected: VaultAppHostname::Unrelated,
+            },
         ] {
             assert_eq!(
                 VaultHostObservation::new(case.hostname).vault_app_hostname(),
@@ -399,5 +424,30 @@ mod tests {
                 case.hostname
             );
         }
+    }
+
+    #[test]
+    fn meta_secret_alias_is_a_vault_app_but_never_an_extension_pairing_origin() -> anyhow::Result<()>
+    {
+        let base = "https://simple.nokey.sh/";
+        let alias_url = "https://simple.meta-secret.io/vault";
+        assert!(
+            VaultHostPolicy::new(base)
+                .nook_vault_app_exclude_match_patterns()?
+                .contains(&"https://simple.meta-secret.io/*".to_owned())
+        );
+        assert!(
+            VaultHostObservation::new(alias_url)
+                .is_nook_vault_app_url(VaultAppBaseSelection::Configured(base))?
+        );
+        assert!(
+            !VaultHostPolicy::new(base)
+                .belongs_to_simple_vault("https://simple.meta-secret.io/extension-connect")?
+        );
+        assert_eq!(
+            VaultHostPolicy::new(base).simple_vault_match_pattern()?,
+            "https://simple.nokey.sh/*"
+        );
+        Ok(())
     }
 }
