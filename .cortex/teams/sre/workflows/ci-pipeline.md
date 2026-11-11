@@ -138,7 +138,9 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Deploys `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts.
 - Attaches `simple.meta-secret.io` to the same `nokey-simple` Pages project and
   verifies it with the identical Simple gate. The `CLOUDFLARE_API_TOKEN` must
-  read the `meta-secret.io` zone and edit its DNS.
+  read the `meta-secret.io` zone and edit its DNS. The domain is probed once,
+  so it must already be an active `nokey-simple` custom domain before the first
+  release that serves it.
 - Publishes GitHub Release.
 
 **`rust-dependency-updates.yml`**

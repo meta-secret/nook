@@ -1638,9 +1638,9 @@ counter convergence, and the threat model.
 
 ## Consent
 
-Consent is shown only on `simple.nokey.sh` after normal vault unlock, never on
-its alias `simple.meta-secret.io`. User-facing
-permissions describe actions instead of implementation details:
+Consent completes only on `simple.nokey.sh` after normal vault unlock. The
+alias `simple.meta-secret.io` serves the same consent route, but the extension
+never opens it there and cannot receive its approval. User-facing permissions describe actions instead of implementation details:
 
 - suggest logins for the current website;
 - fill a selected login;
