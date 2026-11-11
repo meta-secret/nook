@@ -73,7 +73,7 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
       -p nook-event-log \
       -p nook-companion-core \
       -p nook-core \
-    && nook-sccache-report compile-native-dependencies \
+    && nook-sccache-report --finish compile-native-dependencies \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-native-dependencies
 
@@ -87,7 +87,7 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm \
       -p nook-companion-wasm \
-    && nook-sccache-report compile-wasm-dependencies \
+    && nook-sccache-report --finish compile-wasm-dependencies \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-wasm-dependencies
 
@@ -104,7 +104,8 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-app-common -type f -name '*.rs' -exec touch {} + \
     && \
-    cargo build --locked -p nook-app-common
+    cargo build --locked -p nook-app-common \
+    && nook-sccache-report --finish compile-native-source-1
 
 COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
 COPY nook-app/nook-platform/nook-auth2 nook-auth2
@@ -113,7 +114,8 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-authenticator-domain nook-auth2 -type f -name '*.rs' -exec touch {} + \
     && \
-    cargo build --locked -p nook-authenticator-domain -p nook-auth2
+    cargo build --locked -p nook-authenticator-domain -p nook-auth2 \
+    && nook-sccache-report --finish compile-native-source-2
 
 COPY nook-app/nook-platform/nook-replication nook-replication
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
@@ -121,7 +123,8 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-replication -type f -name '*.rs' -exec touch {} + \
     && \
-    cargo build --locked -p nook-replication
+    cargo build --locked -p nook-replication \
+    && nook-sccache-report --finish compile-native-source-3
 
 COPY nook-app/nook-platform/nook-event-log nook-event-log
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
@@ -129,7 +132,8 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-event-log -type f -name '*.rs' -exec touch {} + \
     && \
-    cargo build --locked -p nook-event-log
+    cargo build --locked -p nook-event-log \
+    && nook-sccache-report --finish compile-native-source-4
 
 COPY nook-app/nook-platform/nook-companion-core nook-companion-core
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
@@ -137,7 +141,8 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-companion-core -type f -name '*.rs' -exec touch {} + \
     && \
-    cargo build --locked -p nook-companion-core
+    cargo build --locked -p nook-companion-core \
+    && nook-sccache-report --finish compile-native-source-5
 
 COPY nook-app/nook-platform/nook-core nook-core
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
@@ -147,7 +152,8 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     && \
     cargo build --locked -p nook-core \
     && mkdir -p /opt/nook \
-    && touch /opt/nook/compile-native-passed
+    && touch /opt/nook/compile-native-passed \
+    && nook-sccache-report --finish compile-native-source-6
 
 FROM compile-wasm-dependencies AS compile-wasm-source
 
@@ -160,7 +166,8 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     find nook-app-common -type f -name '*.rs' -exec touch {} + \
     && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
-      -p nook-wasm -p nook-companion-wasm
+      -p nook-wasm -p nook-companion-wasm \
+    && nook-sccache-report --finish compile-wasm-source-1
 
 COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
 COPY nook-app/nook-platform/nook-auth2 nook-auth2
@@ -170,7 +177,8 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     find nook-authenticator-domain nook-auth2 -type f -name '*.rs' -exec touch {} + \
     && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
-      -p nook-wasm -p nook-companion-wasm
+      -p nook-wasm -p nook-companion-wasm \
+    && nook-sccache-report --finish compile-wasm-source-2
 
 COPY nook-app/nook-platform/nook-replication nook-replication
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
@@ -179,7 +187,8 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     find nook-replication -type f -name '*.rs' -exec touch {} + \
     && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
-      -p nook-wasm -p nook-companion-wasm
+      -p nook-wasm -p nook-companion-wasm \
+    && nook-sccache-report --finish compile-wasm-source-3
 
 COPY nook-app/nook-platform/nook-event-log nook-event-log
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
@@ -188,7 +197,8 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     find nook-event-log -type f -name '*.rs' -exec touch {} + \
     && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
-      -p nook-wasm -p nook-companion-wasm
+      -p nook-wasm -p nook-companion-wasm \
+    && nook-sccache-report --finish compile-wasm-source-4
 
 COPY nook-app/nook-platform/nook-companion-core nook-companion-core
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
@@ -197,7 +207,8 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     find nook-companion-core -type f -name '*.rs' -exec touch {} + \
     && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
-      -p nook-wasm -p nook-companion-wasm
+      -p nook-wasm -p nook-companion-wasm \
+    && nook-sccache-report --finish compile-wasm-source-5
 
 COPY nook-app/nook-platform/nook-core nook-core
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
@@ -206,7 +217,8 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     find nook-core -type f -name '*.rs' -exec touch {} + \
     && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
-      -p nook-wasm -p nook-companion-wasm
+      -p nook-wasm -p nook-companion-wasm \
+    && nook-sccache-report --finish compile-wasm-source-6
 
 COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
@@ -215,7 +227,8 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     find nook-companion-wasm -type f -name '*.rs' -exec touch {} + \
     && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
-      -p nook-wasm -p nook-companion-wasm
+      -p nook-wasm -p nook-companion-wasm \
+    && nook-sccache-report --finish compile-wasm-source-7
 
 COPY nook-app/nook-platform/nook-wasm nook-wasm
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
@@ -238,7 +251,8 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
          --out-dir /opt/nook/wasm-handoff/nook-companion-wasm \
          --out-name nook_companion_wasm $wasm_opt_flag \
     && printf '%s\n' "$stamp_mode" > /opt/nook/wasm-handoff/nook-wasm/nook-wasm-build-mode \
-    && touch /opt/nook/wasm-compile-passed
+    && touch /opt/nook/wasm-compile-passed \
+    && nook-sccache-report --finish compile-wasm-source-8
 
 # Continue the rooted dependency foundation from the completed Cargo graph.
 # This keeps Cargo fetch, native/WASM dependencies, and all stable Node/web

@@ -75,7 +75,7 @@ tasks:
     desc: Run local workflow and artifact delivery contracts.
     cmds:
       - cd "{{.REPO_ROOT}}" && node --test .github/scripts/workbench-publish.test.cjs
-      - cd "{{.REPO_ROOT}}" && node --test .github/workflows/lib/buildkit-cache-export-telemetry.test.mjs .github/workflows/lib/cache-telemetry-baseline.test.mjs .github/workflows/lib/cache-telemetry.test.mjs .github/workflows/lib/cache-telemetry-split-log.test.mjs .github/workflows/lib/compile-only-dockerfile.test.mjs .github/workflows/lib/pr-cache-health.test.mjs
+      - cd "{{.REPO_ROOT}}" && node --test .github/workflows/lib/buildkit-cache-export-telemetry.test.mjs .github/workflows/lib/cache-telemetry-baseline.test.mjs .github/workflows/lib/cache-telemetry.test.mjs .github/workflows/lib/cache-telemetry-storage.test.mjs .github/workflows/lib/cache-telemetry-split-log.test.mjs .github/workflows/lib/compile-only-dockerfile.test.mjs .github/workflows/lib/pr-cache-health.test.mjs
 
   ci:pr:bake:
     internal: true

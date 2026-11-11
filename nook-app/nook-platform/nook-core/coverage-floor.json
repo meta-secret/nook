@@ -12,6 +12,7 @@
     "nook-companion-wasm",
     "nook-wasm",
     "nook-preflight",
+    "nook-compiler-cache-proof",
     "nook_domain_api"
   ],
   "package_lines_percent": {
@@ -25,6 +26,7 @@
     "nook-companion-wasm": 90.0,
     "nook-wasm": 81.2,
     "nook-preflight": 90.0,
+    "nook-compiler-cache-proof": 90.0,
     "nook_domain_api": 90.0
   },
   "excluded_packages": [

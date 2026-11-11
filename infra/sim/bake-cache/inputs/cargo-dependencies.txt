@@ -1,0 +1,1 @@
+Cargo.toml and Cargo.lock fixture for the plain Cargo WASM release dependency build

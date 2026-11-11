@@ -202,6 +202,17 @@ jobs:
         uses: ./.github/actions/nook-cache-telemetry
         with:
           artifact-suffix: ${{ inputs.publish_compile_cache && 'compile-publish' || 'compile-no-buildkit-export' }}
+      - name: Preserve real compiler cache proof
+        if: always() && (inputs.tasks || inputs.task) == 'infra:bake-cache:prove-compiler'
+        uses: actions/upload-artifact@v7
+        with:
+          name: compiler-cache-proof-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/nook-compiler-cache-proof
+            !${{ runner.temp }}/nook-compiler-cache-proof/cache/blobs/**
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: warn
       - name: Preserve Playwright diagnostics
         if: always() && (contains(inputs.tasks, 'e2e') || contains(inputs.task, 'e2e'))
         uses: actions/upload-artifact@v7

@@ -114,7 +114,7 @@ target "_nook-rust-common" {
   }
   cache-from = rust_wasm_source_cache_from
   // Remote task builds must publish the source-sealed graph as well as the manifest-only
-  // dependency graph. Without this export, an identical clean worker restores cargo-chef but
+  // dependency graph. Without this export, an identical clean worker restores Cargo dependencies but
   // recompiles every source-sensitive WASM, clippy, and test layer.
   cache-to   = rust_wasm_source_cache_to
 }

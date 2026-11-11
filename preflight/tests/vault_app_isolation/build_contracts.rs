@@ -907,7 +907,7 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Resul
     let dependency_dockerfile = root.read("nook-app/nook-platform/docker/rust/base/Dockerfile");
     let source_dockerfile = dependency_dockerfile.as_str();
     let warmup = dependency_dockerfile
-        .split_once("FROM builder-wasm-deps AS builder-core-deps")
+        .split_once("FROM platform-manifests AS builder-core-deps")
         .map_or_else(
             || panic!("builder-core-deps stage must exist in rust/base/Dockerfile"),
             |(_, rest)| rest,
