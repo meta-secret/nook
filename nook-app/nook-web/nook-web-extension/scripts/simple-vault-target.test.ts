@@ -3,11 +3,13 @@ import { companionWasmReady } from '../../nook-web-shared/src/extension/companio
 await companionWasmReady
 import { describe, expect, test } from 'bun:test'
 import {
+  belongs_to_simple_vault,
   is_nook_vault_app_url,
   is_sentinel_vault_hostname,
   is_simple_vault_hostname,
   nook_vault_app_exclude_match_patterns,
   sentinel_vault_match_patterns,
+  simple_vault_match_pattern,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { SimpleVaultTarget } from '../src/lib/simple-vault-target'
 
@@ -48,6 +50,11 @@ describe('channel-agnostic Nook vault app hosts', () => {
     expect(is_simple_vault_hostname('simple.nokey.sh')).toBe(true)
     expect(is_simple_vault_hostname('simple.dev.nokey.sh')).toBe(true)
     expect(is_simple_vault_hostname('pr-466.nokey-simple.pages.dev')).toBe(true)
+    expect(is_simple_vault_hostname('simple.meta-secret.io')).toBe(true)
+    expect(is_simple_vault_hostname('simple.meta-secret.io.example.com')).toBe(
+      false,
+    )
+    expect(is_simple_vault_hostname('sentinel.meta-secret.io')).toBe(false)
     expect(is_simple_vault_hostname('dev.nokey.sh')).toBe(false)
     expect(is_simple_vault_hostname('example.com')).toBe(false)
 
@@ -65,10 +72,29 @@ describe('channel-agnostic Nook vault app hosts', () => {
     )
     expect(exclusions).toContain('https://simple.nokey.sh/*')
     expect(exclusions).toContain('https://simple.dev.nokey.sh/*')
+    expect(exclusions).toContain('https://simple.meta-secret.io/*')
     expect(exclusions).toContain('https://sentinel.nokey.sh/*')
     expect(exclusions).toContain('https://sentinel.dev.nokey.sh/*')
     expect(exclusions).toContain('https://*.nokey-simple.pages.dev/*')
     expect(exclusions).toContain('https://*.nokey-sentinel.pages.dev/*')
+  })
+
+  test('the meta-secret alias is a vault app but never the pairing origin', () => {
+    expect(
+      is_nook_vault_app_url(
+        'https://simple.meta-secret.io/vault',
+        'https://simple.nokey.sh/',
+      ),
+    ).toBe(true)
+    expect(simple_vault_match_pattern('https://simple.nokey.sh/')).toBe(
+      'https://simple.nokey.sh/*',
+    )
+    expect(
+      belongs_to_simple_vault(
+        'https://simple.nokey.sh/',
+        'https://simple.meta-secret.io/extension-connect',
+      ),
+    ).toBe(false)
   })
 
   test('runtime URL check ignores build channel mismatch', () => {

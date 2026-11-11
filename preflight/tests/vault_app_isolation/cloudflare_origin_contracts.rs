@@ -33,6 +33,7 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
     for production_boundary in [
         "https://simple.nokey.sh/",
         "https://simple.dev.nokey.sh/*",
+        "https://simple.meta-secret.io/*",
         "https://sentinel.nokey.sh/*",
         "https://*.nokey-simple.pages.dev/*",
         "https://*.nokey-sentinel.pages.dev/*",
@@ -79,8 +80,9 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
     }
     let domains_script = root.read(".github/scripts/ci-release-attach-prod-domains.sh");
     for required in [
-        "simple.nokey.sh:nokey-simple",
-        "sentinel.nokey.sh:nokey-sentinel",
+        "simple.nokey.sh:nokey.sh:nokey-simple",
+        "sentinel.nokey.sh:nokey.sh:nokey-sentinel",
+        "simple.meta-secret.io:meta-secret.io:nokey-simple",
         "nook-app-kind",
         "failed release verification",
     ] {

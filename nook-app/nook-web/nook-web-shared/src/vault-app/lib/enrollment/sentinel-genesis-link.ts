@@ -55,7 +55,7 @@ class SentinelGenesisBrowser {
     const url = new URL(enrollmentLinkBase);
     const workspace = new URL(currentLocation);
     // Workspace routing canonicalizes `/vault/` to `/vault`. Keep ceremony
-    // links on the configured public origin and that same document so a response
+    // links on the origin serving the page and that same document so a response
     // URL changes only its fragment: a slash-only navigation would recreate the
     // app and lose the in-progress (intentionally in-memory) Genesis ceremony.
     const workspaceRoute = new WorkspacePath(workspace.pathname).route;
