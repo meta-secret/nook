@@ -80,9 +80,8 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
     }
     let domains_script = root.read(".github/scripts/ci-release-attach-prod-domains.sh");
     for required in [
-        "simple.nokey.sh:nokey.sh:nokey-simple",
-        "sentinel.nokey.sh:nokey.sh:nokey-sentinel",
-        "simple.meta-secret.io:meta-secret.io:nokey-simple",
+        "simple.nokey.sh:nokey-simple",
+        "sentinel.nokey.sh:nokey-sentinel",
         "nook-app-kind",
         "failed release verification",
     ] {
@@ -94,6 +93,10 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
     assert!(
         !domains_script.contains("for attempt in") && !domains_script.contains("sleep 10"),
         "release domain verification must probe exact-release metadata once"
+    );
+    assert!(
+        !domains_script.contains("meta-secret.io"),
+        "the release must not attach or verify the hand-attached simple.meta-secret.io alias"
     );
     let research_verifier = root.read(".github/scripts/web-research-verify-live.sh");
     assert!(

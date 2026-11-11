@@ -113,15 +113,14 @@ product.
 - **Production release:** Publish `nokey.sh` as the public site and deploy the
   two vaults to separate Cloudflare Pages projects.
   - Attach and verify both custom domains and their proxied CNAME records.
-  - Attach `simple.meta-secret.io` to the same `nokey-simple` project and
-    verify it with the identical Simple gate. Each domain's proxied CNAME is
-    created in its own Cloudflare zone, `nokey.sh` or `meta-secret.io`.
-  - The CI `CLOUDFLARE_API_TOKEN` must read the `meta-secret.io` zone and edit
-    its DNS. Otherwise the attach step fails with "Cloudflare zone
-    meta-secret.io is not visible to CLOUDFLARE_API_TOKEN".
-  - The release probes each domain once, right after attaching it. Before the
-    first release that serves the alias, add `simple.meta-secret.io` as a
-    `nokey-simple` custom domain and wait until Cloudflare shows it active.
+  - `simple.meta-secret.io` is a custom domain attached once, by hand, to the
+    `nokey-simple` project with a proxied CNAME in the `meta-secret.io` zone.
+    Every production deploy of that project serves it.
+  - The release neither attaches nor verifies the alias, and its
+    `CLOUDFLARE_API_TOKEN` needs no access to the `meta-secret.io` zone. An
+    alias problem cannot stop a `nokey.sh` release.
+  - After a release, check the alias by hand: the commit in
+    `https://simple.meta-secret.io/release.json` must match the release commit.
   - Sentinel, Main, the landing site, and PR previews have no alias.
 - **Main and PR deployment:** Deploy all three artifacts independently.
   - Point the landing and both vault custom domains at their Pages
@@ -140,7 +139,8 @@ product.
   - Google Drive and iCloud also accept the exact origin
     `https://simple.meta-secret.io`. Register it in the Google OAuth client's
     Authorized JavaScript origins and the CloudKit API token's allowed origins
-    before the release that serves it.
+    before users rely on Google Drive or iCloud there. The alias is served as soon
+    as it is attached.
   - Wildcard subdomains do not satisfy browser OAuth origin checks.
   - WebAuthn ceremonies use the current hostname as RP ID; the apps do not share
     an RP.
