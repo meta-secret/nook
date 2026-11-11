@@ -4,12 +4,17 @@ import {
   type OpenSimpleVaultMessage,
 } from '../../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import type { BrowserRuntimeMessageValue } from '../../lib/browser-runtime-message'
-import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
+import {
+  BROWSER_MESSAGE_KEYS,
+  type BrowserMessageKey,
+} from '../../lib/browser-message-keys'
 import { workflowUi } from './workflow-ui'
 
 type PilotVaultOpeningSurface = {
   readonly button: HTMLButtonElement
   readonly description: HTMLParagraphElement
+  /** What the description says once the vault tab is open. */
+  readonly opened: BrowserMessageKey
 }
 
 type PilotVaultOpeningFeedback = {
@@ -50,7 +55,7 @@ export class PilotVaultOpening {
       },
       onSuccess: () => {
         this.surface.description.textContent = workflowUi.translatedMessage(
-          BROWSER_MESSAGE_KEYS.WidgetLoginNoMatchDescription,
+          this.surface.opened,
         )
         this.surface.description.removeAttribute('role')
       },

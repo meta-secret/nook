@@ -76,6 +76,7 @@ export class PersonalFillWidget {
     const gate = WidgetVaultGate.decide(gateRequest)
     switch (gate) {
       case WidgetVaultGateKind.Connect:
+      case WidgetVaultGateKind.CreateVault:
       case WidgetVaultGateKind.Unlock: {
         const gateMount: WidgetVaultGateMount = {
           shell,

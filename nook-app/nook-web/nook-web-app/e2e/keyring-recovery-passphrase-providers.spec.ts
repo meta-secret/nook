@@ -118,12 +118,7 @@ test.describe('recovering a keyring with its passphrase on every sync provider',
       await device.getByTestId('provider-option-oauth-file').click()
       await device.getByTestId('google-sign-in-btn').click()
       await waitForGoogleOAuthSignedIn(device)
-      await recoverListedKeyringWithWords(
-        device,
-        kept,
-        device.getByTestId('connect-provider-btn'),
-        words,
-      )
+      await recoverListedKeyringWithWords(device, kept, words)
       expect(await readSecretOfVault(device, kept)).toBe(kept.value)
     } finally {
       await newContext.close()
@@ -150,12 +145,7 @@ test.describe('recovering a keyring with its passphrase on every sync provider',
         keyPrefix,
         identity: LocalS3Identity.DeviceB,
       })
-      await recoverListedKeyringWithWords(
-        device,
-        kept,
-        device.getByTestId('remote-vault-choice-apply'),
-        words,
-      )
+      await recoverListedKeyringWithWords(device, kept, words)
       expect(await readSecretOfVault(device, kept)).toBe(kept.value)
     } finally {
       await newContext.close()
@@ -187,12 +177,7 @@ test.describe('recovering a keyring with its passphrase on every sync provider',
       await device.getByTestId('github-repo-input').fill(target.repoName)
       await device.getByTestId('github-pat-input').fill(target.pat)
       await device.getByTestId('connect-provider-btn').click()
-      await recoverListedKeyringWithWords(
-        device,
-        kept,
-        device.getByTestId('remote-vault-choice-apply'),
-        words,
-      )
+      await recoverListedKeyringWithWords(device, kept, words)
       expect(await readSecretOfVault(device, kept)).toBe(kept.value)
     } finally {
       await newContext.close()
@@ -235,12 +220,7 @@ test.describe('recovering a keyring with its passphrase on every sync provider',
       await device.getByTestId('provider-option-local-folder').click()
       await device.getByTestId('login-choose-local-folder-btn').click()
       await device.getByTestId('login-connect-local-folder-btn').click()
-      await recoverListedKeyringWithWords(
-        device,
-        kept,
-        device.getByTestId('remote-vault-choice-apply'),
-        words,
-      )
+      await recoverListedKeyringWithWords(device, kept, words)
       expect(await readSecretOfVault(device, kept)).toBe(kept.value)
     } finally {
       await newContext.close()

@@ -54,62 +54,21 @@ export type IdentityPick = {
   readonly decision: IdentityDecision;
 };
 
-/** One decision the plan will run, for the identity it names. */
+/** One decision to run, for the identity it names. */
 export type PlannedDecision = {
   readonly choice: ProviderIdentityChoice;
   readonly decision: IdentityDecision;
 };
 
-/**
- * The decisions picked on one page, at most one per identity. An identity
- * nothing is picked for is left as it is; picking its decision again takes
- * it out of the plan.
- */
-export class IdentityPlan {
-  private picks = $state<readonly IdentityPick[]>([]);
-
-  /** Whether this decision is picked for the identity. */
-  isPicked(pick: IdentityPick): boolean {
-    return this.picks.some(
-      (picked) =>
-        picked.identityId === pick.identityId &&
-        picked.decision === pick.decision,
-    );
-  }
-
-  /** Pick a decision for its identity, in place of any other; picking it
-   * again unpicks it. */
-  decide(pick: IdentityPick): void {
-    const others = this.picks.filter(
-      (picked) => picked.identityId !== pick.identityId,
-    );
-    this.picks = this.isPicked(pick) ? others : [...others, pick];
-  }
-
-  clear(): void {
-    this.picks = [];
-  }
-
-  /** What will run, in listing order; a decision an identity no longer
-   * allows is dropped. */
-  planned(
-    choices: readonly ProviderIdentityChoice[],
-  ): readonly PlannedDecision[] {
-    const planned: PlannedDecision[] = [];
-    for (const choice of choices) {
-      for (const picked of this.picks) {
-        if (
-          picked.identityId === choice.identity.identityId &&
-          choice.decisions.includes(picked.decision)
-        ) {
-          const entry: PlannedDecision = { choice, decision: picked.decision };
-          planned.push(entry);
-        }
-      }
-    }
-    return planned;
-  }
+export enum IdentityRunKind {
+  Idle = "idle",
+  Running = "running",
 }
+
+/** The decision a page runs: one at a time, started by its own button. */
+export type IdentityRun =
+  | { readonly kind: IdentityRunKind.Idle }
+  | { readonly kind: IdentityRunKind.Running; readonly pick: IdentityPick };
 
 /** The words for an identity's name and for each decision about it. */
 export class IdentityDecisionText {

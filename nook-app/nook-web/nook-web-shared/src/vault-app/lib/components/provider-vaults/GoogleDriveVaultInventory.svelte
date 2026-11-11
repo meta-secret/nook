@@ -9,13 +9,14 @@ again. Or "Create a new identity" saves the identity in use there as a new
 one, and connects.
 
 On the recovery screen, with no identity yet, each identity offers the
-decisions Rust allows; picking one runs nothing, and the step's button runs
-the plan. A keyring it brings here keeps Drive, and the page lands on the
-keyrings page with it, its vaults on its card; otherwise Connect & sync
-runs. A keyring recovered with a passphrase stops the plan for its words,
-typed in place of the list; once they let this browser in, it keeps Drive
-the same way. Checking which passkey opens an identity
-decrypts in memory and changes nothing.
+decisions Rust allows, one button each, and a button runs its decision at
+once. A keyring it brings here keeps Drive, and the page lands on the
+keyrings page with it, its vaults on its card; otherwise the folder is read
+again. A keyring recovered with a passphrase asks for its words, typed in
+place of the list; once they let this browser in, it keeps Drive the same
+way. The step's own button stays Connect & sync, for a keyring of its own.
+Checking which passkey opens an identity decrypts in memory and changes
+nothing.
 -->
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte'
@@ -40,10 +41,11 @@ decrypts in memory and changes nothing.
   import { IdentityControlViewKind } from '$lib/vault/identity-control.svelte'
   import {
     IdentityDecisionText,
-    IdentityPlan,
+    IdentityRunKind,
     identityChoices,
     type IdentityChoicesFailure,
     type IdentityChoicesRequest,
+    type IdentityRun,
     type PlannedDecision,
   } from '$lib/components/provider-vaults/identity-plan.svelte'
   import IdentityJoinKeyGate from '$lib/components/provider-vaults/IdentityJoinKeyGate.svelte'
@@ -85,7 +87,7 @@ decrypts in memory and changes nothing.
     /** The signed-in account's token; a new sign-in lists again. */
     accessToken: string
     busy: boolean
-    /** Connect & sync, after the plan ran. */
+    /** Connect & sync. */
     onConnect: () => Promise<void>
     /** The step's one action button. */
     connectButton: Snippet<[ConnectPlanButton]>
@@ -97,8 +99,9 @@ decrypts in memory and changes nothing.
   // Passkey checks of this listing, newest last; they live with the page.
   let checks = $state<CredentialCheckReport[]>([])
   let checking = $state(false)
-  let working = $state(false)
-  const plan = new IdentityPlan()
+  // The recovery decision that runs now: one at a time.
+  let running = $state<IdentityRun>({ kind: IdentityRunKind.Idle })
+  const working = $derived(running.kind === IdentityRunKind.Running)
   // A join waiting for its key keeps the step still: one action at a time.
   const joinIdle = $derived(
     vault.identityJoin.kind === IdentityJoinWaitKind.Idle,
@@ -119,13 +122,11 @@ decrypts in memory and changes nothing.
     },
   )
 
-  const planned = $derived(choices.isOk() ? plan.planned(choices.value) : [])
   const listedIdentities = $derived(choices.isOk() ? choices.value.length : 0)
 
   async function load(token: string): Promise<void> {
     inventory = { kind: DriveVaultInventoryKind.Loading }
     checks = []
-    plan.clear()
     const read = await new DriveVaultInventoryReader(vault).read()
     if (token !== accessToken) return
     inventory = read
@@ -161,51 +162,50 @@ decrypts in memory and changes nothing.
     }
   }
 
-  /** Run the picked decisions, one identity at a time, then connect. A
-   * decision that fails stops the plan and says so; Connect & sync waits. */
-  async function runPlan(): Promise<void> {
-    if (planned.length > 0) {
-      working = true
-      // A keyring the plan brings here keeps Drive, with its vaults.
-      const brought = planned.some(
-        (entry) =>
-          entry.decision === 'addToBrowser' ||
-          entry.decision === 'finishJoining',
-      )
-      try {
-        const source: NookProviderSource = {
-          kind: 'remote',
-          source: { kind: 'googleDrive', accessToken },
-        }
-        const run: IdentityPlanRun = { source, planned }
-        const ran = await new IdentityPlanActions(vault).run(run)
-        if (ran.isErr()) {
-          vault.errorMsg = ran.error.message(vault)
-          await load(accessToken)
-          return
-        }
-        plan.clear()
-        switch (ran.value.kind) {
-          case IdentityPlanOutcomeKind.Applied:
-            if (brought) {
-              await connectRecovered()
-              return
-            }
-            break
-          case IdentityPlanOutcomeKind.AddedBeside:
-            break
-          // A join waits for a new key of its own; its ceremony asks, and
-          // Connect & sync waits for the identity that ceremony adopts. Or
-          // a recovery passphrase's words are typed next; they connect.
-          case IdentityPlanOutcomeKind.WaitsForKey:
-          case IdentityPlanOutcomeKind.RecoveryWordsNext:
-            return
-        }
-      } finally {
-        working = false
-      }
+  /** Run one decision for its keyring, at once. A keyring it brings here
+   * keeps Drive, with its vaults. A join waits for a new key of its own,
+   * and a recovery passphrase for its words: their own steps take over.
+   * Anything else, a failure included, reads the folder again. */
+  async function runDecision(entry: PlannedDecision): Promise<void> {
+    running = {
+      kind: IdentityRunKind.Running,
+      pick: {
+        identityId: entry.choice.identity.identityId,
+        decision: entry.decision,
+      },
     }
-    await onConnect()
+    try {
+      const source: NookProviderSource = {
+        kind: 'remote',
+        source: { kind: 'googleDrive', accessToken },
+      }
+      const run: IdentityPlanRun = { source, planned: [entry] }
+      const ran = await new IdentityPlanActions(vault).run(run)
+      if (ran.isErr()) {
+        vault.errorMsg = ran.error.message(vault)
+        await load(accessToken)
+        return
+      }
+      switch (ran.value.kind) {
+        case IdentityPlanOutcomeKind.Applied:
+          if (
+            entry.decision === 'addToBrowser' ||
+            entry.decision === 'finishJoining'
+          ) {
+            await connectRecovered()
+            return
+          }
+          break
+        case IdentityPlanOutcomeKind.AddedBeside:
+          break
+        case IdentityPlanOutcomeKind.WaitsForKey:
+        case IdentityPlanOutcomeKind.RecoveryWordsNext:
+          return
+      }
+      await load(accessToken)
+    } finally {
+      running = { kind: IdentityRunKind.Idle }
+    }
   }
 
   /** Adding a sync provider to the identity in use: each identity runs its
@@ -323,18 +323,15 @@ decrypts in memory and changes nothing.
           ? vault.t(detail)
           : vault.t(I18N_KEYS.FirstRunSyncCreateBody),
         look: ConnectButtonLook.NewIdentity,
-        run: runPlan,
+        run: onConnect,
       }
     }
     return {
       busy,
-      label:
-        planned.length > 0
-          ? vault.t(I18N_KEYS.ProviderIdentitiesConnectApply)
-          : '',
+      label: '',
       detail: '',
       look: ConnectButtonLook.Primary,
-      run: runPlan,
+      run: onConnect,
     }
   })
 </script>
@@ -393,9 +390,10 @@ decrypts in memory and changes nothing.
         <ProviderIdentityList
           {vault}
           choices={choices.value}
-          {plan}
+          run={running}
           {disabled}
           {checking}
+          onDecide={runDecision}
           onFindPasskey={checkPasskey}
         />
       {/if}

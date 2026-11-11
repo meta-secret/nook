@@ -1,18 +1,18 @@
 <!--
 The identities a provider holds, one card each. Passkeys and devices belong
 to identities, so the identity is the only thing the user decides about:
-its card says whether it opens here and lists what Rust allows doing
-with it, one row per way in, each saying what it needs. Nothing starts
-picked: an identity left unpicked stays as it is, and pressing the picked
-row again unpicks it. Vaults are never acted on here: the card names the identity and what
-its public log tells, nothing more. Picking a decision runs nothing; the
-page's one button applies the plan.
+its card says whether it opens here and offers what Rust allows doing with
+it, one button per way in. Rust lists the most direct way first, and that
+one leads; the others stay quieter beside it. A button runs its way in at
+once: there is nothing to pick and no second button to apply it. Vaults are
+never acted on here: the card names the identity and what its public log
+tells, nothing more.
 -->
 <script lang="ts">
   import {
-    Check,
     Fingerprint,
     MonitorSmartphone,
+    RefreshCw,
     ScrollText,
   } from '@lucide/svelte'
   import type {
@@ -20,36 +20,42 @@ page's one button applies the plan.
     IdentityStanding,
     ProviderIdentityChoice,
   } from '$app-wasm'
+  import { Button } from '$lib/components/ui/button'
   import IdentityCardHeader from '$lib/components/provider-vaults/IdentityCardHeader.svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     IdentityDecisionText,
+    IdentityRunKind,
     type IdentityPick,
-    type IdentityPlan,
+    type IdentityRun,
+    type PlannedDecision,
   } from '$lib/components/provider-vaults/identity-plan.svelte'
 
   let {
     vault,
     choices,
-    plan,
+    run,
     disabled,
     checking,
+    onDecide,
     onFindPasskey,
   }: {
     vault: VaultState
     choices: readonly ProviderIdentityChoice[]
-    plan: IdentityPlan
-    /** True while the plan or another action runs. */
+    /** The decision that runs now, if one does. */
+    run: IdentityRun
+    /** True while a decision or another action runs. */
     disabled: boolean
     /** True while a passkey check runs. */
     checking: boolean
+    /** Run one way in for its identity, at once. */
+    onDecide: (entry: PlannedDecision) => void | Promise<void>
     /** Check which listed identity a passkey opens; changes nothing. */
     onFindPasskey: () => void | Promise<void>
   } = $props()
 
   const text = $derived(new IdentityDecisionText(vault))
-  const planned = $derived(plan.planned(choices))
 
   /** Whether a passkey check could still open the identity. */
   function findable(standing: IdentityStanding): boolean {
@@ -74,6 +80,18 @@ page's one button applies the plan.
       replacements: { identity: text.name(choice) },
     }
     return vault.t(request)
+  }
+
+  function running(pick: IdentityPick): boolean {
+    switch (run.kind) {
+      case IdentityRunKind.Idle:
+        return false
+      case IdentityRunKind.Running:
+        return (
+          run.pick.identityId === pick.identityId &&
+          run.pick.decision === pick.decision
+        )
+    }
   }
 </script>
 
@@ -101,40 +119,35 @@ page's one button applies the plan.
       <IdentityCardHeader {vault} {choice} />
       {#if choice.decisions.length > 0}
         <div
-          class="grid"
+          class="flex flex-wrap items-center gap-2"
           role="group"
           aria-label={decisionsLabel(choice)}
           data-testid="provider-identity-decisions"
         >
-          {#each choice.decisions as decision (decision)}
+          {#each choice.decisions as decision, index (decision)}
             {@const pick: IdentityPick = {
               identityId: choice.identity.identityId,
               decision,
             }}
-            {@const picked = plan.isPicked(pick)}
-            <button
+            {@const entry: PlannedDecision = { choice, decision }}
+            <Button
               type="button"
-              aria-pressed={picked}
-              class="nk-vault-row disabled:opacity-60"
+              size="sm"
+              variant={index === 0 ? 'default' : 'outline'}
+              title={text.detail(decision)}
               data-testid="provider-identity-decision"
               data-decision={decision}
+              data-lead={index === 0}
               {disabled}
-              onclick={() => plan.decide(pick)}
+              onclick={() => void onDecide(entry)}
             >
-              <span class="nk-vault-icon" aria-hidden="true">
+              {#if running(pick)}
+                <RefreshCw class="size-4 animate-spin" aria-hidden="true" />
+              {:else}
                 {@render decisionIcon(decision)}
-              </span>
-              <span class="flex-none text-sm font-medium">
-                {text.decision(decision)}
-              </span>
-              <span class="nk-lead" aria-hidden="true"></span>
-              <span class="min-w-0 truncate text-xs text-muted-foreground">
-                {text.detail(decision)}
-              </span>
-              {#if picked}
-                <Check class="size-4 flex-none" aria-hidden="true" />
               {/if}
-            </button>
+              {text.decision(decision)}
+            </Button>
           {/each}
         </div>
       {/if}
@@ -153,23 +166,4 @@ page's one button applies the plan.
       {/if}
     </section>
   {/each}
-  {#if planned.length > 0}
-    <div class="space-y-1" role="status" data-testid="provider-identity-plan">
-      <p class="nk-subpanel-head">
-        {vault.t(I18N_KEYS.ProviderIdentitiesPlanTitle)}
-      </p>
-      <ul class="space-y-0.5 text-xs text-foreground">
-        {#each planned as entry (entry.choice.identity.identityId)}
-          {@const row: Parameters<typeof vault.t>[0] = {
-            key: I18N_KEYS.ProviderIdentitiesPlanRow,
-            replacements: {
-              identity: text.name(entry.choice),
-              decision: text.decision(entry.decision),
-            },
-          }}
-          <li data-testid="provider-identity-plan-row">{vault.t(row)}</li>
-        {/each}
-      </ul>
-    </div>
-  {/if}
 </div>

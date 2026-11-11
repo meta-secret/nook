@@ -1,9 +1,12 @@
 import { Effect } from 'effect'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-vi.hoisted(() => {
+const gateRuntime = vi.hoisted(() => {
+  type GateOpeningAcknowledgement = { readonly ok: true }
+  const sendMessage = vi.fn<() => Promise<GateOpeningAcknowledgement>>()
   type GateChromeFixture = {
     readonly runtime: Pick<typeof chrome.runtime, 'id' | 'getURL'> & {
       readonly onMessage: Pick<typeof chrome.runtime.onMessage, 'addListener'>
+      readonly sendMessage: typeof sendMessage
     }
   }
   const chromeFixture: GateChromeFixture = {
@@ -11,13 +14,16 @@ vi.hoisted(() => {
       id: 'nook-extension',
       getURL: (path: string) => `chrome-extension://nook-extension/${path}`,
       onMessage: { addListener: () => {} },
+      sendMessage,
     },
   }
   vi.stubGlobal('chrome', chromeFixture)
   vi.stubGlobal('__NOOK_EXTENSION_DIAGNOSTICS_ENABLED__', false)
+  return { sendMessage }
 })
 import { AuthenticationGesture } from '../../../../nook-web-extension/src/lib/auth-widget-policy'
 import { BROWSER_MESSAGE_KEYS } from '../../../../nook-web-extension/src/lib/browser-message-keys'
+import { OpenSimpleVaultMessageType } from '../../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import {
   SiteVaultConnectMessageType,
   SiteVaultConnectResponseKind,
@@ -85,6 +91,8 @@ function connectAnswer(kind: SiteVaultConnectResponseKind) {
 
 beforeEach(() => {
   widgetState.dismissed = false
+  gateRuntime.sendMessage.mockReset()
+  gateRuntime.sendMessage.mockResolvedValue({ ok: true })
   vi.spyOn(workflowUi, 'translatedMessage').mockImplementation((key) => key)
   vi.spyOn(AuthenticationGesture.prototype, 'trusted', 'get').mockReturnValue(
     true,
@@ -170,6 +178,55 @@ describe('connect-first widget state', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
+  test('a connected keyring with no vault offers Open vault, never a connect', async () => {
+    const shell = new GateShellFixture()
+    const send = connectAnswer(SiteVaultConnectResponseKind.Opened)
+    WidgetVaultGateSurface.render({
+      shell,
+      gate: WidgetVaultGateKind.CreateVault,
+      resume: { kind: VaultConnectResumeKind.Page },
+    })
+
+    expect(shell.title.textContent).toBe(
+      BROWSER_MESSAGE_KEYS.WidgetNoVaultTitle,
+    )
+    expect(shell.description.textContent).toBe(
+      BROWSER_MESSAGE_KEYS.WidgetNoVaultDescription,
+    )
+    expect(shell.continueButton.textContent).toBe(
+      BROWSER_MESSAGE_KEYS.WidgetOpenVault,
+    )
+
+    await shell.click()
+    await vi.waitFor(() =>
+      expect(shell.description.textContent).toBe(
+        BROWSER_MESSAGE_KEYS.WidgetNoVaultOpened,
+      ),
+    )
+    expect(gateRuntime.sendMessage).toHaveBeenCalledExactlyOnceWith({
+      type: OpenSimpleVaultMessageType.NookOpenSimpleVault,
+    })
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  test('a vault tab that cannot open fails visibly', async () => {
+    const shell = new GateShellFixture()
+    gateRuntime.sendMessage.mockRejectedValue(new Error('closed'))
+    WidgetVaultGateSurface.render({
+      shell,
+      gate: WidgetVaultGateKind.CreateVault,
+      resume: { kind: VaultConnectResumeKind.Page },
+    })
+
+    await shell.click()
+    await vi.waitFor(() =>
+      expect(shell.description.textContent).toBe(
+        BROWSER_MESSAGE_KEYS.WidgetOpenNookFailed,
+      ),
+    )
+    expect(shell.description.getAttribute('role')).toBe('alert')
+  })
+
   test('Not now dismisses the widget', () => {
     const shell = new GateShellFixture()
     WidgetVaultGateSurface.render({
@@ -197,6 +254,31 @@ describe('connect-first widget state', () => {
     )
     widget.shell.continueButton.click()
     await vi.waitFor(() => expect(send).toHaveBeenCalledOnce())
+    expect(choose).not.toHaveBeenCalled()
+  })
+
+  test('a focused field in a keyring with no vault offers Open vault, not Connect vault', async () => {
+    const field = document.createElement('input')
+    document.body.append(field)
+    const choose = vi.fn<() => void>()
+    const send = connectAnswer(SiteVaultConnectResponseKind.Opened)
+    const widget = FocusedCredentialWidget.mount({
+      vaultConnection: { kind: PilotVaultConnectionKind.KeyringWithoutVault },
+      field,
+      choose,
+    })
+
+    expect(widget.shell.title.textContent).toBe(
+      BROWSER_MESSAGE_KEYS.WidgetNoVaultTitle,
+    )
+    expect(widget.shell.continueButton.textContent).toBe(
+      BROWSER_MESSAGE_KEYS.WidgetOpenVault,
+    )
+    widget.shell.continueButton.click()
+    await vi.waitFor(() =>
+      expect(gateRuntime.sendMessage).toHaveBeenCalledOnce(),
+    )
+    expect(send).not.toHaveBeenCalled()
     expect(choose).not.toHaveBeenCalled()
   })
 })

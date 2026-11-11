@@ -167,6 +167,8 @@ class WorkflowUi {
         return this.translatedMessage(
           BROWSER_MESSAGE_KEYS.WidgetVaultNotConnected,
         )
+      case WidgetVaultPresentationKind.NoVault:
+        return this.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetNoVaultStatus)
       case WidgetVaultPresentationKind.Locked:
         return this.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetVaultLocked)
       case WidgetVaultPresentationKind.NoMatchingCredential:

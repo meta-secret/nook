@@ -170,6 +170,23 @@ pub fn extension_pairing_keyrings(
         .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
 }
 
+/// What the extension is connected to: nothing, a keyring with no vault
+/// yet, or a vault that is set up.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn extension_vault_connection(
+    state: &tsify::Ts<ExtensionPairingState>,
+) -> Result<tsify::Ts<nook_companion_core::ExtensionVaultConnection>, JsError> {
+    let state = state
+        .to_rust()
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    Tsify::into_ts(&state.vault_connection())
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))
+}
+
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(

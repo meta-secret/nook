@@ -56,6 +56,7 @@ export class FocusedCredentialWidget {
     const gate = WidgetVaultGate.decide(gateRequest)
     switch (gate) {
       case WidgetVaultGateKind.Connect:
+      case WidgetVaultGateKind.CreateVault:
       case WidgetVaultGateKind.Unlock: {
         const gateMount: WidgetVaultGateMount = {
           shell,

@@ -135,6 +135,7 @@ class AuthenticationWidgetRenderer {
       case WidgetVaultGateKind.Open:
         return gate
       case WidgetVaultGateKind.Connect:
+      case WidgetVaultGateKind.CreateVault:
       case WidgetVaultGateKind.Unlock: {
         const mount: WidgetVaultGateMount = {
           shell: request.shell,
@@ -236,6 +237,7 @@ class AuthenticationWidgetRenderer {
     authenticationWidgetShell.mountWidgetShell(nookTypedArgs0_1)
     switch (enrollmentGateKind) {
       case WidgetVaultGateKind.Connect:
+      case WidgetVaultGateKind.CreateVault:
       case WidgetVaultGateKind.Unlock:
         return
       case WidgetVaultGateKind.Open:
@@ -385,6 +387,7 @@ class AuthenticationWidgetRenderer {
     }
     switch (this.vaultGate(workflowGate)) {
       case WidgetVaultGateKind.Connect:
+      case WidgetVaultGateKind.CreateVault:
       case WidgetVaultGateKind.Unlock: {
         const gateMount: Parameters<
           typeof authenticationWidgetShell.mountWidgetShell
@@ -442,6 +445,7 @@ class AuthenticationWidgetRenderer {
           >[0] = {
             button: continueButton,
             description,
+            opened: BROWSER_MESSAGE_KEYS.WidgetLoginNoMatchDescription,
           }
           new PilotVaultOpening(openingSurface).activate()
           return

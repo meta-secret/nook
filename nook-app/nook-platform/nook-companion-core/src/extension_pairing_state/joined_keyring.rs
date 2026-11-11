@@ -13,7 +13,8 @@ use tsify::Tsify;
 
 use super::{
     ExtensionConnectScope, ExtensionPairingApprovalEpochMilliseconds, ExtensionPairingRecord,
-    ExtensionPairingState, ExtensionPairingStateError,
+    ExtensionPairingState, ExtensionPairingStateError, ExtensionReadySetup,
+    PairingSetupObservation,
 };
 
 pub const EXTENSION_KEYRING_KEY_PREFIX: &str = "nook:extension-keyring:";
@@ -61,7 +62,34 @@ impl StoredExtensionKeyring {
     }
 }
 
+/// What the extension is connected to, as a page widget needs to tell it.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum ExtensionVaultConnection {
+    /// The extension joined no keyring and has no vault.
+    NotConnected,
+    /// The extension joined a keyring that has no vault for it yet.
+    KeyringWithoutVault,
+    /// A vault is set up.
+    Ready { setup: ExtensionReadySetup },
+}
+
 impl ExtensionPairingState {
+    /// Tells a joined keyring that still has no vault apart from no
+    /// connection at all: the first needs a vault, the second a connection.
+    #[must_use]
+    pub fn vault_connection(&self) -> ExtensionVaultConnection {
+        match self.ready_setup() {
+            PairingSetupObservation::Ready(setup) => ExtensionVaultConnection::Ready {
+                setup: setup.clone(),
+            },
+            PairingSetupObservation::NotConfigured if self.keyrings().is_empty() => {
+                ExtensionVaultConnection::NotConnected
+            }
+            PairingSetupObservation::NotConfigured => ExtensionVaultConnection::KeyringWithoutVault,
+        }
+    }
+
     /// The keyring entries to store for a keyring the web app just added the
     /// extension to; approving the same keyring again replaces its record.
     pub fn for_keyring(
@@ -159,6 +187,33 @@ mod tests {
         state.validate()?;
         assert_eq!(state.keyrings(), vec![newer, older]);
         assert_eq!(state.ordered_grants(), vec![Fixture::grant()]);
+        Ok(())
+    }
+
+    #[test]
+    fn a_joined_keyring_without_a_vault_is_not_reported_as_no_connection() -> anyhow::Result<()> {
+        assert_eq!(
+            ExtensionPairingState::default().vault_connection(),
+            ExtensionVaultConnection::NotConnected
+        );
+
+        let joined = keyring("identity-personal", "1753401600000")?;
+        let keyring_only = ExtensionPairingState::for_keyring(joined)?;
+        assert_eq!(
+            keyring_only.vault_connection(),
+            ExtensionVaultConnection::KeyringWithoutVault
+        );
+
+        let setup = ExtensionReadySetup::from_grant(&Fixture::grant());
+        let mut entries = keyring_only.entries;
+        entries.push(ExtensionPairingEntry {
+            key: crate::EXTENSION_SETUP_KEY.to_owned(),
+            record: ExtensionPairingRecord::Setup(setup.clone()),
+        });
+        assert_eq!(
+            ExtensionPairingState { entries }.vault_connection(),
+            ExtensionVaultConnection::Ready { setup }
+        );
         Ok(())
     }
 
