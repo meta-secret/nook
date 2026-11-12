@@ -55,14 +55,15 @@ describe('extension vault target input', () => {
   })
 
   test('localhost and explicit URLs keep the default package names and identity', () => {
-    for (const [input, simpleVaultBaseUrl] of [
+    const cases: ReadonlyArray<readonly [string, string]> = [
       ['localhost', 'https://localhost:5173/'],
       [
         'https://pr-408.nokey-simple.pages.dev',
         'https://pr-408.nokey-simple.pages.dev/',
       ],
       ['http://127.0.0.1:5174/', 'http://127.0.0.1:5174/'],
-    ]) {
+    ]
+    for (const [input, simpleVaultBaseUrl] of cases) {
       const target = resolveExtensionVaultTarget(input)
       expect(target.simpleVaultBaseUrl).toBe(simpleVaultBaseUrl)
       expect(target.metadataFileName).toBe('extension.json')
