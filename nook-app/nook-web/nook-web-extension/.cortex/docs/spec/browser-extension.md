@@ -519,7 +519,8 @@ pairs with exactly one Simple Vault:
   repository's locally trusted development certificate.
 
 The production, development, local, and each per-PR build have distinct,
-deterministic extension ids.
+deterministic extension ids. The `nokey` and `meta-secret` production packages
+share the production id, so a browser installs one of them.
 Rebuilding one channel preserves its extension-origin IndexedDB and passkey RP
 identity.
 Switching channels cannot reuse extension-private state.
@@ -1650,7 +1651,8 @@ counter convergence, and the threat model.
 
 Consent completes only on the Simple Vault origin the extension build targets,
 after normal vault unlock. Another Simple origin serves the same consent route,
-but that build never opens it there and cannot receive its approval. User-facing permissions describe actions instead of implementation details:
+but that build never opens it there and cannot receive its approval.
+User-facing permissions describe actions instead of implementation details:
 
 - suggest logins for the current website;
 - fill a selected login;

@@ -106,10 +106,9 @@ accepts external connections only from the one Simple origin it targets
 build) and excludes `sentinel.nokey.sh` from content-script injection. Every
 build treats both production Simple origins as Nook vault app hosts, with no
 autofill or website WebAuthn injection. A browser on an origin its extension
-build does not target has no extension pairing. Simple
-never advertises or links to Sentinel in its vault application shell. Sentinel
-may offer a one-way link back to Simple for users leaving the quorum-only
-product.
+build does not target has no extension pairing. Simple never advertises or
+links to Sentinel in its vault application shell. Sentinel may offer a one-way
+link back to Simple for users leaving the quorum-only product.
 
 ## Deployment
 

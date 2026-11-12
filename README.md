@@ -298,7 +298,9 @@ statistics are not published there.
 
 `simple.meta-secret.io` serves the same Simple vault for organizations that block
 `.sh` domains. It is a separate browser origin from `simple.nokey.sh` with its own
-storage and passkeys, and the browser extension does not pair with it.
+storage and passkeys. A browser extension build pairs with one Simple vault; the
+production release publishes one package for each (`task extension:build
+VAULT=meta-secret` builds the alias one).
 
 Each PR site and `dev.nokey.sh` publish a browser-extension ZIP under
 `/downloads/`. Immutable production releases publish the versioned ZIP at

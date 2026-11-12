@@ -129,7 +129,7 @@ Team owner: web development.
 ### `nook-web-extension`
 
 - **Manifest V3 companion:** Browser extension source in `nook-app/nook-web/nook-web-extension/src` and build output in `dist/`.
-- **Simple Vault pairing:** Pairs exclusively with `simple.nokey.sh` via the extension device-protection widget and consent route. Excludes every Simple and Sentinel vault origin, including `simple.meta-secret.io`, from content script injection.
+- **Simple Vault pairing:** Each build pairs with exactly one Simple vault via the extension device-protection widget and consent route. `NOOK_EXTENSION_VAULT` (`task extension:build VAULT=<name|url>`) selects it: `nokey` (default, `simple.nokey.sh`), `meta-secret` (`simple.meta-secret.io`), `localhost`, or an absolute Simple vault URL. Companion WASM owns the names, and an unknown name fails the build. The two production packages share the production extension identity. Every known Nook vault origin is excluded from content script injection.
 - **Domain delegation:** TypeScript coordinates Chrome APIs, DOM inspection, WebAuthn ceremonies, and timers, while delegating portable policy, payload validation, and persistence decisions to Rust/WASM.
 
 ### `nook-web-research`
