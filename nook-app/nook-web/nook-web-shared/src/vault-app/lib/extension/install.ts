@@ -1,4 +1,9 @@
 import { DEFAULT_SITE_URL } from "$lib/content/sitemap";
+import {
+  ExtensionPackageHost,
+  simple_vault_host_extension_metadata_file_name,
+  simple_vault_host_extension_package_host,
+} from "$app-wasm";
 import { Effect, Schema } from "effect";
 import {
   InstalledExtensionRuntimeKind,
@@ -170,6 +175,39 @@ type ExtensionSetupOfferContext = {
   readonly environment: BrowserExtensionEnvironment;
 };
 
+/**
+ * Metadata of the extension package this page's host offers. Rust names the
+ * file and where it is served for each host: a site-hosted package is read
+ * from the page's own host, then the marketing site; a package the Simple
+ * vault serves (meta-secret) is read from the page's own host alone, so that
+ * page never offers the nokey package.
+ */
+export type ExtensionMetadataCandidateRequest = {
+  readonly pageUrl: URL;
+  readonly marketingSiteBaseUrl: string;
+};
+
+export function extensionMetadataCandidateUrls({
+  pageUrl,
+  marketingSiteBaseUrl,
+}: ExtensionMetadataCandidateRequest): string[] {
+  const metadataFile = simple_vault_host_extension_metadata_file_name(
+    pageUrl.hostname,
+  );
+  const ownHostUrl = new URL(`./downloads/${metadataFile}`, pageUrl).href;
+  switch (simple_vault_host_extension_package_host(pageUrl.hostname)) {
+    case ExtensionPackageHost.SimpleVault:
+      return [ownHostUrl];
+    case ExtensionPackageHost.Site:
+      return [
+        ...new Set([
+          ownHostUrl,
+          `${marketingSiteBaseUrl}/downloads/${metadataFile}`,
+        ]),
+      ];
+  }
+}
+
 /** Owns this browser host’s resources and interaction lifecycle. */
 class ExtensionInstallationBrowser {
   constructor(private readonly browser: typeof globalThis) {}
@@ -235,12 +273,11 @@ class ExtensionInstallationBrowser {
   }
 
   private metadataCandidateUrls(): string[] {
-    const urls = [
-      new URL("./downloads/extension.json", this.browser.window.location.href)
-        .href,
-      `${this.marketingSiteBaseUrl()}/downloads/extension.json`,
-    ];
-    return [...new Set(urls)];
+    const request: ExtensionMetadataCandidateRequest = {
+      pageUrl: new URL(this.browser.window.location.href),
+      marketingSiteBaseUrl: this.marketingSiteBaseUrl(),
+    };
+    return extensionMetadataCandidateUrls(request);
   }
 
   private async fetchExtensionMetadata(

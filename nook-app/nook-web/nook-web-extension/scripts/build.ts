@@ -10,17 +10,12 @@ import { dirname, join, resolve } from 'node:path'
 import packageJson from '../package.json'
 import { buildChromeLocales } from './chrome-locales'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
-import { SimpleVaultTarget } from '../src/lib/simple-vault-target'
-import { normalize_simple_vault_base_url } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { extensionVaultTargetFromEnvironment } from './vault-target'
 import {
   createManifest,
   type CreateExtensionManifestArgs,
-  ExtensionManifestBuildKind,
 } from '../src/manifest'
-import {
-  extensionChannelIdentity,
-  resolveExtensionChannel,
-} from './channel-identity'
+import { extensionIdentity, resolveExtensionChannel } from './channel-identity'
 import {
   ExtensionDiagnosticBuildAvailability,
   ExtensionDiagnosticBuildPolicy,
@@ -44,13 +39,17 @@ const appCommonLocalesRoot = join(
   'locales',
 )
 const distDir = join(projectRoot, 'dist')
-const simpleVaultBaseUrl = normalize_simple_vault_base_url(
-  process.env.NOOK_SIMPLE_VAULT_URL?.trim() || SimpleVaultTarget.defaultBase(),
-)
+// NOOK_EXTENSION_VAULT names the one Simple vault this build pairs with.
+const vaultTarget = extensionVaultTargetFromEnvironment()
+const { simpleVaultBaseUrl } = vaultTarget
 const simpleVaultDefine = {
   __NOOK_SIMPLE_VAULT_URL__: JSON.stringify(simpleVaultBaseUrl),
 }
-const deployment = extensionChannelIdentity(resolveExtensionChannel())
+// A vault-scoped target gets its own extension identity beside the channel's.
+const deployment = extensionIdentity(
+  resolveExtensionChannel(),
+  vaultTarget.identityScope,
+)
 const extensionDiagnosticBuildPolicy = new ExtensionDiagnosticBuildPolicy()
 const extensionDiagnosticsEnabled =
   extensionDiagnosticBuildPolicy.availability({
@@ -277,7 +276,6 @@ await Promise.all([
 ])
 
 const manifestArgs: CreateExtensionManifestArgs = {
-  kind: ExtensionManifestBuildKind.Channel,
   version: manifestVersion,
   simpleVaultBaseUrl,
   deployment: {

@@ -53,8 +53,9 @@ application capability checks enforce the vault-type boundary.
   - **Responsibility:** Complete vault UI, unlock, consent, device management, recovery, and settings
 - **`simple.meta-secret.io`**
   - **Responsibility:** The same Simple vault UI for organizations that block
-    `.sh` domains. It is a separate browser origin with no extension pairing
-    and no consent. The extension treats it as a Nook vault app host.
+    `.sh` domains. It is a separate browser origin. Only the meta-secret
+    extension package pairs with it and receives its consent; every other
+    build treats it as a Nook vault app host.
 - **Extension side panel**
   - **Responsibility:** The panel the toolbar icon opens, docked at full height
     beside the page. It stays open across tab switches in its window. Each
@@ -503,22 +504,42 @@ intact.
 - Authentication-tab controls use the same neutral primary tokens as nook-web dark
   mode rather than a separate green button style.
 
-The Simple Vault base URL is build-selected rather than hard-coded:
+The Simple Vault base URL is build-selected rather than hard-coded. One builder
+input, `NOOK_EXTENSION_VAULT` (`task extension:build VAULT=<name|url>`), names
+it: a companion WASM target name or an absolute Simple Vault URL. An absent or
+empty input selects `nokey`, and an unknown name fails the build. Each build
+pairs with exactly one Simple Vault:
 
-- production: `https://simple.nokey.sh/`;
+- production (`nokey`, the default): `https://simple.nokey.sh/`;
+- production for organizations that block `.sh` (`meta-secret`):
+  `https://simple.meta-secret.io/`, which shares `https://sentinel.nokey.sh/`;
 - development: `https://simple.dev.nokey.sh/`;
 - PR preview: `https://pr-<number>.nokey-simple.pages.dev/`;
-- local: `https://localhost:5173/`, served with the repository's locally
-  trusted development certificate.
+- local (`localhost`): `https://localhost:5173/`, served with the
+  repository's locally trusted development certificate.
 
 The production, development, local, and each per-PR build have distinct,
-deterministic extension ids.
+deterministic extension ids. The `meta-secret` production package has its own id,
+the name "Nook Passwords (meta-secret.io)", and its own extension storage, so it
+installs beside the `nokey` package, which keeps the production id. Rust's known
+Simple vault list decides which targets get their own identity: only
+`meta-secret`. The `nokey`, `localhost`, and URL targets keep the channel
+identity.
 Rebuilding one channel preserves its extension-origin IndexedDB and passkey RP
 identity.
 Switching channels cannot reuse extension-private state.
 The sealed image publishes the tested bundle as a root-level ZIP plus
 `extension.json` metadata and a SHA-256 checksum under the matching site
-deployment's `/downloads/` path.
+deployment's `/downloads/` path. The meta-secret package is a manual ZIP on every
+channel. It ships inside the Simple vault artifact under `/downloads/` as
+`extension-meta-secret.json`, `nook-passwords-meta-secret-<version>.zip`, and its
+`.sha256`, so `https://simple.meta-secret.io/downloads/` serves it. The Simple
+vault offers the package for its own host through Rust: on
+`simple.meta-secret.io` it reads `./downloads/extension-meta-secret.json`, and
+elsewhere `extension.json`. It never offers the `nokey` package on the
+meta-secret host. The vault discovers the installed extension's runtime id from
+the bridge script, which only the extension built for that origin injects. A
+production release attaches both packages' files to the GitHub Release.
 PR and development bundles are unsigned developer artifacts.
 They must be unzipped and loaded through the browser's extension developer mode.
 The supported developer launcher resolves hosted builds from that metadata.
@@ -551,11 +572,11 @@ The manifest and runtime authorization bind each deployed extension to the
 matching isolated Simple origin. Sentinel origins cannot message or approve the
 extension. Autofill and website-WebAuthn content scripts exclude every Simple
 and Sentinel Nook host (production, development, and PR previews) and the
-production alias `simple.meta-secret.io`, not only the build's configured
-Simple origin, so a mismatched channel never shows the in-page auth gate on
-vault apps. The Simple Vault bridge content script and
+production Simple origin `simple.meta-secret.io`, not only the build's
+configured Simple origin, so a mismatched channel never shows the in-page auth
+gate on vault apps. The Simple Vault bridge content script and
 `externally_connectable` remain bound to the configured Simple origin only, so
-the alias never pairs.
+a build never pairs with a second Simple origin.
 
 ### Side-panel This site and Fill route
 
@@ -1638,9 +1659,10 @@ counter convergence, and the threat model.
 
 ## Consent
 
-Consent completes only on `simple.nokey.sh` after normal vault unlock. The
-alias `simple.meta-secret.io` serves the same consent route, but the extension
-never opens it there and cannot receive its approval. User-facing permissions describe actions instead of implementation details:
+Consent completes only on the Simple Vault origin the extension build targets,
+after normal vault unlock. Another Simple origin serves the same consent route,
+but that build never opens it there and cannot receive its approval.
+User-facing permissions describe actions instead of implementation details:
 
 - suggest logins for the current website;
 - fill a selected login;

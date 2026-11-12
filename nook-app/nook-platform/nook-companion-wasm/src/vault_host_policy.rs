@@ -1,8 +1,10 @@
 use nook_companion_core::{
-    BrowserOAuthLocation, BrowserOAuthLocationEvidence, OAuthOriginSupport,
-    OAuthOriginUnsupportedReason, SentinelVaultMatch, VaultAppBaseSelection, VaultHostObservation,
-    VaultHostPolicy,
+    BrowserOAuthLocation, BrowserOAuthLocationEvidence, ExtensionIdentityScope,
+    ExtensionPackageDistribution, ExtensionPackageHost, KnownSimpleVault, OAuthOriginSupport,
+    OAuthOriginUnsupportedReason, SentinelVaultMatch, SimpleVaultTarget, VaultAppBaseSelection,
+    VaultHostObservation, VaultHostPolicy,
 };
+use tsify::{Ts, Tsify};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -89,6 +91,109 @@ pub fn resolve_oauth_origin_support(
 )]
 pub fn default_simple_vault_url() -> String {
     nook_companion_core::DEFAULT_SIMPLE_VAULT_URL.to_owned()
+}
+
+/// Vault target name a build pairs with when it names none.
+#[wasm_bindgen]
+#[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn default_simple_vault_target_name() -> String {
+    KnownSimpleVault::DEFAULT.name().to_owned()
+}
+
+/// Normalized Simple Vault base URL for a build's vault target: a known
+/// target name or an absolute Simple Vault URL.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn resolve_simple_vault_target(input: &str) -> Result<String, wasm_bindgen::JsError> {
+    Ok(input.parse::<SimpleVaultTarget>()?.base_url().into())
+}
+
+/// Download file-name suffix for a build's vault target (`""` or `"-<name>"`).
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn simple_vault_target_downloads_suffix(input: &str) -> Result<String, wasm_bindgen::JsError> {
+    Ok(input
+        .parse::<SimpleVaultTarget>()?
+        .downloads_suffix()
+        .to_owned())
+}
+
+/// Extension identity of a build for this vault target: the channel identity,
+/// or one qualified by the vault (`{ kind: 'vaultIdentity', seedQualifier, displayQualifier }`).
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn simple_vault_target_extension_identity(
+    input: &str,
+) -> Result<Ts<ExtensionIdentityScope>, wasm_bindgen::JsError> {
+    input
+        .parse::<SimpleVaultTarget>()?
+        .extension_identity_scope()
+        .into_ts()
+        .map_err(|_| wasm_bindgen::JsError::new("Extension identity could not be encoded."))
+}
+
+/// Deployment metadata file name a build for this vault target publishes.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn simple_vault_target_extension_metadata_file_name(
+    input: &str,
+) -> Result<String, wasm_bindgen::JsError> {
+    Ok(input
+        .parse::<SimpleVaultTarget>()?
+        .extension_metadata_file_name()
+        .into())
+}
+
+/// How a build for this vault target distributes its extension package.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn simple_vault_target_package_distribution(
+    input: &str,
+) -> Result<ExtensionPackageDistribution, wasm_bindgen::JsError> {
+    Ok(input.parse::<SimpleVaultTarget>()?.package_distribution())
+}
+
+/// Origin that hosts the extension package downloads of a build for this vault target.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn simple_vault_target_package_host(
+    input: &str,
+) -> Result<ExtensionPackageHost, wasm_bindgen::JsError> {
+    Ok(input.parse::<SimpleVaultTarget>()?.package_host())
+}
+
+/// Throws unless a production-channel build may pair with this vault target:
+/// a named vault, or the URL of one.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn admit_simple_vault_target_for_production(input: &str) -> Result<(), wasm_bindgen::JsError> {
+    input.parse::<SimpleVaultTarget>()?.admit_for_production()?;
+    Ok(())
 }
 
 #[wasm_bindgen]
@@ -213,4 +318,203 @@ pub fn belongs_to_sentinel_vault(
     candidate_url: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {
     Ok(VaultHostPolicy::new(base_url).belongs_to_sentinel_vault(candidate_url)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn vault_target_exports_resolve_names_and_explicit_urls() -> Result<(), String> {
+        assert_eq!(default_simple_vault_target_name(), "nokey");
+        assert_eq!(
+            resolve_simple_vault_target(&default_simple_vault_target_name())
+                .map_err(|_| "default target failed".to_owned())?,
+            default_simple_vault_url()
+        );
+        assert_eq!(
+            resolve_simple_vault_target("meta-secret")
+                .map_err(|_| "meta-secret failed".to_owned())?,
+            "https://simple.meta-secret.io/"
+        );
+        assert_eq!(
+            resolve_simple_vault_target("localhost").map_err(|_| "localhost failed".to_owned())?,
+            "https://localhost:5173/"
+        );
+        assert_eq!(
+            resolve_simple_vault_target("https://pr-12.nokey-simple.pages.dev")
+                .map_err(|_| "preview failed".to_owned())?,
+            "https://pr-12.nokey-simple.pages.dev/"
+        );
+        assert_eq!(
+            matching_sentinel_vault_base_url("https://simple.meta-secret.io/")
+                .map_err(|_| "sentinel failed".to_owned())?,
+            "https://sentinel.nokey.sh/"
+        );
+        #[cfg(target_arch = "wasm32")]
+        assert!(resolve_simple_vault_target("prod").is_err());
+        Ok(())
+    }
+
+    struct DownloadsCase {
+        input: &'static str,
+        suffix: &'static str,
+        distribution: ExtensionPackageDistribution,
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn vault_target_exports_name_downloads_and_distribution() -> Result<(), String> {
+        for DownloadsCase {
+            input,
+            suffix,
+            distribution,
+        } in [
+            DownloadsCase {
+                input: "nokey",
+                suffix: "",
+                distribution: ExtensionPackageDistribution::StoreOnProductionChannel,
+            },
+            DownloadsCase {
+                input: "https://simple.meta-secret.io/",
+                suffix: "-meta-secret",
+                distribution: ExtensionPackageDistribution::ManualZip,
+            },
+            DownloadsCase {
+                input: "localhost",
+                suffix: "",
+                distribution: ExtensionPackageDistribution::StoreOnProductionChannel,
+            },
+            DownloadsCase {
+                input: "https://pr-12.nokey-simple.pages.dev/",
+                suffix: "",
+                distribution: ExtensionPackageDistribution::StoreOnProductionChannel,
+            },
+        ] {
+            assert_eq!(
+                simple_vault_target_downloads_suffix(input)
+                    .map_err(|_| format!("{input} suffix failed"))?,
+                suffix
+            );
+            assert_eq!(
+                simple_vault_target_package_distribution(input)
+                    .map_err(|_| format!("{input} distribution failed"))?,
+                distribution
+            );
+        }
+        #[cfg(target_arch = "wasm32")]
+        assert!(
+            simple_vault_target_downloads_suffix("https://u:p@simple.meta-secret.io/").is_err()
+        );
+        Ok(())
+    }
+
+    struct MetadataCase {
+        input: &'static str,
+        metadata: &'static str,
+    }
+
+    struct PackageHostCase {
+        input: &'static str,
+        package_host: ExtensionPackageHost,
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn vault_target_exports_name_the_package_host_and_admit_named_vaults_for_production()
+    -> Result<(), String> {
+        for PackageHostCase {
+            input,
+            package_host,
+        } in [
+            PackageHostCase {
+                input: "nokey",
+                package_host: ExtensionPackageHost::Site,
+            },
+            PackageHostCase {
+                input: "localhost",
+                package_host: ExtensionPackageHost::Site,
+            },
+            PackageHostCase {
+                input: "https://simple.meta-secret.io/",
+                package_host: ExtensionPackageHost::SimpleVault,
+            },
+        ] {
+            assert_eq!(
+                simple_vault_target_package_host(input)
+                    .map_err(|_| format!("{input} package host failed"))?,
+                package_host
+            );
+            admit_simple_vault_target_for_production(input)
+                .map_err(|_| format!("{input} must be admitted for production"))?;
+        }
+        assert_eq!(
+            simple_vault_target_package_host("https://pr-12.nokey-simple.pages.dev/")
+                .map_err(|_| "preview package host failed".to_owned())?,
+            ExtensionPackageHost::Site
+        );
+        #[cfg(target_arch = "wasm32")]
+        assert!(
+            admit_simple_vault_target_for_production("https://pr-12.nokey-simple.pages.dev/")
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn vault_target_exports_name_the_metadata_file_the_vault_host_offers() -> Result<(), String> {
+        for MetadataCase { input, metadata } in [
+            MetadataCase {
+                input: "nokey",
+                metadata: "extension.json",
+            },
+            MetadataCase {
+                input: "localhost",
+                metadata: "extension.json",
+            },
+            MetadataCase {
+                input: "https://pr-12.nokey-simple.pages.dev/",
+                metadata: "extension.json",
+            },
+            MetadataCase {
+                input: "meta-secret",
+                metadata: "extension-meta-secret.json",
+            },
+            MetadataCase {
+                input: "https://simple.meta-secret.io/",
+                metadata: "extension-meta-secret.json",
+            },
+        ] {
+            assert_eq!(
+                simple_vault_target_extension_metadata_file_name(input)
+                    .map_err(|_| format!("{input} metadata failed"))?,
+                metadata
+            );
+        }
+        Ok(())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn vault_target_extension_identity_export_encodes_the_scope()
+    -> Result<(), wasm_bindgen::JsError> {
+        let nokey: serde_json::Value = serde_wasm_bindgen::from_value(
+            simple_vault_target_extension_identity("nokey")?.js_value(),
+        )?;
+        assert_eq!(nokey, serde_json::json!({ "kind": "channelIdentity" }));
+        let meta_secret: serde_json::Value = serde_wasm_bindgen::from_value(
+            simple_vault_target_extension_identity("meta-secret")?.js_value(),
+        )?;
+        assert_eq!(
+            meta_secret,
+            serde_json::json!({
+                "kind": "vaultIdentity",
+                "seedQualifier": "meta-secret",
+                "displayQualifier": "meta-secret.io",
+            })
+        );
+        Ok(())
+    }
 }

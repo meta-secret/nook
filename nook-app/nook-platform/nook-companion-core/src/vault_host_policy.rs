@@ -32,8 +32,12 @@ impl<'a> VaultHostObservation<'a> {
 use thiserror::Error;
 use url::Url;
 
+use crate::simple_vault_target::{
+    KnownSimpleVault, SimpleVaultBaseUrl, SimpleVaultHost, SimpleVaultTarget,
+};
+
 /// Default production Simple Vault base URL.
-pub const DEFAULT_SIMPLE_VAULT_URL: &str = "https://simple.nokey.sh/";
+pub const DEFAULT_SIMPLE_VAULT_URL: &str = KnownSimpleVault::DEFAULT.base_url();
 
 /// Channel-agnostic match patterns for every Simple/Sentinel Nook host.
 const NOOK_VAULT_APP_EXCLUDE_MATCH_PATTERNS: &[&str] = &[
@@ -52,6 +56,8 @@ pub enum VaultHostPolicyError {
     InsecureNonLocalhost,
     #[error("invalid vault URL: {0}")]
     InvalidUrl(String),
+    #[error("The Simple Vault URL must not contain a username or password.")]
+    EmbeddedCredentials,
 }
 
 /// Normalize a Simple Vault base URL (trailing slash, no hash/query).
@@ -64,6 +70,10 @@ impl VaultHostPolicy<'_> {
             url.scheme() == "http" && matches!(url.host_str(), Some("localhost" | "127.0.0.1"));
         if url.scheme() != "https" && !local_http {
             return Err(VaultHostPolicyError::InsecureNonLocalhost);
+        }
+        match (url.username(), url.password()) {
+            ("", None) => {}
+            _ => return Err(VaultHostPolicyError::EmbeddedCredentials),
         }
         url.set_fragment(None);
         url.set_query(None);
@@ -115,13 +125,24 @@ pub enum VaultAppBaseSelection<'a> {
     Configured(&'a str),
 }
 /// Matching Sentinel base URL for a Simple Vault URL, when one can be derived.
+///
+/// A known Simple vault uses its own Sentinel; another base derives one from
+/// its host or path.
 impl VaultHostPolicy<'_> {
     pub fn matching_sentinel_vault_base_url(
         &self,
     ) -> Result<SentinelVaultMatch, VaultHostPolicyError> {
-        let base_url = self.as_str();
-        let normalized = VaultHostPolicy::new(base_url).normalize_simple_vault_base_url()?;
-        let url = Url::parse(&normalized)
+        match SimpleVaultTarget::from(SimpleVaultBaseUrl::try_from(self.as_str())?) {
+            SimpleVaultTarget::Known(known) => Ok(known.sentinel_vault_match()),
+            SimpleVaultTarget::ExplicitUrl(base_url) => base_url.derived_sentinel_vault_match(),
+        }
+    }
+}
+
+/// Sentinel base URL derived from a Simple host prefix, Pages project, or path.
+impl SimpleVaultBaseUrl {
+    fn derived_sentinel_vault_match(&self) -> Result<SentinelVaultMatch, VaultHostPolicyError> {
+        let url = Url::parse(self.as_str())
             .map_err(|error| VaultHostPolicyError::InvalidUrl(error.to_string()))?;
         let host = url.host_str().unwrap_or_default();
         if let Some(rest) = host.strip_prefix("simple.") {
@@ -206,6 +227,14 @@ pub(crate) enum VaultAppHostname {
     Simple,
     Sentinel,
     Unrelated,
+}
+
+/// Named Simple vault deployment that serves this hostname.
+impl VaultHostObservation<'_> {
+    #[must_use]
+    pub fn simple_vault_host(&self) -> SimpleVaultHost {
+        SimpleVaultHost::for_hostname(self.as_str())
+    }
 }
 
 /// Named outcome of the Simple and Sentinel hostname predicates.
@@ -332,6 +361,22 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn simple_vault_base_urls_with_userinfo_are_rejected() {
+        for base in [
+            "https://u:p@simple.meta-secret.io/",
+            "https://u@simple.nokey.sh/",
+            "https://:p@simple.nokey.sh/",
+            "http://u:p@127.0.0.1:5174/",
+        ] {
+            assert_eq!(
+                VaultHostPolicy::new(base).normalize_simple_vault_base_url(),
+                Err(VaultHostPolicyError::EmbeddedCredentials),
+                "{base}"
+            );
+        }
+    }
+
     struct VaultAppHostnameCase {
         hostname: &'static str,
         expected: VaultAppHostname,
@@ -448,6 +493,158 @@ mod tests {
             VaultHostPolicy::new(base).simple_vault_match_pattern()?,
             "https://simple.nokey.sh/*"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn meta_secret_build_pairs_only_with_its_own_simple_origin() -> anyhow::Result<()> {
+        let policy = VaultHostPolicy::new(KnownSimpleVault::MetaSecret.base_url());
+        assert_eq!(
+            policy.simple_vault_match_pattern()?,
+            "https://simple.meta-secret.io/*"
+        );
+        assert!(policy.belongs_to_simple_vault("https://simple.meta-secret.io/extension-connect")?);
+        for foreign in [
+            "https://simple.nokey.sh/extension-connect",
+            "https://simple.meta-secret.io.example.com/extension-connect",
+            "http://simple.meta-secret.io/extension-connect",
+        ] {
+            assert!(!policy.belongs_to_simple_vault(foreign)?, "{foreign}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn meta_secret_build_excludes_every_nook_vault_host_and_no_meta_secret_sentinel()
+    -> anyhow::Result<()> {
+        let exclusions = VaultHostPolicy::new(KnownSimpleVault::MetaSecret.base_url())
+            .nook_vault_app_exclude_match_patterns()?;
+        for required in [
+            "https://simple.nokey.sh/*",
+            "https://simple.meta-secret.io/*",
+            "https://simple.dev.nokey.sh/*",
+            "https://sentinel.nokey.sh/*",
+            "https://sentinel.dev.nokey.sh/*",
+            "https://*.nokey-simple.pages.dev/*",
+            "https://*.nokey-sentinel.pages.dev/*",
+        ] {
+            assert!(exclusions.contains(&required.to_owned()), "{required}");
+        }
+        assert!(
+            !exclusions
+                .iter()
+                .any(|pattern| pattern.contains("sentinel.meta-secret.io")),
+            "{exclusions:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn every_build_excludes_its_own_and_both_production_simple_vaults() -> anyhow::Result<()> {
+        for build in KnownSimpleVault::ALL {
+            let exclusions =
+                VaultHostPolicy::new(build.base_url()).nook_vault_app_exclude_match_patterns()?;
+            for excluded in [build, KnownSimpleVault::Nokey, KnownSimpleVault::MetaSecret] {
+                let pattern =
+                    VaultHostPolicy::new(excluded.base_url()).simple_vault_match_pattern()?;
+                assert!(
+                    exclusions.contains(&pattern),
+                    "{} build must exclude {pattern}",
+                    build.name()
+                );
+            }
+        }
+        Ok(())
+    }
+
+    struct KnownSentinelCase {
+        target: KnownSimpleVault,
+        sentinel: SentinelVaultMatch,
+        sentinel_patterns: &'static [&'static str],
+    }
+
+    #[test]
+    fn known_simple_vaults_use_their_deployed_sentinel() -> anyhow::Result<()> {
+        for case in [
+            KnownSentinelCase {
+                target: KnownSimpleVault::Nokey,
+                sentinel: SentinelVaultMatch::MatchingBaseUrl(
+                    "https://sentinel.nokey.sh/".to_owned(),
+                ),
+                sentinel_patterns: &["https://sentinel.nokey.sh/*"],
+            },
+            KnownSentinelCase {
+                target: KnownSimpleVault::MetaSecret,
+                sentinel: SentinelVaultMatch::MatchingBaseUrl(
+                    "https://sentinel.nokey.sh/".to_owned(),
+                ),
+                sentinel_patterns: &["https://sentinel.nokey.sh/*"],
+            },
+            KnownSentinelCase {
+                target: KnownSimpleVault::Localhost,
+                sentinel: SentinelVaultMatch::UnsupportedHost,
+                sentinel_patterns: &["https://sentinel.nokey.sh/*"],
+            },
+        ] {
+            let policy = VaultHostPolicy::new(case.target.base_url());
+            assert_eq!(
+                policy.matching_sentinel_vault_base_url()?,
+                case.sentinel,
+                "{}",
+                case.target.name()
+            );
+            assert_eq!(
+                policy.sentinel_vault_match_patterns()?,
+                case.sentinel_patterns.to_vec(),
+                "{}",
+                case.target.name()
+            );
+        }
+        assert!(
+            !VaultHostPolicy::new(KnownSimpleVault::MetaSecret.base_url())
+                .belongs_to_sentinel_vault("https://sentinel.meta-secret.io/")?
+        );
+        Ok(())
+    }
+
+    struct DerivedSentinelCase {
+        simple: &'static str,
+        sentinel: SentinelVaultMatch,
+    }
+
+    #[test]
+    fn explicit_simple_vaults_derive_their_sentinel() -> anyhow::Result<()> {
+        for case in [
+            DerivedSentinelCase {
+                simple: "https://simple.dev.nokey.sh/",
+                sentinel: SentinelVaultMatch::MatchingBaseUrl(
+                    "https://sentinel.dev.nokey.sh/".to_owned(),
+                ),
+            },
+            DerivedSentinelCase {
+                simple: "https://pr-12.nokey-simple.pages.dev/",
+                sentinel: SentinelVaultMatch::MatchingBaseUrl(
+                    "https://pr-12.nokey-sentinel.pages.dev/".to_owned(),
+                ),
+            },
+            DerivedSentinelCase {
+                simple: "https://localhost:5173/simple/",
+                sentinel: SentinelVaultMatch::MatchingBaseUrl(
+                    "https://localhost:5173/sentinel/".to_owned(),
+                ),
+            },
+            DerivedSentinelCase {
+                simple: "http://127.0.0.1:5174/",
+                sentinel: SentinelVaultMatch::UnsupportedHost,
+            },
+        ] {
+            assert_eq!(
+                VaultHostPolicy::new(case.simple).matching_sentinel_vault_base_url()?,
+                case.sentinel,
+                "{}",
+                case.simple
+            );
+        }
         Ok(())
     }
 }

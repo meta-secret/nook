@@ -16,11 +16,9 @@ import { fileURLToPath } from 'node:url'
 import type { ExtensionPairingApprovedMessage } from '../../../nook-web-shared/src/extension/runtime-messages'
 import { attachNookLogsForTest } from '../../../nook-web-app/e2e/helpers'
 import { installMockPasskeyRuntime } from '../../../nook-web-app/e2e/passkey-mock'
-import {
-  belongs_to_simple_vault,
-  normalize_simple_vault_base_url,
-} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { belongs_to_simple_vault } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { SimpleVaultTarget } from '../../src/lib/simple-vault-target'
+import { extensionVaultTargetFromEnvironment } from '../../scripts/vault-target'
 import { startMockAuthServer } from '../mock-auth'
 import {
   createWebsiteIdentityForConnect,
@@ -144,9 +142,7 @@ export const connectedSetupState = {
   eventLogHeads: ['event-e2e'],
   lastLocalSyncAt: '2026-07-07T00:00:00.000Z',
 }
-export const simpleVaultBaseUrl = normalize_simple_vault_base_url(
-  process.env.NOOK_SIMPLE_VAULT_URL || SimpleVaultTarget.defaultBase(),
-)
+export const { simpleVaultBaseUrl } = extensionVaultTargetFromEnvironment()
 
 /**
  * Sentinel origin used to assert Pilot stays off vault-app hosts.

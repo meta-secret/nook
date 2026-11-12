@@ -1,4 +1,3 @@
-import { SimpleVaultTarget } from './lib/simple-vault-target'
 import { SIDE_PANEL_PAGE_PATH } from './lib/side-panel-page-path'
 import {
   nook_vault_app_exclude_match_patterns,
@@ -89,25 +88,11 @@ export type ExtensionManifestDeployment = {
   versionName: string
 }
 
-export enum ExtensionManifestBuildKind {
-  StoreRelease = 'store-release',
-  Channel = 'channel',
-}
-
-type StoreReleaseManifestArgs = {
-  kind: ExtensionManifestBuildKind.StoreRelease
-  version: string
-}
-
-type ChannelManifestArgs = {
-  kind: ExtensionManifestBuildKind.Channel
+export type CreateExtensionManifestArgs = {
   version: string
   simpleVaultBaseUrl: string
   deployment: ExtensionManifestDeployment
 }
-
-export type CreateExtensionManifestArgs =
-  StoreReleaseManifestArgs | ChannelManifestArgs
 
 const iconSet: ManifestIconSet = {
   [ManifestIconSize.Small]: 'icons/nook.png',
@@ -119,10 +104,7 @@ const iconSet: ManifestIconSet = {
 export function createManifest(
   args: CreateExtensionManifestArgs,
 ): ExtensionManifest {
-  const simpleVaultBaseUrl =
-    args.kind === ExtensionManifestBuildKind.StoreRelease
-      ? SimpleVaultTarget.defaultBase()
-      : args.simpleVaultBaseUrl
+  const { simpleVaultBaseUrl } = args
   const simpleVaultMatch = simple_vault_match_pattern(simpleVaultBaseUrl)
   const vaultAppExclusions =
     nook_vault_app_exclude_match_patterns(simpleVaultBaseUrl)
@@ -130,14 +112,8 @@ export function createManifest(
     manifest_version: 3,
     min_chrome_version: '141',
     default_locale: 'en',
-    name:
-      args.kind === ExtensionManifestBuildKind.StoreRelease
-        ? 'Nook Passwords'
-        : args.deployment.name,
-    short_name:
-      args.kind === ExtensionManifestBuildKind.StoreRelease
-        ? 'Nook'
-        : args.deployment.shortName,
+    name: args.deployment.name,
+    short_name: args.deployment.shortName,
     description:
       'Nook browser companion for password form detection and future autofill.',
     version: args.version,
@@ -224,9 +200,6 @@ export function createManifest(
         matches: ['<all_urls>'],
       },
     ],
-  }
-  if (args.kind === ExtensionManifestBuildKind.StoreRelease) {
-    return manifest
   }
   return {
     ...manifest,

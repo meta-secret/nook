@@ -7,10 +7,14 @@ import { companionWasmReady } from '../../nook-web-shared/src/extension/companio
 import {
   createManifest,
   type CreateExtensionManifestArgs,
-  ExtensionManifestBuildKind,
   type ExtensionManifestDeployment,
 } from '../../nook-web-extension/src/manifest'
 import { SIDE_PANEL_PAGE_PATH } from '../../nook-web-extension/src/lib/side-panel-page-path'
+import { extensionVaultTargetFromEnvironment } from '../../nook-web-extension/scripts/vault-target'
+import {
+  sentinel_vault_match_patterns,
+  simple_vault_match_pattern,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { VAULT_WORKSPACE_OUTPUT_ALIASES } from '../../nook-web-shared/vite-config'
 
 const webRoot = resolve(import.meta.dir, '../..')
@@ -414,30 +418,66 @@ if (normalizedWasmBuildMode === 'optimized') {
 
 // createManifest reads companion WASM defaults; await init before calling it.
 await companionWasmReady
+// Verify the manifest of the one Simple vault this build pairs with:
+// NOOK_EXTENSION_VAULT, or the default target when it is absent.
+const { simpleVaultBaseUrl: targetSimpleVaultBaseUrl } =
+  extensionVaultTargetFromEnvironment()
+const targetSimpleVaultMatch = simple_vault_match_pattern(
+  targetSimpleVaultBaseUrl,
+)
+const productionManifestDeployment: ExtensionManifestDeployment = {
+  key: 'production-key',
+  name: 'Nook Passwords',
+  shortName: 'Nook',
+  versionName: '1.0.0 (production)',
+}
 const productionManifestArgs: CreateExtensionManifestArgs = {
-  kind: ExtensionManifestBuildKind.StoreRelease,
   version: '1.0.0',
+  simpleVaultBaseUrl: targetSimpleVaultBaseUrl,
+  deployment: productionManifestDeployment,
 }
 const manifest = createManifest(productionManifestArgs)
 if (
   manifest.externally_connectable.matches.length !== 1 ||
-  manifest.externally_connectable.matches[0] !== 'https://simple.nokey.sh/*'
+  manifest.externally_connectable.matches[0] !== targetSimpleVaultMatch
 ) {
-  throw new Error('Extension external connections are not Simple-only.')
-}
-if (
-  !manifest.content_scripts.every((script) =>
-    script.exclude_matches.includes('https://sentinel.nokey.sh/*'),
+  throw new Error(
+    `Extension external connections are not only ${targetSimpleVaultMatch}.`,
   )
-) {
-  throw new Error('Extension content scripts do not exclude Sentinel Vault.')
 }
 const broadScripts = manifest.content_scripts.filter((script) =>
   script.matches.includes('<all_urls>'),
 )
+if (
+  !manifest.content_scripts.every(
+    (script) =>
+      script.matches.includes('<all_urls>') ||
+      (script.matches.length === 1 &&
+        script.matches[0] === targetSimpleVaultMatch),
+  )
+) {
+  throw new Error(
+    `Extension content scripts target an origin other than ${targetSimpleVaultMatch}.`,
+  )
+}
+for (const sentinelExclusion of [
+  'https://sentinel.nokey.sh/*',
+  ...sentinel_vault_match_patterns(targetSimpleVaultBaseUrl),
+]) {
+  if (
+    !manifest.content_scripts.every((script) =>
+      script.exclude_matches.includes(sentinelExclusion),
+    )
+  ) {
+    throw new Error(
+      `Extension content scripts do not exclude Sentinel Vault (${sentinelExclusion}).`,
+    )
+  }
+}
 for (const requiredExclusion of [
   'https://simple.nokey.sh/*',
   'https://simple.meta-secret.io/*',
+  'https://sentinel.nokey.sh/*',
   'https://simple.dev.nokey.sh/*',
   'https://sentinel.dev.nokey.sh/*',
   'https://*.nokey-simple.pages.dev/*',
@@ -470,7 +510,6 @@ const previewManifestDeployment: ExtensionManifestDeployment = {
   versionName: '1.0.0 (preview)',
 }
 const previewManifestArgs: CreateExtensionManifestArgs = {
-  kind: ExtensionManifestBuildKind.Channel,
   version: '1.0.0',
   simpleVaultBaseUrl: 'https://pr-391.nokey-simple.pages.dev/',
   deployment: previewManifestDeployment,

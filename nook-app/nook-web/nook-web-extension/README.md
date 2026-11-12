@@ -83,13 +83,20 @@ Build it through Docker-backed Taskfile commands from the repo root or `nook-app
 task extension:build
 ```
 
-The target and extension identity default to production. CI selects the
-matching target and deterministic identity for PR and development deployments.
-Override both values for an ad hoc PR build, or use the local task:
+Each build pairs with exactly one Simple vault. `VAULT` names it: `nokey`
+(`https://simple.nokey.sh/`, the default), `meta-secret`
+(`https://simple.meta-secret.io/`), `localhost`
+(`https://localhost:5173/`), or an absolute Simple vault URL. Builders read
+the same value from `NOOK_EXTENSION_VAULT`, and an unknown name fails the
+build. The extension identity follows the channel and defaults to production;
+the `meta-secret` target adds its own identity beside the channel's.
+CI selects the matching vault and deterministic identity for PR and development
+deployments. Override both for an ad hoc PR build, or use the local task:
 
 ```bash
-NOOK_SIMPLE_VAULT_URL=https://pr-408.nokey-simple.pages.dev/ \
-  NOOK_EXTENSION_CHANNEL=pr-408 task extension:build
+task extension:build VAULT=meta-secret
+NOOK_EXTENSION_CHANNEL=pr-408 \
+  task extension:build VAULT=https://pr-408.nokey-simple.pages.dev/
 task extension:build:localhost
 ```
 
@@ -99,6 +106,13 @@ Main publishes the development ZIP at
 `https://dev.nokey.sh/downloads/nook-passwords-dev.zip`, paired only with
 `https://simple.dev.nokey.sh/`. Production releases publish a versioned ZIP at
 `https://nokey.sh/downloads/` and attach the same bytes to the GitHub Release.
+They also publish a manual-install production ZIP paired only with
+`https://simple.meta-secret.io/`, with its own extension identity so it installs
+beside the default package. It is named
+`nook-passwords-meta-secret-<version>.zip` and described by
+`extension-meta-secret.json` and its `.sha256`. These files ship in the Simple
+vault artifact, so `https://simple.meta-secret.io/downloads/` serves them, and
+the release attaches both packages' files to the GitHub Release.
 Every channel also exposes `/downloads/extension.json` and the archive's
 `.sha256` file. Metadata schema version 2 distinguishes the public installation
 path from the downloadable verification artifact: production's `install_url`

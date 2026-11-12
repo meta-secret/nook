@@ -52,6 +52,7 @@ mod oauth_origin_policy;
 mod outcome_evidence;
 pub use login_save::*;
 mod page_field_classification;
+mod simple_vault_target;
 mod site_secret_listing;
 mod vault_host_policy;
 mod website_login_options_response;
@@ -228,6 +229,12 @@ pub use page_field_classification::{
     MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES, OneTimeCodeEntryEvidence, OneTimeCodeEntrySignals,
     PageInputCharacterLimit, PageInputFieldObservation, PageInputMaxLength, PageInputMode,
     PageInputPattern, PageInputType, PageSecondFactorRoute,
+};
+pub use simple_vault_target::{
+    ExtensionIdentityDisplayQualifier, ExtensionIdentityScope, ExtensionIdentitySeedQualifier,
+    ExtensionMetadataFileName, ExtensionPackageDistribution, ExtensionPackageHost,
+    KnownSimpleVault, ProductionSimpleVaultTargetError, SimpleVaultBaseUrl, SimpleVaultHost,
+    SimpleVaultTarget, SimpleVaultTargetError, SimpleVaultTargetInput,
 };
 pub use vault_host_policy::{DEFAULT_SIMPLE_VAULT_URL, VaultHostPolicyError};
 pub use website_login_options_response::{

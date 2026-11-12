@@ -4,6 +4,8 @@ import {
   ExtensionInstallSource,
   ExtensionSetupStatus,
   extensionInstallationBrowser,
+  extensionMetadataCandidateUrls,
+  type ExtensionMetadataCandidateRequest,
 } from '$lib/extension/install'
 
 afterEach(() => {
@@ -147,6 +149,29 @@ describe('extension install target', () => {
       '_blank',
       'noopener,noreferrer',
     )
+  })
+})
+
+describe('extension metadata candidates', () => {
+  test('a meta-secret page offers only the meta-secret package from its own host', () => {
+    const request: ExtensionMetadataCandidateRequest = {
+      pageUrl: new URL('https://simple.meta-secret.io/vault'),
+      marketingSiteBaseUrl: 'https://nokey.sh',
+    }
+    expect(extensionMetadataCandidateUrls(request)).toEqual([
+      'https://simple.meta-secret.io/downloads/extension-meta-secret.json',
+    ])
+  })
+
+  test('a nokey page offers the default package from its host, then the marketing site', () => {
+    const request: ExtensionMetadataCandidateRequest = {
+      pageUrl: new URL('https://simple.nokey.sh/vault'),
+      marketingSiteBaseUrl: 'https://nokey.sh',
+    }
+    expect(extensionMetadataCandidateUrls(request)).toEqual([
+      'https://simple.nokey.sh/downloads/extension.json',
+      'https://nokey.sh/downloads/extension.json',
+    ])
   })
 })
 

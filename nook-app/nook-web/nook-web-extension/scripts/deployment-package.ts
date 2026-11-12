@@ -8,6 +8,15 @@ import {
   resolveExtensionChannel,
   type ExtensionChannel,
 } from './channel-identity'
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
+import {
+  ExtensionPackageDistribution,
+  ExtensionPackageHost,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  resolvePublishedExtensionVaultTarget,
+  type ExtensionVaultTarget,
+} from './vault-target'
 
 export type ExtensionDeploymentMetadata = {
   schema_version: 2
@@ -96,33 +105,53 @@ const extensionManifestAdmission = new ExtensionManifestAdmission()
 export function extensionArchiveName(
   channel: ExtensionChannel,
   version: string,
+  target: ExtensionVaultTarget,
 ): string {
-  if (channel === 'development') return 'nook-passwords-dev.zip'
-  if (channel === 'local') return 'nook-passwords-local.zip'
-  if (channel.startsWith('pr-')) return `nook-passwords-${channel}.zip`
+  const prefix = `nook-passwords${target.downloadsSuffix}`
+  if (channel === 'development') return `${prefix}-dev.zip`
+  if (channel === 'local') return `${prefix}-local.zip`
+  if (channel.startsWith('pr-')) return `${prefix}-${channel}.zip`
   if (!/^[0-9A-Za-z][0-9A-Za-z.+-]*$/.test(version)) {
     throw new Error('NOOK_EXTENSION_VERSION is not safe for an archive name.')
   }
-  return `nook-passwords-${version}.zip`
+  return `${prefix}-${version}.zip`
+}
+
+/** Only the store-distributed package on the production channel installs
+ * from the Chrome Web Store; every other package is a manual ZIP. */
+export function extensionInstallMethod(
+  channel: ExtensionChannel,
+  distribution: ExtensionPackageDistribution,
+): ExtensionInstallMethod {
+  switch (distribution) {
+    case ExtensionPackageDistribution.ManualZip:
+      return ExtensionInstallMethod.ManualZip
+    case ExtensionPackageDistribution.StoreOnProductionChannel:
+      return channel === 'production'
+        ? ExtensionInstallMethod.ChromeWebStore
+        : ExtensionInstallMethod.ManualZip
+  }
 }
 
 export function extensionInstallTarget(
-  channel: ExtensionChannel,
+  installMethod: ExtensionInstallMethod,
   extensionId: string,
   downloadUrl: string,
 ): Pick<ExtensionDeploymentMetadata, 'install_method' | 'install_url'> {
   if (!/^[a-p]{32}$/.test(extensionId)) {
     throw new Error('Extension ID is not a valid Chrome extension ID.')
   }
-  if (channel === 'production') {
-    return {
-      install_method: ExtensionInstallMethod.ChromeWebStore,
-      install_url: `https://chromewebstore.google.com/detail/${extensionId}`,
-    }
-  }
-  return {
-    install_method: ExtensionInstallMethod.ManualZip,
-    install_url: downloadUrl,
+  switch (installMethod) {
+    case ExtensionInstallMethod.ChromeWebStore:
+      return {
+        install_method: ExtensionInstallMethod.ChromeWebStore,
+        install_url: `https://chromewebstore.google.com/detail/${extensionId}`,
+      }
+    case ExtensionInstallMethod.ManualZip:
+      return {
+        install_method: ExtensionInstallMethod.ManualZip,
+        install_url: downloadUrl,
+      }
   }
 }
 
@@ -176,40 +205,92 @@ export async function makeDeterministicZip(
   await writeFile(archivePath, zipSync(archiveEntries, archiveOptions))
 }
 
-export async function packageExtensionDeployment(): Promise<ExtensionDeploymentMetadata> {
-  const projectRoot = resolve(import.meta.dir, '..')
-  const extensionDist = join(projectRoot, 'dist')
-  const siteDist = resolve(projectRoot, '../nook-web-app/dist/site')
-  const downloads = join(siteDist, 'downloads')
-  const channel = parseExtensionChannel(resolveExtensionChannel())
-  const version = process.env.NOOK_EXTENSION_VERSION?.trim() || '1.0.0'
-  const commit = process.env.NOOK_EXTENSION_COMMIT?.trim() || ''
+/** One build's package: where it is written and the facts it records. */
+export type ExtensionPackageRequest = {
+  readonly extensionDist: string
+  /** The public site artifact (`nook-web-app/dist/site`). */
+  readonly siteDist: string
+  /** The Simple vault artifact (`nook-vault-simple/dist`). */
+  readonly simpleVaultDist: string
+  readonly channel: ExtensionChannel
+  readonly version: string
+  readonly commit: string
+  /** NOOK_EXTENSION_SITE_URL: the public site that hosts the default package. */
+  readonly siteUrl: string
+  readonly target: ExtensionVaultTarget
+}
+
+/** Public base URL of the artifact that serves this target's package. */
+export function extensionPackageSiteUrl(
+  target: ExtensionVaultTarget,
+  siteUrl: string,
+): URL {
+  switch (target.packageHost) {
+    case ExtensionPackageHost.Site:
+      return normalizedHttpsBaseUrl(siteUrl, 'NOOK_EXTENSION_SITE_URL')
+    case ExtensionPackageHost.SimpleVault:
+      return normalizedHttpsBaseUrl(
+        target.simpleVaultBaseUrl,
+        'The Simple vault URL that hosts this package',
+      )
+  }
+}
+
+function extensionPackageDownloads(request: ExtensionPackageRequest): string {
+  switch (request.target.packageHost) {
+    case ExtensionPackageHost.Site:
+      return join(request.siteDist, 'downloads')
+    case ExtensionPackageHost.SimpleVault:
+      return join(request.simpleVaultDist, 'downloads')
+  }
+}
+
+export async function packageExtensionDeployment(
+  request: ExtensionPackageRequest,
+): Promise<ExtensionDeploymentMetadata> {
+  const { channel, version, commit, target } = request
   if (!/^[0-9a-f]{40}$/.test(commit)) {
     throw new Error('NOOK_EXTENSION_COMMIT must be a full lowercase Git SHA.')
   }
-  const siteUrl = normalizedHttpsBaseUrl(
-    process.env.NOOK_EXTENSION_SITE_URL?.trim() || 'https://nokey.sh/',
-    'NOOK_EXTENSION_SITE_URL',
-  )
+  const siteUrl = extensionPackageSiteUrl(target, request.siteUrl)
   const manifest = extensionManifestAdmission.parse(
     safeJson.parse(
-      await readFile(join(extensionDist, 'manifest.json'), 'utf8'),
+      await readFile(join(request.extensionDist, 'manifest.json'), 'utf8'),
     ),
   )
   if (!manifest.key) {
     throw new Error('Deployment extension manifest is missing its stable key.')
   }
-  const simple_vault_url = manifest.externally_connectable.matches[0]
-  if (!simple_vault_url) {
-    throw new Error('Deployment extension manifest has no Simple Vault target.')
+  const [pairedMatch] = manifest.externally_connectable.matches
+  if (
+    manifest.externally_connectable.matches.length !== 1 ||
+    typeof pairedMatch !== 'string'
+  ) {
+    throw new Error(
+      'Deployment extension manifest must pair with exactly one Simple Vault.',
+    )
+  }
+  // The package is named for NOOK_EXTENSION_VAULT; the built manifest must
+  // pair with that same Simple vault.
+  if (pairedMatch !== `${target.simpleVaultBaseUrl}*`) {
+    throw new Error(
+      `Built extension pairs with ${pairedMatch}, not the packaged vault target ${target.simpleVaultBaseUrl}.`,
+    )
   }
 
-  await rm(downloads, { force: true, recursive: true })
+  // Replace only this target's files so each vault target's package coexists.
+  const downloads = extensionPackageDownloads(request)
   await mkdir(downloads, { recursive: true })
-  const archive = extensionArchiveName(channel, version)
+  const archive = extensionArchiveName(channel, version, target)
+  const metadataFile = target.metadataFileName
   const archivePath = join(downloads, archive)
+  await Promise.all(
+    [metadataFile, archive, `${archive}.sha256`].map((file) =>
+      rm(join(downloads, file), { force: true }),
+    ),
+  )
   const archiveRequest: DeterministicZipRequest = {
-    sourceDirectory: extensionDist,
+    sourceDirectory: request.extensionDist,
     archivePath,
   }
   await makeDeterministicZip(archiveRequest)
@@ -225,17 +306,21 @@ export async function packageExtensionDeployment(): Promise<ExtensionDeploymentM
     version,
     manifest_version: manifest.version,
     commit,
-    simple_vault_url: simple_vault_url.replace(/\*$/, ''),
+    simple_vault_url: target.simpleVaultBaseUrl,
     extension_id: extensionId,
     archive,
     download_url: downloadUrl,
     checksum_url: checksumUrl,
     sha256: digest,
-    ...extensionInstallTarget(channel, extensionId, downloadUrl),
+    ...extensionInstallTarget(
+      extensionInstallMethod(channel, target.distribution),
+      extensionId,
+      downloadUrl,
+    ),
   }
   await Promise.all([
     writeFile(
-      join(downloads, 'extension.json'),
+      join(downloads, metadataFile),
       `${JSON.stringify(metadata, identityJsonReplacer, 2)}\n`,
     ),
     writeFile(join(downloads, `${archive}.sha256`), `${digest}  ${archive}\n`),
@@ -247,4 +332,28 @@ export async function packageExtensionDeployment(): Promise<ExtensionDeploymentM
   return metadata
 }
 
-if (import.meta.main) await packageExtensionDeployment()
+/** Package the build in `dist/` for the environment's channel and vault target. */
+async function packageExtensionDeploymentFromEnvironment(): Promise<ExtensionDeploymentMetadata> {
+  const projectRoot = resolve(import.meta.dir, '..')
+  const channel = parseExtensionChannel(resolveExtensionChannel())
+  const request: ExtensionPackageRequest = {
+    extensionDist: join(projectRoot, 'dist'),
+    siteDist: resolve(projectRoot, '../nook-web-app/dist/site'),
+    simpleVaultDist: resolve(projectRoot, '../nook-vault-simple/dist'),
+    channel,
+    version: process.env.NOOK_EXTENSION_VERSION?.trim() || '1.0.0',
+    commit: process.env.NOOK_EXTENSION_COMMIT?.trim() || '',
+    siteUrl: process.env.NOOK_EXTENSION_SITE_URL?.trim() || 'https://nokey.sh/',
+    // A published production package must name its Simple vault.
+    target: resolvePublishedExtensionVaultTarget(
+      process.env.NOOK_EXTENSION_VAULT || '',
+      channel,
+    ),
+  }
+  return packageExtensionDeployment(request)
+}
+
+if (import.meta.main) {
+  await companionWasmReady
+  await packageExtensionDeploymentFromEnvironment()
+}

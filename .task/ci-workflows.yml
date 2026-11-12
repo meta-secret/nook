@@ -57,8 +57,15 @@ tasks:
     cmds:
       - bash "{{.REPO_ROOT}}/.github/scripts/ci-release-attach-prod-domains.sh"
 
+  ci:release:package-extension:
+    desc: Build, isolation-check, and package the production extension for NOOK_EXTENSION_VAULT beside the default package.
+    cmds:
+      - task: _extension:build
+      - cd "{{.REPO_ROOT}}/nook-app/nook-web/nook-web-app" && bun run verify:isolation
+      - cd "{{.REPO_ROOT}}/nook-app/nook-web/nook-web-extension" && bun run package:deployment
+
   ci:release:verify-extension:
-    desc: Verify production browser extension deployment for a release.
+    desc: Verify each production browser extension deployment for a release.
     cmds:
       - bash "{{.REPO_ROOT}}/.github/scripts/ci-release-verify-extension.sh"
 

@@ -1,4 +1,5 @@
 import { createHash, createPrivateKey, createPublicKey } from 'node:crypto'
+import type { ExtensionIdentityScope } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 export enum ExtensionReleaseChannel {
   Production = 'production',
@@ -54,9 +55,36 @@ export function parseExtensionChannel(value: string): ExtensionChannel {
   return ExtensionChannelAdmission.parse(value)
 }
 
-function manifestKeyForChannel(channel: ExtensionChannel): Buffer {
+/** A vault-scoped identity extends the channel seed, so the channel's own
+ * identity stays byte-identical. */
+function identitySeed(
+  channel: ExtensionChannel,
+  scope: ExtensionIdentityScope,
+): string {
+  const channelSeed = `nook/passwords/extension-channel/v1/${channel}`
+  switch (scope.kind) {
+    case 'channelIdentity':
+      return channelSeed
+    case 'vaultIdentity':
+      return `${channelSeed}/vault/${scope.seedQualifier}`
+  }
+}
+
+function identityNameQualifier(scope: ExtensionIdentityScope): string {
+  switch (scope.kind) {
+    case 'channelIdentity':
+      return ''
+    case 'vaultIdentity':
+      return ` (${scope.displayQualifier})`
+  }
+}
+
+function manifestKeyForIdentity(
+  channel: ExtensionChannel,
+  scope: ExtensionIdentityScope,
+): Buffer {
   const seed = createHash('sha256')
-    .update(`nook/passwords/extension-channel/v1/${channel}`)
+    .update(identitySeed(channel, scope))
     .digest()
   const privateKey = createPrivateKey({
     key: Buffer.concat([ED25519_PKCS8_SEED_PREFIX, seed]),
@@ -80,11 +108,24 @@ export function extensionIdFromManifestKey(manifestKey: string): string {
     .join('')
 }
 
+const CHANNEL_IDENTITY_SCOPE: ExtensionIdentityScope = {
+  kind: 'channelIdentity',
+}
+
+/** The channel's own identity, which nokey, localhost, and URL builds use. */
 export function extensionChannelIdentity(
   channelValue: string,
 ): ExtensionChannelIdentity {
+  return extensionIdentity(channelValue, CHANNEL_IDENTITY_SCOPE)
+}
+
+/** The identity of a build for a channel and its vault target's identity scope. */
+export function extensionIdentity(
+  channelValue: string,
+  scope: ExtensionIdentityScope,
+): ExtensionChannelIdentity {
   const channel = parseExtensionChannel(channelValue)
-  const manifestKey = manifestKeyForChannel(channel).toString('base64')
+  const manifestKey = manifestKeyForIdentity(channel, scope).toString('base64')
   const suffix =
     channel === ExtensionReleaseChannel.Production
       ? ''
@@ -97,7 +138,7 @@ export function extensionChannelIdentity(
     channel,
     extensionId: extensionIdFromManifestKey(manifestKey),
     manifestKey,
-    name: `Nook Passwords${suffix}`,
+    name: `Nook Passwords${suffix}${identityNameQualifier(scope)}`,
     shortName:
       channel === ExtensionReleaseChannel.Production ? 'Nook' : 'Nook Dev',
   }

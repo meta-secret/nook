@@ -2,7 +2,19 @@ version: '3'
 
 tasks:
   extension:build:
-    desc: Build the browser extension in Docker.
+    desc: >-
+      Build the browser extension in Docker for one Simple vault:
+      VAULT=nokey (default), meta-secret, localhost, or a Simple vault URL.
+    cmds:
+      # Start a fresh Task invocation so the root Taskfile resolves its environment-backed
+      # NOOK_EXTENSION_VAULT before setup seals the Docker image. Without VAULT, an
+      # inherited NOOK_EXTENSION_VAULT stays in effect.
+      - >-
+        NOOK_EXTENSION_VAULT='{{default .NOOK_EXTENSION_VAULT .VAULT}}'
+        task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" _extension:build:sealed
+
+  _extension:build:sealed:
+    desc: Build the browser extension in Docker for the vault in NOOK_EXTENSION_VAULT.
     deps:
       - setup
     cmds:
@@ -10,14 +22,12 @@ tasks:
         vars: { TASK: _extension:build }
 
   extension:build:localhost:
-    desc: Build the browser extension for the trusted local Simple Vault server.
+    desc: Build the browser extension for the trusted local Simple Vault server (VAULT defaults to localhost).
     cmds:
-      # Start a fresh Task invocation so the root Taskfile resolves its environment-backed
-      # NOOK_SIMPLE_VAULT_URL before setup seals the Docker image.
       - >-
-        NOOK_SIMPLE_VAULT_URL=https://localhost:5173/
         NOOK_EXTENSION_CHANNEL=local
         task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" extension:build
+        VAULT='{{default "localhost" .VAULT}}'
 
   extension:scenario:
     desc: >-
@@ -38,14 +48,14 @@ tasks:
       - WASM_BUILD_MODE=dev task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" _wasm:build
       - >-
         PATH="$HOME/.nook/bun/{{.DEV_BUN_VERSION}}/bin:$PATH"
-        NOOK_SIMPLE_VAULT_URL=https://localhost:5173/
+        NOOK_EXTENSION_VAULT='{{default "localhost" .VAULT}}'
         NOOK_EXTENSION_CHANNEL=local
         task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" _extension:build
       - |
         root="$HOME/Library/Application Support/Nook/browser-profiles/scenario-{{.SCENARIO}}-$(date +%Y%m%d-%H%M%S)"
         cd "{{.EXTENSION_ROOT}}"
         PATH="$HOME/.nook/bun/{{.DEV_BUN_VERSION}}/bin:$PATH" \
-          NOOK_SCENARIO_ROOT="$root" NOOK_SIMPLE_VAULT_URL=https://localhost:5173/ \
+          NOOK_SCENARIO_ROOT="$root" NOOK_EXTENSION_VAULT='{{default "localhost" .VAULT}}' \
           bun x playwright test --config scenarios/playwright.config.ts "scenarios/{{.SCENARIO}}.scenario.ts"
         # One Brave window per device the scenario opened, each on its profile.
         for profile in "$root"/*/; do
@@ -214,13 +224,12 @@ tasks:
         printf "Copied release zip to %s\n" "$releases_dir/$zip_name";'
 
   extension:install:localhost:
-    desc: Install a local extension build targeting https://localhost:5173.
+    desc: Install a local extension build targeting https://localhost:5173 (VAULT defaults to localhost).
     cmds:
-      # See extension:build:localhost: this must be present when the nested setup task starts.
       - >-
-        NOOK_SIMPLE_VAULT_URL=https://localhost:5173/
         NOOK_EXTENSION_CHANNEL=local
         task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" extension:install:local
+        VAULT='{{default "localhost" .VAULT}}'
 
   extension:install:hosted:
     desc: Download, verify, and atomically install a hosted extension (CHANNEL=dev|prod or PR=<number>).
@@ -279,7 +288,7 @@ tasks:
       # these from the start: a dev WASM build, the local channel against the
       # HTTPS dev vault.
       WASM_BUILD_MODE: dev
-      NOOK_SIMPLE_VAULT_URL: https://localhost:5173/
+      NOOK_EXTENSION_VAULT: '{{default "localhost" .VAULT}}'
       NOOK_EXTENSION_CHANNEL: local
       NOOK_LOCAL_HTTPS: '1'
       NOOK_LOCAL_HTTPS_CERT_PATH: '{{.LOCAL_HTTPS_DIR}}/localhost.pem'

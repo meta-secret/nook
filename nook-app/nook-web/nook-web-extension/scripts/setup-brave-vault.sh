@@ -116,7 +116,7 @@ main() {
 
   NOOK_EXTENSION_SETUP_CDP_URL="$cdp_url" \
     NOOK_EXTENSION_SETUP_EXTENSION_ID="$extension_id" \
-    NOOK_SIMPLE_VAULT_URL="$simple_vault_url" \
+    NOOK_EXTENSION_VAULT="$simple_vault_url" \
     NOOK_EXTENSION_SETUP_PIN="$pin" \
     NOOK_EXTENSION_SETUP_VAULT_NAME="$vault_name" \
     node "$DRIVER"

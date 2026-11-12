@@ -170,6 +170,7 @@ EXPECTED_EXTENSION_COMMIT="$COMMIT_SHA" \
 EXPECTED_EXTENSION_SITE_URL="https://$DEV_DOMAIN/" \
 EXPECTED_SIMPLE_VAULT_URL="https://$SIMPLE_DOMAIN/" \
 EXPECTED_SENTINEL_VAULT_URL="https://$SENTINEL_DOMAIN/" \
+EXPECTED_EXTENSION_INSTALL_METHOD="manual_zip" \
   bash nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
   echo "dev_url=https://$DEV_DOMAIN/" >> "$GITHUB_OUTPUT"

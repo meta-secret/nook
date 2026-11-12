@@ -18,8 +18,9 @@ building blocks. They are not selectable modes inside one production web app.
   - **Production origin:** `https://simple.nokey.sh`
   - **Production alias origin:** `https://simple.meta-secret.io`, the same
     Simple artifact for organizations that block `.sh` domains
-  - **Vault capability:** Simple only; extension pairing allowed on
-    `simple.nokey.sh` only
+  - **Vault capability:** Simple only; each extension package pairs with
+    exactly one Simple origin: `simple.nokey.sh` by default, or
+    `simple.meta-secret.io` for the meta-secret package
 - **Quorum safe**
   - **Project:** `nook-vault-sentinel`
   - **Production origin:** `https://sentinel.nokey.sh`
@@ -99,14 +100,15 @@ protocol or UI, it serves no extension-connect route, and the extension manifest
 cannot connect to or inject into its origin. Isolation verification checks all
 of these boundaries in the built production artifacts.
 
-Sentinel's web artifact has no extension-connect route. The extension manifest
-accepts external connections only from `simple.nokey.sh` and excludes
-`sentinel.nokey.sh` from content-script injection. It treats
-`simple.meta-secret.io` as a Nook vault app host, with no autofill or website
-WebAuthn injection. A browser on the alias has no extension pairing. Simple
-never advertises or links to Sentinel in its vault application shell. Sentinel
-may offer a one-way link back to Simple for users leaving the quorum-only
-product.
+Sentinel's web artifact has no extension-connect route. Each extension build
+accepts external connections only from the one Simple origin it targets
+(`simple.nokey.sh` by default, `simple.meta-secret.io` for the meta-secret
+build) and excludes `sentinel.nokey.sh` from content-script injection. Every
+build treats both production Simple origins as Nook vault app hosts, with no
+autofill or website WebAuthn injection. A browser on an origin its extension
+build does not target has no extension pairing. Simple never advertises or
+links to Sentinel in its vault application shell. Sentinel may offer a one-way
+link back to Simple for users leaving the quorum-only product.
 
 ## Deployment
 
@@ -121,6 +123,9 @@ product.
     alias problem cannot stop a `nokey.sh` release.
   - After a release, check the alias by hand: the commit in
     `https://simple.meta-secret.io/release.json` must match the release commit.
+  - The Simple artifact also carries `downloads/` with the meta-secret extension
+    package, so the alias serves it. The release verifies that package on the
+    immutable `nokey-simple` deployment, not the alias host.
   - Sentinel, Main, the landing site, and PR previews have no alias.
 - **Main and PR deployment:** Deploy all three artifacts independently.
   - Point the landing and both vault custom domains at their Pages
