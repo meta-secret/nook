@@ -1,7 +1,7 @@
 use nook_companion_core::{
-    BrowserOAuthLocation, BrowserOAuthLocationEvidence, OAuthOriginSupport,
-    OAuthOriginUnsupportedReason, SentinelVaultMatch, VaultAppBaseSelection, VaultHostObservation,
-    VaultHostPolicy,
+    BrowserOAuthLocation, BrowserOAuthLocationEvidence, KnownSimpleVault, OAuthOriginSupport,
+    OAuthOriginUnsupportedReason, SentinelVaultMatch, SimpleVaultTarget, VaultAppBaseSelection,
+    VaultHostObservation, VaultHostPolicy,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -89,6 +89,28 @@ pub fn resolve_oauth_origin_support(
 )]
 pub fn default_simple_vault_url() -> String {
     nook_companion_core::DEFAULT_SIMPLE_VAULT_URL.to_owned()
+}
+
+/// Vault target name a build pairs with when it names none.
+#[wasm_bindgen]
+#[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn default_simple_vault_target_name() -> String {
+    KnownSimpleVault::DEFAULT.name().to_owned()
+}
+
+/// Normalized Simple Vault base URL for a build's vault target: a known
+/// target name or an absolute Simple Vault URL.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn resolve_simple_vault_target(input: &str) -> Result<String, wasm_bindgen::JsError> {
+    Ok(input.parse::<SimpleVaultTarget>()?.base_url().into())
 }
 
 #[wasm_bindgen]
@@ -213,4 +235,42 @@ pub fn belongs_to_sentinel_vault(
     candidate_url: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {
     Ok(VaultHostPolicy::new(base_url).belongs_to_sentinel_vault(candidate_url)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn vault_target_exports_resolve_names_and_explicit_urls() -> Result<(), String> {
+        assert_eq!(default_simple_vault_target_name(), "nokey");
+        assert_eq!(
+            resolve_simple_vault_target(&default_simple_vault_target_name())
+                .map_err(|_| "default target failed".to_owned())?,
+            default_simple_vault_url()
+        );
+        assert_eq!(
+            resolve_simple_vault_target("meta-secret")
+                .map_err(|_| "meta-secret failed".to_owned())?,
+            "https://simple.meta-secret.io/"
+        );
+        assert_eq!(
+            resolve_simple_vault_target("localhost").map_err(|_| "localhost failed".to_owned())?,
+            "https://localhost:5173/"
+        );
+        assert_eq!(
+            resolve_simple_vault_target("https://pr-12.nokey-simple.pages.dev")
+                .map_err(|_| "preview failed".to_owned())?,
+            "https://pr-12.nokey-simple.pages.dev/"
+        );
+        assert_eq!(
+            matching_sentinel_vault_base_url("https://simple.meta-secret.io/")
+                .map_err(|_| "sentinel failed".to_owned())?,
+            "https://sentinel.nokey.sh/"
+        );
+        #[cfg(target_arch = "wasm32")]
+        assert!(resolve_simple_vault_target("prod").is_err());
+        Ok(())
+    }
 }
