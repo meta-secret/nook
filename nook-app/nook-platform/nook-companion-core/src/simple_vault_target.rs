@@ -16,7 +16,8 @@ use crate::vault_host_policy::{SentinelVaultMatch, VaultHostPolicy, VaultHostPol
 mod extension_package;
 pub use extension_package::{
     ExtensionIdentityDisplayQualifier, ExtensionIdentityScope, ExtensionIdentitySeedQualifier,
-    ExtensionMetadataFileName, SimpleVaultHost,
+    ExtensionMetadataFileName, ExtensionPackageHost, ProductionSimpleVaultTargetError,
+    SimpleVaultHost,
 };
 
 /// Production Sentinel vault that serves every named production Simple vault.

@@ -4,9 +4,11 @@
 //! downloads rule here, so the vault on each host offers that host's package.
 
 use serde::Serialize;
+use thiserror::Error;
 use tsify::Tsify;
+use wasm_bindgen::prelude::wasm_bindgen;
 
-use super::{KnownSimpleVault, SimpleVaultTarget};
+use super::{KnownSimpleVault, SimpleVaultBaseUrl, SimpleVaultTarget};
 
 /// Identity a build derives its extension key, ID, and name from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify)]
@@ -110,6 +112,47 @@ impl SimpleVaultHost {
             Self::Other => "",
         })
     }
+
+    /// Where this host's vault offers the extension package from.
+    #[must_use]
+    pub fn package_host(self) -> ExtensionPackageHost {
+        match self {
+            Self::Known(known) => known.package_host(),
+            Self::Other => ExtensionPackageHost::Site,
+        }
+    }
+}
+
+/// Origin that hosts a build's extension package downloads.
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExtensionPackageHost {
+    /// The deployment's own site and the marketing site.
+    Site,
+    /// The Simple vault's own host alone.
+    SimpleVault,
+}
+
+/// A production-channel build would bind the production identity to an
+/// arbitrary origin.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error(
+    "A production extension build must target a named Simple vault ({known}), not \"{base_url}\".",
+    known = KnownSimpleVault::name_list()
+)]
+pub struct ProductionSimpleVaultTargetError {
+    base_url: SimpleVaultBaseUrl,
+}
+
+impl KnownSimpleVault {
+    /// Only a non-default production vault serves its package from its own host.
+    #[must_use]
+    pub const fn package_host(self) -> ExtensionPackageHost {
+        match self {
+            Self::Nokey | Self::Localhost => ExtensionPackageHost::Site,
+            Self::MetaSecret => ExtensionPackageHost::SimpleVault,
+        }
+    }
 }
 
 impl KnownSimpleVault {
@@ -154,6 +197,25 @@ impl SimpleVaultTarget {
     #[must_use]
     pub fn extension_metadata_file_name(&self) -> ExtensionMetadataFileName {
         ExtensionMetadataFileName::for_downloads_suffix(self.downloads_suffix())
+    }
+
+    /// Package download host; an explicit URL keeps the site.
+    #[must_use]
+    pub fn package_host(&self) -> ExtensionPackageHost {
+        match self {
+            Self::Known(known) => known.package_host(),
+            Self::ExplicitUrl(_) => ExtensionPackageHost::Site,
+        }
+    }
+
+    /// Named vault a production-channel build may pair with.
+    pub fn admit_for_production(
+        self,
+    ) -> Result<KnownSimpleVault, ProductionSimpleVaultTargetError> {
+        match self {
+            Self::Known(known) => Ok(known),
+            Self::ExplicitUrl(base_url) => Err(ProductionSimpleVaultTargetError { base_url }),
+        }
     }
 }
 
@@ -300,6 +362,105 @@ mod tests {
                 .extension_metadata_file_name()
                 .as_str(),
             "extension.json"
+        );
+        Ok(())
+    }
+
+    struct PackageHostCase {
+        input: &'static str,
+        package_host: ExtensionPackageHost,
+    }
+
+    #[test]
+    fn only_the_meta_secret_package_is_hosted_by_its_own_vault() -> anyhow::Result<()> {
+        for case in [
+            PackageHostCase {
+                input: "nokey",
+                package_host: ExtensionPackageHost::Site,
+            },
+            PackageHostCase {
+                input: "localhost",
+                package_host: ExtensionPackageHost::Site,
+            },
+            PackageHostCase {
+                input: "https://pr-12.nokey-simple.pages.dev/",
+                package_host: ExtensionPackageHost::Site,
+            },
+            PackageHostCase {
+                input: "meta-secret",
+                package_host: ExtensionPackageHost::SimpleVault,
+            },
+            PackageHostCase {
+                input: "https://simple.meta-secret.io/",
+                package_host: ExtensionPackageHost::SimpleVault,
+            },
+        ] {
+            assert_eq!(
+                case.input.parse::<SimpleVaultTarget>()?.package_host(),
+                case.package_host,
+                "{}",
+                case.input
+            );
+        }
+        for known in KnownSimpleVault::ALL {
+            assert_eq!(
+                SimpleVaultHost::for_hostname(known.hostname()).package_host(),
+                known.package_host(),
+                "{}",
+                known.name()
+            );
+        }
+        for hostname in [
+            "simple.dev.nokey.sh",
+            "pr-12.nokey-simple.pages.dev",
+            "simple.meta-secret.io.example.com",
+            "xsimple.meta-secret.io",
+        ] {
+            assert_eq!(
+                SimpleVaultHost::for_hostname(hostname).package_host(),
+                ExtensionPackageHost::Site,
+                "{hostname}"
+            );
+        }
+        assert_eq!(
+            SimpleVaultHost::for_hostname("SIMPLE.META-SECRET.IO.").package_host(),
+            ExtensionPackageHost::SimpleVault
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn production_builds_admit_only_named_vaults() -> anyhow::Result<()> {
+        for known in KnownSimpleVault::ALL {
+            for input in [known.name(), known.base_url()] {
+                assert_eq!(
+                    input.parse::<SimpleVaultTarget>()?.admit_for_production(),
+                    Ok(known),
+                    "{input}"
+                );
+            }
+        }
+        for input in [
+            "https://pr-12.nokey-simple.pages.dev/",
+            "http://127.0.0.1:5174/",
+            "https://simple.dev.nokey.sh/",
+            "https://attacker.example/",
+        ] {
+            let admission = input.parse::<SimpleVaultTarget>()?.admit_for_production();
+            assert_eq!(
+                admission,
+                Err(ProductionSimpleVaultTargetError {
+                    base_url: SimpleVaultBaseUrl::try_from(input)?,
+                }),
+                "{input}"
+            );
+        }
+        assert_eq!(
+            "https://attacker.example"
+                .parse::<SimpleVaultTarget>()?
+                .admit_for_production()
+                .map_err(|error| error.to_string()),
+            Err("A production extension build must target a named Simple vault (nokey, meta-secret, localhost), not \"https://attacker.example/\".".to_owned())
         );
         Ok(())
     }

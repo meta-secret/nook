@@ -232,8 +232,9 @@ pub use page_field_classification::{
 };
 pub use simple_vault_target::{
     ExtensionIdentityDisplayQualifier, ExtensionIdentityScope, ExtensionIdentitySeedQualifier,
-    ExtensionMetadataFileName, ExtensionPackageDistribution, KnownSimpleVault, SimpleVaultBaseUrl,
-    SimpleVaultHost, SimpleVaultTarget, SimpleVaultTargetError, SimpleVaultTargetInput,
+    ExtensionMetadataFileName, ExtensionPackageDistribution, ExtensionPackageHost,
+    KnownSimpleVault, ProductionSimpleVaultTargetError, SimpleVaultBaseUrl, SimpleVaultHost,
+    SimpleVaultTarget, SimpleVaultTargetError, SimpleVaultTargetInput,
 };
 pub use vault_host_policy::{DEFAULT_SIMPLE_VAULT_URL, VaultHostPolicyError};
 pub use website_login_options_response::{

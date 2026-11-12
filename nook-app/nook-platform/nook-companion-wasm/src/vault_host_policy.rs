@@ -1,6 +1,6 @@
 use nook_companion_core::{
     BrowserOAuthLocation, BrowserOAuthLocationEvidence, ExtensionIdentityScope,
-    ExtensionPackageDistribution, KnownSimpleVault, OAuthOriginSupport,
+    ExtensionPackageDistribution, ExtensionPackageHost, KnownSimpleVault, OAuthOriginSupport,
     OAuthOriginUnsupportedReason, SentinelVaultMatch, SimpleVaultTarget, VaultAppBaseSelection,
     VaultHostObservation, VaultHostPolicy,
 };
@@ -170,6 +170,30 @@ pub fn simple_vault_target_package_distribution(
     input: &str,
 ) -> Result<ExtensionPackageDistribution, wasm_bindgen::JsError> {
     Ok(input.parse::<SimpleVaultTarget>()?.package_distribution())
+}
+
+/// Origin that hosts the extension package downloads of a build for this vault target.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn simple_vault_target_package_host(
+    input: &str,
+) -> Result<ExtensionPackageHost, wasm_bindgen::JsError> {
+    Ok(input.parse::<SimpleVaultTarget>()?.package_host())
+}
+
+/// Throws unless a production-channel build may pair with this vault target:
+/// a named vault, or the URL of one.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn admit_simple_vault_target_for_production(input: &str) -> Result<(), wasm_bindgen::JsError> {
+    input.parse::<SimpleVaultTarget>()?.admit_for_production()?;
+    Ok(())
 }
 
 #[wasm_bindgen]
@@ -389,6 +413,53 @@ mod tests {
     struct MetadataCase {
         input: &'static str,
         metadata: &'static str,
+    }
+
+    struct PackageHostCase {
+        input: &'static str,
+        package_host: ExtensionPackageHost,
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn vault_target_exports_name_the_package_host_and_admit_named_vaults_for_production()
+    -> Result<(), String> {
+        for PackageHostCase {
+            input,
+            package_host,
+        } in [
+            PackageHostCase {
+                input: "nokey",
+                package_host: ExtensionPackageHost::Site,
+            },
+            PackageHostCase {
+                input: "localhost",
+                package_host: ExtensionPackageHost::Site,
+            },
+            PackageHostCase {
+                input: "https://simple.meta-secret.io/",
+                package_host: ExtensionPackageHost::SimpleVault,
+            },
+        ] {
+            assert_eq!(
+                simple_vault_target_package_host(input)
+                    .map_err(|_| format!("{input} package host failed"))?,
+                package_host
+            );
+            admit_simple_vault_target_for_production(input)
+                .map_err(|_| format!("{input} must be admitted for production"))?;
+        }
+        assert_eq!(
+            simple_vault_target_package_host("https://pr-12.nokey-simple.pages.dev/")
+                .map_err(|_| "preview package host failed".to_owned())?,
+            ExtensionPackageHost::Site
+        );
+        #[cfg(target_arch = "wasm32")]
+        assert!(
+            admit_simple_vault_target_for_production("https://pr-12.nokey-simple.pages.dev/")
+                .is_err()
+        );
+        Ok(())
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
