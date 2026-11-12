@@ -30,14 +30,15 @@ if [ "${1:-}" = "$NOOK_TEST_HOST_HELPER" ]; then
   exit 0
 fi
 if [ "${1:-}" = "$NOOK_TEST_VERIFY_DEPLOYMENT" ]; then
-  printf '%s|%s|%s|%s|%s|%s|%s\n' \
+  printf '%s|%s|%s|%s|%s|%s|%s|%s\n' \
     "$EXPECTED_EXTENSION_CHANNEL" \
     "$EXPECTED_EXTENSION_COMMIT" \
     "$EXPECTED_EXTENSION_SITE_URL" \
     "$EXPECTED_SIMPLE_VAULT_URL" \
     "$EXPECTED_SENTINEL_VAULT_URL" \
     "$EXTENSION_METADATA_URL" \
-    "$EXTENSION_FETCH_ORIGIN_URL" >> "$NOOK_TEST_VERIFICATION_CALLS"
+    "$EXTENSION_FETCH_ORIGIN_URL" \
+    "$EXPECTED_EXTENSION_INSTALL_METHOD" >> "$NOOK_TEST_VERIFICATION_CALLS"
   exit 0
 fi
 exec "$NOOK_TEST_REAL_BASH" "$@"
@@ -214,7 +215,7 @@ grep -Fq 'Pages aliases have not converged after verification attempt 1/2' <<< "
 test -e "$verification_retry_marker" \
   || { echo 'preview deploy extension contract test: retry fixture was not exercised' >&2; exit 1; }
 grep -Fxq \
-  'pr-preview-branch|0123456789abcdef0123456789abcdef01234567|https://pr-preview-branch.nokey-sh.pages.dev/|https://pr-preview-branch.nokey-simple.pages.dev/|https://pr-preview-branch.nokey-sentinel.pages.dev/|https://deadbeef.nokey-sh.pages.dev/downloads/extension.json|https://deadbeef.nokey-sh.pages.dev/' \
+  'pr-preview-branch|0123456789abcdef0123456789abcdef01234567|https://pr-preview-branch.nokey-sh.pages.dev/|https://pr-preview-branch.nokey-simple.pages.dev/|https://pr-preview-branch.nokey-sentinel.pages.dev/|https://deadbeef.nokey-sh.pages.dev/downloads/extension.json|https://deadbeef.nokey-sh.pages.dev/|manual_zip' \
   "$verification_calls" \
   || { echo 'preview deploy extension contract test: verifier did not receive the isolated PR channel and exact aliases' >&2; exit 1; }
 grep -Fxq 'extension_url=https://pr-preview-branch.nokey-sh.pages.dev/downloads/nook-passwords-pr-preview-branch.zip' "$github_output" \

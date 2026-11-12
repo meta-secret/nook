@@ -7,6 +7,7 @@ set -euo pipefail
 : "${EXPECTED_EXTENSION_SITE_URL:?EXPECTED_EXTENSION_SITE_URL is required}"
 : "${EXPECTED_SIMPLE_VAULT_URL:?EXPECTED_SIMPLE_VAULT_URL is required}"
 : "${EXPECTED_SENTINEL_VAULT_URL:?EXPECTED_SENTINEL_VAULT_URL is required}"
+: "${EXPECTED_EXTENSION_INSTALL_METHOD:?EXPECTED_EXTENSION_INSTALL_METHOD is required}"
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
@@ -16,9 +17,11 @@ archive="$tmp_dir/extension.zip"
 site_url="${EXPECTED_EXTENSION_SITE_URL%/}/"
 fetch_site_url="${EXTENSION_FETCH_ORIGIN_URL:-$EXPECTED_EXTENSION_SITE_URL}"
 fetch_site_url="${fetch_site_url%/}/"
+# The site packages and the Simple vault artifact's own package are fetched
+# from their immutable Pages deployments rather than racing an alias.
 if [ -n "${EXTENSION_FETCH_ORIGIN_URL:-}" ] \
-  && [[ ! "$fetch_site_url" =~ ^https://[0-9a-f]{8}\.nokey-sh\.pages\.dev/$ ]]; then
-  echo "EXTENSION_FETCH_ORIGIN_URL must be a canonical immutable nokey-sh deployment origin" >&2
+  && [[ ! "$fetch_site_url" =~ ^https://[0-9a-f]{8}\.nokey-(sh|simple)\.pages\.dev/$ ]]; then
+  echo "EXTENSION_FETCH_ORIGIN_URL must be a canonical immutable nokey-sh or nokey-simple deployment origin" >&2
   exit 1
 fi
 cache_bust="${EXTENSION_CACHE_BUST:-$EXPECTED_EXTENSION_COMMIT}"
@@ -63,18 +66,18 @@ if ! jq -e \
   --arg channel "$EXPECTED_EXTENSION_CHANNEL" \
   --arg commit "$EXPECTED_EXTENSION_COMMIT" \
   --arg simple "$simple_vault_url" \
+  --arg install_method "$EXPECTED_EXTENSION_INSTALL_METHOD" \
   '.schema_version == 2
     and .channel == $channel
     and .commit == $commit
     and .simple_vault_url == $simple
     and (.extension_id | test("^[a-p]{32}$"))
     and (.sha256 | test("^[0-9a-f]{64}$"))
-    and (if $channel == "production" then
-      .install_method == "chrome_web_store"
-      and .install_url == ("https://chromewebstore.google.com/detail/" + .extension_id)
+    and .install_method == $install_method
+    and (if $install_method == "chrome_web_store" then
+      .install_url == ("https://chromewebstore.google.com/detail/" + .extension_id)
     else
-      .install_method == "manual_zip"
-      and .install_url == .download_url
+      .install_url == .download_url
     end)' \
   "$metadata" >/dev/null; then
   echo "Extension metadata contract mismatch" >&2
@@ -82,7 +85,8 @@ if ! jq -e \
     --arg expected_channel "$EXPECTED_EXTENSION_CHANNEL" \
     --arg expected_commit "$EXPECTED_EXTENSION_COMMIT" \
     --arg expected_simple "$simple_vault_url" \
-    '{actual: {schema_version, channel, commit, simple_vault_url, extension_id, sha256, install_method, install_url, download_url}, expected: {schema_version: 2, channel: $expected_channel, commit: $expected_commit, simple_vault_url: $expected_simple}}' \
+    --arg expected_install_method "$EXPECTED_EXTENSION_INSTALL_METHOD" \
+    '{actual: {schema_version, channel, commit, simple_vault_url, extension_id, sha256, install_method, install_url, download_url}, expected: {schema_version: 2, channel: $expected_channel, commit: $expected_commit, simple_vault_url: $expected_simple, install_method: $expected_install_method}}' \
     "$metadata" >&2
   exit 1
 fi

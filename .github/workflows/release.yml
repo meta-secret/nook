@@ -212,7 +212,8 @@ jobs:
           NOOK_EXTENSION_SITE_URL: https://nokey.sh/
 
       # Each extension build pairs with one Simple vault. The image already
-      # packaged the nokey extension; add the meta-secret one beside it.
+      # packaged the nokey extension into the site; the meta-secret package
+      # goes into the Simple vault artifact before it is copied and deployed.
       - name: Build and package the meta-secret production extension
         run: |
           cd /meta-secret/nook
@@ -254,6 +255,7 @@ jobs:
         run: task ci:release:write-metadata
 
       - name: Deploy isolated Simple and Sentinel applications
+        id: vaults
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
@@ -280,6 +282,7 @@ jobs:
       - name: Verify production browser extension deployments
         env:
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          SIMPLE_DEPLOYMENT_URL: ${{ steps.vaults.outputs.simple_deployment_url }}
         run: |
           cd /meta-secret/nook
           task ci:release:verify-extension
@@ -319,26 +322,23 @@ jobs:
               })).data
             }
 
-            const downloads = path.join(
-              process.cwd(),
-              'nook-app/nook-web/nook-web-app/dist/site/downloads',
-            )
-            // One verified package per vault target: extension.json and
-            // extension-<target>.json each name their archive and checksum.
-            const assetPaths = fs
-              .readdirSync(downloads)
-              .filter((name) => /^extension(-[a-z-]+)?\.json$/.test(name))
-              .sort()
-              .flatMap((metadataFile) => {
-                const metadata = JSON.parse(
-                  fs.readFileSync(path.join(downloads, metadataFile), 'utf8'),
-                )
-                return [
-                  path.join(downloads, metadata.archive),
-                  path.join(downloads, metadataFile),
-                  path.join(downloads, `${metadata.archive}.sha256`),
-                ]
-              })
+            // One verified package per vault target: the nokey package on
+            // the public site, the meta-secret package in the Simple vault.
+            const packages = [
+              ['nook-app/nook-web/nook-web-app/dist/site/downloads', 'extension.json'],
+              ['nook-app/nook-web/nook-vault-simple/dist/downloads', 'extension-meta-secret.json'],
+            ]
+            const assetPaths = packages.flatMap(([directory, metadataFile]) => {
+              const downloads = path.join(process.cwd(), directory)
+              const metadata = JSON.parse(
+                fs.readFileSync(path.join(downloads, metadataFile), 'utf8'),
+              )
+              return [
+                path.join(downloads, metadata.archive),
+                path.join(downloads, metadataFile),
+                path.join(downloads, `${metadata.archive}.sha256`),
+              ]
+            })
             const assets = (await github.rest.repos.listReleaseAssets({
               ...context.repo,
               release_id: release.id,

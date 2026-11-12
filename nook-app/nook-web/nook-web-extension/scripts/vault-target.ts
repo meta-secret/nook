@@ -1,51 +1,52 @@
 import {
   default_simple_vault_target_name,
+  ExtensionPackageDistribution,
   resolve_simple_vault_target,
+  simple_vault_target_downloads_suffix,
+  simple_vault_target_extension_identity,
+  simple_vault_target_extension_metadata_file_name,
+  simple_vault_target_package_distribution,
+  type ExtensionIdentityScope,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 /**
- * Download names of one build's deployment package. The default target and
- * URL-form inputs keep the unsuffixed names that installers and the landing
- * page read; another named target adds its name so both packages coexist.
+ * Where a target's deployment package is published. The default package
+ * lives on the public site. A target with its own download names lives in
+ * the Simple vault artifact, so the vault on that host offers it.
  */
-export enum ExtensionVaultDownloadsKind {
-  Default = 'default',
-  Named = 'named',
+export enum ExtensionPackageHost {
+  Site = 'site',
+  SimpleVault = 'simple-vault',
 }
 
-type ExtensionVaultDownloads =
-  | { readonly kind: ExtensionVaultDownloadsKind.Default }
-  | { readonly kind: ExtensionVaultDownloadsKind.Named; readonly name: string }
-
-/** The one Simple vault an extension build pairs with. */
+/** The one Simple vault an extension build pairs with, and its package facts. */
 export type ExtensionVaultTarget = {
   readonly simpleVaultBaseUrl: string
-  readonly downloads: ExtensionVaultDownloads
+  readonly downloadsSuffix: string
+  readonly metadataFileName: string
+  readonly distribution: ExtensionPackageDistribution
+  readonly identityScope: ExtensionIdentityScope
 }
 
 /**
  * Resolve the builder's vault input (`NOOK_EXTENSION_VAULT`): a known target
  * name or an absolute Simple vault URL. Companion WASM owns the names, the
- * default, and URL validation; an unknown name throws its diagnostic.
- * Callers acquire companion WASM readiness first.
+ * default, URL validation, and every package fact; an unknown name throws its
+ * diagnostic. Callers acquire companion WASM readiness first.
  */
 export function resolveExtensionVaultTarget(
   input: string,
 ): ExtensionVaultTarget {
-  const defaultName = default_simple_vault_target_name()
   // Docker build arguments and Task pass-through turn an unset variable into
   // an empty string, so an empty value selects the default target too.
-  const requested = input.trim() || defaultName
-  const simpleVaultBaseUrl = resolve_simple_vault_target(requested)
-  if (requested === defaultName || URL.canParse(requested)) {
-    return {
-      simpleVaultBaseUrl,
-      downloads: { kind: ExtensionVaultDownloadsKind.Default },
-    }
-  }
+  const requested = input.trim() || default_simple_vault_target_name()
   return {
-    simpleVaultBaseUrl,
-    downloads: { kind: ExtensionVaultDownloadsKind.Named, name: requested },
+    simpleVaultBaseUrl: resolve_simple_vault_target(requested),
+    downloadsSuffix: simple_vault_target_downloads_suffix(requested),
+    metadataFileName:
+      simple_vault_target_extension_metadata_file_name(requested),
+    distribution: simple_vault_target_package_distribution(requested),
+    identityScope: simple_vault_target_extension_identity(requested),
   }
 }
 
@@ -54,21 +55,11 @@ export function extensionVaultTargetFromEnvironment(): ExtensionVaultTarget {
   return resolveExtensionVaultTarget(process.env.NOOK_EXTENSION_VAULT || '')
 }
 
-/** File-name suffix that keeps a named target's downloads beside the default's. */
-export function extensionDownloadNameSuffix(
+/** Rust gives the default package no download suffix; it alone uses the site. */
+export function extensionPackageHost(
   target: ExtensionVaultTarget,
-): string {
-  switch (target.downloads.kind) {
-    case ExtensionVaultDownloadsKind.Default:
-      return ''
-    case ExtensionVaultDownloadsKind.Named:
-      return `-${target.downloads.name}`
-  }
-}
-
-/** Deployment metadata file name under the site's `downloads/` path. */
-export function extensionMetadataFileName(
-  target: ExtensionVaultTarget,
-): string {
-  return `extension${extensionDownloadNameSuffix(target)}.json`
+): ExtensionPackageHost {
+  return target.downloadsSuffix.length === 0
+    ? ExtensionPackageHost.Site
+    : ExtensionPackageHost.SimpleVault
 }

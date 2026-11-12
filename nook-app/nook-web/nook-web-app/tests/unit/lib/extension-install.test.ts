@@ -4,6 +4,7 @@ import {
   ExtensionInstallSource,
   ExtensionSetupStatus,
   extensionInstallationBrowser,
+  extensionMetadataCandidateUrls,
 } from '$lib/extension/install'
 
 afterEach(() => {
@@ -147,6 +148,32 @@ describe('extension install target', () => {
       '_blank',
       'noopener,noreferrer',
     )
+  })
+})
+
+describe('extension metadata candidates', () => {
+  test('a meta-secret page offers only the meta-secret package', () => {
+    expect(
+      extensionMetadataCandidateUrls(
+        new URL('https://simple.meta-secret.io/vault'),
+        'https://nokey.sh',
+      ),
+    ).toEqual([
+      'https://simple.meta-secret.io/downloads/extension-meta-secret.json',
+      'https://nokey.sh/downloads/extension-meta-secret.json',
+    ])
+  })
+
+  test('a nokey page offers the default package', () => {
+    expect(
+      extensionMetadataCandidateUrls(
+        new URL('https://simple.nokey.sh/vault'),
+        'https://nokey.sh',
+      ),
+    ).toEqual([
+      'https://simple.nokey.sh/downloads/extension.json',
+      'https://nokey.sh/downloads/extension.json',
+    ])
   })
 })
 

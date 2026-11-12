@@ -6,23 +6,23 @@ import {
   createManifest,
   ContentScriptRunAt,
   type CreateExtensionManifestArgs,
-  ExtensionManifestBuildKind,
   ExtensionPermission,
   type ExtensionManifestDeployment,
 } from '../src/manifest'
 import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-page-path'
 import { resolveExtensionVaultTarget } from './vault-target'
 
-const defaultManifestArgs: CreateExtensionManifestArgs = {
-  kind: ExtensionManifestBuildKind.StoreRelease,
-  version: '1.0.0',
-}
-
 const testDeployment: ExtensionManifestDeployment = {
   key: 'test-key',
   name: 'Nook Passwords Preview',
   shortName: 'Nook Preview',
   versionName: '1.0.0 (preview)',
+}
+
+const defaultManifestArgs: CreateExtensionManifestArgs = {
+  version: '1.0.0',
+  simpleVaultBaseUrl: resolveExtensionVaultTarget('').simpleVaultBaseUrl,
+  deployment: testDeployment,
 }
 
 function defaultManifest() {
@@ -48,7 +48,6 @@ const sidePanelPagePath = SIDE_PANEL_PAGE_PATH
 
 function channelManifest() {
   const manifestArgs: CreateExtensionManifestArgs = {
-    kind: ExtensionManifestBuildKind.Channel,
     version: '1.0.0',
     simpleVaultBaseUrl: 'https://pr-408.nokey-simple.pages.dev/',
     deployment: testDeployment,
@@ -101,7 +100,6 @@ describe('extension origin isolation', () => {
   for (const environment of environments) {
     test(`connects only to ${environment.simple}`, () => {
       const manifestArgs: CreateExtensionManifestArgs = {
-        kind: ExtensionManifestBuildKind.Channel,
         version: '1.0.0',
         simpleVaultBaseUrl: environment.simple,
         deployment: testDeployment,
@@ -262,7 +260,6 @@ describe('vault target pairing', () => {
     test(`a ${input} build pairs with exactly its own Simple vault`, () => {
       const target = resolveExtensionVaultTarget(input)
       const manifestArgs: CreateExtensionManifestArgs = {
-        kind: ExtensionManifestBuildKind.Channel,
         version: '1.0.0',
         simpleVaultBaseUrl: target.simpleVaultBaseUrl,
         deployment: testDeployment,

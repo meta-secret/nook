@@ -7,7 +7,6 @@ import { companionWasmReady } from '../../nook-web-shared/src/extension/companio
 import {
   createManifest,
   type CreateExtensionManifestArgs,
-  ExtensionManifestBuildKind,
   type ExtensionManifestDeployment,
 } from '../../nook-web-extension/src/manifest'
 import { SIDE_PANEL_PAGE_PATH } from '../../nook-web-extension/src/lib/side-panel-page-path'
@@ -433,7 +432,6 @@ const productionManifestDeployment: ExtensionManifestDeployment = {
   versionName: '1.0.0 (production)',
 }
 const productionManifestArgs: CreateExtensionManifestArgs = {
-  kind: ExtensionManifestBuildKind.Channel,
   version: '1.0.0',
   simpleVaultBaseUrl: targetSimpleVaultBaseUrl,
   deployment: productionManifestDeployment,
@@ -512,7 +510,6 @@ const previewManifestDeployment: ExtensionManifestDeployment = {
   versionName: '1.0.0 (preview)',
 }
 const previewManifestArgs: CreateExtensionManifestArgs = {
-  kind: ExtensionManifestBuildKind.Channel,
   version: '1.0.0',
   simpleVaultBaseUrl: 'https://pr-391.nokey-simple.pages.dev/',
   deployment: previewManifestDeployment,

@@ -2,9 +2,10 @@ import { companionWasmReady } from '../../nook-web-shared/src/extension/companio
 
 await companionWasmReady
 import { afterEach, describe, expect, test } from 'bun:test'
+import { ExtensionPackageDistribution } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
-  ExtensionVaultDownloadsKind,
-  extensionMetadataFileName,
+  ExtensionPackageHost,
+  extensionPackageHost,
   extensionVaultTargetFromEnvironment,
   resolveExtensionVaultTarget,
 } from './vault-target'
@@ -20,34 +21,53 @@ afterEach(() => {
 })
 
 describe('extension vault target input', () => {
-  test('each known name selects its Simple vault', () => {
-    expect(resolveExtensionVaultTarget('nokey')).toEqual({
+  test('nokey is the store-distributed site package with the channel identity', () => {
+    const target = resolveExtensionVaultTarget('nokey')
+    expect(target).toEqual({
       simpleVaultBaseUrl: 'https://simple.nokey.sh/',
-      downloads: { kind: ExtensionVaultDownloadsKind.Default },
+      downloadsSuffix: '',
+      metadataFileName: 'extension.json',
+      distribution: ExtensionPackageDistribution.StoreOnProductionChannel,
+      identityScope: { kind: 'channelIdentity' },
     })
-    expect(resolveExtensionVaultTarget('meta-secret')).toEqual({
-      simpleVaultBaseUrl: 'https://simple.meta-secret.io/',
-      downloads: {
-        kind: ExtensionVaultDownloadsKind.Named,
-        name: 'meta-secret',
-      },
-    })
-    expect(resolveExtensionVaultTarget('localhost')).toEqual({
-      simpleVaultBaseUrl: 'https://localhost:5173/',
-      downloads: { kind: ExtensionVaultDownloadsKind.Named, name: 'localhost' },
-    })
+    expect(extensionPackageHost(target)).toBe(ExtensionPackageHost.Site)
   })
 
-  test('an absolute URL selects that Simple vault under the default download names', () => {
-    expect(
-      resolveExtensionVaultTarget('https://pr-408.nokey-simple.pages.dev'),
-    ).toEqual({
-      simpleVaultBaseUrl: 'https://pr-408.nokey-simple.pages.dev/',
-      downloads: { kind: ExtensionVaultDownloadsKind.Default },
-    })
-    expect(
-      resolveExtensionVaultTarget('http://127.0.0.1:5174/').simpleVaultBaseUrl,
-    ).toBe('http://127.0.0.1:5174/')
+  test('meta-secret is a manual ZIP the Simple vault serves under its own identity', () => {
+    for (const input of ['meta-secret', 'https://simple.meta-secret.io']) {
+      const target = resolveExtensionVaultTarget(input)
+      expect(target).toEqual({
+        simpleVaultBaseUrl: 'https://simple.meta-secret.io/',
+        downloadsSuffix: '-meta-secret',
+        metadataFileName: 'extension-meta-secret.json',
+        distribution: ExtensionPackageDistribution.ManualZip,
+        identityScope: {
+          kind: 'vaultIdentity',
+          seedQualifier: 'meta-secret',
+          displayQualifier: 'meta-secret.io',
+        },
+      })
+      expect(extensionPackageHost(target)).toBe(
+        ExtensionPackageHost.SimpleVault,
+      )
+    }
+  })
+
+  test('localhost and explicit URLs keep the default package names and identity', () => {
+    for (const [input, simpleVaultBaseUrl] of [
+      ['localhost', 'https://localhost:5173/'],
+      [
+        'https://pr-408.nokey-simple.pages.dev',
+        'https://pr-408.nokey-simple.pages.dev/',
+      ],
+      ['http://127.0.0.1:5174/', 'http://127.0.0.1:5174/'],
+    ]) {
+      const target = resolveExtensionVaultTarget(input)
+      expect(target.simpleVaultBaseUrl).toBe(simpleVaultBaseUrl)
+      expect(target.metadataFileName).toBe('extension.json')
+      expect(target.identityScope).toEqual({ kind: 'channelIdentity' })
+      expect(extensionPackageHost(target)).toBe(ExtensionPackageHost.Site)
+    }
   })
 
   test('an absent, empty, or blank input selects the nokey vault', () => {
@@ -79,19 +99,5 @@ describe('extension vault target input', () => {
         `Unknown Simple vault target "${input}": use one of nokey, meta-secret, localhost, or an absolute Simple vault URL.`,
       )
     }
-  })
-
-  test('only a named non-default target suffixes its metadata file', () => {
-    expect(extensionMetadataFileName(resolveExtensionVaultTarget(''))).toBe(
-      'extension.json',
-    )
-    expect(
-      extensionMetadataFileName(
-        resolveExtensionVaultTarget('https://simple.dev.nokey.sh/'),
-      ),
-    ).toBe('extension.json')
-    expect(
-      extensionMetadataFileName(resolveExtensionVaultTarget('meta-secret')),
-    ).toBe('extension-meta-secret.json')
   })
 })

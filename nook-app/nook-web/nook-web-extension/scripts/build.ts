@@ -14,12 +14,8 @@ import { extensionVaultTargetFromEnvironment } from './vault-target'
 import {
   createManifest,
   type CreateExtensionManifestArgs,
-  ExtensionManifestBuildKind,
 } from '../src/manifest'
-import {
-  extensionChannelIdentity,
-  resolveExtensionChannel,
-} from './channel-identity'
+import { extensionIdentity, resolveExtensionChannel } from './channel-identity'
 import {
   ExtensionDiagnosticBuildAvailability,
   ExtensionDiagnosticBuildPolicy,
@@ -44,11 +40,16 @@ const appCommonLocalesRoot = join(
 )
 const distDir = join(projectRoot, 'dist')
 // NOOK_EXTENSION_VAULT names the one Simple vault this build pairs with.
-const { simpleVaultBaseUrl } = extensionVaultTargetFromEnvironment()
+const vaultTarget = extensionVaultTargetFromEnvironment()
+const { simpleVaultBaseUrl } = vaultTarget
 const simpleVaultDefine = {
   __NOOK_SIMPLE_VAULT_URL__: JSON.stringify(simpleVaultBaseUrl),
 }
-const deployment = extensionChannelIdentity(resolveExtensionChannel())
+// A vault-scoped target gets its own extension identity beside the channel's.
+const deployment = extensionIdentity(
+  resolveExtensionChannel(),
+  vaultTarget.identityScope,
+)
 const extensionDiagnosticBuildPolicy = new ExtensionDiagnosticBuildPolicy()
 const extensionDiagnosticsEnabled =
   extensionDiagnosticBuildPolicy.availability({
@@ -275,7 +276,6 @@ await Promise.all([
 ])
 
 const manifestArgs: CreateExtensionManifestArgs = {
-  kind: ExtensionManifestBuildKind.Channel,
   version: manifestVersion,
   simpleVaultBaseUrl,
   deployment: {
