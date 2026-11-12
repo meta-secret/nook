@@ -231,8 +231,9 @@ pub use page_field_classification::{
     PageInputPattern, PageInputType, PageSecondFactorRoute,
 };
 pub use simple_vault_target::{
-    KnownSimpleVault, SimpleVaultBaseUrl, SimpleVaultTarget, SimpleVaultTargetError,
-    SimpleVaultTargetInput,
+    ExtensionIdentityDisplayQualifier, ExtensionIdentityScope, ExtensionIdentitySeedQualifier,
+    ExtensionMetadataFileName, ExtensionPackageDistribution, KnownSimpleVault, SimpleVaultBaseUrl,
+    SimpleVaultHost, SimpleVaultTarget, SimpleVaultTargetError, SimpleVaultTargetInput,
 };
 pub use vault_host_policy::{DEFAULT_SIMPLE_VAULT_URL, VaultHostPolicyError};
 pub use website_login_options_response::{

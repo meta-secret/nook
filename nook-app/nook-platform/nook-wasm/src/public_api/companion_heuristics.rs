@@ -298,6 +298,17 @@ impl NookOAuthOriginSupport {
     VaultHostObservation::new(hostname).is_simple_vault_hostname()
 }
 
+/// Deployment metadata file of the extension package a Simple vault page
+/// served on `hostname` (`location.hostname`) offers.
+#[wasm_bindgen]
+#[must_use]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn simple_vault_host_extension_metadata_file_name(hostname: &str) -> String {
+    VaultHostObservation::new(hostname)
+        .simple_vault_host()
+        .extension_metadata_file_name()
+        .into()
+}
+
 #[wasm_bindgen]
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn is_sentinel_vault_hostname(hostname: &str) -> bool {
@@ -392,6 +403,23 @@ mod tests {
         assert!(!is_cloudflare_pr_preview_host(
             "pr-7.nokey-simple.pages.dev.evil.test"
         ));
+    }
+
+    #[wasm_bindgen_test]
+    fn simple_vault_host_offers_the_extension_package_of_that_host() {
+        for (hostname, metadata) in [
+            ("simple.meta-secret.io", "extension-meta-secret.json"),
+            ("Simple.Meta-Secret.IO.", "extension-meta-secret.json"),
+            ("simple.nokey.sh", "extension.json"),
+            ("pr-7.nokey-simple.pages.dev", "extension.json"),
+            ("simple.meta-secret.io.example.com", "extension.json"),
+        ] {
+            assert_eq!(
+                simple_vault_host_extension_metadata_file_name(hostname),
+                metadata,
+                "{hostname}"
+            );
+        }
     }
 
     #[wasm_bindgen_test]

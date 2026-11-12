@@ -32,7 +32,9 @@ impl<'a> VaultHostObservation<'a> {
 use thiserror::Error;
 use url::Url;
 
-use crate::simple_vault_target::{KnownSimpleVault, SimpleVaultBaseUrl, SimpleVaultTarget};
+use crate::simple_vault_target::{
+    KnownSimpleVault, SimpleVaultBaseUrl, SimpleVaultHost, SimpleVaultTarget,
+};
 
 /// Default production Simple Vault base URL.
 pub const DEFAULT_SIMPLE_VAULT_URL: &str = KnownSimpleVault::DEFAULT.base_url();
@@ -54,6 +56,8 @@ pub enum VaultHostPolicyError {
     InsecureNonLocalhost,
     #[error("invalid vault URL: {0}")]
     InvalidUrl(String),
+    #[error("The Simple Vault URL must not contain a username or password.")]
+    EmbeddedCredentials,
 }
 
 /// Normalize a Simple Vault base URL (trailing slash, no hash/query).
@@ -66,6 +70,10 @@ impl VaultHostPolicy<'_> {
             url.scheme() == "http" && matches!(url.host_str(), Some("localhost" | "127.0.0.1"));
         if url.scheme() != "https" && !local_http {
             return Err(VaultHostPolicyError::InsecureNonLocalhost);
+        }
+        match (url.username(), url.password()) {
+            ("", None) => {}
+            _ => return Err(VaultHostPolicyError::EmbeddedCredentials),
         }
         url.set_fragment(None);
         url.set_query(None);
@@ -221,6 +229,14 @@ pub(crate) enum VaultAppHostname {
     Unrelated,
 }
 
+/// Named Simple vault deployment that serves this hostname.
+impl VaultHostObservation<'_> {
+    #[must_use]
+    pub fn simple_vault_host(&self) -> SimpleVaultHost {
+        SimpleVaultHost::for_hostname(self.as_str())
+    }
+}
+
 /// Named outcome of the Simple and Sentinel hostname predicates.
 impl VaultHostObservation<'_> {
     /// A trailing DNS root dot names the same host, as in Chrome match patterns.
@@ -343,6 +359,22 @@ mod tests {
             Err(VaultHostPolicyError::InsecureNonLocalhost)
         ));
         Ok(())
+    }
+
+    #[test]
+    fn simple_vault_base_urls_with_userinfo_are_rejected() {
+        for base in [
+            "https://u:p@simple.meta-secret.io/",
+            "https://u@simple.nokey.sh/",
+            "https://:p@simple.nokey.sh/",
+            "http://u:p@127.0.0.1:5174/",
+        ] {
+            assert_eq!(
+                VaultHostPolicy::new(base).normalize_simple_vault_base_url(),
+                Err(VaultHostPolicyError::EmbeddedCredentials),
+                "{base}"
+            );
+        }
     }
 
     struct VaultAppHostnameCase {
