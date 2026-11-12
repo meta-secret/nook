@@ -724,7 +724,9 @@ test("approves the extension into an existing local vault's keyring without even
 
     const consent = connectPage.getByTestId('extension-connect-consent')
     const unlockStep = connectPage.getByTestId('identity-vault-row').first()
-    await expect(consent.or(unlockStep)).toBeVisible({
+    await expect(
+      consent.or(unlockStep).filter({ visible: true }).first(),
+    ).toBeVisible({
       timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     })
     await authorizeDeviceProtection(connectPage)
