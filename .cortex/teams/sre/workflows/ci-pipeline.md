@@ -141,8 +141,11 @@ and manual ecosystem execution in one Actions run named `CI`.
   the project serves it. `CLOUDFLARE_API_TOKEN` needs no `meta-secret.io` zone
   access.
 - Packages a second production extension paired with `simple.meta-secret.io`
-  (`NOOK_EXTENSION_VAULT: meta-secret`) beside the default `nokey` package,
-  verifies both deployed packages once, and attaches both to the release.
+  (`NOOK_EXTENSION_VAULT: meta-secret`, its own extension identity, manual ZIP)
+  into the Simple vault artifact beside the default `nokey` package. It verifies
+  the `nokey` package on `nokey.sh` and the meta-secret package on the immutable
+  `nokey-simple` Pages deployment, never fetching the alias host, once each, and
+  attaches both packages' files to the release.
 - Publishes GitHub Release.
 
 **`rust-dependency-updates.yml`**

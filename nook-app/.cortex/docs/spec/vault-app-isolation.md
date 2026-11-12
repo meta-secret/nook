@@ -123,6 +123,9 @@ link back to Simple for users leaving the quorum-only product.
     alias problem cannot stop a `nokey.sh` release.
   - After a release, check the alias by hand: the commit in
     `https://simple.meta-secret.io/release.json` must match the release commit.
+  - The Simple artifact also carries `downloads/` with the meta-secret extension
+    package, so the alias serves it. The release verifies that package on the
+    immutable `nokey-simple` deployment, not the alias host.
   - Sentinel, Main, the landing site, and PR previews have no alias.
 - **Main and PR deployment:** Deploy all three artifacts independently.
   - Point the landing and both vault custom domains at their Pages

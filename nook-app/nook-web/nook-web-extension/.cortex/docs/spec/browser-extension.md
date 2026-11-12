@@ -519,17 +519,27 @@ pairs with exactly one Simple Vault:
   repository's locally trusted development certificate.
 
 The production, development, local, and each per-PR build have distinct,
-deterministic extension ids. The `nokey` and `meta-secret` production packages
-share the production id, so a browser installs one of them.
+deterministic extension ids. The `meta-secret` production package has its own id,
+the name "Nook Passwords (meta-secret.io)", and its own extension storage, so it
+installs beside the `nokey` package, which keeps the production id. Rust's known
+Simple vault list decides which targets get their own identity: only
+`meta-secret`. The `nokey`, `localhost`, and URL targets keep the channel
+identity.
 Rebuilding one channel preserves its extension-origin IndexedDB and passkey RP
 identity.
 Switching channels cannot reuse extension-private state.
 The sealed image publishes the tested bundle as a root-level ZIP plus
 `extension.json` metadata and a SHA-256 checksum under the matching site
-deployment's `/downloads/` path. A production release also publishes the
-meta-secret package beside it as `extension-meta-secret.json` and
-`nook-passwords-meta-secret-<version>.zip`. Both packages keep the production
-extension identity.
+deployment's `/downloads/` path. The meta-secret package is a manual ZIP on every
+channel. It ships inside the Simple vault artifact under `/downloads/` as
+`extension-meta-secret.json`, `nook-passwords-meta-secret-<version>.zip`, and its
+`.sha256`, so `https://simple.meta-secret.io/downloads/` serves it. The Simple
+vault offers the package for its own host through Rust: on
+`simple.meta-secret.io` it reads `./downloads/extension-meta-secret.json`, and
+elsewhere `extension.json`. It never offers the `nokey` package on the
+meta-secret host. The vault discovers the installed extension's runtime id from
+the bridge script, which only the extension built for that origin injects. A
+production release attaches both packages' files to the GitHub Release.
 PR and development bundles are unsigned developer artifacts.
 They must be unzipped and loaded through the browser's extension developer mode.
 The supported developer launcher resolves hosted builds from that metadata.
