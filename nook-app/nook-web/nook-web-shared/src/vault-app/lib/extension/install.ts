@@ -1,5 +1,9 @@
 import { DEFAULT_SITE_URL } from "$lib/content/sitemap";
-import { simple_vault_host_extension_metadata_file_name } from "$app-wasm";
+import {
+  ExtensionPackageHost,
+  simple_vault_host_extension_metadata_file_name,
+  simple_vault_host_extension_package_host,
+} from "$app-wasm";
 import { Effect, Schema } from "effect";
 import {
   InstalledExtensionRuntimeKind,
@@ -172,10 +176,11 @@ type ExtensionSetupOfferContext = {
 };
 
 /**
- * Metadata of the extension package this page's host offers: first on the
- * page's own host, then the marketing site's copy of the same package. Rust
- * names the file per host, so a meta-secret page never offers the nokey
- * package.
+ * Metadata of the extension package this page's host offers. Rust names the
+ * file and where it is served for each host: a site-hosted package is read
+ * from the page's own host, then the marketing site; a package the Simple
+ * vault serves (meta-secret) is read from the page's own host alone, so that
+ * page never offers the nokey package.
  */
 export function extensionMetadataCandidateUrls(
   pageUrl: URL,
@@ -184,11 +189,18 @@ export function extensionMetadataCandidateUrls(
   const metadataFile = simple_vault_host_extension_metadata_file_name(
     pageUrl.hostname,
   );
-  const urls = [
-    new URL(`./downloads/${metadataFile}`, pageUrl).href,
-    `${marketingSiteBaseUrl}/downloads/${metadataFile}`,
-  ];
-  return [...new Set(urls)];
+  const ownHostUrl = new URL(`./downloads/${metadataFile}`, pageUrl).href;
+  switch (simple_vault_host_extension_package_host(pageUrl.hostname)) {
+    case ExtensionPackageHost.SimpleVault:
+      return [ownHostUrl];
+    case ExtensionPackageHost.Site:
+      return [
+        ...new Set([
+          ownHostUrl,
+          `${marketingSiteBaseUrl}/downloads/${metadataFile}`,
+        ]),
+      ];
+  }
 }
 
 /** Owns this browser host’s resources and interaction lifecycle. */

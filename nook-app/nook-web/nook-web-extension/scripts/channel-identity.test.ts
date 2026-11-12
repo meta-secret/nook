@@ -74,7 +74,12 @@ describe('extension deployment channel identity', () => {
     const production = extensionChannelIdentity('production')
     const metaSecret = extensionIdentity('production', metaSecretIdentityScope)
 
-    expect(metaSecret.extensionId).toMatch(/^[a-p]{32}$/)
+    // Installed meta-secret extensions keep their storage only while these
+    // stay byte-identical.
+    expect(metaSecret.extensionId).toBe('khjcheibamemkakfjfbjloppehnplffp')
+    expect(metaSecret.manifestKey).toBe(
+      'MCowBQYDK2VwAyEAlz1hhMTmfY2Vz22nPp1xQ5f3MeeQ5HX9rdwXqfGNCTc=',
+    )
     expect(metaSecret.extensionId).not.toBe(production.extensionId)
     expect(metaSecret.manifestKey).not.toBe(production.manifestKey)
     expect(extensionIdFromManifestKey(metaSecret.manifestKey)).toBe(

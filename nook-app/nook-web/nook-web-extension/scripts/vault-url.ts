@@ -3,6 +3,7 @@
 // site come from NOOK_EXTENSION_CHANNEL and NOOK_EXTENSION_SITE_URL, as for
 // packaging.
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
+import { ExtensionPackageHost } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { SimpleVaultTarget } from '../src/lib/simple-vault-target'
 import {
   parseExtensionChannel,
@@ -12,15 +13,25 @@ import {
   extensionInstallMethod,
   extensionPackageSiteUrl,
 } from './deployment-package'
-import {
-  extensionPackageHost,
-  resolveExtensionVaultTarget,
-} from './vault-target'
+import { resolvePublishedExtensionVaultTarget } from './vault-target'
+
+/** The `package_host` value shell verifiers branch on. */
+function packageHostLabel(packageHost: ExtensionPackageHost): string {
+  switch (packageHost) {
+    case ExtensionPackageHost.Site:
+      return 'site'
+    case ExtensionPackageHost.SimpleVault:
+      return 'simple-vault'
+  }
+}
 
 await companionWasmReady
 
-const target = resolveExtensionVaultTarget(process.argv[2] || '')
 const channel = parseExtensionChannel(resolveExtensionChannel())
+const target = resolvePublishedExtensionVaultTarget(
+  process.argv[2] || '',
+  channel,
+)
 const siteUrl =
   process.env.NOOK_EXTENSION_SITE_URL?.trim() || 'https://nokey.sh/'
 console.log(`simple=${target.simpleVaultBaseUrl}`)
@@ -31,5 +42,5 @@ console.log(`metadata=${target.metadataFileName}`)
 console.log(
   `install_method=${extensionInstallMethod(channel, target.distribution)}`,
 )
-console.log(`package_host=${extensionPackageHost(target)}`)
+console.log(`package_host=${packageHostLabel(target.packageHost)}`)
 console.log(`package_site=${extensionPackageSiteUrl(target, siteUrl).href}`)

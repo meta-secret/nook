@@ -2,12 +2,15 @@ import { companionWasmReady } from '../../nook-web-shared/src/extension/companio
 
 await companionWasmReady
 import { afterEach, describe, expect, test } from 'bun:test'
-import { ExtensionPackageDistribution } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
+  ExtensionPackageDistribution,
   ExtensionPackageHost,
-  extensionPackageHost,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { ExtensionReleaseChannel } from './channel-identity'
+import {
   extensionVaultTargetFromEnvironment,
   resolveExtensionVaultTarget,
+  resolvePublishedExtensionVaultTarget,
 } from './vault-target'
 
 const savedVaultInput = process.env.NOOK_EXTENSION_VAULT
@@ -28,9 +31,9 @@ describe('extension vault target input', () => {
       downloadsSuffix: '',
       metadataFileName: 'extension.json',
       distribution: ExtensionPackageDistribution.StoreOnProductionChannel,
+      packageHost: ExtensionPackageHost.Site,
       identityScope: { kind: 'channelIdentity' },
     })
-    expect(extensionPackageHost(target)).toBe(ExtensionPackageHost.Site)
   })
 
   test('meta-secret is a manual ZIP the Simple vault serves under its own identity', () => {
@@ -41,15 +44,13 @@ describe('extension vault target input', () => {
         downloadsSuffix: '-meta-secret',
         metadataFileName: 'extension-meta-secret.json',
         distribution: ExtensionPackageDistribution.ManualZip,
+        packageHost: ExtensionPackageHost.SimpleVault,
         identityScope: {
           kind: 'vaultIdentity',
           seedQualifier: 'meta-secret',
           displayQualifier: 'meta-secret.io',
         },
       })
-      expect(extensionPackageHost(target)).toBe(
-        ExtensionPackageHost.SimpleVault,
-      )
     }
   })
 
@@ -66,7 +67,7 @@ describe('extension vault target input', () => {
       expect(target.simpleVaultBaseUrl).toBe(simpleVaultBaseUrl)
       expect(target.metadataFileName).toBe('extension.json')
       expect(target.identityScope).toEqual({ kind: 'channelIdentity' })
-      expect(extensionPackageHost(target)).toBe(ExtensionPackageHost.Site)
+      expect(target.packageHost).toBe(ExtensionPackageHost.Site)
     }
   })
 
@@ -98,6 +99,36 @@ describe('extension vault target input', () => {
       expect(() => resolveExtensionVaultTarget(input)).toThrow(
         `Unknown Simple vault target "${input}": use one of nokey, meta-secret, localhost, or an absolute Simple vault URL.`,
       )
+    }
+  })
+})
+
+describe('published extension vault target', () => {
+  test('a production package must name its Simple vault', () => {
+    for (const input of ['', 'nokey', 'meta-secret']) {
+      expect(
+        resolvePublishedExtensionVaultTarget(
+          input,
+          ExtensionReleaseChannel.Production,
+        ),
+      ).toEqual(resolveExtensionVaultTarget(input))
+    }
+    expect(() =>
+      resolvePublishedExtensionVaultTarget(
+        'https://pr-1.nokey-simple.pages.dev/',
+        ExtensionReleaseChannel.Production,
+      ),
+    ).toThrow('A production extension build must target a named Simple vault')
+  })
+
+  test('other channels package any Simple vault URL', () => {
+    for (const channel of [ExtensionReleaseChannel.Development, 'pr-1']) {
+      expect(
+        resolvePublishedExtensionVaultTarget(
+          'https://pr-1.nokey-simple.pages.dev/',
+          channel,
+        ).simpleVaultBaseUrl,
+      ).toBe('https://pr-1.nokey-simple.pages.dev/')
     }
   })
 })

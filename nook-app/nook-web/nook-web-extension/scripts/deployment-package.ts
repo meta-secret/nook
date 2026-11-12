@@ -9,11 +9,12 @@ import {
   type ExtensionChannel,
 } from './channel-identity'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
-import { ExtensionPackageDistribution } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
-  extensionPackageHost,
+  ExtensionPackageDistribution,
   ExtensionPackageHost,
-  extensionVaultTargetFromEnvironment,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  resolvePublishedExtensionVaultTarget,
   type ExtensionVaultTarget,
 } from './vault-target'
 
@@ -224,7 +225,7 @@ export function extensionPackageSiteUrl(
   target: ExtensionVaultTarget,
   siteUrl: string,
 ): URL {
-  switch (extensionPackageHost(target)) {
+  switch (target.packageHost) {
     case ExtensionPackageHost.Site:
       return normalizedHttpsBaseUrl(siteUrl, 'NOOK_EXTENSION_SITE_URL')
     case ExtensionPackageHost.SimpleVault:
@@ -236,7 +237,7 @@ export function extensionPackageSiteUrl(
 }
 
 function extensionPackageDownloads(request: ExtensionPackageRequest): string {
-  switch (extensionPackageHost(request.target)) {
+  switch (request.target.packageHost) {
     case ExtensionPackageHost.Site:
       return join(request.siteDist, 'downloads')
     case ExtensionPackageHost.SimpleVault:
@@ -261,7 +262,10 @@ export async function packageExtensionDeployment(
     throw new Error('Deployment extension manifest is missing its stable key.')
   }
   const [pairedMatch] = manifest.externally_connectable.matches
-  if (manifest.externally_connectable.matches.length !== 1) {
+  if (
+    manifest.externally_connectable.matches.length !== 1 ||
+    typeof pairedMatch !== 'string'
+  ) {
     throw new Error(
       'Deployment extension manifest must pair with exactly one Simple Vault.',
     )
@@ -331,15 +335,20 @@ export async function packageExtensionDeployment(
 /** Package the build in `dist/` for the environment's channel and vault target. */
 async function packageExtensionDeploymentFromEnvironment(): Promise<ExtensionDeploymentMetadata> {
   const projectRoot = resolve(import.meta.dir, '..')
+  const channel = parseExtensionChannel(resolveExtensionChannel())
   const request: ExtensionPackageRequest = {
     extensionDist: join(projectRoot, 'dist'),
     siteDist: resolve(projectRoot, '../nook-web-app/dist/site'),
     simpleVaultDist: resolve(projectRoot, '../nook-vault-simple/dist'),
-    channel: parseExtensionChannel(resolveExtensionChannel()),
+    channel,
     version: process.env.NOOK_EXTENSION_VERSION?.trim() || '1.0.0',
     commit: process.env.NOOK_EXTENSION_COMMIT?.trim() || '',
     siteUrl: process.env.NOOK_EXTENSION_SITE_URL?.trim() || 'https://nokey.sh/',
-    target: extensionVaultTargetFromEnvironment(),
+    // A published production package must name its Simple vault.
+    target: resolvePublishedExtensionVaultTarget(
+      process.env.NOOK_EXTENSION_VAULT || '',
+      channel,
+    ),
   }
   return packageExtensionDeployment(request)
 }

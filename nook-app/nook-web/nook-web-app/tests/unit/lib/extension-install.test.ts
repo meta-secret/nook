@@ -152,7 +152,7 @@ describe('extension install target', () => {
 })
 
 describe('extension metadata candidates', () => {
-  test('a meta-secret page offers only the meta-secret package', () => {
+  test('a meta-secret page offers only the meta-secret package from its own host', () => {
     expect(
       extensionMetadataCandidateUrls(
         new URL('https://simple.meta-secret.io/vault'),
@@ -160,11 +160,10 @@ describe('extension metadata candidates', () => {
       ),
     ).toEqual([
       'https://simple.meta-secret.io/downloads/extension-meta-secret.json',
-      'https://nokey.sh/downloads/extension-meta-secret.json',
     ])
   })
 
-  test('a nokey page offers the default package', () => {
+  test('a nokey page offers the default package from its host, then the marketing site', () => {
     expect(
       extensionMetadataCandidateUrls(
         new URL('https://simple.nokey.sh/vault'),
