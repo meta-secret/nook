@@ -182,10 +182,15 @@ type ExtensionSetupOfferContext = {
  * vault serves (meta-secret) is read from the page's own host alone, so that
  * page never offers the nokey package.
  */
-export function extensionMetadataCandidateUrls(
-  pageUrl: URL,
-  marketingSiteBaseUrl: string,
-): string[] {
+export type ExtensionMetadataCandidateRequest = {
+  readonly pageUrl: URL;
+  readonly marketingSiteBaseUrl: string;
+};
+
+export function extensionMetadataCandidateUrls({
+  pageUrl,
+  marketingSiteBaseUrl,
+}: ExtensionMetadataCandidateRequest): string[] {
   const metadataFile = simple_vault_host_extension_metadata_file_name(
     pageUrl.hostname,
   );
@@ -268,10 +273,11 @@ class ExtensionInstallationBrowser {
   }
 
   private metadataCandidateUrls(): string[] {
-    return extensionMetadataCandidateUrls(
-      new URL(this.browser.window.location.href),
-      this.marketingSiteBaseUrl(),
-    );
+    const request: ExtensionMetadataCandidateRequest = {
+      pageUrl: new URL(this.browser.window.location.href),
+      marketingSiteBaseUrl: this.marketingSiteBaseUrl(),
+    };
+    return extensionMetadataCandidateUrls(request);
   }
 
   private async fetchExtensionMetadata(

@@ -361,9 +361,9 @@ describe('extension deployment packages per vault target', () => {
         defaultVaultTarget.simpleVaultBaseUrl,
         extensionChannelIdentity('production').manifestKey,
       )
-      await expect(packageExtensionDeployment(request)).rejects.toThrow(
-        'not the packaged vault target',
-      )
+      const vaultMismatch = packageExtensionDeployment(request)
+      expect(vaultMismatch).rejects.toThrow('not the packaged vault target')
+      await Promise.allSettled([vaultMismatch])
       const twoVaults = {
         manifest_version: 3,
         version: '1.2.3',
@@ -379,9 +379,9 @@ describe('extension deployment packages per vault target', () => {
         join(extensionDist, 'manifest.json'),
         JSON.stringify(twoVaults),
       )
-      await expect(packageExtensionDeployment(request)).rejects.toThrow(
-        'exactly one Simple Vault',
-      )
+      const secondPairing = packageExtensionDeployment(request)
+      expect(secondPairing).rejects.toThrow('exactly one Simple Vault')
+      await Promise.allSettled([secondPairing])
     } finally {
       await rm(root, { recursive: true, force: true })
     }
