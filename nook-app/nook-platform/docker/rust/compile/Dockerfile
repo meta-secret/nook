@@ -382,13 +382,14 @@ RUN cd nook-app/nook-web/nook-web-research && node_modules/.bin/vite build
 # the preceding web compilers.
 COPY nook-app/nook-platform/nook-app-common/locales/en.json nook-app/nook-platform/nook-app-common/locales/en.json
 COPY nook-app/nook-platform/nook-app-common/locales/ru.json nook-app/nook-platform/nook-app-common/locales/ru.json
-ARG NOOK_SIMPLE_VAULT_URL=https://simple.nokey.sh/
+# Empty selects the default vault target owned by companion WASM.
+ARG NOOK_EXTENSION_VAULT=
 ARG NOOK_EXTENSION_CHANNEL=production
 ARG NOOK_EXTENSION_VERSION=1.0.0
 ARG NOOK_EXTENSION_COMMIT=
 ARG NOOK_EXTENSION_SITE_URL=https://nokey.sh/
 RUN cd nook-app/nook-web/nook-web-extension \
-    && NOOK_SIMPLE_VAULT_URL="${NOOK_SIMPLE_VAULT_URL}" \
+    && NOOK_EXTENSION_VAULT="${NOOK_EXTENSION_VAULT}" \
        NOOK_EXTENSION_CHANNEL="${NOOK_EXTENSION_CHANNEL}" \
        NOOK_EXTENSION_VERSION="${NOOK_EXTENSION_VERSION}" \
        NOOK_EXTENSION_COMMIT="${NOOK_EXTENSION_COMMIT}" \

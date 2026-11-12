@@ -23,8 +23,9 @@ variable "VITE_PUBLIC_APP_URL" {
   default = ""
 }
 
-variable "NOOK_SIMPLE_VAULT_URL" {
-  default = "https://simple.nokey.sh/"
+// Empty selects the default vault target owned by companion WASM.
+variable "NOOK_EXTENSION_VAULT" {
+  default = ""
 }
 
 variable "VITE_SIMPLE_APP_URL" {
@@ -67,7 +68,7 @@ target "_nook-web-base" {
     VITE_BASE               = VITE_BASE
     VITE_SITE_URL           = VITE_SITE_URL
     VITE_PUBLIC_APP_URL     = VITE_PUBLIC_APP_URL
-    NOOK_SIMPLE_VAULT_URL   = NOOK_SIMPLE_VAULT_URL
+    NOOK_EXTENSION_VAULT    = NOOK_EXTENSION_VAULT
     VITE_SIMPLE_APP_URL     = VITE_SIMPLE_APP_URL
     VITE_SENTINEL_APP_URL   = VITE_SENTINEL_APP_URL
     NOOK_EXTENSION_CHANNEL  = NOOK_EXTENSION_CHANNEL

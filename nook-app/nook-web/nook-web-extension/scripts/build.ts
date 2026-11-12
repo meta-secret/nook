@@ -10,8 +10,7 @@ import { dirname, join, resolve } from 'node:path'
 import packageJson from '../package.json'
 import { buildChromeLocales } from './chrome-locales'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
-import { SimpleVaultTarget } from '../src/lib/simple-vault-target'
-import { normalize_simple_vault_base_url } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { extensionVaultTargetFromEnvironment } from './vault-target'
 import {
   createManifest,
   type CreateExtensionManifestArgs,
@@ -44,9 +43,8 @@ const appCommonLocalesRoot = join(
   'locales',
 )
 const distDir = join(projectRoot, 'dist')
-const simpleVaultBaseUrl = normalize_simple_vault_base_url(
-  process.env.NOOK_SIMPLE_VAULT_URL?.trim() || SimpleVaultTarget.defaultBase(),
-)
+// NOOK_EXTENSION_VAULT names the one Simple vault this build pairs with.
+const { simpleVaultBaseUrl } = extensionVaultTargetFromEnvironment()
 const simpleVaultDefine = {
   __NOOK_SIMPLE_VAULT_URL__: JSON.stringify(simpleVaultBaseUrl),
 }

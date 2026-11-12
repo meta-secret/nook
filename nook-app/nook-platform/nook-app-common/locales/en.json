@@ -1563,9 +1563,7 @@
       "status_ready": "ready",
       "status_revoked": "revoked",
       "vaults": "Vaults",
-      "simple_device_description": "This creates a separate passkey-protected extension device for this browser profile. The extension never reuses the device key from an open Simple Vault tab and can pair only with simple.nokey.sh.",
       "protect_title": "Protect this extension",
-      "protect_description": "Nook is creating this extension's own device key and protecting it with this browser profile's passkey before pairing with simple.nokey.sh.",
       "browser_access_title": "Protect browser access",
       "browser_access_description": "This one-time window protects the extension device. Your complete vault stays at {vaultUrl}.",
       "protect_browser_access": "Protect browser access",
@@ -1629,7 +1627,6 @@
     },
     "connect": {
       "title": "Use Nook on websites",
-      "description": "Keep the complete vault on simple.nokey.sh and allow this browser extension to provide Nook where you sign in.",
       "device_protection": "The extension remains a separately revocable Nook device. The Nook tab protects its device key with a passkey; it does not contain a second vault interface.",
       "identity_handoff_failed": "The extension device could not be unlocked for this vault. Reopen Nook from the unlocked extension and try again.",
       "start_failed": "The extension could not start browser access setup.",

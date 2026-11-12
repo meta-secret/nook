@@ -895,7 +895,6 @@ pub const EXTENSION_COMPANION_USE_IDENTITY_FAILED: &str = "extension.companion.u
 pub const EXTENSION_COMPANION_VAULTS_HINT: &str = "extension.companion.vaults_hint";
 pub const EXTENSION_COMPANION_VAULTS_TITLE: &str = "extension.companion.vaults_title";
 pub const EXTENSION_CONNECT_CONTINUE: &str = "extension.connect.continue";
-pub const EXTENSION_CONNECT_DESCRIPTION: &str = "extension.connect.description";
 pub const EXTENSION_CONNECT_DEVICE_PROTECTION: &str = "extension.connect.device_protection";
 pub const EXTENSION_CONNECT_IDENTITY_HANDOFF_FAILED: &str =
     "extension.connect.identity_handoff_failed";
@@ -1088,7 +1087,6 @@ pub const EXTENSION_SETUP_PASSKEY_DEVICE_DESCRIPTION: &str =
 pub const EXTENSION_SETUP_PASSKEY_SETUP_FAILED: &str = "extension.setup.passkey_setup_failed";
 pub const EXTENSION_SETUP_PROFILE_TITLE: &str = "extension.setup.profile_title";
 pub const EXTENSION_SETUP_PROTECT_BROWSER_ACCESS: &str = "extension.setup.protect_browser_access";
-pub const EXTENSION_SETUP_PROTECT_DESCRIPTION: &str = "extension.setup.protect_description";
 pub const EXTENSION_SETUP_PROTECT_TITLE: &str = "extension.setup.protect_title";
 pub const EXTENSION_SETUP_RESET_SETUP: &str = "extension.setup.reset_setup";
 pub const EXTENSION_SETUP_REVOKED_TITLE: &str = "extension.setup.revoked_title";
@@ -1101,8 +1099,6 @@ pub const EXTENSION_SETUP_SCOPE_VAULT_ACCESS: &str = "extension.setup.scope_vaul
 pub const EXTENSION_SETUP_SELECTED_VAULT: &str = "extension.setup.selected_vault";
 pub const EXTENSION_SETUP_SESSION_BUSY_RETRY: &str = "extension.setup.session_busy_retry";
 pub const EXTENSION_SETUP_SET_UP_EXTENSION: &str = "extension.setup.set_up_extension";
-pub const EXTENSION_SETUP_SIMPLE_DEVICE_DESCRIPTION: &str =
-    "extension.setup.simple_device_description";
 pub const EXTENSION_SETUP_START_OVER: &str = "extension.setup.start_over";
 pub const EXTENSION_SETUP_STATE: &str = "extension.setup.state";
 pub const EXTENSION_SETUP_STATUS_LOCKED: &str = "extension.setup.status_locked";

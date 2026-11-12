@@ -10,13 +10,14 @@ const SETUP_STORAGE_KEY = 'nook:extension-setup'
 const TIMEOUT_MS = 45_000
 const cdpUrl = process.env.NOOK_EXTENSION_SETUP_CDP_URL
 const extensionId = process.env.NOOK_EXTENSION_SETUP_EXTENSION_ID
-const simpleVaultUrl = process.env.NOOK_SIMPLE_VAULT_URL
+// The setup driver receives the Simple Vault in URL form.
+const simpleVaultUrl = process.env.NOOK_EXTENSION_VAULT
 const pin = process.env.NOOK_EXTENSION_SETUP_PIN || '123456'
 const vaultName = process.env.NOOK_EXTENSION_SETUP_VAULT_NAME || 'test'
 
 if (!cdpUrl || !extensionId || !simpleVaultUrl) {
   throw new Error(
-    'NOOK_EXTENSION_SETUP_CDP_URL, NOOK_EXTENSION_SETUP_EXTENSION_ID, and NOOK_SIMPLE_VAULT_URL are required',
+    'NOOK_EXTENSION_SETUP_CDP_URL, NOOK_EXTENSION_SETUP_EXTENSION_ID, and NOOK_EXTENSION_VAULT (a Simple Vault URL) are required',
   )
 }
 const requiredCdpUrl = cdpUrl

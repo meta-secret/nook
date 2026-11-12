@@ -140,6 +140,9 @@ and manual ecosystem execution in one Actions run named `CI`.
   attached by hand to the `nokey-simple` project and every production deploy of
   the project serves it. `CLOUDFLARE_API_TOKEN` needs no `meta-secret.io` zone
   access.
+- Packages a second production extension paired with `simple.meta-secret.io`
+  (`NOOK_EXTENSION_VAULT: meta-secret`) beside the default `nokey` package,
+  verifies both deployed packages once, and attaches both to the release.
 - Publishes GitHub Release.
 
 **`rust-dependency-updates.yml`**

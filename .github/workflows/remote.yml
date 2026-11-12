@@ -332,7 +332,7 @@ jobs:
           export NOOK_EXTENSION_COMMIT="$HEAD_SHA"
           export NOOK_EXTENSION_CHANNEL="pr-$DEPLOYMENT_TAG"
           export NOOK_EXTENSION_SITE_URL="https://pr-$DEPLOYMENT_TAG.nokey-sh.pages.dev/"
-          export NOOK_SIMPLE_VAULT_URL="https://pr-$DEPLOYMENT_TAG.nokey-simple.pages.dev/"
+          export NOOK_EXTENSION_VAULT="https://pr-$DEPLOYMENT_TAG.nokey-simple.pages.dev/"
           export VITE_BASE=/
           export VITE_SITE_URL="https://pr-$DEPLOYMENT_TAG.nokey-sh.pages.dev"
           export VITE_PUBLIC_APP_URL="https://pr-$DEPLOYMENT_TAG.nook-1n8.pages.dev"

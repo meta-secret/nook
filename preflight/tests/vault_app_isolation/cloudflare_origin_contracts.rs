@@ -28,10 +28,24 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
             && vault_target.contains("default_simple_vault_url"),
         "extension vault targeting must call companion WASM host policy"
     );
+    let build_target = root.read("nook-app/nook-web/nook-web-extension/scripts/vault-target.ts");
+    assert!(
+        build_target.contains("resolve_simple_vault_target(requested)")
+            && build_target.contains("default_simple_vault_target_name()")
+            && build_target.contains("process.env.NOOK_EXTENSION_VAULT"),
+        "the extension build must resolve NOOK_EXTENSION_VAULT through companion WASM"
+    );
+    let known_targets =
+        root.read("nook-app/nook-platform/nook-companion-core/src/simple_vault_target.rs");
+    for known_base_url in ["https://simple.nokey.sh/", "https://simple.meta-secret.io/"] {
+        assert!(
+            known_targets.contains(known_base_url),
+            "companion vault targets must own production Simple vault {known_base_url}"
+        );
+    }
     let vault_host_policy =
         root.read("nook-app/nook-platform/nook-companion-core/src/vault_host_policy.rs");
     for production_boundary in [
-        "https://simple.nokey.sh/",
         "https://simple.dev.nokey.sh/*",
         "https://simple.meta-secret.io/*",
         "https://sentinel.nokey.sh/*",
@@ -49,6 +63,9 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
         "task ci:release:deploy-vaults",
         "task ci:release:attach-prod-domains",
         "uses: actions/github-script@v9",
+        "NOOK_EXTENSION_VAULT: nokey",
+        "NOOK_EXTENSION_VAULT: meta-secret",
+        "task ci:release:package-extension",
     ] {
         assert!(
             release.contains(required),
@@ -244,6 +261,12 @@ fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<
         release_extension.contains("EXTENSION_CACHE_BUST=\"$RELEASE_SHA\"")
             && !release_extension.contains("Waiting for exact-release extension artifacts"),
         "release extension verification must check exact-release artifacts once"
+    );
+    assert!(
+        release_extension.contains("for vault_target in nokey meta-secret; do")
+            && release_extension.contains("scripts/vault-url.ts \"$vault_target\"")
+            && !release_extension.contains("https://simple."),
+        "release extension verification must check every vault target's package with companion-resolved URLs"
     );
 
     let verifier = root.read("nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh");

@@ -64,7 +64,7 @@ main() {
   export NOOK_EXTENSION_E2E_DIR="$extension_dir"
   export NOOK_EXTENSION_E2E_HOSTED=true
   export NOOK_EXTENSION_E2E_PROFILE_DIR="$SMOKE_ROOT/browser-profile"
-  export NOOK_SIMPLE_VAULT_URL="$simple_vault_url"
+  export NOOK_EXTENSION_VAULT="$simple_vault_url"
 
   printf 'Testing verified extension at %s against %s\n' "$extension_dir" "$simple_vault_url"
   cd "$EXTENSION_ROOT"

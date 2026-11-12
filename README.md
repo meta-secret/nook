@@ -501,7 +501,7 @@ task web:test:e2e:pr       # fast Playwright subset (IndexedDB / local provider)
 task web:test:e2e:isolation # Simple/Sentinel project and origin boundary suite
 task web:test:e2e          # full local-provider Playwright suite (no PAT)
 task web:test:e2e:sync-live  # live GitHub sync e2e (requires NOOK_GITHUB_PAT)
-task extension:build       # browser extension package
+task extension:build       # browser extension package (VAULT=nokey|meta-secret|localhost|<Simple vault URL>)
 task extension:check:fast  # host-cached extension format/unit/manifest/security gate
 task extension:build:localhost # local-only identity targeting trusted HTTPS localhost
 task extension:install:hosted PR=410 # verify and install an isolated hosted PR build

@@ -78,7 +78,7 @@ for compile_target in "${compile_targets[@]}"; do
     --set "${compile_target}.args.VITE_PUBLIC_APP_URL=${VITE_PUBLIC_APP_URL:-}"
     --set "${compile_target}.args.VITE_SIMPLE_APP_URL=${VITE_SIMPLE_APP_URL:-}"
     --set "${compile_target}.args.VITE_SENTINEL_APP_URL=${VITE_SENTINEL_APP_URL:-}"
-    --set "${compile_target}.args.NOOK_SIMPLE_VAULT_URL=${NOOK_SIMPLE_VAULT_URL:-https://simple.nokey.sh/}"
+    --set "${compile_target}.args.NOOK_EXTENSION_VAULT=${NOOK_EXTENSION_VAULT:-}"
     --set "${compile_target}.args.NOOK_EXTENSION_CHANNEL=${NOOK_EXTENSION_CHANNEL:-production}"
     --set "${compile_target}.args.NOOK_EXTENSION_VERSION=${NOOK_EXTENSION_VERSION:-1.0.0}"
     --set "${compile_target}.args.NOOK_EXTENSION_COMMIT=${extension_commit}"

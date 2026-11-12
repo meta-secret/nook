@@ -11,6 +11,7 @@ import {
   type ExtensionManifestDeployment,
 } from '../src/manifest'
 import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-page-path'
+import { resolveExtensionVaultTarget } from './vault-target'
 
 const defaultManifestArgs: CreateExtensionManifestArgs = {
   kind: ExtensionManifestBuildKind.StoreRelease,
@@ -244,4 +245,59 @@ describe('extension origin isolation', () => {
       ),
     ).toBe(true)
   })
+})
+
+describe('vault target pairing', () => {
+  const productionVaultExclusions = [
+    'https://simple.nokey.sh/*',
+    'https://simple.meta-secret.io/*',
+    'https://sentinel.nokey.sh/*',
+  ]
+
+  for (const input of [
+    'nokey',
+    'meta-secret',
+    'https://pr-408.nokey-simple.pages.dev/',
+  ]) {
+    test(`a ${input} build pairs with exactly its own Simple vault`, () => {
+      const target = resolveExtensionVaultTarget(input)
+      const manifestArgs: CreateExtensionManifestArgs = {
+        kind: ExtensionManifestBuildKind.Channel,
+        version: '1.0.0',
+        simpleVaultBaseUrl: target.simpleVaultBaseUrl,
+        deployment: testDeployment,
+      }
+      const manifest = createManifest(manifestArgs)
+      const simpleMatch = `${target.simpleVaultBaseUrl}*`
+
+      expect(manifest.externally_connectable.matches).toEqual([simpleMatch])
+      expect(
+        manifest.content_scripts
+          .filter(({ js }) => js.includes('content/simple-vault-bridge.js'))
+          .map(({ matches }) => matches),
+      ).toEqual([[simpleMatch]])
+      const broadScripts = manifest.content_scripts.filter(({ matches }) =>
+        matches.includes('<all_urls>'),
+      )
+      for (const exclusion of productionVaultExclusions) {
+        expect(
+          broadScripts.every(({ exclude_matches }) =>
+            exclude_matches.includes(exclusion),
+          ),
+        ).toBe(true)
+      }
+      expect(
+        manifest.content_scripts.every(({ exclude_matches }) =>
+          exclude_matches.includes('https://sentinel.nokey.sh/*'),
+        ),
+      ).toBe(true)
+      expect(
+        manifest.content_scripts.some(
+          ({ matches, exclude_matches }) =>
+            matches.includes('https://sentinel.meta-secret.io/*') ||
+            exclude_matches.includes('https://sentinel.meta-secret.io/*'),
+        ),
+      ).toBe(false)
+    })
+  }
 })

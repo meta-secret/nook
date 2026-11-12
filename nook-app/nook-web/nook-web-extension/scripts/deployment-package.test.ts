@@ -11,26 +11,73 @@ import {
   type DeterministicZipRequest,
 } from './deployment-package'
 import { ExtensionReleaseChannel } from './channel-identity'
+import {
+  ExtensionVaultDownloadsKind,
+  type ExtensionVaultTarget,
+} from './vault-target'
+
+const defaultVaultTarget: ExtensionVaultTarget = {
+  simpleVaultBaseUrl: 'https://simple.nokey.sh/',
+  downloads: { kind: ExtensionVaultDownloadsKind.Default },
+}
+
+const metaSecretVaultTarget: ExtensionVaultTarget = {
+  simpleVaultBaseUrl: 'https://simple.meta-secret.io/',
+  downloads: { kind: ExtensionVaultDownloadsKind.Named, name: 'meta-secret' },
+}
 
 describe('extension deployment archive', () => {
   test('uses predictable channel-specific names', () => {
     expect(
-      extensionArchiveName(ExtensionReleaseChannel.Production, '1.2.3'),
+      extensionArchiveName(
+        ExtensionReleaseChannel.Production,
+        '1.2.3',
+        defaultVaultTarget,
+      ),
     ).toBe('nook-passwords-1.2.3.zip')
     expect(
-      extensionArchiveName(ExtensionReleaseChannel.Development, '1.2.3'),
+      extensionArchiveName(
+        ExtensionReleaseChannel.Development,
+        '1.2.3',
+        defaultVaultTarget,
+      ),
     ).toBe('nook-passwords-dev.zip')
-    expect(extensionArchiveName(ExtensionReleaseChannel.Local, '1.2.3')).toBe(
-      'nook-passwords-local.zip',
-    )
-    expect(extensionArchiveName('pr-408', '1.2.3')).toBe(
+    expect(
+      extensionArchiveName(
+        ExtensionReleaseChannel.Local,
+        '1.2.3',
+        defaultVaultTarget,
+      ),
+    ).toBe('nook-passwords-local.zip')
+    expect(extensionArchiveName('pr-408', '1.2.3', defaultVaultTarget)).toBe(
       'nook-passwords-pr-408.zip',
     )
   })
 
+  test('names a named vault target archive after that target', () => {
+    expect(
+      extensionArchiveName(
+        ExtensionReleaseChannel.Production,
+        '1.2.3',
+        metaSecretVaultTarget,
+      ),
+    ).toBe('nook-passwords-meta-secret-1.2.3.zip')
+    expect(
+      extensionArchiveName(
+        ExtensionReleaseChannel.Development,
+        '1.2.3',
+        metaSecretVaultTarget,
+      ),
+    ).toBe('nook-passwords-meta-secret-dev.zip')
+  })
+
   test('rejects unsafe production versions', () => {
     expect(() =>
-      extensionArchiveName(ExtensionReleaseChannel.Production, '../latest'),
+      extensionArchiveName(
+        ExtensionReleaseChannel.Production,
+        '../latest',
+        defaultVaultTarget,
+      ),
     ).toThrow()
   })
 

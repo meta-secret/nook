@@ -105,7 +105,7 @@ jobs:
           VITE_SENTINEL_APP_URL: https://sentinel.nokey.sh
           VITE_VAULT_SYNC_INTERVAL_MS: ${{ env.CI_RELEASE_VITE_VAULT_SYNC_INTERVAL_MS }}
           WASM_BUILD_MODE: prod
-          NOOK_SIMPLE_VAULT_URL: https://simple.nokey.sh/
+          NOOK_EXTENSION_VAULT: nokey
           NOOK_EXTENSION_CHANNEL: production
           NOOK_EXTENSION_VERSION: ${{ steps.release.outputs.version }}
           NOOK_EXTENSION_COMMIT: ${{ steps.release.outputs.sha }}
@@ -205,7 +205,21 @@ jobs:
         env:
           CI: true
           GIT_COMMIT_ID: ${{ steps.release.outputs.sha }}
-          NOOK_SIMPLE_VAULT_URL: https://simple.nokey.sh/
+          NOOK_EXTENSION_VAULT: nokey
+          NOOK_EXTENSION_CHANNEL: production
+          NOOK_EXTENSION_VERSION: ${{ steps.release.outputs.version }}
+          NOOK_EXTENSION_COMMIT: ${{ steps.release.outputs.sha }}
+          NOOK_EXTENSION_SITE_URL: https://nokey.sh/
+
+      # Each extension build pairs with one Simple vault. The image already
+      # packaged the nokey extension; add the meta-secret one beside it.
+      - name: Build and package the meta-secret production extension
+        run: |
+          cd /meta-secret/nook
+          task ci:release:package-extension
+        env:
+          CI: true
+          NOOK_EXTENSION_VAULT: meta-secret
           NOOK_EXTENSION_CHANNEL: production
           NOOK_EXTENSION_VERSION: ${{ steps.release.outputs.version }}
           NOOK_EXTENSION_COMMIT: ${{ steps.release.outputs.sha }}
@@ -261,10 +275,14 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v5
 
-      - name: Verify production browser extension deployment
+      # The image checkout holds the generated companion WASM that resolves
+      # each vault target's expected URLs.
+      - name: Verify production browser extension deployments
         env:
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
-        run: task ci:release:verify-extension
+        run: |
+          cd /meta-secret/nook
+          task ci:release:verify-extension
 
       - name: Publish GitHub Release
         uses: actions/github-script@v9
@@ -305,14 +323,22 @@ jobs:
               process.cwd(),
               'nook-app/nook-web/nook-web-app/dist/site/downloads',
             )
-            const metadata = JSON.parse(
-              fs.readFileSync(path.join(downloads, 'extension.json'), 'utf8'),
-            )
-            const assetPaths = [
-              path.join(downloads, metadata.archive),
-              path.join(downloads, 'extension.json'),
-              path.join(downloads, `${metadata.archive}.sha256`),
-            ]
+            // One verified package per vault target: extension.json and
+            // extension-<target>.json each name their archive and checksum.
+            const assetPaths = fs
+              .readdirSync(downloads)
+              .filter((name) => /^extension(-[a-z-]+)?\.json$/.test(name))
+              .sort()
+              .flatMap((metadataFile) => {
+                const metadata = JSON.parse(
+                  fs.readFileSync(path.join(downloads, metadataFile), 'utf8'),
+                )
+                return [
+                  path.join(downloads, metadata.archive),
+                  path.join(downloads, metadataFile),
+                  path.join(downloads, `${metadata.archive}.sha256`),
+                ]
+              })
             const assets = (await github.rest.repos.listReleaseAssets({
               ...context.repo,
               release_id: release.id,

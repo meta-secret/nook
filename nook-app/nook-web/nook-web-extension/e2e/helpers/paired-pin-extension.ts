@@ -10,10 +10,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { installMockPasskeyRuntime } from '../../../nook-web-app/e2e/passkey-mock'
 import { openVaultPage } from '../../../nook-web-app/e2e/helpers/workspace-navigation'
-import {
-  belongs_to_simple_vault,
-  normalize_simple_vault_base_url,
-} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { belongs_to_simple_vault } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { resolveExtensionVaultTarget } from '../../scripts/vault-target'
 import { MOCK_AUTH_DEFAULT_PIN } from '../mock-auth'
 import {
   ensurePinProtectedPopup,
@@ -140,9 +138,9 @@ export async function launchPairedPinExtension(
 ): Promise<PairedPinExtension> {
   const [vaultName = 'Mock auth vault'] = [options?.vaultName]
   const [pin = MOCK_AUTH_DEFAULT_PIN] = [options?.pin]
-  const simpleVaultBaseUrl = normalize_simple_vault_base_url(
+  const { simpleVaultBaseUrl } = resolveExtensionVaultTarget(
     process.env.NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL ||
-      process.env.NOOK_SIMPLE_VAULT_URL ||
+      process.env.NOOK_EXTENSION_VAULT ||
       LOCAL_E2E_SIMPLE_VAULT_URL,
   )
 

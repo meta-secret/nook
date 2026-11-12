@@ -108,7 +108,7 @@ jobs:
       VITE_PUBLIC_APP_URL: https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev
       VITE_SIMPLE_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
       VITE_SENTINEL_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
-      NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
+      NOOK_EXTENSION_VAULT: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
       NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
       NOOK_EXTENSION_COMMIT: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
       NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
@@ -235,7 +235,7 @@ jobs:
       VITE_PUBLIC_APP_URL: https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev
       VITE_SIMPLE_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
       VITE_SENTINEL_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
-      NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
+      NOOK_EXTENSION_VAULT: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
       NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
       NOOK_EXTENSION_COMMIT: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
       NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
@@ -325,7 +325,7 @@ jobs:
       PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
       NOOK_E2E_SYNC_PROVIDER: file
       WASM_BUILD_MODE: dev
-      NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
+      NOOK_EXTENSION_VAULT: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
       NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
       NOOK_EXTENSION_COMMIT: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
       NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/

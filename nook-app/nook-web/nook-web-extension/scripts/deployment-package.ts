@@ -8,6 +8,13 @@ import {
   resolveExtensionChannel,
   type ExtensionChannel,
 } from './channel-identity'
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
+import {
+  extensionDownloadNameSuffix,
+  extensionMetadataFileName,
+  extensionVaultTargetFromEnvironment,
+  type ExtensionVaultTarget,
+} from './vault-target'
 
 export type ExtensionDeploymentMetadata = {
   schema_version: 2
@@ -96,14 +103,16 @@ const extensionManifestAdmission = new ExtensionManifestAdmission()
 export function extensionArchiveName(
   channel: ExtensionChannel,
   version: string,
+  target: ExtensionVaultTarget,
 ): string {
-  if (channel === 'development') return 'nook-passwords-dev.zip'
-  if (channel === 'local') return 'nook-passwords-local.zip'
-  if (channel.startsWith('pr-')) return `nook-passwords-${channel}.zip`
+  const prefix = `nook-passwords${extensionDownloadNameSuffix(target)}`
+  if (channel === 'development') return `${prefix}-dev.zip`
+  if (channel === 'local') return `${prefix}-local.zip`
+  if (channel.startsWith('pr-')) return `${prefix}-${channel}.zip`
   if (!/^[0-9A-Za-z][0-9A-Za-z.+-]*$/.test(version)) {
     throw new Error('NOOK_EXTENSION_VERSION is not safe for an archive name.')
   }
-  return `nook-passwords-${version}.zip`
+  return `${prefix}-${version}.zip`
 }
 
 export function extensionInstallTarget(
@@ -203,11 +212,25 @@ export async function packageExtensionDeployment(): Promise<ExtensionDeploymentM
   if (!simple_vault_url) {
     throw new Error('Deployment extension manifest has no Simple Vault target.')
   }
+  // The package is named for NOOK_EXTENSION_VAULT; the built manifest must
+  // pair with that same Simple vault.
+  const target = extensionVaultTargetFromEnvironment()
+  if (simple_vault_url !== `${target.simpleVaultBaseUrl}*`) {
+    throw new Error(
+      `Built extension pairs with ${simple_vault_url}, not the packaged vault target ${target.simpleVaultBaseUrl}.`,
+    )
+  }
 
-  await rm(downloads, { force: true, recursive: true })
+  // Replace only this target's files so each vault target's package coexists.
   await mkdir(downloads, { recursive: true })
-  const archive = extensionArchiveName(channel, version)
+  const archive = extensionArchiveName(channel, version, target)
+  const metadataFile = extensionMetadataFileName(target)
   const archivePath = join(downloads, archive)
+  await Promise.all(
+    [metadataFile, archive, `${archive}.sha256`].map((file) =>
+      rm(join(downloads, file), { force: true }),
+    ),
+  )
   const archiveRequest: DeterministicZipRequest = {
     sourceDirectory: extensionDist,
     archivePath,
@@ -235,7 +258,7 @@ export async function packageExtensionDeployment(): Promise<ExtensionDeploymentM
   }
   await Promise.all([
     writeFile(
-      join(downloads, 'extension.json'),
+      join(downloads, metadataFile),
       `${JSON.stringify(metadata, identityJsonReplacer, 2)}\n`,
     ),
     writeFile(join(downloads, `${archive}.sha256`), `${digest}  ${archive}\n`),
@@ -247,4 +270,7 @@ export async function packageExtensionDeployment(): Promise<ExtensionDeploymentM
   return metadata
 }
 
-if (import.meta.main) await packageExtensionDeployment()
+if (import.meta.main) {
+  await companionWasmReady
+  await packageExtensionDeployment()
+}

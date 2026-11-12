@@ -226,7 +226,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/scripts/ci-pr-native-pages-build.sh',
-    'e6731f208ba0e58d59b221aa70f800ac67f8fc29299a1010deb2cd44782769c2',
+    'eac87e68b0d752ee926b829910c5b95f88f137a893433f317a728d017cac5ddd',
   ],
   [
     'infra/operator-ssh.ts',
@@ -238,7 +238,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts',
-    'b76a4199b24b9425409aaea9d760130892f533245ea213d4006dbc292373cc15',
+    'f6f6f3d71b7befe57cdb01a2e2ea8440dc27495557e77d086ac6d4de649360d1',
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.sh',
@@ -246,15 +246,15 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.mjs',
-    '2fefe136040aaa20f96fa95a0712539b240195d31f4ef20f30935bf237a8743c',
+    'd25baf30a47a738c22c19df74ca89b61db570e77353f126a8931f51b9daadae6',
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.sh',
-    'e8d392f86a032d510038d55a8eb1f7d1a0dbd472f5a5362c1829a11c11df501b',
+    'a8387ddda8ba6e9dd7339cfb1d25851a44cfc27695e2231b7fb4c9d99ca04cdb',
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/test-hosted-smoke.sh',
-    'e75257d97999373062da11a90e9d22d5b68d7266de868f4a3e972c2f1b8309c4',
+    '5e68dd7acfb2374cedc0bc75e43817873aa407513185f3421b49ea2ed978346a',
   ],
 ]);
 
@@ -281,7 +281,7 @@ export const AUDITED_SOURCE_SEAMS: readonly AuditedSourceSeam[] = [
       'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.sh',
   },
   {
-    digest: 'e8d392f86a032d510038d55a8eb1f7d1a0dbd472f5a5362c1829a11c11df501b',
+    digest: 'a8387ddda8ba6e9dd7339cfb1d25851a44cfc27695e2231b7fb4c9d99ca04cdb',
     marker: '$SCRIPT_DIR/setup-brave-vault.sh',
     sourcePath:
       'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.test.sh',
@@ -299,7 +299,7 @@ export const AUDITED_SOURCE_SEAMS: readonly AuditedSourceSeam[] = [
       'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.sh',
   },
   {
-    digest: 'e75257d97999373062da11a90e9d22d5b68d7266de868f4a3e972c2f1b8309c4',
+    digest: '5e68dd7acfb2374cedc0bc75e43817873aa407513185f3421b49ea2ed978346a',
     marker: '$SCRIPT_DIR/test-hosted-smoke.sh',
     sourcePath:
       'nook-app/nook-web/nook-web-extension/scripts/test-hosted-smoke.test.sh',

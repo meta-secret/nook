@@ -98,7 +98,7 @@ jobs:
           # Verify the complete native graph before refreshing any shared Main cache scope.
           GHA_CACHE_WRITE_ENABLED: ""
           GIT_COMMIT_ID: ${{ github.sha }}
-          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
+          NOOK_EXTENSION_VAULT: ${{ env.CI_MAIN_SIMPLE_URL }}/
           NOOK_EXTENSION_CHANNEL: development
           NOOK_EXTENSION_COMMIT: ${{ github.sha }}
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
@@ -321,7 +321,7 @@ jobs:
           VITE_PUBLIC_APP_URL: ${{ env.CI_MAIN_DEV_URL }}
           VITE_SIMPLE_APP_URL: ${{ env.CI_MAIN_SIMPLE_URL }}
           VITE_SENTINEL_APP_URL: ${{ env.CI_MAIN_SENTINEL_URL }}
-          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
+          NOOK_EXTENSION_VAULT: ${{ env.CI_MAIN_SIMPLE_URL }}/
           NOOK_EXTENSION_CHANNEL: development
           NOOK_EXTENSION_COMMIT: ${{ github.sha }}
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
