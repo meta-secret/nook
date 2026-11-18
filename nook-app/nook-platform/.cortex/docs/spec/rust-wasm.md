@@ -18,6 +18,8 @@
   - the featureless `nook-wasm` vault bridge (Unified/Simple/Sentinel/extension
     background); and
   - tiny `nook-companion-wasm` (content-script heuristics + host policy).
+- Both packages target `wasm32-unknown-unknown` with fixed-width SIMD
+  (`simd128`). The browser or test runtime must support this WebAssembly feature.
 - Realm enforcement stays in Rust-owned application configuration for the vault
   package.
 

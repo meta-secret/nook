@@ -777,7 +777,7 @@ RUN case "$WASM_BUILD_MODE" in \
     && RUSTC_WRAPPER= wasm-pack build nook-wasm --target web \
          --out-dir "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm" \
          --out-name nook_wasm $wasm_opt_flag \
-    && ( current="$(find Cargo.toml Cargo.lock \
+    && ( current="$(find Cargo.toml Cargo.lock .cargo/config.toml \
            nook-wasm/Cargo.toml nook-wasm/src \
            nook-companion-core/Cargo.toml nook-companion-core/src \
            nook-app-common/Cargo.toml nook-app-common/src nook-app-common/locales \
@@ -786,7 +786,7 @@ RUN case "$WASM_BUILD_MODE" in \
            nook-auth2/Cargo.toml nook-auth2/src \
            nook-replication/Cargo.toml nook-replication/src \
            nook-event-log/Cargo.toml nook-event-log/src \
-           \( -name '*.rs' -o -name '*.json' -o -name 'Cargo.toml' -o -name 'Cargo.lock' \) -print0 \
+           \( -name '*.rs' -o -name '*.json' -o -name 'Cargo.toml' -o -name 'Cargo.lock' -o -path '.cargo/config.toml' \) -print0 \
          | LC_ALL=C sort -z \
          | xargs -0 sha256sum \
          | sha256sum \
@@ -814,10 +814,10 @@ RUN case "$WASM_BUILD_MODE" in \
     && RUSTC_WRAPPER= wasm-pack build nook-companion-wasm --target web \
          --out-dir "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm" \
          --out-name nook_companion_wasm $wasm_opt_flag \
-    && ( current="$(find Cargo.toml Cargo.lock \
+    && ( current="$(find Cargo.toml Cargo.lock .cargo/config.toml \
            nook-companion-wasm/Cargo.toml nook-companion-wasm/src \
            nook-companion-core/Cargo.toml nook-companion-core/src \
-           \( -name '*.rs' -o -name '*.json' -o -name 'Cargo.toml' -o -name 'Cargo.lock' \) -print0 \
+           \( -name '*.rs' -o -name '*.json' -o -name 'Cargo.toml' -o -name 'Cargo.lock' -o -path '.cargo/config.toml' \) -print0 \
          | LC_ALL=C sort -z \
          | xargs -0 sha256sum \
          | sha256sum \
