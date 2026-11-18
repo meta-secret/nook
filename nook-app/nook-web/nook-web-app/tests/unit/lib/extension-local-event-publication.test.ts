@@ -66,11 +66,12 @@ class LocalEventPublicationFixture {
   private async exportCatalog(
     expectedStoreId: string,
   ): Promise<NookEncryptedSearchCatalogHint> {
-    this.catalogReads.push({
+    const read: CatalogExportRead = {
       expectedStoreId,
       stage: this.stage,
       releasedRecords: this.releaseRecords.mock.calls.length,
-    })
+    }
+    this.catalogReads.push(read)
     switch (this.scenario) {
       case CatalogExportScenario.Sealed:
         return { kind: 'sealed', encoded: 'sealed-catalog-fixture' }

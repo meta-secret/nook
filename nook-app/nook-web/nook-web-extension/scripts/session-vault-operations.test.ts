@@ -40,6 +40,10 @@ type ImportManagerState = {
 class EventLogRecordsFixture {
   free(): void {}
 
+  with_local_update(): never {
+    throw new Error('Prepared updates belong to the background worker')
+  }
+
   [Symbol.dispose](): void {
     this.free()
   }

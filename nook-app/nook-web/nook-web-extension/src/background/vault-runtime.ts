@@ -263,11 +263,10 @@ class BackgroundVaultRuntime {
     const request: ExtensionManagedEventLogImport = {
       grant,
       records,
-      importRecords: ({ manager, records: recordValues }) =>
-        manager.import_extension_local_event_log_update_js(
-          update,
-          recordValues,
-        ),
+      importRecords: ({ manager, records: recordValues }) => {
+        const prepared = recordValues.with_local_update(update)
+        return manager.import_extension_local_event_log_update_js(prepared)
+      },
     }
     return this.importManagedEventLog(request)
   }

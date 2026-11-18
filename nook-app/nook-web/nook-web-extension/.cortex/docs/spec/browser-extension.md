@@ -1611,8 +1611,10 @@ phone or computer is.
     before seeding a completely empty extension catalog in one transaction.
   - Existing senders can omit the field. Older receivers discard it and still
     import the signed events. The extension also imports valid events when
-    this field is malformed or its catalog is rejected. Existing pairings
-    and the encrypted catalog storage format support this rollout directly.
+    this field is malformed or its catalog is rejected. The content bridge
+    omits the hint when it could make the browser message exceed its size
+    limit. Existing pairings and the encrypted catalog storage format support
+    this rollout directly.
 - **Extension unlock:** Wrap the private device key in extension-origin
   IndexedDB with WebAuthn PRF.
   - Event replication may run while it is locked.

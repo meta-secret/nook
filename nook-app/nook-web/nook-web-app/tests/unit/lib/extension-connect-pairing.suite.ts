@@ -9,13 +9,16 @@ import {
   extensionConnectionBrowser,
 } from '$lib/extension/connect'
 import {
-  ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageGuard,
   ExtensionPairingApprovedMessageAdmissionFailure,
   RuntimeMessageDecodeFailureKind,
   ExtensionPairingApprovedMessageType,
   ExtensionPairingApprovedMessage as ExtensionPairingApprovedMessageSchema,
   type ExtensionPairingApprovedMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
+import {
+  ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageGuard,
+  ExtensionLocalEventLogUpdatedMessageType,
+} from '../../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import { RuntimeMessageDecodeCauseKind } from '../../../../nook-web-shared/src/extension/runtime-message-decode-failure'
 import {
   extensionEventLogRecordsFixture as eventLogRecords,
@@ -30,6 +33,16 @@ import {
   setupStorageKey,
   simplePairingVaultType,
 } from './extension-connect-test-support'
+
+type LocalUpdateDecodeInput = Pick<
+  ExtensionLocalEventLogUpdatedMessageGuard,
+  'type'
+> & {
+  payload: Omit<
+    ExtensionLocalEventLogUpdatedMessageGuard['payload'],
+    'encryptedSearchCatalog'
+  > & { encryptedSearchCatalog: unknown }
+}
 
 describe('extension pairing approved message', () => {
   /** The web app added the extension to a keyring holding one vault here. */
@@ -478,17 +491,19 @@ describe('extension pairing approved message', () => {
   ])(
     'projects only an opaque string from the optional catalog field %#',
     ({ value, expected }) => {
-      const type = 'nook:extension-local-event-log-updated'
+      const type =
+        ExtensionLocalEventLogUpdatedMessageType.NookExtensionLocalEventLogUpdated
       const vaultStoreId = 'store_abcdefghijk'
+      const input: LocalUpdateDecodeInput = {
+        type,
+        payload: {
+          vaultStoreId,
+          eventLogRecords,
+          encryptedSearchCatalog: value,
+        },
+      }
       const decoded = Effect.runSync(
-        ExtensionLocalEventLogUpdatedMessageGuard.decode({
-          type,
-          payload: {
-            vaultStoreId,
-            eventLogRecords,
-            encryptedSearchCatalog: value,
-          },
-        }),
+        ExtensionLocalEventLogUpdatedMessageGuard.decode(input),
       )
       expect(decoded).toEqual({
         type,
