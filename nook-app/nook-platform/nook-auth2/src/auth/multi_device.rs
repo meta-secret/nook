@@ -44,66 +44,88 @@ mod fixtures {
     use crate::RecordTypeDeclaration;
     use std::io;
 
-    pub(super) const ENROLLED_AT: &str = "2026-06-21T00:00:00Z";
-    pub(super) fn genesis_vault(
-        keys: &VaultKeys,
-    ) -> anyhow::Result<(DeviceIdentity, Vec<StoredSecretRecord>)> {
-        let genesis = DeviceIdentity::generate()?;
-        let mut records = vec![genesis.auth_record(&keys.secrets_key, &keys.members_key)?];
-        records.extend(VaultMember::genesis_members_records(
-            GenesisMembersRecordsRequest {
-                identity: &genesis,
-                members_key: &keys.members_key,
-                enrolled_at: ENROLLED_AT,
-            },
-        )?);
-        Ok((genesis, records))
+    pub(super) struct EnrollmentFixture<'a> {
+        pub(super) keys: &'a VaultKeys,
     }
 
-    pub(super) fn user_secret_record(id: &str, value: &str) -> StoredSecretRecord {
-        StoredSecretRecord {
-            key: SecretId::from_vault_record(id),
-            secret_type: RecordTypeDeclaration::Secret(SecretType::Login),
-            value: StoredRecordPayload::from_trusted(value.to_owned()),
+    pub(super) struct PendingEnrollment<'a> {
+        pub(super) approver: &'a DeviceIdentity,
+        pub(super) records: Vec<StoredSecretRecord>,
+        pub(super) joiner: &'a DeviceIdentity,
+    }
+
+    impl EnrollmentFixture<'_> {
+        pub(super) const ENROLLED_AT: &'static str = "2026-06-21T00:00:00Z";
+        pub(super) fn genesis_vault(
+            &self,
+        ) -> anyhow::Result<(DeviceIdentity, Vec<StoredSecretRecord>)> {
+            let genesis = DeviceIdentity::generate()?;
+            let mut records =
+                vec![genesis.auth_record(&self.keys.secrets_key, &self.keys.members_key)?];
+            records.extend(VaultMember::genesis_members_records(
+                GenesisMembersRecordsRequest {
+                    identity: &genesis,
+                    members_key: &self.keys.members_key,
+                    enrolled_at: Self::ENROLLED_AT,
+                },
+            )?);
+            Ok((genesis, records))
+        }
+
+        pub(super) fn approve_pending_join(
+            &self,
+            request: PendingEnrollment<'_>,
+        ) -> anyhow::Result<Vec<StoredSecretRecord>> {
+            let PendingEnrollment {
+                approver,
+                mut records,
+                joiner,
+            } = request;
+            let join = match VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
+                records: &records,
+                device_id: joiner.device_id(),
+            })? {
+                DeviceJoinStatus::Pending(join) => join,
+                DeviceJoinStatus::NotRequested => {
+                    return Err(io::Error::other("pending join fixture must exist").into());
+                }
+            };
+            let (auth_record, join_key, member_records) = JoinRequestApproval::new(
+                &self.keys.secrets_key,
+                &self.keys.members_key,
+                join,
+                approver,
+                &records,
+            )
+            .approve()?;
+            records.retain(|record| record.key.as_str() != join_key);
+            records.push(auth_record);
+            VaultMember::replace_member_records(ReplaceMemberRecordsRequest {
+                records: &mut records,
+                member_records,
+            })?;
+            Ok(records)
         }
     }
 
-    pub(super) fn approve_pending_join(
-        keys: &VaultKeys,
-        approver: &DeviceIdentity,
-        mut records: Vec<StoredSecretRecord>,
-        joiner: &DeviceIdentity,
-    ) -> anyhow::Result<Vec<StoredSecretRecord>> {
-        let join = match VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
-            records: &records,
-            device_id: joiner.device_id(),
-        })? {
-            DeviceJoinStatus::Pending(join) => join,
-            DeviceJoinStatus::NotRequested => {
-                return Err(io::Error::other("pending join fixture must exist").into());
+    pub(super) struct LoginRecord<'a> {
+        pub(super) id: &'a str,
+        pub(super) value: &'a str,
+    }
+    impl LoginRecord<'_> {
+        pub(super) fn stored(self) -> StoredSecretRecord {
+            StoredSecretRecord {
+                key: SecretId::from_vault_record(self.id),
+                secret_type: RecordTypeDeclaration::Secret(SecretType::Login),
+                value: StoredRecordPayload::from_trusted(self.value.to_owned()),
             }
-        };
-        let (auth_record, join_key, member_records) = JoinRequestApproval::new(
-            &keys.secrets_key,
-            &keys.members_key,
-            join,
-            approver,
-            &records,
-        )
-        .approve()?;
-        records.retain(|record| record.key.as_str() != join_key);
-        records.push(auth_record);
-        VaultMember::replace_member_records(ReplaceMemberRecordsRequest {
-            records: &mut records,
-            member_records,
-        })?;
-        Ok(records)
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::fixtures::{ENROLLED_AT, approve_pending_join, genesis_vault, user_secret_record};
+    use super::fixtures::{EnrollmentFixture, LoginRecord, PendingEnrollment};
     use std::io;
 
     use super::*;
@@ -112,7 +134,7 @@ mod tests {
     #[test]
     fn genesis_device_can_decrypt_vault_keys() -> anyhow::Result<()> {
         let keys = VaultKeys::generate()?;
-        let (genesis, records) = genesis_vault(&keys)?;
+        let (genesis, records) = EnrollmentFixture { keys: &keys }.genesis_vault()?;
         assert_eq!(
             VaultRecordView::new(&records).secrets_key(&genesis)?,
             keys.secrets_key
@@ -127,12 +149,16 @@ mod tests {
     #[test]
     fn second_device_join_request_and_approval_roundtrips_key_access() -> anyhow::Result<()> {
         let keys = VaultKeys::generate()?;
-        let (genesis, mut records) = genesis_vault(&keys)?;
+        let (genesis, mut records) = EnrollmentFixture { keys: &keys }.genesis_vault()?;
 
         let joiner = DeviceIdentity::generate()?;
-        records.push(JoinRequestIssuance::new(&joiner, ENROLLED_AT).issue()?);
+        records.push(JoinRequestIssuance::new(&joiner, EnrollmentFixture::ENROLLED_AT).issue()?);
 
-        records = approve_pending_join(&keys, &genesis, records, &joiner)?;
+        records = EnrollmentFixture { keys: &keys }.approve_pending_join(PendingEnrollment {
+            approver: &genesis,
+            records,
+            joiner: &joiner,
+        })?;
 
         assert_eq!(
             VaultRecordView::new(&records).secrets_key(&joiner)?,
@@ -157,7 +183,7 @@ mod tests {
     fn vault_meta_state_classifies_roundtrips_and_removes_every_record_kind() -> anyhow::Result<()>
     {
         let keys = VaultKeys::generate()?;
-        let (genesis, mut records) = genesis_vault(&keys)?;
+        let (genesis, mut records) = EnrollmentFixture { keys: &keys }.genesis_vault()?;
         let joiner = DeviceIdentity::generate()?;
         let sentinel_participant = DeviceIdentity::generate()?;
         let sentinel_record = SentinelShareEnvelope::create_sentinel_share_records(
@@ -171,11 +197,15 @@ mod tests {
         .ok_or_else(|| io::Error::other("sentinel share record must exist"))?;
         let join_record = JoinRequestIssuance::with_signing_key(
             &joiner,
-            ENROLLED_AT,
+            EnrollmentFixture::ENROLLED_AT,
             &DeviceSigningPublicKey::from_trusted("a".repeat(64)),
         )
         .issue()?;
-        let user_secret = user_secret_record("secret_login001", "encrypted-user-secret");
+        let user_secret = LoginRecord {
+            id: "secret_login001",
+            value: "encrypted-user-secret",
+        }
+        .stored();
         records.push(join_record.clone());
         records.push(sentinel_record.clone());
         records.push(user_secret.clone());
@@ -244,15 +274,22 @@ mod tests {
     #[test]
     fn merge_remote_join_records_replaces_only_pending_join_bucket() -> anyhow::Result<()> {
         let keys = VaultKeys::generate()?;
-        let (genesis, mut records) = genesis_vault(&keys)?;
-        records.push(user_secret_record("secret_api001", "encrypted-user-secret"));
+        let (genesis, mut records) = EnrollmentFixture { keys: &keys }.genesis_vault()?;
+        records.push(
+            LoginRecord {
+                id: "secret_api001",
+                value: "encrypted-user-secret",
+            }
+            .stored(),
+        );
 
         let stale_joiner = DeviceIdentity::generate()?;
         records.push(JoinRequestIssuance::new(&stale_joiner, "2026-06-20T00:00:00Z").issue()?);
         let mut state = VaultMetaState::from_stored_records(&records)?;
 
         let fresh_joiner = DeviceIdentity::generate()?;
-        let fresh_records = vec![JoinRequestIssuance::new(&fresh_joiner, ENROLLED_AT).issue()?];
+        let fresh_records =
+            vec![JoinRequestIssuance::new(&fresh_joiner, EnrollmentFixture::ENROLLED_AT).issue()?];
         state.replace_join_records(&fresh_records)?;
 
         assert_eq!(state.secrets.len(), 1);
@@ -281,7 +318,7 @@ mod tests {
                 roster: vec![VaultMember::member_from_identity(
                     MemberFromIdentityRequest {
                         identity: &genesis,
-                        enrolled_at: ENROLLED_AT,
+                        enrolled_at: EnrollmentFixture::ENROLLED_AT,
                     },
                 )],
                 members_key: &wrong_members_key,
@@ -290,7 +327,7 @@ mod tests {
             .next()
             .ok_or_else(|| io::Error::other("member record must exist"))?;
         let records = vec![
-            JoinRequestIssuance::new(&joiner, ENROLLED_AT).issue()?,
+            JoinRequestIssuance::new(&joiner, EnrollmentFixture::ENROLLED_AT).issue()?,
             corrupt_member_record,
         ];
         let join = match VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {

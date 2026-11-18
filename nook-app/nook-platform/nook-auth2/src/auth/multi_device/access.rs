@@ -133,7 +133,7 @@ impl VaultMetaState {
 
 #[cfg(test)]
 mod tests {
-    use super::super::fixtures::{ENROLLED_AT, approve_pending_join, genesis_vault};
+    use super::super::fixtures::{EnrollmentFixture, PendingEnrollment};
 
     use super::super::{JoinRequestIssuance, VaultKeys, VaultRecordView};
     use super::*;
@@ -146,7 +146,7 @@ mod tests {
         let members = VaultMember::genesis_members_records(GenesisMembersRecordsRequest {
             identity: &participant,
             members_key: &keys.members_key,
-            enrolled_at: ENROLLED_AT,
+            enrolled_at: EnrollmentFixture::ENROLLED_AT,
         })?;
         assert!(VaultMetaState::device_is_enrolled(
             DeviceIsEnrolledRequest {
@@ -173,11 +173,11 @@ mod tests {
     fn connect_access_status_distinguishes_ready_pending_and_unenrolled_devices()
     -> anyhow::Result<()> {
         let keys = VaultKeys::generate()?;
-        let (genesis, mut records) = genesis_vault(&keys)?;
+        let (genesis, mut records) = EnrollmentFixture { keys: &keys }.genesis_vault()?;
         let pending = DeviceIdentity::generate()?;
         let stranger = DeviceIdentity::generate()?;
 
-        records.push(JoinRequestIssuance::new(&pending, ENROLLED_AT).issue()?);
+        records.push(JoinRequestIssuance::new(&pending, EnrollmentFixture::ENROLLED_AT).issue()?);
 
         assert_eq!(
             VaultMetaState::assess_connect_access(AssessConnectAccessRequest {
@@ -206,10 +206,14 @@ mod tests {
     #[test]
     fn ensure_self_in_roster_adds_missing_current_identity_once() -> anyhow::Result<()> {
         let keys = VaultKeys::generate()?;
-        let (genesis, mut records) = genesis_vault(&keys)?;
+        let (genesis, mut records) = EnrollmentFixture { keys: &keys }.genesis_vault()?;
         let joiner = DeviceIdentity::generate()?;
-        records.push(JoinRequestIssuance::new(&joiner, ENROLLED_AT).issue()?);
-        records = approve_pending_join(&keys, &genesis, records, &joiner)?;
+        records.push(JoinRequestIssuance::new(&joiner, EnrollmentFixture::ENROLLED_AT).issue()?);
+        records = EnrollmentFixture { keys: &keys }.approve_pending_join(PendingEnrollment {
+            approver: &genesis,
+            records,
+            joiner: &joiner,
+        })?;
 
         let mut missing_joiner_roster = records
             .iter()

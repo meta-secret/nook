@@ -50,13 +50,19 @@ impl ChromePasswordColumns {
     fn from_headers(
         record: &StringRecord,
     ) -> Result<ChromePasswordColumns, ChromePasswordsImportError> {
-        let headers = CsvHeaders::new(record, ChromePasswordsImportError::MissingColumn);
+        let headers = CsvHeaders::from(record);
         Ok(Self {
-            name: headers.optional(&["name", "title"]),
-            url: headers.required_with_aliases("url", &["website url", "website"])?,
-            username: headers.required_with_aliases("username", &["user name", "login"])?,
-            password: headers.required_with_aliases("password", &["secret"])?,
-            note: headers.optional(&["note", "notes"]),
+            name: headers.find(&["name", "title"]),
+            url: headers
+                .find(&["url", "website url", "website"])
+                .required(ChromePasswordsImportError::MissingColumn("url"))?,
+            username: headers
+                .find(&["username", "user name", "login"])
+                .required(ChromePasswordsImportError::MissingColumn("username"))?,
+            password: headers
+                .find(&["password", "secret"])
+                .required(ChromePasswordsImportError::MissingColumn("password"))?,
+            note: headers.find(&["note", "notes"]),
         })
     }
 }

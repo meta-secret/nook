@@ -104,14 +104,22 @@ impl ApplePasswordColumns {
     fn from_headers(
         record: &StringRecord,
     ) -> Result<ApplePasswordColumns, ApplePasswordsImportError> {
-        let headers = CsvHeaders::new(record, ApplePasswordsImportError::MissingColumn);
+        let headers = CsvHeaders::from(record);
         Ok(Self {
-            title: headers.required("Title")?,
-            url: headers.required("URL")?,
-            username: headers.required("Username")?,
-            password: headers.required("Password")?,
-            notes: headers.optional(&["Notes"]),
-            otp_auth: headers.optional(&["OTPAuth"]),
+            title: headers
+                .find(&["Title"])
+                .required(ApplePasswordsImportError::MissingColumn("Title"))?,
+            url: headers
+                .find(&["URL"])
+                .required(ApplePasswordsImportError::MissingColumn("URL"))?,
+            username: headers
+                .find(&["Username"])
+                .required(ApplePasswordsImportError::MissingColumn("Username"))?,
+            password: headers
+                .find(&["Password"])
+                .required(ApplePasswordsImportError::MissingColumn("Password"))?,
+            notes: headers.find(&["Notes"]),
+            otp_auth: headers.find(&["OTPAuth"]),
         })
     }
 }

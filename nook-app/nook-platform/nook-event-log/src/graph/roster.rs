@@ -101,7 +101,7 @@ mod tests {
     use super::super::authorization::tests::signed_operation;
     use super::*;
     use crate::EventResult;
-    use crate::test_support::genesis_event;
+    use crate::VaultEvent;
     use crate::test_support::{public_key, signing_key};
     use nook_auth2::AgeArmoredCiphertext;
 
@@ -121,7 +121,7 @@ mod tests {
         let owner = signing_key();
         let phone = signing_key();
         let tablet = signing_key();
-        let genesis = genesis_event(&owner)?;
+        let genesis = VaultEvent::fixture_genesis(&owner)?;
         let genesis_id = genesis.id()?;
         let approve = signed_operation(
             vec![genesis_id],

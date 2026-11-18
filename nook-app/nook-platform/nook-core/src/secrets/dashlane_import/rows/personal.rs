@@ -7,7 +7,7 @@
 //! join a person and are not imported.
 
 use super::super::DashlaneImportError;
-use super::NormalizedDashlaneHeaders;
+use super::CsvHeaders;
 use crate::secrets::import_support::personal::{
     BankImportFields, ExportedAccountNumber, ExportedAccountNumberKind, PersonalImportItem,
     PersonalImportPart,
@@ -31,16 +31,16 @@ pub(super) struct IdColumns {
 }
 
 impl IdColumns {
-    pub(super) fn from_headers(
-        headers: &NormalizedDashlaneHeaders,
-    ) -> Result<Self, DashlaneImportError> {
+    pub(super) fn from_headers(headers: &CsvHeaders) -> Result<Self, DashlaneImportError> {
         Ok(Self {
-            kind: headers.required("type")?,
-            number: headers.optional(&["number"]),
-            name: headers.optional(&["name"]),
-            issue_date: headers.optional(&["issue_date"]),
-            expiration_date: headers.optional(&["expiration_date"]),
-            place_of_issue: headers.optional(&["place_of_issue"]),
+            kind: headers
+                .find(&["type"])
+                .required(DashlaneImportError::MissingColumn("type"))?,
+            number: headers.find(&["number"]),
+            name: headers.find(&["name"]),
+            issue_date: headers.find(&["issue_date"]),
+            expiration_date: headers.find(&["expiration_date"]),
+            place_of_issue: headers.find(&["place_of_issue"]),
         })
     }
 
@@ -92,22 +92,22 @@ pub(super) struct PersonalInfoColumns {
 }
 
 impl PersonalInfoColumns {
-    pub(super) fn from_headers(
-        headers: &NormalizedDashlaneHeaders,
-    ) -> Result<Self, DashlaneImportError> {
+    pub(super) fn from_headers(headers: &CsvHeaders) -> Result<Self, DashlaneImportError> {
         Ok(Self {
-            kind: headers.required("type")?,
-            first_name: headers.optional(&["first_name"]),
-            middle_name: headers.optional(&["middle_name"]),
-            last_name: headers.optional(&["last_name"]),
-            date_of_birth: headers.optional(&["date_of_birth"]),
-            item_name: headers.optional(&["item_name"]),
-            address: headers.optional(&["address"]),
-            address_apartment: headers.optional(&["address_apartment"]),
-            city: headers.optional(&["city"]),
-            state: headers.optional(&["state"]),
-            zip: headers.optional(&["zip"]),
-            country: headers.optional(&["country"]),
+            kind: headers
+                .find(&["type"])
+                .required(DashlaneImportError::MissingColumn("type"))?,
+            first_name: headers.find(&["first_name"]),
+            middle_name: headers.find(&["middle_name"]),
+            last_name: headers.find(&["last_name"]),
+            date_of_birth: headers.find(&["date_of_birth"]),
+            item_name: headers.find(&["item_name"]),
+            address: headers.find(&["address"]),
+            address_apartment: headers.find(&["address_apartment"]),
+            city: headers.find(&["city"]),
+            state: headers.find(&["state"]),
+            zip: headers.find(&["zip"]),
+            country: headers.find(&["country"]),
         })
     }
 
@@ -152,12 +152,12 @@ pub(super) struct BankPaymentColumns {
 }
 
 impl BankPaymentColumns {
-    pub(super) fn from_headers(headers: &NormalizedDashlaneHeaders) -> Self {
+    pub(super) fn from_headers(headers: &CsvHeaders) -> Self {
         Self {
-            account_holder: headers.optional(&["account_holder", "account holder"]),
-            account_number: headers.optional(&["account_number", "account number"]),
-            routing_number: headers.optional(&["routing_number", "routing number"]),
-            issuing_bank: headers.optional(&["issuing_bank", "bank_name"]),
+            account_holder: headers.find(&["account_holder", "account holder"]),
+            account_number: headers.find(&["account_number", "account number"]),
+            routing_number: headers.find(&["routing_number", "routing number"]),
+            issuing_bank: headers.find(&["issuing_bank", "bank_name"]),
         }
     }
 

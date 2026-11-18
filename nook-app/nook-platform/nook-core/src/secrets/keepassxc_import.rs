@@ -53,15 +53,27 @@ struct KeePassXcColumns {
 
 impl KeePassXcColumns {
     fn from_headers(record: &StringRecord) -> Result<KeePassXcColumns, KeePassXcImportError> {
-        let headers = CsvHeaders::new(record, KeePassXcImportError::MissingColumn);
+        let headers = CsvHeaders::from(record);
         Ok(Self {
-            group: headers.required("Group")?,
-            title: headers.required("Title")?,
-            username: headers.required("Username")?,
-            password: headers.required("Password")?,
-            url: headers.required("URL")?,
-            notes: headers.required("Notes")?,
-            totp: headers.optional(&["TOTP"]),
+            group: headers
+                .find(&["Group"])
+                .required(KeePassXcImportError::MissingColumn("Group"))?,
+            title: headers
+                .find(&["Title"])
+                .required(KeePassXcImportError::MissingColumn("Title"))?,
+            username: headers
+                .find(&["Username"])
+                .required(KeePassXcImportError::MissingColumn("Username"))?,
+            password: headers
+                .find(&["Password"])
+                .required(KeePassXcImportError::MissingColumn("Password"))?,
+            url: headers
+                .find(&["URL"])
+                .required(KeePassXcImportError::MissingColumn("URL"))?,
+            notes: headers
+                .find(&["Notes"])
+                .required(KeePassXcImportError::MissingColumn("Notes"))?,
+            totp: headers.find(&["TOTP"]),
         })
     }
 }

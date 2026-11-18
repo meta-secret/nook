@@ -42,7 +42,7 @@ impl<'a> DashlaneCsvInput<'a> {
         let reader = CsvImportReader::new(self.text);
         let read = reader.headers()?;
         let reader = read.reader;
-        let headers = CsvHeaders::new(&read.headers, DashlaneImportError::MissingColumn);
+        let headers = CsvHeaders::from(&read.headers);
         let kind = match self.selection {
             DashlaneCsvSelection::Detect => DashlaneCsvKind::detect(&headers.names)?,
             DashlaneCsvSelection::Archive(kind) => kind,
@@ -114,7 +114,6 @@ impl DashlaneColumns {
         }
     }
 }
-type NormalizedDashlaneHeaders = CsvHeaders<DashlaneImportError>;
 
 impl DashlaneCsvKind {
     fn detect(names: &[String]) -> Result<Self, DashlaneImportError> {
@@ -183,18 +182,22 @@ struct PaymentColumns {
 }
 
 impl CredentialColumns {
-    fn from_headers(headers: &NormalizedDashlaneHeaders) -> Result<Self, DashlaneImportError> {
+    fn from_headers(headers: &CsvHeaders) -> Result<Self, DashlaneImportError> {
         Ok(CredentialColumns {
-            username: headers.required("username")?,
-            username2: headers.optional(&["username2"]),
-            username3: headers.optional(&["username3"]),
-            title: headers.optional(&["title", "name"]),
-            password: headers.required("password")?,
-            note: headers.optional(&["note", "notes"]),
-            url: headers.optional(&["url", "website"]),
-            category: headers.optional(&["category", "folder"]),
-            otp_secret: headers.optional(&["otpSecret", "otp_secret"]),
-            otp_url: headers.optional(&["otpUrl", "otp_url"]),
+            username: headers
+                .find(&["username"])
+                .required(DashlaneImportError::MissingColumn("username"))?,
+            username2: headers.find(&["username2"]),
+            username3: headers.find(&["username3"]),
+            title: headers.find(&["title", "name"]),
+            password: headers
+                .find(&["password"])
+                .required(DashlaneImportError::MissingColumn("password"))?,
+            note: headers.find(&["note", "notes"]),
+            url: headers.find(&["url", "website"]),
+            category: headers.find(&["category", "folder"]),
+            otp_secret: headers.find(&["otpSecret", "otp_secret"]),
+            otp_url: headers.find(&["otpUrl", "otp_url"]),
         })
     }
     #[expect(
@@ -317,10 +320,14 @@ impl CredentialColumns {
     }
 }
 impl SecureNoteColumns {
-    fn from_headers(headers: &NormalizedDashlaneHeaders) -> Result<Self, DashlaneImportError> {
+    fn from_headers(headers: &CsvHeaders) -> Result<Self, DashlaneImportError> {
         Ok(SecureNoteColumns {
-            title: headers.required("title")?,
-            note: headers.required("note")?,
+            title: headers
+                .find(&["title"])
+                .required(DashlaneImportError::MissingColumn("title"))?,
+            note: headers
+                .find(&["note"])
+                .required(DashlaneImportError::MissingColumn("note"))?,
         })
     }
     fn convert(&self, record: &StringRecord) -> (Vec<SecretValue>, usize) {
@@ -337,15 +344,17 @@ impl SecureNoteColumns {
     }
 }
 impl PaymentColumns {
-    fn from_headers(headers: &NormalizedDashlaneHeaders) -> Result<Self, DashlaneImportError> {
+    fn from_headers(headers: &CsvHeaders) -> Result<Self, DashlaneImportError> {
         Ok(PaymentColumns {
-            kind: headers.required("type")?,
-            account_name: headers.optional(&["account_name", "account name"]),
-            account_holder: headers.optional(&["account_holder", "account holder"]),
-            cc_number: headers.optional(&["cc_number", "cc number"]),
-            code: headers.optional(&["code", "cvv"]),
-            expiration_month: headers.optional(&["expiration_month", "expiration month"]),
-            expiration_year: headers.optional(&["expiration_year", "expiration year"]),
+            kind: headers
+                .find(&["type"])
+                .required(DashlaneImportError::MissingColumn("type"))?,
+            account_name: headers.find(&["account_name", "account name"]),
+            account_holder: headers.find(&["account_holder", "account holder"]),
+            cc_number: headers.find(&["cc_number", "cc number"]),
+            code: headers.find(&["code", "cvv"]),
+            expiration_month: headers.find(&["expiration_month", "expiration month"]),
+            expiration_year: headers.find(&["expiration_year", "expiration year"]),
             bank: BankPaymentColumns::from_headers(headers),
         })
     }

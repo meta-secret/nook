@@ -38,29 +38,45 @@ pub(super) enum CustomFieldColumn {
 
 pub(super) struct KeeperHeaders<'a> {
     record: &'a StringRecord,
-    headers: CsvHeaders<KeeperImportError>,
+    headers: CsvHeaders,
 }
 impl<'a> KeeperHeaders<'a> {
     #[must_use]
     pub(super) fn new(record: &'a StringRecord) -> Self {
         Self {
             record,
-            headers: CsvHeaders::new(record, KeeperImportError::MissingColumn),
+            headers: CsvHeaders::from(record),
         }
     }
     pub(super) fn admit(self) -> Result<KeeperColumns, KeeperImportError> {
-        let folder = self.headers.optional(&["folder"]);
-        let title = self.headers.required_with_aliases("title", &["name"])?;
+        let folder = self.headers.find(&["folder"]);
+        let title = self
+            .headers
+            .find(&["title", "name"])
+            .required(KeeperImportError::MissingColumn("title"))?;
         let login = self
             .headers
-            .required_with_aliases("login", &["username", "user name"])?;
-        let password = self.headers.required("password")?;
-        let website = self.headers.required_with_aliases(
-            "website address",
-            &["login url", "url", "website", "website url"],
-        )?;
-        let notes = self.headers.required_with_aliases("notes", &["note"])?;
-        let shared_folder = self.headers.optional(&["shared folder", "sharedfolder"]);
+            .find(&["login", "username", "user name"])
+            .required(KeeperImportError::MissingColumn("login"))?;
+        let password = self
+            .headers
+            .find(&["password"])
+            .required(KeeperImportError::MissingColumn("password"))?;
+        let website = self
+            .headers
+            .find(&[
+                "website address",
+                "login url",
+                "url",
+                "website",
+                "website url",
+            ])
+            .required(KeeperImportError::MissingColumn("website address"))?;
+        let notes = self
+            .headers
+            .find(&["notes", "note"])
+            .required(KeeperImportError::MissingColumn("notes"))?;
+        let shared_folder = self.headers.find(&["shared folder", "sharedfolder"]);
 
         let known = [
             folder,

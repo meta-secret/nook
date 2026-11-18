@@ -90,10 +90,10 @@ impl EventGraph {
 }
 #[cfg(test)]
 mod tests {
-    use super::super::tests::{assert_self_approval_quarantined, signed_operation};
+    use super::super::tests::{SelfApproval, signed_operation};
     use super::*;
     use crate::event::SentinelShareIssuedPayload;
-    use crate::test_support::{genesis_event, public_key, signing_key};
+    use crate::test_support::{public_key, signing_key};
     use crate::{EventInsertStatus, EventResult};
     use nook_auth2::{AgeArmoredCiphertext, DeviceId, DevicePublicKey, MemberLabel};
     #[test]
@@ -157,7 +157,7 @@ mod tests {
         let root_key = signing_key();
         let stranger_key = signing_key();
         let mut graph = EventGraph::new();
-        let genesis = genesis_event(&root_key)?;
+        let genesis = VaultEvent::fixture_genesis(&root_key)?;
         let genesis_id = genesis.id()?;
         graph = graph.insert_fixture_event(genesis)?.graph;
 
@@ -187,7 +187,7 @@ mod tests {
         let joiner_key = signing_key();
         let stranger_key = signing_key();
         let mut graph = EventGraph::new();
-        let genesis = genesis_event(&root_key)?;
+        let genesis = VaultEvent::fixture_genesis(&root_key)?;
         let genesis_id = genesis.id()?;
         graph = graph.insert_fixture_event(genesis)?.graph;
 
@@ -204,7 +204,12 @@ mod tests {
         let sentinel_enrol_id = sentinel_enrol.id()?;
         graph = graph.insert_fixture_event(sentinel_enrol)?.graph;
 
-        assert_self_approval_quarantined(graph, sentinel_enrol_id, &stranger_key, "age-pub-2")?;
+        SelfApproval {
+            parent: sentinel_enrol_id,
+            stranger_key: &stranger_key,
+            encryption_public_key: "age-pub-2",
+        }
+        .assert_quarantined(graph)?;
         Ok(())
     }
     #[test]
@@ -212,7 +217,7 @@ mod tests {
         let root_key = signing_key();
         let stranger_key = signing_key();
         let mut graph = EventGraph::new();
-        let genesis = genesis_event(&root_key)?;
+        let genesis = VaultEvent::fixture_genesis(&root_key)?;
         let genesis_id = genesis.id()?;
         graph = graph.insert_fixture_event(genesis)?.graph;
 
@@ -233,7 +238,12 @@ mod tests {
         let shares_id = shares.id()?;
         graph = graph.insert_fixture_event(shares)?.graph;
 
-        assert_self_approval_quarantined(graph, shares_id, &stranger_key, "age-pub")?;
+        SelfApproval {
+            parent: shares_id,
+            stranger_key: &stranger_key,
+            encryption_public_key: "age-pub",
+        }
+        .assert_quarantined(graph)?;
         Ok(())
     }
     #[test]
@@ -245,7 +255,7 @@ mod tests {
         // Sentinel-style root: genesis import that also records the owner's
         // SentinelParticipantEnrolled in the same empty-parent event (allowed via
         // parents.is_empty() short-circuit on actor auth).
-        let mut sentinel_genesis = genesis_event(&root_key)?;
+        let mut sentinel_genesis = VaultEvent::fixture_genesis(&root_key)?;
         sentinel_genesis
             .body
             .operations
@@ -261,7 +271,12 @@ mod tests {
         graph = insertion.graph;
         assert_eq!(insertion.status, EventInsertStatus::Applied);
 
-        assert_self_approval_quarantined(graph, sentinel_genesis_id, &stranger_key, "age-pub-2")?;
+        SelfApproval {
+            parent: sentinel_genesis_id,
+            stranger_key: &stranger_key,
+            encryption_public_key: "age-pub-2",
+        }
+        .assert_quarantined(graph)?;
         Ok(())
     }
 }

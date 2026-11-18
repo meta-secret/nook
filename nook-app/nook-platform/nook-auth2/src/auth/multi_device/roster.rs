@@ -368,9 +368,7 @@ impl VaultMember {
 
 #[cfg(test)]
 mod tests {
-    use super::super::fixtures::{
-        ENROLLED_AT, approve_pending_join, genesis_vault, user_secret_record,
-    };
+    use super::super::fixtures::{EnrollmentFixture, LoginRecord, PendingEnrollment};
     use std::io;
 
     use super::*;
@@ -382,10 +380,14 @@ mod tests {
     #[test]
     fn rename_vault_member_trims_clears_and_preserves_key_access() -> anyhow::Result<()> {
         let keys = VaultKeys::generate()?;
-        let (genesis, mut records) = genesis_vault(&keys)?;
+        let (genesis, mut records) = EnrollmentFixture { keys: &keys }.genesis_vault()?;
         let joiner = DeviceIdentity::generate()?;
-        records.push(JoinRequestIssuance::new(&joiner, ENROLLED_AT).issue()?);
-        records = approve_pending_join(&keys, &genesis, records, &joiner)?;
+        records.push(JoinRequestIssuance::new(&joiner, EnrollmentFixture::ENROLLED_AT).issue()?);
+        records = EnrollmentFixture { keys: &keys }.approve_pending_join(PendingEnrollment {
+            approver: &genesis,
+            records,
+            joiner: &joiner,
+        })?;
 
         let renamed = VaultMember::rename_vault_member(RenameVaultMemberRequest {
             records: &records,
@@ -435,12 +437,20 @@ mod tests {
     fn revoke_vault_member_removes_auth_and_member_rows_but_not_user_secrets() -> anyhow::Result<()>
     {
         let keys = VaultKeys::generate()?;
-        let (genesis, mut records) = genesis_vault(&keys)?;
+        let (genesis, mut records) = EnrollmentFixture { keys: &keys }.genesis_vault()?;
         let joiner = DeviceIdentity::generate()?;
-        let user_secret = user_secret_record("secret_note001", "encrypted-user-secret");
-        records.push(JoinRequestIssuance::new(&joiner, ENROLLED_AT).issue()?);
+        let user_secret = LoginRecord {
+            id: "secret_note001",
+            value: "encrypted-user-secret",
+        }
+        .stored();
+        records.push(JoinRequestIssuance::new(&joiner, EnrollmentFixture::ENROLLED_AT).issue()?);
         records.push(user_secret.clone());
-        records = approve_pending_join(&keys, &genesis, records, &joiner)?;
+        records = EnrollmentFixture { keys: &keys }.approve_pending_join(PendingEnrollment {
+            approver: &genesis,
+            records,
+            joiner: &joiner,
+        })?;
         records.extend(SentinelShareEnvelope::create_sentinel_share_records(
             CreateSentinelShareRecordsRequest {
                 keys: &keys,
@@ -485,7 +495,7 @@ mod tests {
     #[test]
     fn revoke_last_access_and_missing_member_are_errors() -> anyhow::Result<()> {
         let keys = VaultKeys::generate()?;
-        let (genesis, records) = genesis_vault(&keys)?;
+        let (genesis, records) = EnrollmentFixture { keys: &keys }.genesis_vault()?;
         let stranger = DeviceIdentity::generate()?;
 
         assert!(matches!(
@@ -520,7 +530,7 @@ mod tests {
     #[test]
     fn member_roster_rejects_mismatched_record_key() -> anyhow::Result<()> {
         let keys = VaultKeys::generate()?;
-        let (genesis, records) = genesis_vault(&keys)?;
+        let (genesis, records) = EnrollmentFixture { keys: &keys }.genesis_vault()?;
         let mut member_record = records
             .iter()
             .find(|record| record.key.as_str().starts_with(MEMBER_RECORD_PREFIX))

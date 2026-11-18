@@ -15,7 +15,6 @@ mod harness;
 use harness::{
     EventLogDevice, ProviderBuckets, approve_join, live_secret_ids, missing_provider_bucket,
     pull_provider_into_device, push_device_outbox, request_join, union_device_from_providers,
-    write_all_device_events_to_provider,
 };
 use nook_core::{
     AppendEventInput, EncryptedSecretPayload, EventError, EventId, IsoTimestamp, OpaqueCiphertext,
@@ -245,30 +244,38 @@ fn expect_provider_event_sets_equal(
     Ok(())
 }
 
-fn append_secure_note(
-    device: EventLogDevice,
-    secret_id: &str,
-    title: &str,
-    note: &str,
-) -> VaultResult<EventLogDevice> {
-    let value = SecretValue::SecureNote(SecureNoteSecret {
-        title: title.to_owned(),
-        note: note.to_owned(),
-    });
-    let secrets_key = SymmetricKey::parse(&device.secrets_key)?;
-    let identity_fingerprint = value.identity_fingerprint(&secrets_key)?;
-    let fingerprint = value.fingerprint(&secrets_key)?;
-    let ciphertext = device.crypto.encrypt_value(value.to_yaml()?.as_str())?;
-    let operation = VaultOperation::SecretCreated {
-        secret: EncryptedSecretPayload::from_armored(
-            &SecretId::from_vault_record(secret_id),
-            SecretType::SecureNote,
-            ciphertext.as_str(),
-            identity_fingerprint,
-            fingerprint,
-        ),
-    };
-    Ok(device.append_signed(vec![operation])?.device)
+struct SecureNoteFixture<'a> {
+    secret_id: &'a str,
+    title: &'a str,
+    note: &'a str,
+}
+
+impl SecureNoteFixture<'_> {
+    fn append_to(self, device: EventLogDevice) -> VaultResult<EventLogDevice> {
+        let Self {
+            secret_id,
+            title,
+            note,
+        } = self;
+        let value = SecretValue::SecureNote(SecureNoteSecret {
+            title: title.to_owned(),
+            note: note.to_owned(),
+        });
+        let secrets_key = SymmetricKey::parse(&device.secrets_key)?;
+        let identity_fingerprint = value.identity_fingerprint(&secrets_key)?;
+        let fingerprint = value.fingerprint(&secrets_key)?;
+        let ciphertext = device.crypto.encrypt_value(value.to_yaml()?.as_str())?;
+        let operation = VaultOperation::SecretCreated {
+            secret: EncryptedSecretPayload::from_armored(
+                &SecretId::from_vault_record(secret_id),
+                SecretType::SecureNote,
+                ciphertext.as_str(),
+                identity_fingerprint,
+                fingerprint,
+            ),
+        };
+        Ok(device.append_signed(vec![operation])?.device)
+    }
 }
 
 fn child_event_with_genesis(
@@ -335,8 +342,10 @@ fn file_provider_style_backups_replicate_secure_note_events() -> VaultResult<()>
     ]);
 
     // Device 1 creates the primary file-sync target and its local-file backup.
-    providers = write_all_device_events_to_provider(&device1, providers, "common-vault")?;
-    providers = write_all_device_events_to_provider(&device1, providers, "common-vault-backup")?;
+    providers = device1.events_for("common-vault").write_to(providers)?;
+    providers = device1
+        .events_for("common-vault-backup")
+        .write_to(providers)?;
     expect_provider_event_sets_equal(&providers, &["common-vault", "common-vault-backup"])?;
 
     // Device 2 onboards through the shared vault, then device 1 approves that request.
@@ -346,27 +355,29 @@ fn file_provider_style_backups_replicate_secure_note_events() -> VaultResult<()>
     let outcome = request_join(device2, &device2_identity, "device 2")?;
     device2 = outcome.device;
     let join = outcome.join;
-    providers = write_all_device_events_to_provider(&device2, providers, "common-vault")?;
+    providers = device2.events_for("common-vault").write_to(providers)?;
     device1 = pull_provider_into_device(device1, &providers, "common-vault")?;
     device1 = approve_join(device1, &join, "device 2")?;
-    providers = write_all_device_events_to_provider(&device1, providers, "common-vault")?;
+    providers = device1.events_for("common-vault").write_to(providers)?;
     device2 = pull_provider_into_device(device2, &providers, "common-vault")?;
 
     // Device 2 creates its own backup from the same replicated event graph.
-    providers = write_all_device_events_to_provider(&device2, providers, "vault2-backup")?;
+    providers = device2.events_for("vault2-backup").write_to(providers)?;
 
     // A secure note saved on device 1 fans out to its primary and backup targets,
     // then device 2 pulls it from the shared vault and fans out to its backup.
-    device1 = append_secure_note(
-        device1,
-        "secret_replicaten",
-        "Replication proof",
-        "created on device 1",
-    )?;
-    providers = write_all_device_events_to_provider(&device1, providers, "common-vault")?;
-    providers = write_all_device_events_to_provider(&device1, providers, "common-vault-backup")?;
+    device1 = SecureNoteFixture {
+        secret_id: "secret_replicaten",
+        title: "Replication proof",
+        note: "created on device 1",
+    }
+    .append_to(device1)?;
+    providers = device1.events_for("common-vault").write_to(providers)?;
+    providers = device1
+        .events_for("common-vault-backup")
+        .write_to(providers)?;
     device2 = pull_provider_into_device(device2, &providers, "common-vault")?;
-    providers = write_all_device_events_to_provider(&device2, providers, "vault2-backup")?;
+    providers = device2.events_for("vault2-backup").write_to(providers)?;
 
     expect_provider_event_sets_equal(
         &providers,

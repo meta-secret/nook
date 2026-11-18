@@ -287,7 +287,7 @@ fn provider_switch_outbox_flush_and_union() -> VaultResult<()> {
     let mut providers: ProviderBuckets =
         HashMap::from([("github".to_owned(), LocalEventStore::new())]);
 
-    providers = write_all_device_events_to_provider(&a, providers, "github")?;
+    providers = a.events_for("github").write_to(providers)?;
 
     let mut b = EventLogDevice::replica_of(&a)?;
     b = union_device_from_providers(b, &providers)?;
@@ -313,7 +313,7 @@ fn provider_advanced_before_local_flush_keeps_both_event_log_writes() -> VaultRe
     let mut providers: ProviderBuckets =
         HashMap::from([("github".to_owned(), LocalEventStore::new())]);
 
-    providers = write_all_device_events_to_provider(&root, providers, "github")?;
+    providers = root.events_for("github").write_to(providers)?;
     local = union_device_from_providers(local, &providers)?;
     remote_device = union_device_from_providers(remote_device, &providers)?;
 

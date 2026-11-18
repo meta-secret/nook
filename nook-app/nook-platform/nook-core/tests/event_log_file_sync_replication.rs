@@ -12,7 +12,7 @@ use nook_core::{LocalEventStore, SecretFingerprint};
 
 use harness::{
     EventLogDevice, ProviderBuckets, approve_join, live_secret_ids, missing_provider_bucket,
-    pull_provider_into_device, request_join, write_all_device_events_to_provider,
+    pull_provider_into_device, request_join,
 };
 use nook_core::{
     EncryptedSecretPayload, OpaqueCiphertext, SecretId, SecretType, VaultOperation, VaultResult,
@@ -23,14 +23,6 @@ const VAULT_A: &str = "vault-a";
 const VAULT_A_DEVICE_B: &str = "vault-a-device-b";
 const LOGIN_SITE: &str = "https://login-a-1.example.com";
 const LOGIN_USER: &str = "alice";
-
-fn clear_provider(mut providers: ProviderBuckets, provider: &str) -> VaultResult<ProviderBuckets> {
-    if !providers.contains_key(provider) {
-        return Err(missing_provider_bucket(provider).into());
-    }
-    providers.insert(provider.to_owned(), LocalEventStore::new());
-    Ok(providers)
-}
 
 fn provider_event_count(providers: &ProviderBuckets, provider: &str) -> VaultResult<usize> {
     Ok(providers
@@ -49,7 +41,7 @@ fn enrolled_pair_with_file_providers()
         (VAULT_A_DEVICE_B.to_owned(), LocalEventStore::new()),
     ]);
 
-    providers = write_all_device_events_to_provider(&device_a, providers, VAULT_A)?;
+    providers = device_a.events_for(VAULT_A).write_to(providers)?;
 
     let mut device_b = EventLogDevice::replica_of(&device_a)?;
     device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
@@ -57,14 +49,14 @@ fn enrolled_pair_with_file_providers()
     let outcome = request_join(device_b, &device_b_identity, "device-b")?;
     device_b = outcome.device;
     let join = outcome.join;
-    providers = write_all_device_events_to_provider(&device_b, providers, VAULT_A)?;
-    providers = write_all_device_events_to_provider(&device_b, providers, VAULT_A_DEVICE_B)?;
+    providers = device_b.events_for(VAULT_A).write_to(providers)?;
+    providers = device_b.events_for(VAULT_A_DEVICE_B).write_to(providers)?;
 
     device_a = pull_provider_into_device(device_a, &providers, VAULT_A)?;
     device_a = approve_join(device_a, &join, "device-b")?;
-    providers = write_all_device_events_to_provider(&device_a, providers, VAULT_A)?;
+    providers = device_a.events_for(VAULT_A).write_to(providers)?;
     device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
-    providers = write_all_device_events_to_provider(&device_b, providers, VAULT_A_DEVICE_B)?;
+    providers = device_b.events_for(VAULT_A_DEVICE_B).write_to(providers)?;
 
     Ok((device_a, device_b, providers))
 }
@@ -78,7 +70,9 @@ fn disconnected_pair_with_shared_head()
         .first()
         .cloned()
         .unwrap_or_else(|| panic!("genesis head must exist"));
-    providers = clear_provider(providers, VAULT_A)?;
+    *providers
+        .get_mut(VAULT_A)
+        .ok_or_else(|| missing_provider_bucket(VAULT_A))? = LocalEventStore::new();
     Ok((device_a, device_b, providers, shared_head))
 }
 
@@ -114,14 +108,14 @@ fn disconnect_then_concurrent_same_identity_logins_both_survive_on_reconnect() -
         .device;
 
     // While disconnected, device-b can still write its local backup; vault-a stays empty.
-    providers = write_all_device_events_to_provider(&device_b, providers, VAULT_A_DEVICE_B)?;
+    providers = device_b.events_for(VAULT_A_DEVICE_B).write_to(providers)?;
     assert_eq!(provider_event_count(&providers, VAULT_A)?, 0);
 
     // 8. device-b reconnects by attaching a fresh file-sync provider to vault-a.yaml.
     // Seed vault-a from device-a's offline history, then pull into device-b.
-    providers = write_all_device_events_to_provider(&device_a, providers, VAULT_A)?;
+    providers = device_a.events_for(VAULT_A).write_to(providers)?;
     device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
-    providers = write_all_device_events_to_provider(&device_b, providers, VAULT_A)?;
+    providers = device_b.events_for(VAULT_A).write_to(providers)?;
     device_a = pull_provider_into_device(device_a, &providers, VAULT_A)?;
 
     let live_a = live_secret_ids(&device_a)?;
@@ -194,9 +188,9 @@ fn reconnect_keeps_identical_password_duplicates_as_separate_records() -> VaultR
         )?
         .device;
 
-    providers = write_all_device_events_to_provider(&device_a, providers, VAULT_A)?;
+    providers = device_a.events_for(VAULT_A).write_to(providers)?;
     device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
-    providers = write_all_device_events_to_provider(&device_b, providers, VAULT_A)?;
+    providers = device_b.events_for(VAULT_A).write_to(providers)?;
     device_a = pull_provider_into_device(device_a, &providers, VAULT_A)?;
 
     assert_eq!(live_secret_ids(&device_a)?.len(), 2);
@@ -254,11 +248,11 @@ fn reconnect_after_mixed_offline_edits_converges_without_losing_either_branch() 
         )?
         .device;
 
-    providers = write_all_device_events_to_provider(&device_a, providers, VAULT_A)?;
+    providers = device_a.events_for(VAULT_A).write_to(providers)?;
     device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
-    providers = write_all_device_events_to_provider(&device_b, providers, VAULT_A)?;
+    providers = device_b.events_for(VAULT_A).write_to(providers)?;
     device_a = pull_provider_into_device(device_a, &providers, VAULT_A)?;
-    write_all_device_events_to_provider(&device_b, providers, VAULT_A_DEVICE_B)?;
+    device_b.events_for(VAULT_A_DEVICE_B).write_to(providers)?;
 
     let live = live_secret_ids(&device_a)?;
     assert_eq!(live.len(), 4);
@@ -299,7 +293,7 @@ fn device_b_local_backup_alone_cannot_heal_cleared_shared_vault() -> VaultResult
             "",
         )?
         .device;
-    providers = write_all_device_events_to_provider(&device_b, providers, VAULT_A_DEVICE_B)?;
+    providers = device_b.events_for(VAULT_A_DEVICE_B).write_to(providers)?;
 
     // Pulling an empty shared vault must not erase device-b's local offline secret.
     device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
@@ -307,7 +301,7 @@ fn device_b_local_backup_alone_cannot_heal_cleared_shared_vault() -> VaultResult
     assert!(live_secret_ids(&device_b)?.contains("secret_logina1bbbb"));
 
     // Healing requires reseeding vault-a from a device that still has the missing events.
-    providers = write_all_device_events_to_provider(&device_a, providers, VAULT_A)?;
+    providers = device_a.events_for(VAULT_A).write_to(providers)?;
     device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
     assert_eq!(live_secret_ids(&device_b)?.len(), 2);
     Ok(())
@@ -326,9 +320,9 @@ fn concurrent_replace_of_shared_secret_surfaces_conflict_group_after_reconnect()
             "",
         )?
         .device;
-    providers = write_all_device_events_to_provider(&device_a, providers, VAULT_A)?;
+    providers = device_a.events_for(VAULT_A).write_to(providers)?;
     device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
-    providers = write_all_device_events_to_provider(&device_b, providers, VAULT_A_DEVICE_B)?;
+    providers = device_b.events_for(VAULT_A_DEVICE_B).write_to(providers)?;
 
     let shared_head = device_a
         .session
@@ -336,7 +330,9 @@ fn concurrent_replace_of_shared_secret_surfaces_conflict_group_after_reconnect()
         .first()
         .cloned()
         .unwrap_or_else(|| panic!("genesis head must exist"));
-    providers = clear_provider(providers, VAULT_A)?;
+    *providers
+        .get_mut(VAULT_A)
+        .ok_or_else(|| missing_provider_bucket(VAULT_A))? = LocalEventStore::new();
 
     device_a.session.heads = vec![shared_head.clone()];
     device_a = device_a
@@ -369,9 +365,9 @@ fn concurrent_replace_of_shared_secret_surfaces_conflict_group_after_reconnect()
         }])?
         .device;
 
-    providers = write_all_device_events_to_provider(&device_a, providers, VAULT_A)?;
+    providers = device_a.events_for(VAULT_A).write_to(providers)?;
     device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
-    providers = write_all_device_events_to_provider(&device_b, providers, VAULT_A)?;
+    providers = device_b.events_for(VAULT_A).write_to(providers)?;
     device_a = pull_provider_into_device(device_a, &providers, VAULT_A)?;
 
     let projection = device_a.project()?;
@@ -390,7 +386,7 @@ fn concurrent_replace_of_shared_secret_surfaces_conflict_group_after_reconnect()
 fn three_way_file_provider_fanout_keeps_concurrent_logins() -> VaultResult<()> {
     let (mut device_a, mut device_b, mut providers) = enrolled_pair_with_file_providers()?;
     providers.insert("vault-a-backup".to_owned(), LocalEventStore::new());
-    providers = write_all_device_events_to_provider(&device_a, providers, "vault-a-backup")?;
+    providers = device_a.events_for("vault-a-backup").write_to(providers)?;
 
     let mut device_c = EventLogDevice::replica_of(&device_a)?;
     device_c = pull_provider_into_device(device_c, &providers, VAULT_A)?;
@@ -433,17 +429,17 @@ fn three_way_file_provider_fanout_keeps_concurrent_logins() -> VaultResult<()> {
         .device;
 
     // Each device publishes its offline branch into the shared vault (and backups).
-    providers = write_all_device_events_to_provider(&device_a, providers, VAULT_A)?;
-    providers = write_all_device_events_to_provider(&device_a, providers, "vault-a-backup")?;
-    providers = write_all_device_events_to_provider(&device_b, providers, VAULT_A)?;
-    providers = write_all_device_events_to_provider(&device_b, providers, VAULT_A_DEVICE_B)?;
-    providers = write_all_device_events_to_provider(&device_c, providers, VAULT_A)?;
+    providers = device_a.events_for(VAULT_A).write_to(providers)?;
+    providers = device_a.events_for("vault-a-backup").write_to(providers)?;
+    providers = device_b.events_for(VAULT_A).write_to(providers)?;
+    providers = device_b.events_for(VAULT_A_DEVICE_B).write_to(providers)?;
+    providers = device_c.events_for(VAULT_A).write_to(providers)?;
 
     device_a = pull_provider_into_device(device_a, &providers, VAULT_A)?;
     device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
     device_c = pull_provider_into_device(device_c, &providers, VAULT_A)?;
-    providers = write_all_device_events_to_provider(&device_a, providers, "vault-a-backup")?;
-    providers = write_all_device_events_to_provider(&device_b, providers, VAULT_A_DEVICE_B)?;
+    providers = device_a.events_for("vault-a-backup").write_to(providers)?;
+    providers = device_b.events_for(VAULT_A_DEVICE_B).write_to(providers)?;
 
     for device in [&device_a, &device_b, &device_c] {
         assert_eq!(live_secret_ids(device)?.len(), 3);
