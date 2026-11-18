@@ -1,40 +1,4 @@
-use std::{
-    env, fs,
-    ops::Deref,
-    path::{Path, PathBuf},
-};
-
-struct RepositoryFixture {
-    path: PathBuf,
-}
-impl RepositoryFixture {
-    fn repository_root() -> Self {
-        Self {
-            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
-                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-                PathBuf::from,
-            ),
-        }
-    }
-}
-impl Deref for RepositoryFixture {
-    type Target = PathBuf;
-    fn deref(&self) -> &PathBuf {
-        &self.path
-    }
-}
-impl AsRef<Path> for RepositoryFixture {
-    fn as_ref(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl RepositoryFixture {
-    fn read(&self, path: &str) -> String {
-        fs::read_to_string(self.join(path))
-            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
-    }
-}
+use super::{RepositoryFixture, RepositoryPathRead};
 
 #[test]
 fn kubernetes_cache_proof_reuses_production_workloads() {

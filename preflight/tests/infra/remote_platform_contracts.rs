@@ -1,42 +1,7 @@
-use std::{
-    env, fs,
-    ops::Deref,
-    path::{Path, PathBuf},
-};
+use super::{RepositoryFixture, RepositoryPathRead};
+use std::{fs, path::Path};
 
 use anyhow::Context;
-
-struct RepositoryFixture {
-    path: PathBuf,
-}
-impl RepositoryFixture {
-    fn repository_root() -> Self {
-        Self {
-            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
-                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-                PathBuf::from,
-            ),
-        }
-    }
-}
-impl Deref for RepositoryFixture {
-    type Target = PathBuf;
-    fn deref(&self) -> &PathBuf {
-        &self.path
-    }
-}
-impl AsRef<Path> for RepositoryFixture {
-    fn as_ref(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl RepositoryFixture {
-    fn read(&self, path: &str) -> String {
-        fs::read_to_string(self.join(path))
-            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
-    }
-}
 
 fn infra_taskfile_graph() -> String {
     let root = RepositoryFixture::repository_root().read("infra/Taskfile.yml");

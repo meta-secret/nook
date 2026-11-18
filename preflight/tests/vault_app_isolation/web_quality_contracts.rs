@@ -1,4 +1,4 @@
-use super::RepositoryFixture;
+use super::{RepositoryFixture, RepositoryPathRead};
 use serde::Deserialize;
 
 #[derive(Deserialize)]

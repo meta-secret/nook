@@ -1,13 +1,14 @@
+#[path = "support/repository.rs"]
+mod repository;
+
 use anyhow::Context as _;
 use nook_preflight::dockerfile_cache::DockerfileRepository;
-use std::{collections::BTreeSet, env, fs, path::PathBuf};
+use repository::RepositoryFixture;
+use std::{collections::BTreeSet, fs, path::PathBuf};
 
 #[test]
 fn dockerfiles_only_use_the_approved_stateful_policy_cache_mount() -> anyhow::Result<()> {
-    let repository_root = env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    );
+    let repository_root = RepositoryFixture::repository_root();
 
     let violations = DockerfileRepository::new(&repository_root).dockerfile_cache_mounts()?;
     let policy_path =

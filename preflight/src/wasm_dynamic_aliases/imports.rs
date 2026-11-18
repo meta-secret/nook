@@ -1,4 +1,5 @@
 use super::{DynamicWasmAliases, HashMap, HashSet, JavaScriptLiteral, WasmModuleSources};
+use crate::typescript_runtime::TypeScriptRuntimeNode;
 use crate::wasm_module_sources::inputs::ModuleSource;
 
 impl DynamicWasmAliases<'_> {
@@ -10,9 +11,7 @@ impl DynamicWasmAliases<'_> {
             module,
             mut wasm_namespace_bindings,
         } = self;
-        if node.kind() == "namespace_import"
-            && !DynamicWasmAliases::node_is_type_only_import(node, source)
-        {
+        if node.kind() == "namespace_import" && !node.is_type_only_import(source) {
             let mut cursor = node.walk();
             if let Some(binding) = node
                 .named_children(&mut cursor)
@@ -24,7 +23,7 @@ impl DynamicWasmAliases<'_> {
             return wasm_namespace_bindings;
         }
         if node.kind() == "import_specifier"
-            && !DynamicWasmAliases::node_is_type_only_import(node, source)
+            && !node.is_type_only_import(source)
             && let Some(imported) = node.child_by_field_name("name")
             && let Ok(imported_name) = (JavaScriptLiteral {
                 node: imported,
@@ -113,26 +112,5 @@ impl DynamicWasmAliases<'_> {
             );
         }
         wasm_class_bindings
-    }
-}
-
-impl DynamicWasmAliases<'_> {
-    pub(super) fn node_is_type_only_import(node: tree_sitter::Node<'_>, source: &str) -> bool {
-        if node
-            .utf8_text(source.as_bytes())
-            .is_ok_and(|text| text.trim_start().starts_with("type "))
-        {
-            return true;
-        }
-        let mut ancestor = node.parent();
-        while let Some(parent) = ancestor {
-            if parent.kind() == "import_statement" {
-                return parent
-                    .utf8_text(source.as_bytes())
-                    .is_ok_and(|text| text.trim_start().starts_with("import type "));
-            }
-            ancestor = parent.parent();
-        }
-        false
     }
 }

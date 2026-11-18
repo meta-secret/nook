@@ -5,6 +5,7 @@ use super::{
 use crate::javascript_scopes::BindingProvenance;
 use crate::javascript_scopes::Invocation;
 use crate::javascript_scopes::VisibleBinding;
+use crate::typescript_runtime::TypeScriptRuntimeNode;
 use crate::wasm_module_sources::inputs::ModuleSource;
 
 impl DynamicWasmAliases<'_> {
@@ -131,7 +132,7 @@ impl DynamicWasmAliases<'_> {
 #[rustfmt::skip]
 impl DynamicWasmAliases<'_> {
 pub(super) fn value_is_wasm_instance(value: tree_sitter::Node<'_>, source: &str, source_path: &ModuleSource<'_>, wasm_types: &WasmTypeInventory, wasm_class_bindings: &HashMap<String, String>, wasm_namespace_bindings: &HashMap<String, String>, scoped_wasm_namespaces: &[ScopedBinding], wasm_type_names: &HashSet<String>, wasm_instance_factories: &HashMap<String, String>, scoped_wasm_factories: &[ScopedBinding], scoped_wasm_runtime_receivers: &[ScopedBinding], wasm_instance_bindings: &HashMap<String, String>, scoped_wasm_instances: &[ScopedBinding]) -> Result<String, AliasResolutionFailure> {
-    let value = DynamicWasmAliases::unwrap_transparent_expression(value);
+    let value = value.runtime_expression();
     if value.kind() == "identifier"
         && let Ok(name) = value.utf8_text(source.as_bytes())
     {

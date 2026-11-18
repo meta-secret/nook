@@ -9,6 +9,7 @@ mod rust_wasm_names;
 pub mod source_size;
 mod typescript_discriminants;
 mod typescript_domain_boundary;
+mod typescript_runtime;
 mod typescript_state;
 mod wasm_direct_aliases;
 mod wasm_dynamic_aliases;
@@ -321,13 +322,6 @@ impl RustBoundarySources<'_> {
 mod tests {
     use super::*;
     use crate::typescript_domain_boundary::TypeScriptDomainBoundary;
-    use std::{
-        env, process,
-        sync::atomic::{AtomicU64, Ordering},
-        time::{SystemTime, UNIX_EPOCH},
-    };
-
-    static TEMPORARY_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
     #[test]
     fn reports_wasm_type_aliases_and_trivial_forwarders() {
@@ -670,13 +664,14 @@ pub fn build_passkey_creation_options() -> Result<JsValue, JsError> {
 
     #[test]
     fn reports_all_authored_null_while_ignoring_generated_declarations() -> anyhow::Result<()> {
-        let root = temporary_directory()?;
-        write_authored_null_fixture(&root)?;
+        let directory = tempfile::tempdir()?;
+        let root = directory.path();
+        write_authored_null_fixture(root)?;
         assert_eq!(
-            TypeScriptApplicationState::typescript_null_absence_sentinels(&root)?,
+            TypeScriptApplicationState::typescript_null_absence_sentinels(root)?,
             expected_authored_null_violations()
         );
-        fs::remove_dir_all(root)?;
+        directory.close()?;
         Ok(())
     }
 
@@ -733,14 +728,5 @@ export function configuredCapability(): NookProviderReplicationCapability {
             TypeScriptDomainBoundary::typescript_boundary_violation_lines(source),
             vec![6]
         );
-    }
-
-    fn temporary_directory() -> anyhow::Result<PathBuf> {
-        let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        let process_id = process::id();
-        let sequence = TEMPORARY_DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let path = env::temp_dir().join(format!("nook-preflight-{process_id}-{unique}-{sequence}"));
-        fs::create_dir(&path)?;
-        Ok(path)
     }
 }

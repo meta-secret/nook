@@ -1,42 +1,20 @@
+#[path = "support/repository.rs"]
+mod repository;
+
 use regex::RegexSet;
+use repository::RepositoryFixture;
 use std::{
     cmp::Ord,
     collections::BTreeSet,
     env,
     ffi::OsStr,
     fs,
-    ops::Deref,
     os::unix::fs as unix_fs,
     path::{Path, PathBuf},
     process::Command,
     str,
     sync::OnceLock,
 };
-
-struct RepositoryFixture {
-    path: PathBuf,
-}
-impl RepositoryFixture {
-    fn repository_root() -> Self {
-        Self {
-            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
-                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-                PathBuf::from,
-            ),
-        }
-    }
-}
-impl Deref for RepositoryFixture {
-    type Target = PathBuf;
-    fn deref(&self) -> &PathBuf {
-        &self.path
-    }
-}
-impl AsRef<Path> for RepositoryFixture {
-    fn as_ref(&self) -> &Path {
-        &self.path
-    }
-}
 
 fn is_generated_repository_component(component: &OsStr) -> bool {
     matches!(
