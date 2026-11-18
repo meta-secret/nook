@@ -498,6 +498,7 @@ struct ImportFixture {
     device_secret: String,
     device_public_key: nook_core::DevicePublicKey,
     signing_public_key: nook_core::DeviceSigningPublicKey,
+    signer: SigningIdentity,
 }
 
 async fn import_fixture(with_update: bool) -> anyhow::Result<ImportFixture> {
@@ -522,7 +523,8 @@ async fn import_fixture(with_update: bool) -> anyhow::Result<ImportFixture> {
             .await
             .map_err(|error| anyhow::anyhow!("append candidate update: {error}"))?;
     }
-    let signing_public_key = source.ensure_signing_identity().await?.public_key();
+    let signer = source.ensure_signing_identity().await?;
+    let signing_public_key = signer.public_key();
     let records = source
         .export_event_log_records()
         .await?
@@ -539,6 +541,7 @@ async fn import_fixture(with_update: bool) -> anyhow::Result<ImportFixture> {
         device_secret: source.device.identity_private_key.clone(),
         device_public_key: identity.public_key(),
         signing_public_key,
+        signer,
     })
 }
 
@@ -685,6 +688,72 @@ async fn extension_import_rejects_a_grant_for_an_inactive_identity() -> anyhow::
         .delete_local_browser_data()
         .await
         .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+    Ok(())
+}
+
+#[wasm_bindgen_test]
+async fn invalid_encrypted_catalog_keeps_signed_extension_update_receipt() -> anyhow::Result<()> {
+    use crate::TypedInput;
+    use crate::manager::NookExternalEventLogRecords;
+    use crate::manager::search_catalog::extension_hint::NookExtensionLocalEventLogUpdate;
+    use nook_core::{
+        AgeArmoredCiphertext, DeviceId, EncryptedSearchCatalogBucket, ExtensionEventCount,
+        SearchCatalogHintContext, SearchCatalogHintSignRequest, SignedSearchCatalogHint,
+    };
+    use tsify::Ts;
+
+    let fixture = import_fixture(true).await?;
+    let store_id = StoreId::parse(&fixture.store_id)?;
+    let device_id = DeviceId::parse(&fixture.device_id)?;
+    let store = NookDatabase::load_local_event_store(store_id.as_str()).await?;
+    let graph = store.load_graph(store_id.as_str())?;
+    let encoded = SignedSearchCatalogHint::sign(SearchCatalogHintSignRequest {
+        context: SearchCatalogHintContext {
+            store_id: &store_id,
+            graph: &graph,
+        },
+        issuer: &device_id,
+        signer: &fixture.signer,
+        buckets: vec![EncryptedSearchCatalogBucket {
+            bucket: 1.into(),
+            ciphertext: AgeArmoredCiphertext::from_trusted_armored(
+                "-----BEGIN AGE ENCRYPTED FILE-----\n-----END AGE ENCRYPTED FILE-----\n".to_owned(),
+            ),
+        }],
+    })?;
+    let (mut replacement, _) = replacement_manager(&fixture).await?;
+    let update = serde_json::json!({
+        "vaultStoreId": fixture.store_id,
+        "deviceId": fixture.device_id,
+        "devicePublicKey": fixture.device_public_key,
+        "deviceSigningPublicKey": fixture.signing_public_key,
+        "catalogHint": { "kind": "sealed", "encoded": encoded },
+    });
+    let update = js_sys::JSON::parse(&serde_json::to_string(&update)?)
+        .map_err(|_| anyhow::anyhow!("construct typed event update fixture"))?;
+    let expected_count = fixture.records.len();
+    let update = NookExternalEventLogRecords(fixture.records)
+        .with_local_update(&Ts::<NookExtensionLocalEventLogUpdate>::new_unchecked(
+            update,
+        ))
+        .map_err(|error| anyhow::anyhow!("decode typed event update fixture: {error:?}"))?;
+    let status = replacement
+        .import_extension_local_event_log_update_js(update)
+        .await
+        .and_then(|status| status.to_object())
+        .map_err(|error| anyhow::anyhow!("signed event update should be admitted: {error:?}"))?
+        .decode()?;
+    assert!(status.access_granted);
+    assert_eq!(
+        status.event_count,
+        ExtensionEventCount::from(u32::try_from(expected_count)?)
+    );
+    assert_eq!(status.vault_store_id.as_str(), fixture.store_id);
+    assert!(
+        NookDatabase::load_secret_search_catalog_buckets(&fixture.store_id)
+            .await?
+            .is_empty()
+    );
     Ok(())
 }
 
