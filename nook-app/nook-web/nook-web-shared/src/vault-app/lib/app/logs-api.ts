@@ -59,8 +59,7 @@ export class AppLogsLocation {
   constructor(private readonly request: string) {}
   get matches(): boolean {
     const pathname = this.request;
-    const normalized =
-      new ApplicationPath(pathname).relative.replace(/\/$/, "") || "/";
+    const normalized = new ApplicationPath(pathname).relative;
     return normalized === APP_LOGS_PATH;
   }
 }
