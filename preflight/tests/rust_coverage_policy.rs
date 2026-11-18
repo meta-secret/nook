@@ -142,11 +142,16 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
         .into_iter()
         .filter(|run| run.contains("--no-run"))
         .collect::<Vec<_>>();
-    assert_eq!(compiler_runs.len(), 2);
-    assert!(compiler_runs[0].contains("llvm-cov show-env --sh"));
-    assert!(!compiler_runs[0].contains("--target wasm32-unknown-unknown"));
-    assert!(compiler_runs[1].contains("llvm-cov show-env --sh --target wasm32-unknown-unknown"));
-    assert!(compiler_runs[1].contains("--target wasm32-unknown-unknown"));
+    let [native_compile, wasm_compile] = compiler_runs.as_slice() else {
+        anyhow::bail!(
+            "expected native and WASM compiler runs, found {}",
+            compiler_runs.len()
+        );
+    };
+    assert!(native_compile.contains("llvm-cov show-env --sh"));
+    assert!(!native_compile.contains("--target wasm32-unknown-unknown"));
+    assert!(wasm_compile.contains("llvm-cov show-env --sh --target wasm32-unknown-unknown"));
+    assert!(wasm_compile.contains("--target wasm32-unknown-unknown"));
     assert!(!wasm_node_deps.contains("llvm-cov test"));
     assert!(!wasm_node_deps.contains("llvm-cov --no-run"));
     assert!(!wasm_node_deps.contains("RUSTC_WRAPPER="));
@@ -477,8 +482,10 @@ fn dockerfile_run_instructions(stage: &str) -> Vec<String> {
         if let Some(run) = current.as_mut() {
             run.push('\n');
             run.push_str(trimmed);
-            if !trimmed.ends_with('\\') {
-                runs.push(current.take().expect("RUN instruction must be present"));
+            if !trimmed.ends_with('\\')
+                && let Some(completed) = current.take()
+            {
+                runs.push(completed);
             }
             continue;
         }

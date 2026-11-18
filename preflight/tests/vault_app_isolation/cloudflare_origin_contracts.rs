@@ -1,11 +1,7 @@
 use super::*;
 
 #[test]
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "integration contracts share a fallible test signature"
-)]
-fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<()> {
+fn extension_and_release_contract_preserve_origin_isolation() {
     let root = RepositoryFixture::repository_root();
     let manifest = root.read("nook-app/nook-web/nook-web-extension/src/manifest.ts");
     let vault_target =
@@ -57,72 +53,77 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
             "companion vault host policy must preserve production boundary {production_boundary}"
         );
     }
+    root.assert_release_origin_isolation();
+}
 
-    let release = root.read(".github/workflows/release.yml");
-    for required in [
-        "task ci:release:deploy-vaults",
-        "task ci:release:attach-prod-domains",
-        "uses: actions/github-script@v9",
-        "NOOK_EXTENSION_VAULT: nokey",
-        "NOOK_EXTENSION_VAULT: meta-secret",
-        "task ci:release:package-extension",
-    ] {
+impl RepositoryFixture {
+    fn assert_release_origin_isolation(&self) {
+        let root = self;
+        let release = root.read(".github/workflows/release.yml");
+        for required in [
+            "task ci:release:deploy-vaults",
+            "task ci:release:attach-prod-domains",
+            "uses: actions/github-script@v9",
+            "NOOK_EXTENSION_VAULT: nokey",
+            "NOOK_EXTENSION_VAULT: meta-secret",
+            "task ci:release:package-extension",
+        ] {
+            assert!(
+                release.contains(required),
+                "release workflow missing {required}"
+            );
+        }
         assert!(
-            release.contains(required),
-            "release workflow missing {required}"
+            !release.contains("gh release "),
+            "release publication must not assume the self-hosted runner has the GitHub CLI"
+        );
+        let deploy_script = root.read(".github/scripts/ci-release-deploy-vaults.sh");
+        for required in [
+            "nook-vault-simple/dist",
+            "nook-vault-sentinel/dist",
+            "node /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules/.bin/wrangler",
+            "wrangler pages project create",
+            "wrangler pages deploy",
+        ] {
+            assert!(
+                deploy_script.contains(required),
+                "release vault deploy script missing {required}"
+            );
+        }
+        for forbidden in ["docker run", "npx --yes wrangler"] {
+            assert!(
+                !deploy_script.contains(forbidden),
+                "release vault deployment must run directly in its Kubernetes Pod: {forbidden}"
+            );
+        }
+        let domains_script = root.read(".github/scripts/ci-release-attach-prod-domains.sh");
+        for required in [
+            "simple.nokey.sh:nokey-simple",
+            "sentinel.nokey.sh:nokey-sentinel",
+            "nook-app-kind",
+            "failed release verification",
+        ] {
+            assert!(
+                domains_script.contains(required),
+                "release domain attach script missing {required}"
+            );
+        }
+        assert!(
+            !domains_script.contains("for attempt in") && !domains_script.contains("sleep 10"),
+            "release domain verification must probe exact-release metadata once"
+        );
+        assert!(
+            !domains_script.contains("meta-secret.io"),
+            "the release must not attach or verify the hand-attached simple.meta-secret.io alias"
+        );
+        let research_verifier = root.read(".github/scripts/web-research-verify-live.sh");
+        assert!(
+            research_verifier.contains("Web research deployment verification failed")
+                && !research_verifier.contains("--retry")
+                && !research_verifier.contains("sleep "),
+            "web research deployment verification must probe the live artifact once"
         );
     }
-    assert!(
-        !release.contains("gh release "),
-        "release publication must not assume the self-hosted runner has the GitHub CLI"
-    );
-    let deploy_script = root.read(".github/scripts/ci-release-deploy-vaults.sh");
-    for required in [
-        "nook-vault-simple/dist",
-        "nook-vault-sentinel/dist",
-        "node /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules/.bin/wrangler",
-        "wrangler pages project create",
-        "wrangler pages deploy",
-    ] {
-        assert!(
-            deploy_script.contains(required),
-            "release vault deploy script missing {required}"
-        );
-    }
-    for forbidden in ["docker run", "npx --yes wrangler"] {
-        assert!(
-            !deploy_script.contains(forbidden),
-            "release vault deployment must run directly in its Kubernetes Pod: {forbidden}"
-        );
-    }
-    let domains_script = root.read(".github/scripts/ci-release-attach-prod-domains.sh");
-    for required in [
-        "simple.nokey.sh:nokey-simple",
-        "sentinel.nokey.sh:nokey-sentinel",
-        "nook-app-kind",
-        "failed release verification",
-    ] {
-        assert!(
-            domains_script.contains(required),
-            "release domain attach script missing {required}"
-        );
-    }
-    assert!(
-        !domains_script.contains("for attempt in") && !domains_script.contains("sleep 10"),
-        "release domain verification must probe exact-release metadata once"
-    );
-    assert!(
-        !domains_script.contains("meta-secret.io"),
-        "the release must not attach or verify the hand-attached simple.meta-secret.io alias"
-    );
-    let research_verifier = root.read(".github/scripts/web-research-verify-live.sh");
-    assert!(
-        research_verifier.contains("Web research deployment verification failed")
-            && !research_verifier.contains("--retry")
-            && !research_verifier.contains("sleep "),
-        "web research deployment verification must probe the live artifact once"
-    );
-    Ok(())
 }
 
 #[test]

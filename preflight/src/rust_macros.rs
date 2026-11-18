@@ -125,12 +125,6 @@ impl<'ast> Visit<'ast> for MacroDefinitionVisitor {
 mod tests {
     #[cfg(unix)]
     use std::fs;
-    #[cfg(unix)]
-    use std::path::PathBuf;
-    #[cfg(unix)]
-    use std::time::{SystemTime, UNIX_EPOCH};
-    #[cfg(unix)]
-    use std::{env, process};
 
     use super::MacroDefinitionVisitor;
     #[cfg(unix)]
@@ -172,7 +166,8 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn ignores_vendored_dependency_macro_definitions() -> anyhow::Result<()> {
-        let root = temporary_directory("vendor")?;
+        let directory = tempfile::tempdir()?;
+        let root = directory.path();
         let vendor = root.join("vendor/arrayref/src");
         fs::create_dir_all(&vendor)?;
         fs::write(
@@ -180,9 +175,9 @@ mod tests {
             "macro_rules! third_party { () => {}; }",
         )?;
 
-        let violations = (RustMacroInventory { root: &root }).authored_rust_macro_definitions()?;
+        let violations = (RustMacroInventory { root }).authored_rust_macro_definitions()?;
 
-        fs::remove_dir_all(root)?;
+        directory.close()?;
         assert!(violations.is_empty());
         Ok(())
     }
@@ -192,29 +187,20 @@ mod tests {
     fn does_not_follow_symlinks_outside_the_scan_root() -> anyhow::Result<()> {
         use std::os::unix::fs::symlink;
 
-        let root = temporary_directory("root")?;
-        let external = temporary_directory("external")?;
+        let directory = tempfile::tempdir()?;
+        let root = directory.path();
+        let external_directory = tempfile::tempdir()?;
+        let external = external_directory.path();
         let external_source = external.join("defined.rs");
         fs::write(&external_source, "macro_rules! external { () => {}; }")?;
-        symlink(&external, root.join("linked-directory"))?;
+        symlink(external, root.join("linked-directory"))?;
         symlink(&external_source, root.join("linked.rs"))?;
 
-        let violations = (RustMacroInventory { root: &root }).authored_rust_macro_definitions()?;
+        let violations = (RustMacroInventory { root }).authored_rust_macro_definitions()?;
 
-        fs::remove_dir_all(root)?;
-        fs::remove_dir_all(external)?;
+        directory.close()?;
+        external_directory.close()?;
         assert!(violations.is_empty());
         Ok(())
-    }
-
-    #[cfg(unix)]
-    fn temporary_directory(label: &str) -> anyhow::Result<PathBuf> {
-        let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        let path = env::temp_dir().join(format!(
-            "nook-rust-macros-{label}-{}-{unique}",
-            process::id()
-        ));
-        fs::create_dir(&path)?;
-        Ok(path)
     }
 }

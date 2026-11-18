@@ -1,10 +1,13 @@
+#[path = "support/repository.rs"]
+mod repository;
+
 use nook_preflight::RustBoundaryState;
 use nook_preflight::RustMacroInventory;
 use nook_preflight::RustWasmNames;
 use nook_preflight::TypeScriptApplicationState;
 use nook_preflight::TypeScriptDomainBoundary;
-use std::path::{Path, PathBuf};
-use std::{env, fs, ops::Deref};
+use repository::RepositoryFixture;
+use std::fs;
 
 use nook_preflight::{RustBoundarySources, RustTestSources};
 
@@ -95,31 +98,6 @@ fn rust_tsify_boundaries_never_override_domain_state_with_absence_sentinels() ->
         "Rust-owned Tsify contracts must use named state enums instead of undefined, null, or void type overrides: {violations:#?}"
     );
     Ok(())
-}
-
-struct RepositoryFixture {
-    path: PathBuf,
-}
-impl RepositoryFixture {
-    fn repository_root() -> Self {
-        Self {
-            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
-                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-                PathBuf::from,
-            ),
-        }
-    }
-}
-impl Deref for RepositoryFixture {
-    type Target = PathBuf;
-    fn deref(&self) -> &PathBuf {
-        &self.path
-    }
-}
-impl AsRef<Path> for RepositoryFixture {
-    fn as_ref(&self) -> &Path {
-        &self.path
-    }
 }
 
 #[test]

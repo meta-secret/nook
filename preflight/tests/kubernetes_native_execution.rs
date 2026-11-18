@@ -1,8 +1,8 @@
-use std::{
-    env, fs, mem,
-    ops::Deref,
-    path::{Path, PathBuf},
-};
+#[path = "support/repository_files.rs"]
+mod repository_files;
+
+use repository_files::{RepositoryFixture, RepositoryPathRead};
+use std::{fs, mem};
 
 use anyhow::Result;
 
@@ -15,38 +15,6 @@ const CLUSTER_ENTRYPOINTS: &[&str] = &[
     ".github/scripts/remote-task-batch.sh",
     "nook-app/ci/Taskfile.yml",
 ];
-
-struct RepositoryFixture {
-    path: PathBuf,
-}
-impl RepositoryFixture {
-    fn repository_root() -> Self {
-        Self {
-            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
-                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-                PathBuf::from,
-            ),
-        }
-    }
-}
-impl Deref for RepositoryFixture {
-    type Target = PathBuf;
-    fn deref(&self) -> &PathBuf {
-        &self.path
-    }
-}
-impl AsRef<Path> for RepositoryFixture {
-    fn as_ref(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl RepositoryFixture {
-    fn read(&self, path: &str) -> String {
-        fs::read_to_string(self.join(path))
-            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
-    }
-}
 
 fn assert_no_nested_runtime(label: &str, source: &str) {
     let lowercase = source.to_ascii_lowercase();

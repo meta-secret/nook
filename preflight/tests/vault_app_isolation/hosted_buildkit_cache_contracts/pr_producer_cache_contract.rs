@@ -102,6 +102,10 @@ impl<'a> PrProducerCacheContract<'a> {
         ] {
             assert!(bake.contains(&format!("\"{target}\"")));
         }
+        self.assert_artifact_build_contract(&tasks)
+    }
+
+    fn assert_artifact_build_contract(&self, tasks: &str) -> anyhow::Result<()> {
         let web = self.root.read("nook-app/nook-web/nook-web-app/Dockerfile");
         assert!(web.contains("FROM nook-web-source AS pr-web-tests"));
         assert!(!web.contains("FROM pr-web-verification AS pr-web-tests"));

@@ -431,15 +431,13 @@ mod tests {
         SourceSizeViolation,
     };
     use std::path::PathBuf;
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::time::{SystemTime, UNIX_EPOCH};
-    use std::{env, fs, process};
 
-    static TEMPORARY_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+    use std::fs;
 
     #[test]
     fn applies_one_hard_limit_to_every_authored_language() -> anyhow::Result<()> {
-        let root = temporary_directory()?;
+        let directory = tempfile::tempdir()?;
+        let root = directory.path();
         fs::write(root.join("at-limit.ts"), lines(AUTHORED_SOURCE_LINE_LIMIT))?;
         fs::write(
             root.join("over-limit.ts"),
@@ -460,7 +458,7 @@ mod tests {
         )?;
 
         assert_eq!(
-            SourceRepository::new(&root).source_size_violations()?,
+            SourceRepository::new(root).source_size_violations()?,
             vec![
                 SourceSizeViolation {
                     path: PathBuf::from("over-limit.html"),
@@ -484,13 +482,14 @@ mod tests {
                 },
             ]
         );
-        fs::remove_dir_all(root)?;
+        directory.close()?;
         Ok(())
     }
 
     #[test]
     fn excludes_dependencies_outputs_and_non_source_fixtures() -> anyhow::Result<()> {
-        let root = temporary_directory()?;
+        let directory = tempfile::tempdir()?;
+        let root = directory.path();
         for directory in ["node_modules", "target", "coverage", "dist"] {
             fs::create_dir(root.join(directory))?;
             fs::write(
@@ -514,20 +513,21 @@ mod tests {
         )?;
 
         assert_eq!(
-            SourceRepository::new(&root).source_size_violations()?,
+            SourceRepository::new(root).source_size_violations()?,
             vec![SourceSizeViolation {
                 path: PathBuf::from("src/coverage/owned.ts"),
                 lines: AUTHORED_SOURCE_LINE_LIMIT + 1,
                 limit: AUTHORED_SOURCE_LINE_LIMIT,
             }]
         );
-        fs::remove_dir_all(root)?;
+        directory.close()?;
         Ok(())
     }
 
     #[test]
     fn excludes_workflow_processing_evidence() -> anyhow::Result<()> {
-        let root = temporary_directory()?;
+        let directory = tempfile::tempdir()?;
+        let root = directory.path();
         let processing = root.join("workflow/processing/run/agents/audit/attempt-1");
         fs::create_dir_all(&processing)?;
         fs::write(
@@ -544,23 +544,24 @@ mod tests {
         )?;
 
         assert!(
-            SourceRepository::new(&root)
+            SourceRepository::new(root)
                 .source_size_violations()?
                 .is_empty()
         );
         assert!(
-            SourceRepository::new(&root)
+            SourceRepository::new(root)
                 .external_rust_unit_test_modules()?
                 .is_empty()
         );
-        fs::remove_dir_all(root)?;
+        directory.close()?;
         Ok(())
     }
 
     #[test]
     fn excludes_exact_generated_wasm_roots_but_governs_adjacent_authored_sources()
     -> anyhow::Result<()> {
-        let root = temporary_directory()?;
+        let directory = tempfile::tempdir()?;
+        let root = directory.path();
         let generated_roots = [
             "nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm",
             "nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm",
@@ -585,7 +586,7 @@ mod tests {
         }
 
         assert_eq!(
-            SourceRepository::new(&root).source_size_violations()?,
+            SourceRepository::new(root).source_size_violations()?,
             authored
                 .into_iter()
                 .map(|path| SourceSizeViolation {
@@ -595,13 +596,14 @@ mod tests {
                 })
                 .collect::<Vec<_>>()
         );
-        fs::remove_dir_all(root)?;
+        directory.close()?;
         Ok(())
     }
 
     #[test]
     fn rejects_external_unit_tests_but_allows_integration_tests() -> anyhow::Result<()> {
-        let root = temporary_directory()?;
+        let directory = tempfile::tempdir()?;
+        let root = directory.path();
         fs::create_dir_all(root.join("crate/src"))?;
         fs::create_dir_all(root.join("crate/src/external"))?;
         fs::create_dir_all(root.join("crate/src/platform"))?;
@@ -652,7 +654,7 @@ mod tests {
         )?;
 
         assert_eq!(
-            SourceRepository::new(&root).external_rust_unit_test_modules()?,
+            SourceRepository::new(root).external_rust_unit_test_modules()?,
             vec![
                 ExternalUnitTestModuleViolation {
                     path: PathBuf::from("crate/src/external.rs"),
@@ -686,22 +688,12 @@ mod tests {
                 },
             ]
         );
-        fs::remove_dir_all(root)?;
+        directory.close()?;
         Ok(())
     }
 
     fn lines(count: usize) -> String {
         "line\n".repeat(count)
-    }
-
-    fn temporary_directory() -> anyhow::Result<PathBuf> {
-        let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        let process_id = process::id();
-        let sequence = TEMPORARY_DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let path =
-            env::temp_dir().join(format!("nook-source-size-{process_id}-{unique}-{sequence}"));
-        fs::create_dir(&path)?;
-        Ok(path)
     }
 }
 

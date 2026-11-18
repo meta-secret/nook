@@ -202,41 +202,14 @@ impl WasmModuleSources<'_> {
 #[cfg(test)]
 mod tests {
     use super::super::inputs::{ModuleInputs, ModuleSource};
-    use std::{
-        env, fs, io,
-        ops::Deref,
-        path::{Path, PathBuf},
-        process,
-    };
+    use std::{fs, io};
 
     use super::WasmModuleSources;
 
-    struct RepositoryFixture {
-        path: PathBuf,
-    }
-    impl RepositoryFixture {
-        fn temp_root(name: &str) -> Self {
-            Self {
-                path: env::temp_dir().join(format!("nook-{name}-{}", process::id())),
-            }
-        }
-    }
-    impl Deref for RepositoryFixture {
-        type Target = PathBuf;
-        fn deref(&self) -> &PathBuf {
-            &self.path
-        }
-    }
-    impl AsRef<Path> for RepositoryFixture {
-        fn as_ref(&self) -> &Path {
-            &self.path
-        }
-    }
-
     #[test]
     fn follows_arbitrary_local_reexport_chains() -> Result<(), io::Error> {
-        let root = RepositoryFixture::temp_root("wasm-facade");
-        fs::create_dir_all(&root)?;
+        let directory = tempfile::tempdir()?;
+        let root = directory.path();
         fs::write(root.join("bridge.ts"), "export * from '$app-wasm';")?;
         let consumer = root.join("consumer.ts");
         fs::write(&consumer, "")?;
@@ -250,14 +223,14 @@ mod tests {
             })
             .is_wasm_callable_source()
         );
-        fs::remove_dir_all(root)?;
+        directory.close()?;
         Ok(())
     }
 
     #[test]
     fn follows_import_then_export_facades() -> Result<(), io::Error> {
-        let root = RepositoryFixture::temp_root("wasm-import-export-facade");
-        fs::create_dir_all(&root)?;
+        let directory = tempfile::tempdir()?;
+        let root = directory.path();
         fs::write(
             root.join("bridge.ts"),
             "import { generate_secret_id as secret } from '$app-wasm'; export { secret as generate_secret_id };",
@@ -272,14 +245,14 @@ mod tests {
                 inputs: &ModuleInputs::default()
             },
         ));
-        fs::remove_dir_all(root)?;
+        directory.close()?;
         Ok(())
     }
 
     #[test]
     fn follows_commonjs_facade_exports() -> Result<(), io::Error> {
-        let root = RepositoryFixture::temp_root("wasm-commonjs-facade");
-        fs::create_dir_all(&root)?;
+        let directory = tempfile::tempdir()?;
+        let root = directory.path();
         fs::write(
             root.join("bridge.cjs"),
             "module.exports = require('nook-wasm');",
@@ -294,14 +267,14 @@ mod tests {
                 inputs: &ModuleInputs::default()
             },
         ));
-        fs::remove_dir_all(root)?;
+        directory.close()?;
         Ok(())
     }
 
     #[test]
     fn preserves_provenance_per_exported_symbol() -> Result<(), io::Error> {
-        let root = RepositoryFixture::temp_root("wasm-mixed-facade");
-        fs::create_dir_all(&root)?;
+        let directory = tempfile::tempdir()?;
+        let root = directory.path();
         fs::write(
             root.join("bridge.ts"),
             "export { generate_secret_id } from '$app-wasm'; export { connect } from 'socket-lib';",
@@ -324,7 +297,7 @@ mod tests {
                 inputs: &ModuleInputs::default()
             }
         ));
-        fs::remove_dir_all(root)?;
+        directory.close()?;
         Ok(())
     }
 }

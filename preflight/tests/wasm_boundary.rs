@@ -1,13 +1,14 @@
+#[path = "support/repository.rs"]
+mod repository;
+
 use nook_preflight::RustWasmNames;
+use repository::RepositoryFixture;
+use std::fs;
 use std::path::{Path, PathBuf};
-use std::{env, fs, process};
 
 #[test]
 fn wasm_source_does_not_use_js_value() -> anyhow::Result<()> {
-    let repository_root = env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    );
+    let repository_root = RepositoryFixture::repository_root();
 
     let violations = (nook_preflight::RustBoundarySources {
         root: &repository_root,
@@ -28,17 +29,18 @@ fn wasm_source_does_not_use_js_value() -> anyhow::Result<()> {
 
 #[test]
 fn wasm_callable_names_preserve_rust_provenance_end_to_end() -> anyhow::Result<()> {
-    let root = wasm_callable_fixture_root();
-    create_wasm_callable_fixture(&root)?;
+    let directory = tempfile::tempdir()?;
+    let root = directory.path();
+    create_wasm_callable_fixture(root)?;
 
-    let violations = (RustWasmNames { root: &root }).rust_wasm_callable_name_overrides()?;
+    let violations = (RustWasmNames { root }).rust_wasm_callable_name_overrides()?;
     let mut locations = violations
         .iter()
         .map(|violation| {
             (
                 violation
                     .path
-                    .strip_prefix(&root)
+                    .strip_prefix(root)
                     .unwrap_or(&violation.path)
                     .to_path_buf(),
                 violation.line,
@@ -47,18 +49,11 @@ fn wasm_callable_names_preserve_rust_provenance_end_to_end() -> anyhow::Result<(
         .collect::<Vec<_>>();
     locations.sort();
     assert_eq!(locations, expected_wasm_callable_alias_locations());
-    fs::remove_dir_all(root)?;
+    directory.close()?;
     Ok(())
 }
 
-fn wasm_callable_fixture_root() -> PathBuf {
-    env::temp_dir().join(format!("nook-wasm-callable-provenance-{}", process::id()))
-}
-
 fn create_wasm_callable_fixture(root: &Path) -> anyhow::Result<()> {
-    if root.exists() {
-        fs::remove_dir_all(root)?;
-    }
     let rust_root = root.join("nook-app/nook-platform/nook-wasm/src");
     let web_root = root.join("nook-app/nook-web");
     fs::create_dir_all(&rust_root)?;

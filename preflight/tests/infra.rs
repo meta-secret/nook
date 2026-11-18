@@ -1,7 +1,11 @@
+#[path = "support/repository_files.rs"]
+mod repository_files;
+
+use anyhow::Context;
+use repository_files::{RepositoryFixture, RepositoryPathRead};
 use std::{
     collections::{HashMap, HashSet},
-    env, fs,
-    ops::Deref,
+    fs,
     path::{Path, PathBuf},
 };
 
@@ -11,37 +15,6 @@ mod kubernetes_cache_sim;
 mod migration_contracts;
 #[path = "infra/remote_platform_contracts.rs"]
 mod remote_platform_contracts;
-
-struct RepositoryFixture {
-    path: PathBuf,
-}
-impl RepositoryFixture {
-    fn repository_root() -> Self {
-        Self {
-            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
-                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-                PathBuf::from,
-            ),
-        }
-    }
-}
-impl Deref for RepositoryFixture {
-    type Target = PathBuf;
-    fn deref(&self) -> &PathBuf {
-        &self.path
-    }
-}
-impl AsRef<Path> for RepositoryFixture {
-    fn as_ref(&self) -> &Path {
-        &self.path
-    }
-}
-impl RepositoryFixture {
-    fn read(&self, path: &str) -> String {
-        fs::read_to_string(self.join(path))
-            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
-    }
-}
 
 #[test]
 fn web_static_container_entrypoint_is_top_level_reachable() {
@@ -333,7 +306,7 @@ fn arc_mesh_reconciliation_fails_closed() {
     clippy::too_many_lines,
     reason = "one infrastructure contract verifies runner placement as a unit"
 )]
-fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
+fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() -> anyhow::Result<()> {
     let values = RepositoryFixture::repository_root()
         .read("infra/k0s/manifests/arc/runner-scale-set-values.yaml");
     let buildkit =
@@ -391,8 +364,10 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         }
         let (_, spread) = execution
             .split_once("topologySpreadConstraints:")
-            .expect("execution spread must exist");
-        let spread = spread.split("affinity:").next().expect("spread section");
+            .context("execution spread must exist")?;
+        let spread = spread
+            .split_once("affinity:")
+            .map_or(spread, |(spread, _)| spread);
         assert!(
             spread.contains(&format!("values: {groups}")),
             "execution spread must count its intended groups: {groups}"
@@ -561,4 +536,5 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         .find("kubectl taint node \"${tier_nodes[@]}\"")
         .unwrap_or_else(|| panic!("ARC activation must expose each tier as one group"));
     assert!(primary < grouped);
+    Ok(())
 }

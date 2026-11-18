@@ -1,5 +1,6 @@
 use crate::javascript_literals::JavaScriptLiteralFailure;
 use crate::javascript_scopes::BindingProvenance;
+use crate::typescript_runtime::TypeScriptRuntimeNode;
 pub struct WasmInstanceFactories<'scan> {
     pub node: tree_sitter::Node<'scan>,
     pub source: &'scan str,
@@ -258,7 +259,7 @@ impl WasmInstanceFactories<'_> {
             return factories;
         }
         if node.kind() == "import_specifier"
-            && !WasmInstanceFactories::node_is_type_only_import(node, source)
+            && !node.is_type_only_import(source)
             && let Some(imported_node) = node.child_by_field_name("name")
             && let Ok(imported_name) = (JavaScriptLiteral {
                 node: imported_node,
@@ -311,7 +312,7 @@ impl WasmInstanceFactories<'_> {
             && let Some(value) = node
                 .child_by_field_name("value")
                 .or_else(|| node.child_by_field_name("right"))
-            && let value = WasmInstanceFactories::unwrap_transparent_expression(value)
+            && let value = value.runtime_expression()
             && matches!(value.kind(), "member_expression" | "subscript_expression")
             && let Some(object) = value.child_by_field_name("object")
             && object.kind() == "identifier"
@@ -393,7 +394,7 @@ impl WasmInstanceFactories<'_> {
         node: tree_sitter::Node<'_>,
         source: &str,
     ) -> Result<String, FactoryResolutionFailure> {
-        let node = Self::unwrap_transparent_expression(node);
+        let node = node.runtime_expression();
         if node.kind() == "await_expression" {
             let mut cursor = node.walk();
             for child in node.named_children(&mut cursor) {
@@ -458,50 +459,6 @@ impl WasmInstanceFactories<'_> {
             .get(actual)
             .cloned()
             .ok_or(FactoryResolutionFailure::UnboundClass)
-    }
-}
-
-impl WasmInstanceFactories<'_> {
-    fn node_is_type_only_import(node: tree_sitter::Node<'_>, source: &str) -> bool {
-        if node
-            .utf8_text(source.as_bytes())
-            .is_ok_and(|text| text.trim_start().starts_with("type "))
-        {
-            return true;
-        }
-        let mut ancestor = node.parent();
-        while let Some(parent) = ancestor {
-            if parent.kind() == "import_statement" {
-                return parent
-                    .utf8_text(source.as_bytes())
-                    .is_ok_and(|text| text.trim_start().starts_with("import type "));
-            }
-            ancestor = parent.parent();
-        }
-        false
-    }
-}
-
-impl WasmInstanceFactories<'_> {
-    fn unwrap_transparent_expression(mut node: tree_sitter::Node<'_>) -> tree_sitter::Node<'_> {
-        while matches!(
-            node.kind(),
-            "parenthesized_expression"
-                | "as_expression"
-                | "satisfies_expression"
-                | "non_null_expression"
-                | "type_assertion"
-        ) {
-            let mut cursor = node.walk();
-            let Some(value) = node
-                .named_children(&mut cursor)
-                .find(|child| child.kind() != "type_annotation" && !child.kind().contains("type"))
-            else {
-                break;
-            };
-            node = value;
-        }
-        node
     }
 }
 

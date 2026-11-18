@@ -1,20 +1,9 @@
-use std::{env, fs, path::PathBuf};
+#[path = "support/repository_files.rs"]
+mod repository_files;
 
-struct RepositoryFixture(PathBuf);
+use repository_files::{RepositoryFixture, RepositoryPathRead};
 
 impl RepositoryFixture {
-    fn repository_root() -> Self {
-        Self(env::var_os("NOOK_REPO_ROOT").map_or_else(
-            || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-            PathBuf::from,
-        ))
-    }
-
-    fn read(&self, path: &str) -> String {
-        fs::read_to_string(self.0.join(path))
-            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
-    }
-
     fn docker_stage<'a>(dockerfile: &'a str, stage: &str) -> &'a str {
         let marker = format!(" AS {stage}\n");
         let marker_start = dockerfile

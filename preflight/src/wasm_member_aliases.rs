@@ -1,5 +1,6 @@
 use crate::javascript_literals::JavaScriptLiteralFailure;
 use crate::javascript_scopes::BindingProvenance;
+use crate::typescript_runtime::TypeScriptRuntimeNode;
 use crate::wasm_dynamic_aliases::AliasResolutionFailure;
 pub struct WasmMemberAliases<'scan> {
     pub binding: tree_sitter::Node<'scan>,
@@ -261,7 +262,7 @@ impl CallableAliasInventory {
         scoped_wasm_namespaces: &[ScopedBinding],
         scoped_wasm_instances: &[ScopedBinding],
     ) -> Self {
-        let value = DynamicWasmAliases::unwrap_transparent_expression(value);
+        let value = value.runtime_expression();
         let binding_name_node = match binding.kind() {
             "identifier" | "property_identifier" | "private_property_identifier" => Some(binding),
             "member_expression" => binding.child_by_field_name("property"),
@@ -463,7 +464,7 @@ impl CallableAliasInventory {
 #[rustfmt::skip]
 impl WasmMemberAliases<'_> {
 fn wasm_callable_member_name(value: tree_sitter::Node<'_>, source: &str, source_path: &ModuleSource<'_>, callable_names: &HashSet<String>, wasm_type_names: &HashSet<String>, wasm_types: &WasmTypeInventory, wasm_namespace_bindings: &HashMap<String, String>, wasm_class_bindings: &HashMap<String, String>, wasm_instance_bindings: &HashMap<String, String>, scoped_wasm_namespaces: &[ScopedBinding], scoped_wasm_instances: &[ScopedBinding]) -> Result<String, MemberResolutionFailure> {
-    let mut value = DynamicWasmAliases::unwrap_transparent_expression(value);
+    let mut value = value.runtime_expression();
     if value.kind() == "sequence_expression" {
         let mut cursor = value.walk();
         return value.named_children(&mut cursor).last().and_then(|result| {
@@ -506,12 +507,12 @@ fn wasm_callable_member_name(value: tree_sitter::Node<'_>, source: &str, source_
             .is_some_and(|name| name == "bind")
         && let Some(bound) = function.child_by_field_name("object")
     {
-        value = DynamicWasmAliases::unwrap_transparent_expression(bound);
+        value = bound.runtime_expression();
     }
     if !matches!(value.kind(), "member_expression" | "subscript_expression") {
         return Err(MemberResolutionFailure::NotMember);
     }
-    let namespace = DynamicWasmAliases::unwrap_transparent_expression(value.child_by_field_name("object").ok_or(MemberResolutionFailure::MissingReceiver)?);
+    let namespace = value.child_by_field_name("object").ok_or(MemberResolutionFailure::MissingReceiver)?.runtime_expression();
     let property = value
         .child_by_field_name("property")
         .or_else(|| value.child_by_field_name("index")).ok_or(MemberResolutionFailure::MissingName)?;
@@ -568,7 +569,7 @@ impl WasmMemberAliases<'_> {
         scoped_wasm_namespaces: &[ScopedBinding],
         scoped_wasm_instances: &[ScopedBinding],
     ) -> Result<String, MemberResolutionFailure> {
-        let receiver = DynamicWasmAliases::unwrap_transparent_expression(receiver);
+        let receiver = receiver.runtime_expression();
         if receiver.kind() == "new_expression"
             && let Some(constructor) = receiver.child_by_field_name("constructor")
             && let Ok(wasm_type) = DynamicWasmAliases::constructor_wasm_class(

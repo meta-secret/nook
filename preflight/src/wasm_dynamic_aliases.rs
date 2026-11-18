@@ -1,5 +1,6 @@
 use crate::javascript_literals::JavaScriptLiteralFailure;
 use crate::javascript_scopes::{BindingInvalidation, BindingProvenance, ScopeAdmissionFailure};
+use crate::typescript_runtime::TypeScriptRuntimeNode;
 mod resolution;
 pub struct DynamicWasmAliases<'scan> {
     pub node: tree_sitter::Node<'scan>,
@@ -53,12 +54,12 @@ impl DynamicWasmAliases<'_> {
 
 impl DynamicWasmAliases<'_> {
     fn trusted_runtime_receiver(node: tree_sitter::Node<'_>, source: &str) -> bool {
-        let node = DynamicWasmAliases::unwrap_transparent_expression(node);
+        let node = node.runtime_expression();
         if matches!(node.kind(), "member_expression" | "subscript_expression") {
             let Some(object) = node.child_by_field_name("object") else {
                 return false;
             };
-            let object = DynamicWasmAliases::unwrap_transparent_expression(object);
+            let object = object.runtime_expression();
             let property = if node.kind() == "subscript_expression" {
                 node.child_by_field_name("index")
             } else {
@@ -198,7 +199,7 @@ impl DynamicScopeInventory {
         self
     }
     fn invalidate(mut self, binding: tree_sitter::Node<'_>, source: &str) -> Self {
-        let binding = DynamicWasmAliases::unwrap_transparent_expression(binding);
+        let binding = binding.runtime_expression();
         if !matches!(
             binding.kind(),
             "identifier" | "member_expression" | "subscript_expression"
@@ -250,8 +251,8 @@ impl DynamicScopeInventory {
             scoped_wasm_factories,
             scoped_wasm_runtime_receivers,
         } = request;
-        let binding = DynamicWasmAliases::unwrap_transparent_expression(binding);
-        let value = DynamicWasmAliases::unwrap_transparent_expression(value);
+        let binding = binding.runtime_expression();
+        let value = value.runtime_expression();
         if binding.kind() == "identifier"
             && let Ok(module) = DynamicWasmAliases::loaded_module_specifier(value, source)
             && WasmModuleSources::is_wasm_callable_export(&module, "default", source_path)
@@ -383,7 +384,7 @@ fn collect_factory_result_member_alias(mut self, binding: tree_sitter::Node<'_>,
     let Some(receiver) = value.child_by_field_name("object") else {
         return (self, AliasDescent::Descend);
     };
-    let receiver = DynamicWasmAliases::unwrap_transparent_expression(receiver);
+    let receiver = receiver.runtime_expression();
     if receiver.kind() != "call_expression" {
         return (self, AliasDescent::Descend);
     }
@@ -416,31 +417,6 @@ fn collect_factory_result_member_alias(mut self, binding: tree_sitter::Node<'_>,
     }
     (self, AliasDescent::Complete)
 }
-}
-
-impl DynamicWasmAliases<'_> {
-    pub(super) fn unwrap_transparent_expression(
-        mut node: tree_sitter::Node<'_>,
-    ) -> tree_sitter::Node<'_> {
-        while matches!(
-            node.kind(),
-            "parenthesized_expression"
-                | "as_expression"
-                | "satisfies_expression"
-                | "non_null_expression"
-                | "type_assertion"
-        ) {
-            let mut cursor = node.walk();
-            let Some(value) = node
-                .named_children(&mut cursor)
-                .find(|child| child.kind() != "type_annotation" && !child.kind().contains("type"))
-            else {
-                break;
-            };
-            node = value;
-        }
-        node
-    }
 }
 
 impl DynamicWasmAliases<'_> {
