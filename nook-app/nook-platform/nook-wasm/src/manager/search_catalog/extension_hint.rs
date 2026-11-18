@@ -88,16 +88,33 @@ impl NookVaultManager {
         })?;
         let crypto = self.vault.crypto.get()?;
         let mut buckets = Vec::new();
+        // The signed envelope carries a single event frontier and fixed-size
+        // identifiers. Reserve space for its JSON framing and for each bucket key.
+        const ENVELOPE_OVERHEAD_BYTES: usize = 512;
+        const BUCKET_OVERHEAD_BYTES: usize = 64;
+        let mut remaining = EncodedSearchCatalogHint::MAX_BYTES - ENVELOPE_OVERHEAD_BYTES;
         for index in 0..SECRET_SEARCH_CATALOG_BUCKET_COUNT {
             let bucket = index.into();
-            if let SearchCatalogBucketPayload::Json(json) = sparse.bucket_json(bucket)? {
-                let mut json = json;
+            if let SearchCatalogBucketPayload::Json(mut json) = sparse.bucket_json(bucket)? {
+                // Base64 armor expands the payload by at least one third.
+                if BUCKET_OVERHEAD_BYTES + json.len() + json.len().div_ceil(3) > remaining {
+                    json.zeroize();
+                    return Ok(NookEncryptedSearchCatalogHint::Absent);
+                }
                 let ciphertext = crypto.encrypt_value(&json);
                 json.zeroize();
-                buckets.push(EncryptedSearchCatalogBucket {
-                    bucket,
-                    ciphertext: ciphertext?,
-                });
+                let ciphertext = ciphertext?;
+                let armor = ciphertext.as_str();
+                let escaped_newlines = armor
+                    .bytes()
+                    .filter(|byte| matches!(byte, b'\n' | b'\r'))
+                    .count();
+                let needed = armor.len() + escaped_newlines + BUCKET_OVERHEAD_BYTES;
+                if needed > remaining {
+                    return Ok(NookEncryptedSearchCatalogHint::Absent);
+                }
+                remaining -= needed;
+                buckets.push(EncryptedSearchCatalogBucket { bucket, ciphertext });
             }
         }
         if buckets.is_empty() {

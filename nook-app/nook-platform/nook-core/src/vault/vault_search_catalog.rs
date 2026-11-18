@@ -165,6 +165,7 @@ pub struct ImportedSearchCatalogRow {
     payload_digest: SecretSearchCatalogPayloadDigest,
 }
 
+#[derive(Clone, Copy)]
 pub struct ImportedSearchCatalogRowSource<'a> {
     pub id: &'a SecretId,
     pub value: &'a SecretValue,

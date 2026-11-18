@@ -1,21 +1,23 @@
 //! Signed admission of existing encrypted catalog buckets across app origins.
 
-use crate::errors::{SessionError, VaultResult};
+use crate::errors::{SessionError, VaultError, VaultResult};
 use crate::{
     AgeArmoredCiphertext, CanonicalEventBodyBytes, DeviceId, DeviceSigningPublicKey,
     Ed25519Signature, EpochCheckpoint, EventGraph, EventGraphDeviceAccess,
     EventGraphDeviceAccessRequest, EventId, ObservedHeads, SECRET_SEARCH_CATALOG_BUCKET_COUNT,
-    SecretSearchCatalogBucket, SigningIdentity, StoreId,
+    SecretSearchCatalogBucket, SigningIdentity, StoreId, VaultCrypto,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
-
-const MAX_HINT_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Clone, Serialize, Deserialize, Tsify)]
 #[serde(transparent)]
 #[tsify(type = "string")]
 pub struct EncodedSearchCatalogHint(String);
+
+impl EncodedSearchCatalogHint {
+    pub const MAX_BYTES: usize = 4 * 1024 * 1024;
+}
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -119,7 +121,7 @@ pub struct SignedSearchCatalogHint {
 }
 
 impl SignedSearchCatalogHint {
-    fn invalid() -> crate::errors::VaultError {
+    fn invalid() -> VaultError {
         SessionError::SearchCatalogInvalid("encrypted hint rejected".to_owned()).into()
     }
 
@@ -146,7 +148,7 @@ impl SignedSearchCatalogHint {
             return Err(Self::invalid());
         }
         let bytes = body.canonical_bytes()?;
-        if bytes.as_ref().len() > MAX_HINT_BYTES {
+        if bytes.as_ref().len() > EncodedSearchCatalogHint::MAX_BYTES {
             return Err(Self::invalid());
         }
         let signed = Self {
@@ -155,7 +157,7 @@ impl SignedSearchCatalogHint {
         };
         let encoded = serde_json::to_string(&signed)
             .map_err(|_| SessionError::SearchCatalogSerialize("signed hint".to_owned()))?;
-        if encoded.len() > MAX_HINT_BYTES {
+        if encoded.len() > EncodedSearchCatalogHint::MAX_BYTES {
             return Err(Self::invalid());
         }
         Ok(EncodedSearchCatalogHint(encoded))
@@ -166,7 +168,7 @@ impl SignedSearchCatalogHint {
         encoded: &EncodedSearchCatalogHint,
         context: SearchCatalogHintContext<'_>,
     ) -> VaultResult<Vec<EncryptedSearchCatalogBucket>> {
-        if encoded.0.len() > MAX_HINT_BYTES {
+        if encoded.0.len() > EncodedSearchCatalogHint::MAX_BYTES {
             return Err(Self::invalid());
         }
         let signed: Self = serde_json::from_str(&encoded.0).map_err(|_| Self::invalid())?;
@@ -187,6 +189,14 @@ impl SignedSearchCatalogHint {
             signed.signature.as_str(),
             &verifying_key,
         )?;
+        if !signed
+            .body
+            .buckets
+            .iter()
+            .all(|bucket| VaultCrypto::is_search_catalog_envelope(&bucket.ciphertext))
+        {
+            return Err(Self::invalid());
+        }
         Ok(signed.body.buckets)
     }
 }
@@ -375,6 +385,58 @@ mod tests {
                 .is_err()
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn a_revoked_publisher_cannot_sign_for_the_current_frontier() -> anyhow::Result<()> {
+        let owner = CatalogPublisher::new()?;
+        let member = CatalogPublisher::new()?;
+        let graph = owner.graph()?;
+        let auth = member
+            .identity
+            .auth_record(&owner.keys.secrets_key, &owner.keys.members_key)?;
+        let envelopes = AuthEnvelopes::parse(auth.value.as_str())?;
+        let device_id = member.identity.device_id();
+        let graph = owner.append(
+            graph,
+            vec![VaultOperation::JoinApproved {
+                device_id: device_id.clone(),
+                encryption_public_key: member.identity.public_key(),
+                signing_public_key: member.signing.public_key(),
+                label: MemberLabel::from_trusted("Second publisher".to_owned()),
+                secrets_key_ciphertext: envelopes.secrets_key,
+                members_key_ciphertext: envelopes.members_key,
+            }],
+        )?;
+        let encoded = SignedSearchCatalogHint::sign(SearchCatalogHintSignRequest {
+            context: owner.context(&graph),
+            issuer: device_id,
+            signer: &member.signing,
+            buckets: vec![owner.bucket(2)?],
+        })?;
+        assert!(SignedSearchCatalogHint::admit(&encoded, owner.context(&graph)).is_ok());
+
+        let revoked = owner.append(
+            graph,
+            vec![VaultOperation::DeviceRevoked {
+                device_id: device_id.clone(),
+            }],
+        )?;
+        assert!(!EventGraphDeviceAccess::new(&revoked).has_access(
+            &EventGraphDeviceAccessRequest {
+                expected_device_id: device_id,
+                expected_public_key: &member.identity.public_key(),
+                expected_signing_public_key: &member.signing.public_key(),
+            }
+        )?);
+        let mut signed: SignedSearchCatalogHint = serde_json::from_str(&encoded.0)?;
+        signed.body.heads = ObservedHeads::from_event_ids(&revoked.heads()).as_parents();
+        signed.body.epoch = revoked.current_epoch_checkpoint()?.into();
+        let bytes = signed.body.canonical_bytes()?;
+        signed.signature = Ed25519Signature::parse(&member.signing.sign_bytes(&bytes))?;
+        let edited = EncodedSearchCatalogHint(serde_json::to_string(&signed)?);
+        assert!(SignedSearchCatalogHint::admit(&edited, owner.context(&revoked)).is_err());
         Ok(())
     }
 }

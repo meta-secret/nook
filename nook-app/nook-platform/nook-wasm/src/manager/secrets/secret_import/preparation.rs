@@ -1,8 +1,9 @@
 use crate::NookError;
 use gloo_timers::future;
 use nook_core::{
-    AgeArmoredCiphertext, ImportedSearchCatalogRow, ImportedSearchCatalogRowSource,
-    RecordTypeDeclaration, SecretValue, SymmetricKey, VaultOperation,
+    AgeArmoredCiphertext, EncodedSearchCatalogHint, ImportedSearchCatalogRow,
+    ImportedSearchCatalogRowSource, RecordTypeDeclaration, SecretValue, SymmetricKey,
+    VaultOperation,
 };
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
@@ -32,8 +33,28 @@ pub(super) struct CoalescedSecretImport<'a> {
 
 pub(super) struct PreparedSecretImport {
     pub(super) operations: Vec<VaultOperation>,
-    pub(super) catalog_rows: Vec<ImportedSearchCatalogRow>,
+    pub(super) catalog: ImportSearchCatalog,
     pub(super) skipped_duplicates: usize,
+}
+
+pub(super) enum ImportSearchCatalog {
+    Disabled,
+    Collecting(Vec<ImportedSearchCatalogRow>),
+}
+
+impl ImportSearchCatalog {
+    fn record(&mut self, source: ImportedSearchCatalogRowSource<'_>) {
+        // The serialized digest and 64-hex-digit HMAC fields alone cost
+        // at least 128 JSON bytes, before metadata or base64 armor.
+        const MINIMUM_ROW_BYTES: usize = 128;
+        if let Self::Collecting(rows) = self {
+            if rows.len() == EncodedSearchCatalogHint::MAX_BYTES / MINIMUM_ROW_BYTES {
+                *self = Self::Disabled;
+            } else {
+                rows.push(ImportedSearchCatalogRow::from_encrypted_import(source));
+            }
+        }
+    }
 }
 
 impl CoalescedSecretImport<'_> {
@@ -58,10 +79,7 @@ impl CoalescedSecretImport<'_> {
 
 enum ImportItemOutcome {
     Duplicate,
-    Operation {
-        operation: VaultOperation,
-        catalog_row: ImportedSearchCatalogRow,
-    },
+    Operation(VaultOperation),
 }
 
 impl<'a> CoalescedSecretImport<'a> {
@@ -104,6 +122,7 @@ impl<'a> CoalescedSecretImport<'a> {
         seen_versions: &mut HashSet<nook_core::SecretFingerprint>,
         crypto: &nook_core::VaultCrypto,
         secrets_key: &nook_core::SymmetricKey,
+        catalog: &mut ImportSearchCatalog,
     ) -> Result<ImportItemOutcome, NookError> {
         let identity_fingerprint = value.identity_fingerprint(secrets_key)?;
         let fingerprint = value.fingerprint(secrets_key)?;
@@ -134,26 +153,21 @@ impl<'a> CoalescedSecretImport<'a> {
                 let ciphertext = crypto.encrypt_value(yaml.as_str())?;
                 yaml.zeroize_plaintext();
                 let new_id = nook_core::SecretId::generate()?;
-                let catalog_row = ImportedSearchCatalogRow::from_encrypted_import(
-                    ImportedSearchCatalogRowSource {
-                        id: &new_id,
-                        value: &enriched,
-                        ciphertext: &ciphertext,
-                    },
-                );
-                ImportItemOutcome::Operation {
-                    operation: VaultOperation::SecretReplaced {
-                        old_id: record.key.clone(),
-                        new_secret: nook_core::EncryptedSecretPayload::from_armored(
-                            &new_id,
-                            secret_type,
-                            ciphertext.as_str(),
-                            identity_fingerprint,
-                            fingerprint,
-                        ),
-                    },
-                    catalog_row,
-                }
+                catalog.record(ImportedSearchCatalogRowSource {
+                    id: &new_id,
+                    value: &enriched,
+                    ciphertext: &ciphertext,
+                });
+                ImportItemOutcome::Operation(VaultOperation::SecretReplaced {
+                    old_id: record.key.clone(),
+                    new_secret: nook_core::EncryptedSecretPayload::from_armored(
+                        &new_id,
+                        secret_type,
+                        ciphertext.as_str(),
+                        identity_fingerprint,
+                        fingerprint,
+                    ),
+                })
             };
             existing.zeroize_plaintext();
             enriched.zeroize_plaintext();
@@ -175,15 +189,14 @@ impl<'a> CoalescedSecretImport<'a> {
                 return Err(error.into());
             }
         };
-        let catalog_row =
-            ImportedSearchCatalogRow::from_encrypted_import(ImportedSearchCatalogRowSource {
-                id: &id,
-                value: &value,
-                ciphertext: &ciphertext,
-            });
+        catalog.record(ImportedSearchCatalogRowSource {
+            id: &id,
+            value: &value,
+            ciphertext: &ciphertext,
+        });
         value.zeroize_plaintext();
-        Ok(ImportItemOutcome::Operation {
-            operation: VaultOperation::SecretCreated {
+        Ok(ImportItemOutcome::Operation(
+            VaultOperation::SecretCreated {
                 secret: nook_core::EncryptedSecretPayload::from_armored(
                     &id,
                     secret_type,
@@ -192,8 +205,7 @@ impl<'a> CoalescedSecretImport<'a> {
                     fingerprint,
                 ),
             },
-            catalog_row,
-        })
+        ))
     }
 
     pub(super) async fn prepare(
@@ -204,6 +216,7 @@ impl<'a> CoalescedSecretImport<'a> {
             nook_core::SecretFingerprint,
         )>,
         crypto: &nook_core::VaultCrypto,
+        mut catalog: ImportSearchCatalog,
     ) -> Result<PreparedSecretImport, NookError> {
         let existing_by_identity = Self::group_import_fingerprints(dedup_state, self.items.len());
         let mut seen_versions = existing_by_identity
@@ -213,7 +226,6 @@ impl<'a> CoalescedSecretImport<'a> {
             .collect::<HashSet<_>>();
         let mut skipped_duplicates = self.duplicates;
         let mut operations = Vec::with_capacity(self.items.len());
-        let mut catalog_rows = Vec::with_capacity(self.items.len());
 
         for (index, value) in self.items.into_iter().enumerate() {
             // A browser task (rather than a resolved Promise) permits input and
@@ -225,21 +237,16 @@ impl<'a> CoalescedSecretImport<'a> {
                 &mut seen_versions,
                 crypto,
                 self.secrets_key,
+                &mut catalog,
             )? {
                 ImportItemOutcome::Duplicate => skipped_duplicates += 1,
-                ImportItemOutcome::Operation {
-                    operation,
-                    catalog_row,
-                } => {
-                    operations.push(operation);
-                    catalog_rows.push(catalog_row);
-                }
+                ImportItemOutcome::Operation(operation) => operations.push(operation),
             }
         }
 
         Ok(PreparedSecretImport {
             operations,
-            catalog_rows,
+            catalog,
             skipped_duplicates,
         })
     }
@@ -303,6 +310,7 @@ mod tests {
                         self.version.clone(),
                     )],
                     &self.crypto,
+                    ImportSearchCatalog::Collecting(Vec::new()),
                 )
                 .await
         }
