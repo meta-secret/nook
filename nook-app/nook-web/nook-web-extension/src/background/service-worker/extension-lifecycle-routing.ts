@@ -704,7 +704,7 @@ export function routeExtensionLifecycleMessage({
           return
         }
         const importArgs: Parameters<typeof importLocalEventLogUpdate>[0] = {
-          vaultStoreId: decodedMessage.payload.vaultStoreId,
+          ...decodedMessage.payload,
           eventLogRecords: preservedEventLogRecords,
         }
         void beginAccountPickerAuthorizationCleanup()
