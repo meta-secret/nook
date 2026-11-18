@@ -24,7 +24,11 @@ import {
   FocusedCredentialTargetValidity,
   FocusedCredentialTargetRetention,
 } from './focused-credential-target'
-import { FocusedCredentialWidget } from './focused-credential-widget'
+import {
+  FocusedFieldKind,
+  FocusedFieldWidget,
+  type FocusedFieldWidgetMount,
+} from './focused-field-widget'
 import { SiteSidePanel } from './site-side-panel'
 import {
   InlineLoginPicker,
@@ -91,7 +95,7 @@ type FocusedSurface =
       readonly observation: FocusedCredentialObservation
       readonly opportunity: FocusedCredentialOpportunity
       readonly selection: FocusedCredentialSelection
-      readonly widget: FocusedCredentialWidget
+      readonly widget: FocusedFieldWidget
     }
 type VisibleFocusedSurface = Extract<
   FocusedSurface,
@@ -139,7 +143,9 @@ type FocusedInteractionDependencies = {
   readonly sensor: FocusedCredentialTargetSensor
   readonly transport: typeof authenticationRuntimeTransport
   readonly ui: typeof workflowUi
-  readonly mount: typeof FocusedCredentialWidget.mount
+  readonly mount: (
+    request: FocusedFieldWidgetMount<FocusedFieldKind.Credential>,
+  ) => FocusedFieldWidget
   readonly mountPicker: (
     request: PickerMountRequest,
   ) => InlineLoginPickerSurface
@@ -337,8 +343,9 @@ export class FocusedCredentialInteraction {
       this.closePicker()
       this.surface = { kind: FocusedSurfaceKind.Empty }
       this.dependencies.ui.removeWidget()
-      const mountRequest: Parameters<typeof FocusedCredentialWidget.mount>[0] =
+      const mountRequest: FocusedFieldWidgetMount<FocusedFieldKind.Credential> =
         {
+          kind: FocusedFieldKind.Credential,
           vaultConnection,
           field: request.observation.target.input,
           choose: () => {
@@ -806,7 +813,7 @@ const interactionRequest: ConstructorParameters<
   sensor: focusedCredentialTargetSensor,
   transport: authenticationRuntimeTransport,
   ui: workflowUi,
-  mount: FocusedCredentialWidget.mount,
+  mount: FocusedFieldWidget.mount,
   mountPicker: InlineLoginPicker.mount,
   fill: passwordFormCredentialInteraction.setNativeInputValue.bind(
     passwordFormCredentialInteraction,

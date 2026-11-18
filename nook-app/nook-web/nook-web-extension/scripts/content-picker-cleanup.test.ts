@@ -1,3 +1,4 @@
+import { AuthenticationObservationFixture } from './authentication-observation-fixture'
 import { expect, mock, spyOn, test } from 'bun:test'
 import { Effect, Schema } from 'effect'
 import { Window } from 'happy-dom'
@@ -66,39 +67,7 @@ function pickerApproval(): AuthenticationWorkflowApproval {
     payload: {
       origin: 'https://login.example.test',
       observations: [
-        {
-          fields: {
-            usernameFieldCount: 1,
-            currentPasswordFieldCount: 1,
-            newPasswordFieldCount: 0,
-            genericPasswordFieldCount: 0,
-            oneTimeCodeFieldCount: 0,
-            actionablePasswordFieldCount: 1,
-            readonlyPasswordFieldCount: 0,
-          },
-          ceremony: {
-            oneTimeCodeProgression: 'advance-control-required',
-            oneTimeCodeHandlerSignal: '',
-            authenticationContext: {
-              authenticationUsername: 'explicit',
-              sourceOrigin: 'https://login.example.test',
-              formIdentity: 'login',
-              destinationIdentity: '/login',
-            },
-            manualCheckpoint: 'absent',
-            advanceControl: 'absent',
-          },
-          authenticator: {
-            authenticatorSetup: 'absent',
-            backupCodesCopy: '',
-            passkeyControl: 'absent',
-            passkeyAccountAvailability: 'unavailable',
-            matchingPasskeyAccountCount: 0,
-            detailedPasskeyControl: { kind: 'absent' },
-          },
-          credentialSubmission: { kind: 'absent' },
-          detailedAdvanceControl: { kind: 'absent' },
-        },
+        AuthenticationObservationFixture.login('https://login.example.test'),
       ],
     },
   })

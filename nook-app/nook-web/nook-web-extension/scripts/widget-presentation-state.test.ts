@@ -1,3 +1,4 @@
+import { AuthenticationObservationFixture } from './authentication-observation-fixture'
 import { describe, expect, test } from 'bun:test'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import type { AuthenticationWorkflowRoutingResponse } from '../src/background/service-worker/authentication-workflow-routing'
@@ -306,39 +307,14 @@ describe('authentication widget vault presentation', () => {
     }).state()
     const factsFor = (
       currentPasswordFieldCount: number,
-    ): AuthenticationPageObservationFacts => ({
-      fields: {
-        usernameFieldCount: 1,
-        currentPasswordFieldCount,
-        newPasswordFieldCount: 0,
-        genericPasswordFieldCount: 0,
-        oneTimeCodeFieldCount: 0,
-        actionablePasswordFieldCount: currentPasswordFieldCount,
-        readonlyPasswordFieldCount: 0,
-      },
-      ceremony: {
-        oneTimeCodeProgression: 'advance-control-required',
-        oneTimeCodeHandlerSignal: '',
-        authenticationContext: {
-          authenticationUsername: 'explicit',
-          sourceOrigin: 'https://login.example.test',
-          formIdentity: 'login',
-          destinationIdentity: '/login',
-        },
-        manualCheckpoint: 'absent',
-        advanceControl: 'absent',
-      },
-      authenticator: {
-        authenticatorSetup: 'absent',
-        backupCodesCopy: '',
-        passkeyControl: 'absent',
-        passkeyAccountAvailability: 'unavailable',
-        matchingPasskeyAccountCount: 0,
-        detailedPasskeyControl: { kind: 'absent' },
-      },
-      credentialSubmission: { kind: 'absent' },
-      detailedAdvanceControl: { kind: 'absent' },
-    })
+    ): AuthenticationPageObservationFacts => {
+      const facts = AuthenticationObservationFixture.login(
+        'https://login.example.test',
+      )
+      facts.fields.currentPasswordFieldCount = currentPasswordFieldCount
+      facts.fields.actionablePasswordFieldCount = currentPasswordFieldCount
+      return facts
+    }
     const initialKey = authenticationWidgetWorkflowKey({
       snapshot,
       loginMatches,

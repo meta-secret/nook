@@ -24,21 +24,39 @@ import {
   type BrowserMessageKey,
 } from '../../lib/browser-message-keys'
 
-type PersonalFillWidgetMount = {
+export enum FocusedFieldKind {
+  Credential = 'focused',
+  Personal = 'personal',
+}
+
+type FocusedFieldChoice =
+  | { readonly kind: FocusedFieldKind.Credential }
+  | {
+      readonly kind: FocusedFieldKind.Personal
+      readonly group: keyof typeof PersonalFieldGroup
+    }
+
+export type FocusedFieldWidgetMount<
+  Kind extends FocusedFieldKind = FocusedFieldKind,
+> = Extract<FocusedFieldChoice, { readonly kind: Kind }> & {
   readonly vaultConnection: PilotVaultConnection
-  readonly group: keyof typeof PersonalFieldGroup
   /** The focused field the widget is offered for. */
   readonly field: HTMLInputElement
   readonly choose: () => void
 }
 
-type PersonalFillWidgetShell = ReturnType<
+type FocusedFieldWidgetShell = ReturnType<
   typeof authenticationWidgetShell.createWidgetShell
 >
 
-/** Uses the existing Pilot shell for one explicit personal-data record choice. */
-export class PersonalFillWidget {
-  private constructor(readonly shell: PersonalFillWidgetShell) {}
+type FocusedFieldChooser = {
+  readonly shell: FocusedFieldWidgetShell
+  readonly request: FocusedFieldWidgetMount
+}
+
+/** The Pilot chooser for one focused credential or personal-data field. */
+export class FocusedFieldWidget {
+  private constructor(readonly shell: FocusedFieldWidgetShell) {}
 
   private static titleKey(
     group: keyof typeof PersonalFieldGroup,
@@ -53,7 +71,7 @@ export class PersonalFillWidget {
     }
   }
 
-  static mount(request: PersonalFillWidgetMount): PersonalFillWidget {
+  static mount(request: FocusedFieldWidgetMount): FocusedFieldWidget {
     const vaultPresentation = WidgetVaultPresentationProjection.forConnection(
       request.vaultConnection,
     )
@@ -68,7 +86,7 @@ export class PersonalFillWidget {
       totalSteps: 1,
     }
     const shell = authenticationWidgetShell.createWidgetShell(shellRequest)
-    shell.host.setAttribute('data-nook-credential-mode', 'personal')
+    shell.host.setAttribute('data-nook-credential-mode', request.kind)
     const gateRequest: Parameters<typeof WidgetVaultGate.decide>[0] = {
       presentation: vaultPresentation,
       requirement: WidgetVaultRequirement.Required,
@@ -84,17 +102,47 @@ export class PersonalFillWidget {
           resume: { kind: VaultConnectResumeKind.Field, input: request.field },
         }
         WidgetVaultGateSurface.render(gateMount)
-        return PersonalFillWidget.mounted(shell)
+        break
       }
-      case WidgetVaultGateKind.Open:
+      case WidgetVaultGateKind.Open: {
+        const chooser: FocusedFieldChooser = { shell, request }
+        FocusedFieldWidget.showChooser(chooser)
+        break
+      }
+    }
+    const mountRequest: Parameters<
+      typeof authenticationWidgetShell.mountWidgetShell
+    >[0] = {
+      shell,
+      workflowKey: FocusedFieldWidget.workflowKey(request.kind),
+      workflowRoot: { kind: WidgetWorkflowRootKind.Unassigned },
+    }
+    authenticationWidgetShell.mountWidgetShell(mountRequest)
+    return new FocusedFieldWidget(shell)
+  }
+
+  private static workflowKey(kind: FocusedFieldKind): string {
+    switch (kind) {
+      case FocusedFieldKind.Credential:
+        return 'focused-credential'
+      case FocusedFieldKind.Personal:
+        return 'personal-fill'
+    }
+  }
+
+  private static showChooser({ shell, request }: FocusedFieldChooser): void {
+    switch (request.kind) {
+      case FocusedFieldKind.Credential:
+        break
+      case FocusedFieldKind.Personal:
+        shell.title.textContent = workflowUi.translatedMessage(
+          FocusedFieldWidget.titleKey(request.group),
+        )
+        shell.description.textContent = workflowUi.translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetPersonalDescription,
+        )
         break
     }
-    shell.title.textContent = workflowUi.translatedMessage(
-      PersonalFillWidget.titleKey(request.group),
-    )
-    shell.description.textContent = workflowUi.translatedMessage(
-      BROWSER_MESSAGE_KEYS.WidgetPersonalDescription,
-    )
     const continueLabel = workflowUi.translatedMessage(
       BROWSER_MESSAGE_KEYS.WidgetContinue,
     )
@@ -108,18 +156,5 @@ export class PersonalFillWidget {
           request.choose()
       }
     })
-    return PersonalFillWidget.mounted(shell)
-  }
-
-  private static mounted(shell: PersonalFillWidgetShell): PersonalFillWidget {
-    const mountRequest: Parameters<
-      typeof authenticationWidgetShell.mountWidgetShell
-    >[0] = {
-      shell,
-      workflowKey: 'personal-fill',
-      workflowRoot: { kind: WidgetWorkflowRootKind.Unassigned },
-    }
-    authenticationWidgetShell.mountWidgetShell(mountRequest)
-    return new PersonalFillWidget(shell)
   }
 }

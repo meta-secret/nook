@@ -1,3 +1,4 @@
+import { AuthenticationObservationFixture } from './authentication-observation-fixture'
 import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { Window } from 'happy-dom'
 import {
@@ -94,45 +95,15 @@ class PageData {
 
   /** Login facts admitted by the Rust snapshot ingress, as revalidation approves them. */
   static approvedFacts(): AuthenticationPageObservationFacts {
+    const observation = AuthenticationObservationFixture.login(
+      PageData.pageOrigin,
+    )
+    observation.ceremony.authenticationContext.destinationIdentity = '/session'
     const admission = AuthenticationWorkflowSnapshotIngress.admit({
       type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot,
       payload: {
         origin: PageData.pageOrigin,
-        observations: [
-          {
-            fields: {
-              usernameFieldCount: 1,
-              currentPasswordFieldCount: 1,
-              newPasswordFieldCount: 0,
-              genericPasswordFieldCount: 0,
-              oneTimeCodeFieldCount: 0,
-              actionablePasswordFieldCount: 1,
-              readonlyPasswordFieldCount: 0,
-            },
-            ceremony: {
-              oneTimeCodeProgression: 'advance-control-required',
-              oneTimeCodeHandlerSignal: '',
-              authenticationContext: {
-                authenticationUsername: 'explicit',
-                sourceOrigin: PageData.pageOrigin,
-                formIdentity: 'login',
-                destinationIdentity: '/session',
-              },
-              manualCheckpoint: 'absent',
-              advanceControl: 'absent',
-            },
-            authenticator: {
-              authenticatorSetup: 'absent',
-              backupCodesCopy: '',
-              passkeyControl: 'absent',
-              passkeyAccountAvailability: 'unavailable',
-              matchingPasskeyAccountCount: 0,
-              detailedPasskeyControl: { kind: 'absent' },
-            },
-            credentialSubmission: { kind: 'absent' },
-            detailedAdvanceControl: { kind: 'absent' },
-          },
-        ],
+        observations: [observation],
       },
     })
     if (admission.kind !== 'accepted') throw new Error('facts fixture')

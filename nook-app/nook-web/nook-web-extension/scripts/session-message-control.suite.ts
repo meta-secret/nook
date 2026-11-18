@@ -1,3 +1,4 @@
+import { RuntimeLoginSaveCaptureFixture } from './runtime-login-save-capture-fixture'
 import { err, ok } from 'neverthrow'
 import { describe, expect, test } from 'bun:test'
 import type { ExtensionSessionRequest } from '../src/offscreen/session-request-adapter'
@@ -288,73 +289,9 @@ describe('ExtensionSessionMessageDispatcher control ingress', () => {
       ExtensionSessionRequest,
       { type: typeof ExtensionSessionMessageType.PlanLoginSave }
     >
-    const capture: BrowserFixtureFields<
-      PlanLoginSaveRequest['payload']['capture']
-    > = {
-      submitted_at: 1000,
-      submitted_url: 'https://example.com/login',
-      controls: ['Sign in'],
-      explicit_candidate: 'Present',
-      fields: [
-        {
-          input_type: 'text',
-          disabled: false,
-          read_only: false,
-          autocomplete_tokens: ['username'],
-          identity_text: 'User',
-          login_context: false,
-          password_history: 'Unobserved',
-        },
-        {
-          input_type: 'password',
-          disabled: false,
-          read_only: false,
-          autocomplete_tokens: ['current-password'],
-          identity_text: 'Password',
-          login_context: false,
-          password_history: 'PreviouslyPassword',
-        },
-      ],
-      intent: {
-        event: 'FormSubmit',
-        trust: 'Trusted',
-        target: { kind: 'CredentialScope' },
-        control_label: 'Sign in',
-        context: {
-          fields: {
-            usernameFieldCount: 0,
-            currentPasswordFieldCount: 0,
-            newPasswordFieldCount: 0,
-            genericPasswordFieldCount: 0,
-            oneTimeCodeFieldCount: 0,
-            actionablePasswordFieldCount: 0,
-            readonlyPasswordFieldCount: 0,
-          },
-          ceremony: {
-            oneTimeCodeProgression: 'advance-control-required',
-            oneTimeCodeHandlerSignal: '',
-            authenticationContext: {
-              authenticationUsername: 'absent',
-              sourceOrigin: 'https://example.com',
-              formIdentity: 'login',
-              destinationIdentity: '/login',
-            },
-            manualCheckpoint: 'absent',
-            advanceControl: 'absent',
-          },
-          authenticator: {
-            authenticatorSetup: 'absent',
-            backupCodesCopy: '',
-            passkeyControl: 'absent',
-            passkeyAccountAvailability: 'unavailable',
-            matchingPasskeyAccountCount: 0,
-            detailedPasskeyControl: { kind: 'absent' },
-          },
-          credentialSubmission: { kind: 'absent' },
-          detailedAdvanceControl: { kind: 'absent' },
-        },
-      },
-    }
+    const capture = RuntimeLoginSaveCaptureFixture.capture(
+      'https://example.com',
+    )
     const payload: BrowserFixtureFields<PlanLoginSaveRequest['payload']> = {
       vaultStoreId: 'store_abcdefghijk',
       deviceId: 'device',

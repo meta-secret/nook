@@ -156,7 +156,7 @@ const loginSaveOfferMessage: Parameters<
     origin: 'https://example.test',
     username: 'person@example.test',
     password: 'secret',
-    capture: new RuntimeLoginSaveCaptureFixture().capture,
+    capture: RuntimeLoginSaveCaptureFixture.capture('https://example.test'),
     capturedValues: ['person@example.test', 'secret'],
   },
 }

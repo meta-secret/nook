@@ -19,6 +19,8 @@ vi.mock(
     authenticationWidgetShell: {
       createWidgetShell: () => ({
         host: document.createElement('aside'),
+        title: document.createElement('h2'),
+        description: document.createElement('p'),
         continueButton: document.createElement('button'),
       }),
       mountWidgetShell: shellFixture.mount,
@@ -40,22 +42,26 @@ vi.mock(
   }),
 )
 
-import { FocusedCredentialWidget } from '../../../../nook-web-extension/src/content/autofill/focused-credential-widget'
+import {
+  FocusedFieldKind,
+  FocusedFieldWidget,
+} from '../../../../nook-web-extension/src/content/autofill/focused-field-widget'
 
 afterEach(() => {
   vi.clearAllMocks()
   shellFixture.trusted = true
 })
 
-describe('focused credential widget surface', () => {
+describe('focused field widget surface', () => {
   test('uses the existing widget shell and requires an explicit chooser click', () => {
     const choose = vi.fn<() => void>()
-    const request: Parameters<typeof FocusedCredentialWidget.mount>[0] = {
+    const request: Parameters<typeof FocusedFieldWidget.mount>[0] = {
+      kind: FocusedFieldKind.Credential,
       vaultConnection: { kind: PilotVaultConnectionKind.Connected },
       field: document.createElement('input'),
       choose,
     }
-    const widget = FocusedCredentialWidget.mount(request)
+    const widget = FocusedFieldWidget.mount(request)
     expect(shellFixture.mount).toHaveBeenCalledOnce()
     expect(widget.shell.host.getAttribute('data-nook-credential-mode')).toBe(
       'focused',
@@ -67,15 +73,43 @@ describe('focused credential widget surface', () => {
     widget.shell.continueButton.click()
     expect(choose).toHaveBeenCalledOnce()
   })
+  test('keeps the personal group copy and field workflow when choosing a record', () => {
+    const choose = vi.fn<() => void>()
+    const request: Parameters<typeof FocusedFieldWidget.mount>[0] = {
+      kind: FocusedFieldKind.Personal,
+      vaultConnection: { kind: PilotVaultConnectionKind.Connected },
+      field: document.createElement('input'),
+      group: 'Address',
+      choose,
+    }
+    const { shell } = FocusedFieldWidget.mount(request)
+    expect(shell.host.getAttribute('data-nook-credential-mode')).toBe(
+      'personal',
+    )
+    expect(shell.title.textContent).toBe(
+      `localized:${BROWSER_MESSAGE_KEYS.WidgetPersonalAddressTitle}`,
+    )
+    expect(shell.description.textContent).toBe(
+      `localized:${BROWSER_MESSAGE_KEYS.WidgetPersonalDescription}`,
+    )
+    expect(shellFixture.mount).toHaveBeenCalledWith(
+      expect.objectContaining({ workflowKey: 'personal-fill' }),
+    )
+    expect(choose).not.toHaveBeenCalled()
+    shell.continueButton.click()
+    expect(choose).toHaveBeenCalledOnce()
+  })
+
   test('rejects a synthetic chooser gesture', () => {
     shellFixture.trusted = false
     const choose = vi.fn<() => void>()
-    const request: Parameters<typeof FocusedCredentialWidget.mount>[0] = {
+    const request: Parameters<typeof FocusedFieldWidget.mount>[0] = {
+      kind: FocusedFieldKind.Credential,
       vaultConnection: { kind: PilotVaultConnectionKind.Connected },
       field: document.createElement('input'),
       choose,
     }
-    FocusedCredentialWidget.mount(request).shell.continueButton.click()
+    FocusedFieldWidget.mount(request).shell.continueButton.click()
     expect(choose).not.toHaveBeenCalled()
   })
 })
