@@ -924,8 +924,9 @@ The layers have intentionally different responsibilities:
 
 - content scripts are sensors and actuators: they report bounded, non-secret
   structural observations and perform only the selected DOM action;
-- `nook-core` is the flight computer: it classifies the workflow, stage,
-  progress, allowed next action, and approval requirement;
+- `nook-companion-core` classifies observed fields and login context. Direct
+  and offscreen calls use the same companion WASM classifier. The Rust
+  workflow chooses the stage, progress, next action, and required approval.
 - the extension background/offscreen runtime is the control plane: it binds
   requests to the sender tab/origin and holds the unlocked encrypted session;
 - the widget is the cockpit HUD: it renders safe state and consent, never vault

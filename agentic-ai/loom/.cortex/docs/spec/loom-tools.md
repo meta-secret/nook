@@ -14,13 +14,24 @@ Full package docs: [`agentic-ai/loom/README.md`](../../../README.md).
 
 - **Read-only experts:** The active harness supplies catalog-scoped context.
   That context is not an implementation workspace.
-- **Write-capable workers:** Team Gizmo assigns implementation and the upstream
-  integration agent supplies its branch and worktree.
-- **Completion:** Workers finish their scoped changes on their branches and
-  report focused evidence to Team Gizmo for integration.
+- **Write-capable workers:** Gizmo Prime assigns implementation. The integration
+  agent supplies the worker branch and worktree.
+- **Completion:** Workers report focused evidence to Prime. The integration
+  agent integrates the reviewed commits.
 
-The active harness owns communication. Loom provides mechanical evidence and
-boundary checks; it does not own local Git integration or recovery machinery.
+The active harness carries assignments and handoffs. Meta-Cortex records task
+progress, checkpoints, and outcomes in the feature ledger.
+See the [ledger workflow](../../../../../.meta-cortex/teams/gizmo-team/docs/agent-ledger.md).
+
+The [Loom package](../../../package.json) exposes four commands:
+
+- `loom` runs the mechanical leaf selected by a domain request.
+- `loom-module-delivery --plan <json-file>` validates a version 7 plan.
+  Accepted output includes its digest, topological order, and execution waves.
+- `loom-module-experts validate` audits production module routes.
+- `loom-structural-experts validate` audits structural role scopes.
+
+Both catalog commands take `--working-directory <repo-root>`.
 
 ## Agent action references
 
@@ -33,33 +44,6 @@ never removed or reassigned when a title or locator changes. Each entry carries
 an immutable document-authority locator. The Cortex audit compares those
 assignments with the registry at the pull request's exact published base
 commit. The audit fails closed when an established base cannot be resolved.
-
-### Lifecycle activity
-
-Every persisted agent-attempt event receives an action ID derived from its
-one-based event sequence, such as `a0002`. Runtime activities are live,
-transient observations with an independent ordered ID such as `live-a0002`.
-They may attach bounded registered Cortex references whose relation is one of
-`loaded`, `cited`, `applied`, or `validated`. Loom emits their compact summary
-to stderr without writing them to `events.jsonl`; optional display failure
-cannot block the lifecycle journal.
-
-### Persisted evidence
-
-Persisted records expose replayable lifecycle and terminal handoff evidence,
-not private reasoning. Live activity counts are diagnostic signals and are not
-an effort, quality, or billing measure.
-
-### Replay boundary
-
-Lifecycle replay is an event-sourcing concern. It is also a projection concern.
-The document-authority locator is a Cortex-document reference.
-
-### In-thread handoff
-
-Team Gizmo and Team Agents follow the root
-[Agent Derailment Circuit Breaker](../../../../../.cortex/CIRCUIT-BREAKER.md). Loom retains
-only its typed task, scope, status, result, and evidence fields.
 
 ## Invoke a leaf tool
 
