@@ -8,6 +8,11 @@ import {
   SerializedWireSnapshotKind,
   SerializedWireValueAdapter,
 } from '../lib/serialized-wire-value-adapter'
+import {
+  LocalUpdateCatalogBudgetKind,
+  localUpdateCatalogBudget,
+  type LocalUpdateCatalogMessageLengths,
+} from './local-update-catalog-budget'
 
 const extensionRuntimeIdAttribute = 'data-nook-extension-runtime-id'
 
@@ -26,16 +31,38 @@ void companionWasmReady.then(() => {
       data,
     )
     if (message.kind === ConcreteDecoderResultKind.Decoded) {
+      const { vaultStoreId, encryptedSearchCatalog } = message.value.payload
       const preservedEventLogRecords =
         SerializedWireValueAdapter.restoreEventLogRecords<
           typeof message.value.payload.eventLogRecords
         >(eventLogRecordsSnapshot.value)
       const deliveryMessage: typeof message.value = {
-        ...message.value,
+        type: message.value.type,
         payload: {
-          ...message.value.payload,
+          vaultStoreId,
           eventLogRecords: preservedEventLogRecords,
         },
+      }
+      switch (true) {
+        case typeof encryptedSearchCatalog === 'string': {
+          const lengths: LocalUpdateCatalogMessageLengths = {
+            eventLogRecordsJsonCodeUnits: eventLogRecordsSnapshot.value.length,
+            vaultStoreIdCodeUnits: vaultStoreId.length,
+            catalogCodeUnits: encryptedSearchCatalog.length,
+          }
+          switch (localUpdateCatalogBudget(lengths)) {
+            case LocalUpdateCatalogBudgetKind.Fits:
+              deliveryMessage.payload.encryptedSearchCatalog =
+                encryptedSearchCatalog
+              break
+            case LocalUpdateCatalogBudgetKind.Exceeds:
+              break
+          }
+          break
+        }
+        case true:
+        default:
+          break
       }
       chrome.runtime.sendMessage(deliveryMessage, () => {
         // The bridge is best-effort when the vault is not paired. Reading

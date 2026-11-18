@@ -45,6 +45,11 @@ pub(crate) struct SaveSecretSearchCatalogBucketsRequest<'a> {
     pub(crate) writes: &'a [SecretSearchBucketMutation],
 }
 
+pub(crate) struct SeedSecretSearchCatalogRequest<'a> {
+    pub(crate) store_id: &'a nook_core::StoreId,
+    pub(crate) buckets: &'a [nook_core::EncryptedSearchCatalogBucket],
+}
+
 /// Named values required by `NookDatabase::set_local_vault_label`.
 pub(crate) struct SetLocalVaultLabelRequest<'a> {
     pub(crate) store_id: &'a str,
@@ -267,6 +272,68 @@ impl NookDatabase {
 }
 
 impl NookDatabase {
+    /// Seed encrypted advisory data without touching any established catalog.
+    pub(crate) async fn seed_secret_search_catalog_if_empty(
+        request: SeedSecretSearchCatalogRequest<'_>,
+    ) -> Result<(), NookError> {
+        const BUCKET_COUNT: u8 = nook_core::SECRET_SEARCH_CATALOG_BUCKET_COUNT;
+        let store_id = request.store_id.as_str();
+        let key_for = |bucket| {
+            let key =
+                Self::secret_search_bucket_key(SecretSearchBucketKeyRequest { store_id, bucket });
+            serde_wasm_bindgen::to_value(&key).map_err(|_| {
+                NookError::IndexedDb("Failed to encode catalog bucket key.".to_owned())
+            })
+        };
+        let range = rexie::KeyRange::bound(&key_for(0)?, &key_for(BUCKET_COUNT - 1)?, None, None)
+            .map_err(|_| NookError::IndexedDb("Invalid catalog key range.".to_owned()))?;
+        let writes = request
+            .buckets
+            .iter()
+            .map(|entry| {
+                let bucket = u8::from(entry.bucket);
+                if bucket >= BUCKET_COUNT {
+                    return Err(NookError::IndexedDb(
+                        "Invalid catalog bucket id.".to_owned(),
+                    ));
+                }
+                let key = key_for(bucket)?;
+                let value =
+                    serde_wasm_bindgen::to_value(entry.ciphertext.as_str()).map_err(|_| {
+                        NookError::IndexedDb(
+                            "Failed to encode encrypted catalog bucket.".to_owned(),
+                        )
+                    })?;
+                Ok((value, Some(key)))
+            })
+            .collect::<Result<Vec<_>, NookError>>()?;
+        let rexie = Self::open_nook_database().await?;
+        let transaction = rexie
+            .transaction(&["vault"], TransactionMode::ReadWrite)
+            .map_err(|_| NookError::IndexedDb("Failed to open catalog transaction.".to_owned()))?;
+        let store = transaction
+            .store("vault")
+            .map_err(|_| NookError::IndexedDb("Failed to open catalog store.".to_owned()))?;
+        let established =
+            store.count(Some(range)).await.map_err(|_| {
+                NookError::IndexedDb("Failed to check catalog presence.".to_owned())
+            })? > 0;
+        if !established && store.add_all(writes.into_iter()).await.is_err() {
+            drop(transaction.abort().await);
+            return Err(NookError::IndexedDb(
+                "Failed to seed encrypted catalog buckets.".to_owned(),
+            ));
+        }
+        let result = transaction
+            .done()
+            .await
+            .map_err(|_| NookError::IndexedDb("Failed to commit catalog seed.".to_owned()))?;
+        if !result.is_committed() {
+            return Err(NookError::IndexedDb("Catalog seed was aborted.".to_owned()));
+        }
+        Ok(())
+    }
+
     pub(crate) async fn load_secret_search_catalog_buckets(
         store_id: &str,
     ) -> Result<Vec<(u8, String)>, NookError> {

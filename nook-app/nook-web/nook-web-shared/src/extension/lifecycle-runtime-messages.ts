@@ -256,14 +256,17 @@ const extensionLocalEventLogUpdatedVaultStoreIdSchema = Schema.String.pipe(
 const extensionLocalEventLogUpdatedRecordsSchema = Schema.Array(
   Schema.Unknown,
 ).pipe(Schema.check(Schema.isMinLength(1)));
+const encryptedSearchCatalogWireSchema = Schema.optionalKey(Schema.Unknown);
 type ExtensionLocalEventLogUpdatedPayloadFields = {
   readonly vaultStoreId: typeof extensionLocalEventLogUpdatedVaultStoreIdSchema;
   readonly eventLogRecords: typeof extensionLocalEventLogUpdatedRecordsSchema;
+  readonly encryptedSearchCatalog: typeof encryptedSearchCatalogWireSchema;
 };
 const extensionLocalEventLogUpdatedPayloadFields: ExtensionLocalEventLogUpdatedPayloadFields =
   {
     vaultStoreId: extensionLocalEventLogUpdatedVaultStoreIdSchema,
     eventLogRecords: extensionLocalEventLogUpdatedRecordsSchema,
+    encryptedSearchCatalog: encryptedSearchCatalogWireSchema,
   };
 const extensionLocalEventLogUpdatedPayloadSchema = Schema.Struct(
   extensionLocalEventLogUpdatedPayloadFields,
@@ -280,6 +283,7 @@ export class ExtensionLocalEventLogUpdatedMessage {
   declare readonly payload: {
     vaultStoreId: string;
     eventLogRecords: ExtensionEventLogRecord[];
+    encryptedSearchCatalog?: string;
   };
   static decode<WireMessage>(
     message: WireMessage,
@@ -312,10 +316,23 @@ export class ExtensionLocalEventLogUpdatedMessage {
           payload.eventLogRecords.map(ExtensionEventLogRecord.decode),
           eventLogRecordDecodeOptions,
         ).pipe(
-          Effect.map((eventLogRecords) => ({
-            type,
-            payload: { vaultStoreId: payload.vaultStoreId, eventLogRecords },
-          })),
+          Effect.map((eventLogRecords) => {
+            const decoded: ExtensionLocalEventLogUpdatedMessage = {
+              type,
+              payload: { vaultStoreId: payload.vaultStoreId, eventLogRecords },
+            };
+            // A malformed optional hint must not reject the signed events.
+            const hint = payload.encryptedSearchCatalog;
+            switch (true) {
+              case typeof hint === "string":
+                decoded.payload.encryptedSearchCatalog = hint;
+                break;
+              case true:
+              default:
+                break;
+            }
+            return decoded;
+          }),
         ),
       ),
     );

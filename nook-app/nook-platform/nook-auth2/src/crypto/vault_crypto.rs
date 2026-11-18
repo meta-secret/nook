@@ -1,5 +1,5 @@
 use std::{
-    io::{Read, Write},
+    io::{self, Read, Write},
     iter,
 };
 
@@ -33,6 +33,42 @@ impl VaultCrypto {
             identity,
             recipient,
         })
+    }
+
+    /// Catalog buckets have always used the programmatic work factor. Never
+    /// let an imported cache envelope request additional work at unlock.
+    pub fn for_search_catalog(vault_key: &SymmetricKey) -> VaultCryptoResult<Self> {
+        let mut crypto = Self::new(vault_key)?;
+        crypto
+            .identity
+            .set_max_work_factor(PROGRAMMATIC_SCRYPT_LOG_N);
+        Ok(crypto)
+    }
+
+    /// Check the complete catalog envelope without accessing a key.
+    #[must_use]
+    pub fn is_search_catalog_envelope(ciphertext: &AgeArmoredCiphertext) -> bool {
+        use age::armor::ArmoredReader;
+
+        const BEGIN: &str = "-----BEGIN AGE ENCRYPTED FILE-----";
+        const END: &str = "-----END AGE ENCRYPTED FILE-----";
+        // An age v1 STREAM frame must at least contain its final authentication tag.
+        const FINAL_TAG_BYTES: u64 = 16;
+        let text = ciphertext.as_str();
+        let mut lines = text.lines();
+        if lines.next() != Some(BEGIN) || lines.next_back() != Some(END) || !text.ends_with('\n') {
+            return false;
+        }
+        let mut armor = ArmoredReader::new(text.as_bytes());
+        let Ok(decryptor) = age::Decryptor::new_buffered(&mut armor) else {
+            return false;
+        };
+        if !decryptor.is_scrypt() {
+            return false;
+        }
+        // The decryptor has consumed the header and nonce. The maintained armor
+        // parser must consume the payload, end marker, and the entire input.
+        io::copy(&mut armor, &mut io::sink()).is_ok_and(|bytes| bytes >= FINAL_TAG_BYTES)
     }
 
     pub fn encrypt_value(
@@ -106,6 +142,36 @@ mod tests {
         let encrypted = crypto.encrypt_value("hello world")?;
         let decrypted = crypto.decrypt_value(&encrypted)?;
         assert_eq!(decrypted.as_str(), "hello world");
+        Ok(())
+    }
+
+    #[test]
+    fn catalog_admission_requires_complete_canonical_passphrase_armor() -> anyhow::Result<()> {
+        let key = test_key()?;
+        let crypto = VaultCrypto::new(&key)?;
+        let encrypted = crypto.encrypt_value("existing bucket format")?;
+        assert!(VaultCrypto::is_search_catalog_envelope(&encrypted));
+        assert_eq!(
+            VaultCrypto::for_search_catalog(&key)?
+                .decrypt_value(&encrypted)?
+                .as_str(),
+            "existing bucket format"
+        );
+        let armor = encrypted.as_str();
+        let (before_footer, _) = armor
+            .rsplit_once("-----END")
+            .ok_or_else(|| anyhow::anyhow!("missing fixture footer"))?;
+        for invalid in [
+            "plain text".to_owned(),
+            "-----BEGIN AGE ENCRYPTED FILE-----\n-----END AGE ENCRYPTED FILE-----\n".to_owned(),
+            format!("detached\n{armor}"),
+            before_footer.to_owned(),
+            format!("{armor}appended"),
+        ] {
+            assert!(!VaultCrypto::is_search_catalog_envelope(
+                &AgeArmoredCiphertext::from_trusted_armored(invalid),
+            ));
+        }
         Ok(())
     }
 

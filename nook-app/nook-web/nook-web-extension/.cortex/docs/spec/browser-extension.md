@@ -1605,6 +1605,22 @@ phone or computer is.
   - This supplies immediate local updates without a sync provider.
   - Sync providers remain responsible for other-device changes.
   - After provider pull, publish the resulting log through the same bridge.
+  - A local update may carry an optional `encryptedSearchCatalog` string.
+    It contains Rust-signed encrypted search buckets for the published vault
+    snapshot and key epoch. Rust verifies that the published event history is
+    complete and accepted, and that its signed heads remain current in the
+    extension's log.
+  - The extension's log may also contain one concurrent pairing event. It
+    must have one parent in the published history and a sole `JoinApproved`
+    operation matching the recipient's device ID and both public keys. Rust
+    verifies the current epoch and the grants for the publisher and recipient
+    before seeding a completely empty extension catalog in one transaction.
+  - Existing senders can omit the field. Older receivers discard it and still
+    import the signed events. The extension also imports valid events when
+    this field is malformed or its catalog is rejected. The content bridge
+    omits the hint when it could make the browser message exceed its size
+    limit. Existing pairings and the encrypted catalog storage format support
+    this rollout directly.
 - **Extension unlock:** Wrap the private device key in extension-origin
   IndexedDB with WebAuthn PRF.
   - Event replication may run while it is locked.

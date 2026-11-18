@@ -168,7 +168,8 @@ impl From<SecretPageLimit> for usize {
 }
 
 /// Stable encrypted search-catalog bucket identifier.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct SecretSearchCatalogBucket(u8);
 
 impl From<u8> for SecretSearchCatalogBucket {

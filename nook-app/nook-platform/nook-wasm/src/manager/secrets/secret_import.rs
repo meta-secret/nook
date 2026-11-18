@@ -4,6 +4,9 @@
     forbid(invalid_unowned_function_suppression)
 )]
 use super::NookVaultManager;
+use crate::manager::search_catalog::extension_hint::{
+    ImportedSearchCatalogHintSource, NookEncryptedSearchCatalogHint,
+};
 use crate::{NookError, NookImportResult};
 use nook_core::BitwardenExportAccess;
 use nook_core::{
@@ -11,13 +14,15 @@ use nook_core::{
     OnePasswordExport, ProtonPassImportInput,
 };
 use nook_core::{ChromePasswordsCsvInput, KeePassXcCsvInput, LastPassCsvInput};
-use nook_core::{SecretImportUnsupportedRecordCount, SymmetricKey, VaultOperation};
+use nook_core::{SecretImportUnsupportedRecordCount, SymmetricKey, VaultOperation, VaultType};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::Zeroizing;
 
 mod preparation;
-use preparation::{CoalescedSecretImport, PreparedSecretImport};
+use preparation::{
+    CoalescedSecretImport, ImportPreparation, ImportSearchCatalog, PreparedSecretImport,
+};
 
 #[derive(Clone, Copy)]
 pub(super) enum SecretImportSource {
@@ -104,7 +109,20 @@ impl NookVaultManager {
         let coalesced = CoalescedSecretImport::new(items, &secrets_key)?;
         let dedup_state = self.live_secret_dedup_state().await?;
         let crypto = self.vault.crypto.get()?;
-        let prepared = coalesced.prepare(dedup_state, crypto).await?;
+        let catalog = if self.application.is_simple()
+            && self.vault.architecture.vault_type == VaultType::Simple
+        {
+            ImportSearchCatalog::collecting()
+        } else {
+            ImportSearchCatalog::Disabled
+        };
+        let prepared = coalesced
+            .prepare(ImportPreparation {
+                dedup_state,
+                crypto,
+                catalog,
+            })
+            .await?;
         prepared.commit(self, source, skipped_unsupported).await
     }
 }
@@ -118,6 +136,7 @@ impl PreparedSecretImport {
     ) -> Result<NookImportResult, JsError> {
         let Self {
             operations,
+            catalog,
             skipped_duplicates,
         } = self;
         let imported = operations
@@ -130,7 +149,21 @@ impl PreparedSecretImport {
             })
             .count();
         if !operations.is_empty() {
-            manager.append_vault_operations(operations).await?;
+            let committed_event = manager.append_vault_operations(operations).await?;
+            match catalog {
+                ImportSearchCatalog::Collecting { rows, .. } => {
+                    manager
+                        .create_imported_search_catalog_hint(ImportedSearchCatalogHintSource {
+                            committed_event,
+                            rows,
+                        })
+                        .await;
+                }
+                ImportSearchCatalog::Disabled => {
+                    manager.vault.encrypted_search_catalog_hint =
+                        NookEncryptedSearchCatalogHint::Absent;
+                }
+            }
         }
         drop(manager.status.tx.send("READY".to_owned()));
         tracing::info!(
@@ -672,7 +705,11 @@ mod secret_import_browser_tests {
                     .collect(),
                 &secrets_key,
             )?;
-            let preparation = coalesced.prepare(dedup_state, manager.vault.crypto.get()?);
+            let preparation = coalesced.prepare(ImportPreparation {
+                dedup_state,
+                crypto: manager.vault.crypto.get()?,
+                catalog: ImportSearchCatalog::Disabled,
+            });
             futures_util::pin_mut!(preparation);
             let browser_task = future::sleep(Duration::ZERO);
             futures_util::pin_mut!(browser_task);

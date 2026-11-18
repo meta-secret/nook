@@ -74,6 +74,8 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub fn lock_device_identity(&mut self) {
         self.vault.projection = VaultSessionProjection::Unhydrated;
+        self.vault.encrypted_search_catalog_hint =
+            super::search_catalog::extension_hint::NookEncryptedSearchCatalogHint::Absent;
         self.device.identity_private_key.zeroize();
         self.device.identity_private_key.clear();
         self.event_log.signing_seed.zeroize();

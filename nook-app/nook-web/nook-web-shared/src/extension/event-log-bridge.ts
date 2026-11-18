@@ -1,4 +1,5 @@
 import { err, ok, type Result } from "neverthrow";
+import type { NookEncryptedSearchCatalogHint } from "../vault-app/lib/nook-wasm/nook_wasm";
 import {
   ExtensionLocalEventLogUpdatedMessageType,
   type ExtensionEventLogRecord,
@@ -11,6 +12,7 @@ import {
 type PublishExtensionEventLogUpdateArgs = {
   readonly vaultStoreId: string;
   readonly eventLogRecords: ExtensionEventLogRecord[];
+  readonly catalogHint: NookEncryptedSearchCatalogHint;
 };
 
 export enum ExtensionPublicationFailure {
@@ -29,6 +31,7 @@ class ExtensionEventLogPublisher {
   publishExtensionEventLogUpdate({
     vaultStoreId,
     eventLogRecords,
+    catalogHint,
   }: PublishExtensionEventLogUpdateArgs): Result<
     ExtensionPublicationOutcome,
     ExtensionPublicationFailure
@@ -39,6 +42,13 @@ class ExtensionEventLogPublisher {
       type: ExtensionLocalEventLogUpdatedMessageType.NookExtensionLocalEventLogUpdated,
       payload: { vaultStoreId, eventLogRecords },
     };
+    switch (catalogHint.kind) {
+      case "absent":
+        break;
+      case "sealed":
+        message.payload.encryptedSearchCatalog = catalogHint.encoded;
+        break;
+    }
     try {
       this.browser.window.postMessage(
         message,

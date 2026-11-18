@@ -321,7 +321,7 @@ pub(crate) use local_vault::SaveVaultBlobRequest;
 pub(crate) use local_vault::UpsertRegistryEntryRequest;
 pub(crate) use local_vault::{
     ImportVaultBlobRequest, SaveSecretSearchCatalogBucketsRequest, SecretSearchBucketMutation,
-    SetLocalVaultLabelRequest,
+    SeedSecretSearchCatalogRequest, SetLocalVaultLabelRequest,
 };
 #[cfg(test)]
 pub(crate) use local_vault::{LocalVaultRemoval, RemoveRegistryEntryRequest};

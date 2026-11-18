@@ -9,16 +9,19 @@ import {
   extensionConnectionBrowser,
 } from '$lib/extension/connect'
 import {
-  ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageGuard,
   ExtensionPairingApprovedMessageAdmissionFailure,
   RuntimeMessageDecodeFailureKind,
   ExtensionPairingApprovedMessageType,
   ExtensionPairingApprovedMessage as ExtensionPairingApprovedMessageSchema,
   type ExtensionPairingApprovedMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
-import { RuntimeMessageDecodeCauseKind } from '../../../../nook-web-shared/src/extension/runtime-message-decode-failure'
-import type { ExtensionKeyringVault } from '../../../../nook-web-shared/src/extension/keyring-grant-wire'
 import {
+  ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageGuard,
+  ExtensionLocalEventLogUpdatedMessageType,
+} from '../../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
+import { RuntimeMessageDecodeCauseKind } from '../../../../nook-web-shared/src/extension/runtime-message-decode-failure'
+import {
+  extensionEventLogRecordsFixture as eventLogRecords,
   extensionPairingGrantStorageItems,
   extensionStoredPairingGrantStorageItems,
   decodeStoredExtensionPairingGrant,
@@ -31,24 +34,21 @@ import {
   simplePairingVaultType,
 } from './extension-connect-test-support'
 
-describe('extension pairing approved message', () => {
-  const eventLogRecords: ExtensionKeyringVault['eventLogRecords'] = [
-    {
-      eventId: 'event-1',
-      event: {
-        schema_version: 2,
-        store_id: 'store_abcdefghijk',
-        actor_id: `key_${'0'.repeat(64)}`,
-        actor_signing_public_key: '0'.repeat(64),
-        parents: [],
-        created_at: '2026-07-07T00:00:00.000Z',
-        key_epoch: 'sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo',
-        operations: [{ type: 'vault-cleared' as const }],
-        signature: `ed25519:${'0'.repeat(128)}`,
-      },
-    },
-  ]
+type MalformedSearchCatalogFixture = {
+  readonly malformed: boolean
+}
 
+type LocalUpdateDecodeInput = Pick<
+  ExtensionLocalEventLogUpdatedMessageGuard,
+  'type'
+> & {
+  payload: Omit<
+    ExtensionLocalEventLogUpdatedMessageGuard['payload'],
+    'encryptedSearchCatalog'
+  > & { encryptedSearchCatalog: string | MalformedSearchCatalogFixture }
+}
+
+describe('extension pairing approved message', () => {
   /** The web app added the extension to a keyring holding one vault here. */
   function approvedMessage(): ExtensionPairingApprovedMessage {
     return {
@@ -485,6 +485,36 @@ describe('extension pairing approved message', () => {
       )._tag,
     ).toBe('Failure')
   })
+
+  test.each([
+    {
+      value: 'sealed-catalog-fixture',
+      expected: { encryptedSearchCatalog: 'sealed-catalog-fixture' },
+    },
+    { value: { malformed: true }, expected: {} },
+  ])(
+    'projects only an opaque string from the optional catalog field %#',
+    ({ value, expected }) => {
+      const type =
+        ExtensionLocalEventLogUpdatedMessageType.NookExtensionLocalEventLogUpdated
+      const vaultStoreId = 'store_abcdefghijk'
+      const input: LocalUpdateDecodeInput = {
+        type,
+        payload: {
+          vaultStoreId,
+          eventLogRecords,
+          encryptedSearchCatalog: value,
+        },
+      }
+      const decoded = Effect.runSync(
+        ExtensionLocalEventLogUpdatedMessageGuard.decode(input),
+      )
+      expect(decoded).toEqual({
+        type,
+        payload: { vaultStoreId, eventLogRecords, ...expected },
+      })
+    },
+  )
 
   test('maps approved grants into extension-owned storage keys', () => {
     const storageItemsArgs: Parameters<

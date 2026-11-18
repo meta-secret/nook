@@ -1,15 +1,10 @@
 use super::secret_presentation::{AuthenticatorGroupKeyRequest, SecretTitle, WebsiteHost};
 use super::{SecretListItem, SecretListItemData, SecretRecord, SecretValue};
+use crate::SecretId;
 
-impl SecretRecord {
-    /// Build the secret-free list representation that may cross into UI state.
-    ///
-    /// Credentials, login notes, seed words, and secure-note bodies are
-    /// intentionally absent. Callers must request the full record separately
-    /// for an explicit reveal, secret copy, or edit action.
-    #[must_use]
-    pub fn list_item(&self) -> SecretListItem {
-        let data = match &self.data {
+impl SecretValue {
+    pub(crate) fn list_item_for_id(&self, id: &SecretId) -> SecretListItem {
+        let data = match self {
             SecretValue::Login(value) => SecretListItemData::Login {
                 website_url: value.website_url.clone(),
                 username: value.username.clone(),
@@ -63,9 +58,21 @@ impl SecretRecord {
             }
         };
         SecretListItem {
-            id: self.id.clone(),
+            id: id.clone(),
             data,
         }
+    }
+}
+
+impl SecretRecord {
+    /// Build the secret-free list representation that may cross into UI state.
+    ///
+    /// Credentials, login notes, seed words, and secure-note bodies are
+    /// intentionally absent. Callers must request the full record separately
+    /// for an explicit reveal, secret copy, or edit action.
+    #[must_use]
+    pub fn list_item(&self) -> SecretListItem {
+        self.data.list_item_for_id(&self.id)
     }
 
     /// Primary label for list rows (website URL, account name, note title, …).

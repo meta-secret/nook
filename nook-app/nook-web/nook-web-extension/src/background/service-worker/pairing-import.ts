@@ -296,8 +296,9 @@ export class PairingCredentialImportLifecycle {
 type ImportLocalEventLogUpdateArgs = {
   vaultStoreId: string
   eventLogRecords: Parameters<
-    typeof backgroundVaultRuntime.importExtensionEventLog
+    typeof backgroundVaultRuntime.importExtensionLocalEventLogUpdate
   >[0]['records']
+  encryptedSearchCatalog?: string
 }
 
 export enum LocalEventLogUpdateFailure {
@@ -315,7 +316,7 @@ type LocalEventLogUpdateDependencies = {
   persistPairingStorage: typeof extensionPairingIdentity.setPairingStorage
   loadPairingStorage: typeof extensionPairingIdentity.getPairingStorage
   pairingPolicyReady: typeof extensionPairingGrantPolicyReady
-  importEventLog: typeof backgroundVaultRuntime.importExtensionEventLog
+  importEventLog: typeof backgroundVaultRuntime.importExtensionLocalEventLogUpdate
   sendSession: typeof extensionPairingIdentity.sendSessionMessage
 }
 
@@ -337,9 +338,10 @@ export function importLocalEventLogUpdate(
       extensionPairingIdentity,
     ),
     pairingPolicyReady: extensionPairingGrantPolicyReady,
-    importEventLog: backgroundVaultRuntime.importExtensionEventLog.bind(
-      backgroundVaultRuntime,
-    ),
+    importEventLog:
+      backgroundVaultRuntime.importExtensionLocalEventLogUpdate.bind(
+        backgroundVaultRuntime,
+      ),
     sendSession: extensionPairingIdentity.sendSessionMessage.bind(
       extensionPairingIdentity,
     ),
@@ -350,6 +352,7 @@ export function importLocalEventLogUpdate(
 export async function importLocalEventLogUpdateWithDependencies({
   vaultStoreId,
   eventLogRecords,
+  encryptedSearchCatalog,
   ensureSession,
   persistPairingStorage,
   loadPairingStorage,
@@ -402,10 +405,22 @@ export async function importLocalEventLogUpdateWithDependencies({
     const grant = authority.grant
     const key = pairingPolicy.pairingGrantStorageKey(vaultStoreId)
     const nookTypedArgs0_3: Parameters<
-      typeof backgroundVaultRuntime.importExtensionEventLog
+      typeof backgroundVaultRuntime.importExtensionLocalEventLogUpdate
     >[0] = {
       grant,
       records: eventLogRecords,
+      catalogHint: { kind: 'absent' },
+    }
+    switch (true) {
+      case typeof encryptedSearchCatalog === 'string':
+        nookTypedArgs0_3.catalogHint = {
+          kind: 'sealed',
+          encoded: encryptedSearchCatalog,
+        }
+        break
+      case true:
+      default:
+        break
     }
     const imported = await importEventLog(nookTypedArgs0_3)
     if (!imported.accessGranted) {

@@ -243,6 +243,12 @@ async function routeDecodedLocalUpdate(
 ) {
   const policy = await extensionPairingGrantPolicyReady
   const key = policy.pairingGrantStorageKey(routedGrant.vaultStoreId)
+  type RoutedEventLogImport = Parameters<
+    Parameters<
+      typeof importLocalEventLogUpdateWithDependencies
+    >[0]['importEventLog']
+  >[0]
+  const imports: RoutedEventLogImport[] = []
   const importLocalEventLogUpdate = (
     request: Parameters<
       ExtensionLifecycleRoutingDependencies['importLocalEventLogUpdate']
@@ -254,12 +260,15 @@ async function routeDecodedLocalUpdate(
       persistPairingStorage: async () => {},
       loadPairingStorage: async () => ({ [key]: routedGrant }),
       pairingPolicyReady: extensionPairingGrantPolicyReady,
-      importEventLog: async () => ({
-        vaultStoreId: routedGrant.vaultStoreId,
-        accessGranted: true,
-        eventCount: 1,
-        heads: ['event-1'],
-      }),
+      importEventLog: async (importRequest) => {
+        imports.push(importRequest)
+        return {
+          vaultStoreId: routedGrant.vaultStoreId,
+          accessGranted: true,
+          eventCount: 1,
+          heads: ['event-1'],
+        }
+      },
       sendSession,
     })
   const closeSession = mock(() =>
@@ -284,6 +293,7 @@ async function routeDecodedLocalUpdate(
         type: 'nook:extension-local-event-log-updated',
         payload: {
           vaultStoreId: routedGrant.vaultStoreId,
+          encryptedSearchCatalog: 'sealed-catalog-fixture',
           eventLogRecords: [
             {
               eventId: 'event-1',
@@ -296,7 +306,7 @@ async function routeDecodedLocalUpdate(
       sendResponse,
     })
   })
-  return { response: await response, closeSession }
+  return { response: await response, closeSession, imports }
 }
 
 export {
