@@ -48,6 +48,21 @@
 - svelte-check's TypeScript 7 API client needs Node; under Bun alone it fails
   to start.
 
+### TypeScript projects and inherited module paths
+
+The web static task runs each surface-root `tsconfig*.json` as a project,
+skipping the main app's solution config. Keep inherited alias maps in the
+owner's `config/tsconfig.paths.json` and reference them through `extends`.
+Simple and the extension's authored project share the map in `nook-web-shared`.
+The main app, Sentinel, and research each own a map. TypeScript resolves each
+map's relative targets from its `config/` directory.
+
+Loom reads tracked `tsconfig*.json` throughout the repository and follows
+`extends`. The nested location preserves both existing discovery rules and
+lets Rust preflight read the consuming project's aliases in a source-only
+checkout. [Web static task](../../../../../.task/static-checks.yml) and
+[Loom configuration boundary](../../../../../agentic-ai/loom/tests/skill-provider-config-boundary.test.ts).
+
 ## 2. Dev Server and Build
 
 - Start Vite dev server: `task web:dev` (Docker; port 5173). It uses the default dev/no-opt WASM mode; `task web:dev:fast` is an explicit alias for the same local-iteration behavior and expects the `nook-web:local` image to already exist, so run `task setup` once first on a fresh machine.
