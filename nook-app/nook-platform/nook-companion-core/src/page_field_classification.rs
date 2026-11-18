@@ -29,7 +29,7 @@ pub use one_time_code_entry::{
     PageInputMode, PageInputPattern, PageSecondFactorRoute,
 };
 
-pub(crate) use input_role::AuthenticationInputRole;
+pub(crate) use input_role::{AuthenticationFieldUsability, AuthenticationInputRole};
 
 pub use authentication_advance_control::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
@@ -166,51 +166,11 @@ impl LoginContextObservation {
     }
 }
 
-/// Classify whether an input should count as a username/email identity field.
 /// Named values required by `PageInputFieldObservation::has_autocomplete_token`.
 #[derive(Clone, Copy)]
 pub struct AutocompleteTokenQuery<'a> {
     pub tokens: &'a [String],
     pub expected: &'a str,
-}
-
-pub(crate) enum AuthenticationFieldUsability {
-    Unavailable,
-    Role(AuthenticationInputRole),
-}
-impl AuthenticationFieldUsability {
-    fn is_username(&self) -> bool {
-        matches!(self, Self::Role(AuthenticationInputRole::Username(_)))
-    }
-
-    fn is_one_time_code(&self) -> bool {
-        matches!(self, Self::Role(AuthenticationInputRole::OneTimeCode(_)))
-    }
-}
-
-impl PageInputFieldObservation {
-    pub(crate) fn usable_authentication_role(&self) -> AuthenticationFieldUsability {
-        if self.disabled || self.read_only {
-            AuthenticationFieldUsability::Unavailable
-        } else {
-            AuthenticationFieldUsability::Role(self.classify_authentication_input_role())
-        }
-    }
-}
-
-impl PageInputFieldObservation {
-    #[must_use]
-    pub fn looks_like_username_field(&self) -> bool {
-        self.usable_authentication_role().is_username()
-    }
-}
-
-/// Classify whether an input should count as a one-time-code field.
-impl PageInputFieldObservation {
-    #[must_use]
-    pub fn looks_like_one_time_code_field(&self) -> bool {
-        self.usable_authentication_role().is_one_time_code()
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
