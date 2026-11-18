@@ -11,8 +11,8 @@ import type {
   ExecutionTopologyRequest,
   AddExecutionConstraintRequest,
 } from './plan-validation-context.ts';
-import { TaskResourceClaim } from '../agent-workflow/domain.ts';
-import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
+import { TaskResourceClaim } from './task-resource-claim.ts';
+import type { TaskResourcePatternPair } from './task-resource-claim.ts';
 import { MODULE_EXPERT_CATALOG } from '../module-experts/catalog.ts';
 import { CortexAuthoringPolicy } from './cortex-authoring-validation.ts';
 import { ModuleScope } from './module-scope-validation.ts';

@@ -1,4 +1,4 @@
-import { TaskResourceClaim } from '../agent-workflow/domain.ts';
+import { TaskResourceClaim } from './task-resource-claim.ts';
 
 import {
   ModuleDeliveryIssueCode,

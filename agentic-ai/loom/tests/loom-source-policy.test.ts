@@ -15,12 +15,12 @@ test('accepts the complete Loom source and test inventory', async () => {
   expect(report.violations).toEqual([]);
 });
 
-test('accepts structural result schema factories with their semantic owner', async () => {
+test('accepts tool request schema factories with their semantic owner', async () => {
   const root = join(import.meta.dir, '..');
   const report = await LoomSourcePolicy.audit({
     root,
     ownershipPaths: [
-      join(root, 'src', 'agent-workflow', 'structural-result-values.ts'),
+      Bun.resolveSync('../src/codec/json-schema.ts', import.meta.dir),
     ],
   });
   expect(report.violations).toEqual([]);

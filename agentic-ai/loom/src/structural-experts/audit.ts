@@ -2,9 +2,11 @@ import { existsSync } from 'node:fs';
 
 import { join, normalize } from 'node:path';
 
-import { WorkflowResultKind } from '../agent-workflow/domain.ts';
-
-import { STRUCTURAL_EXPERT_CATALOG, StructuralExpertKind } from './catalog.ts';
+import {
+  STRUCTURAL_EXPERT_CATALOG,
+  StructuralExpertKind,
+  StructuralExpertResultKind,
+} from './catalog.ts';
 
 import type { StructuralExpertProfile } from './catalog.ts';
 
@@ -262,7 +264,7 @@ export type AuditStructuralExpertProfilesRequest =
 const EXPECTED_PROFILES = [
   {
     name: 'code_refactoring_expert',
-    resultKind: WorkflowResultKind.CodeRefactoringEvidence,
+    resultKind: StructuralExpertResultKind.CodeRefactoringEvidence,
     kind: StructuralExpertKind.RepositoryEvidence,
     skillPath: '.cortex/teams/ai/dynamic-skills/code-refactoring-expert.md',
     requiredContextPaths: [
@@ -300,7 +302,7 @@ const EXPECTED_PROFILES = [
   },
   {
     name: 'cortex_refactoring_expert',
-    resultKind: WorkflowResultKind.CortexRefactoringEvidence,
+    resultKind: StructuralExpertResultKind.CortexRefactoringEvidence,
     kind: StructuralExpertKind.RepositoryEvidence,
     skillPath: '.cortex/teams/ai/dynamic-skills/cortex-refactoring-expert.md',
     requiredContextPaths: [
@@ -353,7 +355,7 @@ const EXPECTED_PROFILES = [
   },
   {
     name: 'system_coherence_synthesizer',
-    resultKind: WorkflowResultKind.SystemCoherenceSynthesis,
+    resultKind: StructuralExpertResultKind.SystemCoherenceSynthesis,
     kind: StructuralExpertKind.VerifiedViewSynthesis,
     skillPath:
       '.cortex/teams/ai/dynamic-skills/system-coherence-synthesizer.md',
