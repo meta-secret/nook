@@ -12,27 +12,31 @@ use tsify::Tsify;
 /// The existing numeric wasm-bindgen route used by the browser message contract.
 /// The domain enum's ordinary Serde representation is used by other callers.
 #[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(try_from = "u32", into = "u32")]
+#[serde(try_from = "BrowserRouteCode", into = "BrowserRouteCode")]
 struct BrowserSecondFactorRoute(PageSecondFactorRoute);
 
-impl TryFrom<u32> for BrowserSecondFactorRoute {
+#[derive(Deserialize, Serialize)]
+#[serde(transparent)]
+struct BrowserRouteCode(u32);
+
+impl TryFrom<BrowserRouteCode> for BrowserSecondFactorRoute {
     type Error = &'static str;
 
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
+    fn try_from(code: BrowserRouteCode) -> Result<Self, Self::Error> {
         [
             PageSecondFactorRoute::Unrelated,
             PageSecondFactorRoute::SecondFactor,
         ]
         .into_iter()
-        .find(|route| *route as u32 == value)
+        .find(|route| *route as u32 == code.0)
         .map(Self)
         .ok_or("Invalid page second-factor route")
     }
 }
 
-impl From<BrowserSecondFactorRoute> for u32 {
-    fn from(value: BrowserSecondFactorRoute) -> Self {
-        value.0 as Self
+impl From<BrowserSecondFactorRoute> for BrowserRouteCode {
+    fn from(route: BrowserSecondFactorRoute) -> Self {
+        Self(route.0 as u32)
     }
 }
 
