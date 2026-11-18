@@ -1,7 +1,7 @@
 import { lstatSync } from 'node:fs';
 import { join } from 'node:path';
-import { TaskResourceClaim } from '../agent-workflow/domain.ts';
-import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
+import { TaskResourceClaim } from '../module-delivery/task-resource-claim.ts';
+import type { TaskResourcePatternPair } from '../module-delivery/task-resource-claim.ts';
 import { ModuleWriteClaim } from '../module-delivery/resource-claims.ts';
 import type { ResourcePathMatchRequest } from '../module-delivery/resource-claims.ts';
 import { TeamAuthorityCatalog } from './catalog.ts';

@@ -1,5 +1,5 @@
 import { TeamKey } from '../project-context/catalog.ts';
-import { TaskResourceClaim } from '../agent-workflow/domain.ts';
+import { TaskResourceClaim } from './task-resource-claim.ts';
 
 export const MODULE_DELIVERY_PLAN_VERSION = 7;
 export type ModuleDeliveryPlanInputVersion =

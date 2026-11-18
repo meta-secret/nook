@@ -1,9 +1,10 @@
-import type { GitCommit } from '../agent-workflow/domain.ts';
 import {
   RepositoryCommand,
   RepositoryCommandExecutable,
   RepositoryGitSecurityPolicy,
 } from './run.ts';
+
+export type GitCommit = string;
 
 /** Bootstrap ancestry evidence is deliberately independent of the moving feature branch. */
 export type PinnedDevBaseEvidence = Readonly<{

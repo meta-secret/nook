@@ -1,13 +1,10 @@
 import { expect, test } from 'bun:test';
 import { resolve } from 'node:path';
-import {
-  AgentAttemptAdapterKind,
-  WorkflowResultKind,
-} from '../../src/agent-workflow/domain.ts';
 import { StructuralExpertContract } from '../../src/structural-experts/audit.ts';
 import {
   STRUCTURAL_EXPERT_CATALOG,
   StructuralExpertKind,
+  StructuralExpertResultKind,
 } from '../../src/structural-experts/catalog.ts';
 
 /** Owns the structural experts catalog fixture and its typed role contracts. */
@@ -42,10 +39,7 @@ test('registers two bounded repository readers and one legacy diagnostic aggrega
     0,
   );
   expect(diagnosticAggregator?.resultKind).toBe(
-    WorkflowResultKind.SystemCoherenceSynthesis,
-  );
-  expect(`${AgentAttemptAdapterKind.StructuralExpertInvocation}`).toBe(
-    'structural-expert-invocation',
+    StructuralExpertResultKind.SystemCoherenceSynthesis,
   );
 });
 
