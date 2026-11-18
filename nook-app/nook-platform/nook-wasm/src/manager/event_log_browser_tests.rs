@@ -757,6 +757,9 @@ async fn invalid_encrypted_catalog_keeps_signed_extension_update_receipt() -> an
     Ok(())
 }
 
+#[path = "event_log_browser_tests/catalog_handoff.rs"]
+mod catalog_handoff;
+
 #[wasm_bindgen_test]
 async fn denied_extension_import_restores_session_and_active_projection() -> anyhow::Result<()> {
     let fixture = import_fixture(false).await?;

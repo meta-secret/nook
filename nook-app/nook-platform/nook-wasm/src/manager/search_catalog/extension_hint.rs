@@ -4,11 +4,11 @@ use crate::storage::indexed_db::SeedSecretSearchCatalogRequest;
 use crate::{NookDatabase, NookError, TypedOutput};
 use nook_core::{
     DeviceId, DevicePublicKey, DeviceSigningPublicKey, EncodedSearchCatalogHint,
-    EncryptedSearchCatalogBucket, EventGraphDeviceAccess, EventGraphDeviceAccessRequest, EventId,
-    ImportedSearchCatalogRow, ImportedSearchCatalogRows, SECRET_SEARCH_CATALOG_BUCKET_COUNT,
-    SearchCatalogBucketPayload, SearchCatalogHintAdmitRequest, SearchCatalogHintContext,
-    SearchCatalogHintSignRequest, SecretSearchCatalog, SignedSearchCatalogHint, StoreId,
-    SymmetricKey, VaultType,
+    EncryptedSearchCatalogBucket, EventGraphDeviceAccessRequest, EventId, ImportedSearchCatalogRow,
+    ImportedSearchCatalogRows, PublishedSearchCatalogHintRequest,
+    SECRET_SEARCH_CATALOG_BUCKET_COUNT, SearchCatalogBucketPayload, SearchCatalogHintAdmitRequest,
+    SearchCatalogHintContext, SearchCatalogHintSignRequest, SecretSearchCatalog,
+    SignedSearchCatalogHint, StoreId, SymmetricKey, VaultType,
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use tsify::Tsify;
@@ -47,6 +47,11 @@ pub struct NookExtensionLocalEventLogUpdate {
         deserialize_with = "NookEncryptedSearchCatalogHint::deserialize_advisory"
     )]
     pub(in crate::manager) catalog_hint: NookEncryptedSearchCatalogHint,
+}
+
+pub(in crate::manager) struct ExtensionSearchCatalogSeed {
+    pub(in crate::manager) update: NookExtensionLocalEventLogUpdate,
+    pub(in crate::manager) published_event_ids: Vec<String>,
 }
 
 impl NookVaultManager {
@@ -137,8 +142,12 @@ impl NookVaultManager {
 
     pub(in crate::manager) async fn seed_extension_search_catalog_hint(
         &self,
-        request: NookExtensionLocalEventLogUpdate,
+        request: ExtensionSearchCatalogSeed,
     ) -> Result<(), NookError> {
+        let ExtensionSearchCatalogSeed {
+            update: request,
+            published_event_ids,
+        } = request;
         let NookEncryptedSearchCatalogHint::Sealed { encoded } = request.catalog_hint else {
             return Ok(());
         };
@@ -149,22 +158,27 @@ impl NookVaultManager {
         }
         let store = NookDatabase::load_local_event_store(request.vault_store_id.as_str()).await?;
         let graph = store.load_graph(request.vault_store_id.as_str())?;
-        if !EventGraphDeviceAccess::new(&graph).has_access(&EventGraphDeviceAccessRequest {
+        let recipient = EventGraphDeviceAccessRequest {
             expected_device_id: &request.device_id,
             expected_public_key: &request.device_public_key,
             expected_signing_public_key: &request.device_signing_public_key,
-        })? {
-            return Err(NookError::Decryption(
-                "Catalog grant was not current.".to_owned(),
-            ));
-        }
-        let buckets = SignedSearchCatalogHint::admit(SearchCatalogHintAdmitRequest {
-            encoded: &encoded,
-            context: SearchCatalogHintContext {
-                store_id: &request.vault_store_id,
-                graph: &graph,
-            },
-        })?;
+        };
+        let published_event_ids = published_event_ids
+            .iter()
+            .map(|id| EventId::parse(id))
+            .collect::<Result<Vec<_>, _>>()?;
+        let buckets =
+            SignedSearchCatalogHint::admit_published(PublishedSearchCatalogHintRequest {
+                hint: SearchCatalogHintAdmitRequest {
+                    encoded: &encoded,
+                    context: SearchCatalogHintContext {
+                        store_id: &request.vault_store_id,
+                        graph: &graph,
+                    },
+                },
+                event_ids: &published_event_ids,
+                recipient: &recipient,
+            })?;
         NookDatabase::seed_secret_search_catalog_if_empty(SeedSecretSearchCatalogRequest {
             store_id: &request.vault_store_id,
             buckets: &buckets,

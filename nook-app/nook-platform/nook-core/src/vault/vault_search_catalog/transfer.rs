@@ -4,10 +4,12 @@ use crate::errors::{SessionError, VaultError, VaultResult};
 use crate::{
     AgeArmoredCiphertext, CanonicalEventBodyBytes, DeviceId, DeviceSigningPublicKey,
     Ed25519Signature, EpochCheckpoint, EventGraph, EventGraphDeviceAccess,
-    EventGraphDeviceAccessRequest, EventId, ObservedHeads, SECRET_SEARCH_CATALOG_BUCKET_COUNT,
-    SecretSearchCatalogBucket, SigningIdentity, StoreId, VaultCrypto,
+    EventGraphDeviceAccessRequest, EventId, EventLookup, ObservedHeads,
+    SECRET_SEARCH_CATALOG_BUCKET_COUNT, SecretSearchCatalogBucket, SigningIdentity, StoreId,
+    VaultCrypto, VaultOperation,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use tsify::Tsify;
 
 #[derive(Clone, Serialize, Deserialize, Tsify)]
@@ -43,6 +45,19 @@ pub struct SearchCatalogHintSignRequest<'a> {
 pub struct SearchCatalogHintAdmitRequest<'a> {
     pub encoded: &'a EncodedSearchCatalogHint,
     pub context: SearchCatalogHintContext<'a>,
+}
+
+#[derive(Clone, Copy)]
+pub struct PublishedSearchCatalogHintRequest<'a> {
+    pub hint: SearchCatalogHintAdmitRequest<'a>,
+    pub event_ids: &'a [EventId],
+    pub recipient: &'a EventGraphDeviceAccessRequest<'a>,
+}
+
+struct SearchCatalogHintVerification<'a> {
+    context: SearchCatalogHintContext<'a>,
+    heads: ObservedHeads,
+    epoch: EpochCheckpoint,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -173,29 +188,123 @@ impl SignedSearchCatalogHint {
     pub fn admit(
         request: SearchCatalogHintAdmitRequest<'_>,
     ) -> VaultResult<Vec<EncryptedSearchCatalogBucket>> {
-        let SearchCatalogHintAdmitRequest { encoded, context } = request;
+        let graph = request.context.graph;
+        Self::decode(request.encoded)?.verify(SearchCatalogHintVerification {
+            context: request.context,
+            heads: ObservedHeads::from_event_ids(&graph.heads()),
+            epoch: graph.current_epoch_checkpoint()?,
+        })
+    }
+
+    /// The complete authenticated shipment must still be current. The receiver
+    /// may also retain its separate pairing approval on an incomparable tip.
+    pub fn admit_published(
+        request: PublishedSearchCatalogHintRequest<'_>,
+    ) -> VaultResult<Vec<EncryptedSearchCatalogBucket>> {
+        let signed = Self::decode(request.hint.encoded)?;
+        let graph = request.hint.context.graph;
+        if !EventGraphDeviceAccess::new(graph).has_access(request.recipient)? {
+            return Err(Self::invalid());
+        }
+        let published = request.event_ids.iter().cloned().collect::<BTreeSet<_>>();
+        let accepted = graph
+            .topological_order()?
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+        if published.is_empty() || !published.is_subset(&accepted) {
+            return Err(Self::invalid());
+        }
+        let mut omitted = accepted.difference(&published);
+        if let Some(event_id) = omitted.next() {
+            let EventLookup::Recorded(event) = graph.get(event_id) else {
+                return Err(Self::invalid());
+            };
+            let [parent] = event.body.parents.as_slice() else {
+                return Err(Self::invalid());
+            };
+            let [
+                VaultOperation::JoinApproved {
+                    device_id,
+                    encryption_public_key,
+                    signing_public_key,
+                    ..
+                },
+            ] = event.body.operations.as_slice()
+            else {
+                return Err(Self::invalid());
+            };
+            if omitted.next().is_some()
+                || !published.contains(parent)
+                || device_id != request.recipient.expected_device_id
+                || encryption_public_key != request.recipient.expected_public_key
+                || signing_public_key != request.recipient.expected_signing_public_key
+            {
+                return Err(Self::invalid());
+            }
+        }
+        let mut heads = published.clone();
+        for event_id in &published {
+            let EventLookup::Recorded(event) = graph.get(event_id) else {
+                return Err(Self::invalid());
+            };
+            for parent in &event.body.parents {
+                if !published.contains(parent) {
+                    return Err(Self::invalid());
+                }
+                heads.remove(parent);
+            }
+        }
+        let current_heads = graph.heads().into_iter().collect::<BTreeSet<_>>();
+        if !heads.is_subset(&current_heads) {
+            return Err(Self::invalid());
+        }
+        let epoch = graph.current_epoch_checkpoint()?;
+        if let EpochCheckpoint::Committed(id) = &epoch
+            && !published.contains(id)
+        {
+            return Err(Self::invalid());
+        }
+        let heads = heads.into_iter().collect::<Vec<_>>();
+        signed.verify(SearchCatalogHintVerification {
+            context: request.hint.context,
+            heads: ObservedHeads::from_event_ids(&heads),
+            epoch,
+        })
+    }
+
+    fn decode(encoded: &EncodedSearchCatalogHint) -> VaultResult<Self> {
         if encoded.0.len() > EncodedSearchCatalogHint::MAX_BYTES {
             return Err(Self::invalid());
         }
         let signed: Self = serde_json::from_str(&encoded.0).map_err(|_| Self::invalid())?;
         signed.body.verify_shape()?;
-        let heads = ObservedHeads::from_event_ids(&context.graph.heads());
+        Ok(signed)
+    }
+
+    fn verify(
+        self,
+        request: SearchCatalogHintVerification<'_>,
+    ) -> VaultResult<Vec<EncryptedSearchCatalogBucket>> {
+        let SearchCatalogHintVerification {
+            context,
+            heads,
+            epoch,
+        } = request;
         if heads.is_empty()
-            || &signed.body.store_id != context.store_id
-            || signed.body.heads != heads.as_event_ids()
-            || signed.body.epoch
-                != SearchCatalogHintEpoch::from(context.graph.current_epoch_checkpoint()?)
+            || &self.body.store_id != context.store_id
+            || self.body.heads != heads.as_event_ids()
+            || self.body.epoch != SearchCatalogHintEpoch::from(epoch)
         {
             return Err(Self::invalid());
         }
-        let key = signed.body.active_issuer_key(context.graph)?;
+        let key = self.body.active_issuer_key(context.graph)?;
         let verifying_key = SigningIdentity::verifying_key_from_public_key_hex(key.as_str())?;
         SigningIdentity::verify_bytes(
-            &signed.body.canonical_bytes()?,
-            signed.signature.as_str(),
+            &self.body.canonical_bytes()?,
+            self.signature.as_str(),
             &verifying_key,
         )?;
-        if !signed
+        if !self
             .body
             .buckets
             .iter()
@@ -203,7 +312,7 @@ impl SignedSearchCatalogHint {
         {
             return Err(Self::invalid());
         }
-        Ok(signed.body.buckets)
+        Ok(self.body.buckets)
     }
 }
 
@@ -294,6 +403,21 @@ mod tests {
                 store_id: &self.store_id,
                 graph,
             }
+        }
+
+        fn pairing_approval(&self, recipient: &Self) -> anyhow::Result<VaultOperation> {
+            let auth = recipient
+                .identity
+                .auth_record(&self.keys.secrets_key, &self.keys.members_key)?;
+            let envelopes = AuthEnvelopes::parse(auth.value.as_str())?;
+            Ok(VaultOperation::JoinApproved {
+                device_id: recipient.identity.device_id().clone(),
+                encryption_public_key: recipient.identity.public_key(),
+                signing_public_key: recipient.signing.public_key(),
+                label: MemberLabel::from_trusted("Paired extension".to_owned()),
+                secrets_key_ciphertext: envelopes.secrets_key,
+                members_key_ciphertext: envelopes.members_key,
+            })
         }
 
         fn bucket(&self, id: u8) -> anyhow::Result<EncryptedSearchCatalogBucket> {
@@ -411,6 +535,111 @@ mod tests {
                 .is_err()
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn current_complete_publication_admits_only_the_recipients_concurrent_pairing_approval()
+    -> anyhow::Result<()> {
+        let publisher = CatalogPublisher::new()?;
+        let recipient = CatalogPublisher::new()?;
+        let recipient_key = recipient.identity.public_key();
+        let recipient_signer = recipient.signing.public_key();
+        let recipient_grant = EventGraphDeviceAccessRequest {
+            expected_device_id: recipient.identity.device_id(),
+            expected_public_key: &recipient_key,
+            expected_signing_public_key: &recipient_signer,
+        };
+        let root = publisher.graph()?;
+        let parent = publisher.append(CatalogPublisherAppend {
+            graph: root.clone(),
+            operations: Vec::new(),
+        })?;
+        let source_graph = publisher.append(CatalogPublisherAppend {
+            graph: parent,
+            operations: vec![publisher.pairing_approval(&recipient)?],
+        })?;
+        let receipt = publisher.append(CatalogPublisherAppend {
+            graph: root.clone(),
+            operations: vec![publisher.pairing_approval(&recipient)?],
+        })?;
+        let union = source_graph.clone().union(&receipt);
+        let encoded = publisher.encode(&source_graph)?;
+        let shipment_ids = source_graph.topological_order()?;
+        let admit = |graph: &EventGraph| {
+            SignedSearchCatalogHint::admit_published(PublishedSearchCatalogHintRequest {
+                hint: SearchCatalogHintAdmitRequest {
+                    encoded: &encoded,
+                    context: publisher.context(graph),
+                },
+                event_ids: &shipment_ids,
+                recipient: &recipient_grant,
+            })
+        };
+        assert!(admit(&source_graph).is_ok());
+        assert!(admit(&union).is_ok());
+        assert!(
+            SignedSearchCatalogHint::admit_published(PublishedSearchCatalogHintRequest {
+                hint: SearchCatalogHintAdmitRequest {
+                    encoded: &encoded,
+                    context: publisher.context(&union)
+                },
+                event_ids: &shipment_ids,
+                recipient: &EventGraphDeviceAccessRequest {
+                    expected_device_id: publisher.identity.device_id(),
+                    expected_public_key: &publisher.identity.public_key(),
+                    expected_signing_public_key: &publisher.signing.public_key(),
+                },
+            })
+            .is_err()
+        );
+
+        let unrelated = publisher.append(CatalogPublisherAppend {
+            graph: root,
+            operations: vec![VaultOperation::VaultCleared],
+        })?;
+        assert!(admit(&source_graph.clone().union(&unrelated)).is_err());
+        assert!(admit(&union.union(&unrelated)).is_err());
+        let superseded = publisher.append(CatalogPublisherAppend {
+            graph: source_graph,
+            operations: vec![publisher.pairing_approval(&recipient)?],
+        })?;
+        assert!(admit(&superseded).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn publication_cannot_omit_a_published_heads_parent_even_if_it_is_available_locally()
+    -> anyhow::Result<()> {
+        let publisher = CatalogPublisher::new()?;
+        let recipient = CatalogPublisher::new()?;
+        let graph = publisher.graph()?;
+        let mut shipment_ids = graph.topological_order()?;
+        let approval = publisher.append(CatalogPublisherAppend {
+            graph,
+            operations: vec![publisher.pairing_approval(&recipient)?],
+        })?;
+        let current = publisher.append(CatalogPublisherAppend {
+            graph: approval,
+            operations: Vec::new(),
+        })?;
+        shipment_ids.extend(current.heads());
+        let encoded = publisher.encode(&current)?;
+        assert!(
+            SignedSearchCatalogHint::admit_published(PublishedSearchCatalogHintRequest {
+                hint: SearchCatalogHintAdmitRequest {
+                    encoded: &encoded,
+                    context: publisher.context(&current)
+                },
+                event_ids: &shipment_ids,
+                recipient: &EventGraphDeviceAccessRequest {
+                    expected_device_id: recipient.identity.device_id(),
+                    expected_public_key: &recipient.identity.public_key(),
+                    expected_signing_public_key: &recipient.signing.public_key(),
+                },
+            })
+            .is_err()
+        );
         Ok(())
     }
 

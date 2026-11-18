@@ -1606,8 +1606,14 @@ phone or computer is.
   - Sync providers remain responsible for other-device changes.
   - After provider pull, publish the resulting log through the same bridge.
   - A local update may carry an optional `encryptedSearchCatalog` string.
-    It contains Rust-signed encrypted search buckets for the same vault, event
-    heads, and key epoch. Rust verifies the current grant and the publisher
+    It contains Rust-signed encrypted search buckets for the published vault
+    snapshot and key epoch. Rust verifies that the published event history is
+    complete and accepted, and that its signed heads remain current in the
+    extension's log.
+  - The extension's log may also contain one concurrent pairing event. It
+    must have one parent in the published history and a sole `JoinApproved`
+    operation matching the recipient's device ID and both public keys. Rust
+    verifies the current epoch and the grants for the publisher and recipient
     before seeding a completely empty extension catalog in one transaction.
   - Existing senders can omit the field. Older receivers discard it and still
     import the signed events. The extension also imports valid events when

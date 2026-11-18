@@ -1,7 +1,9 @@
 use super::super::event_log::{
     EventLogStorageRecord, ExtensionEventLogImportStatus, ExternalEventLogRecord,
 };
-use super::super::search_catalog::extension_hint::NookExtensionLocalEventLogUpdate;
+use super::super::search_catalog::extension_hint::{
+    ExtensionSearchCatalogSeed, NookEncryptedSearchCatalogHint, NookExtensionLocalEventLogUpdate,
+};
 use super::NookVaultManager;
 use crate::NookReplacementConflict;
 use crate::NookSecurityConflict;
@@ -166,6 +168,13 @@ impl NookVaultManager {
         update: NookPreparedExtensionLocalEventLogUpdate,
     ) -> Result<NookExtensionEventLogImportStatus, JsError> {
         let NookPreparedExtensionLocalEventLogUpdate { request, records } = update;
+        let published_event_ids = match &request.catalog_hint {
+            NookEncryptedSearchCatalogHint::Absent => Vec::new(),
+            NookEncryptedSearchCatalogHint::Sealed { .. } => records
+                .iter()
+                .map(|record| record.event_id.clone())
+                .collect(),
+        };
         let status = self
             .import_extension_event_log_records(
                 request.vault_store_id.as_str(),
@@ -177,7 +186,10 @@ impl NookVaultManager {
             .await?;
         if status.access_granted
             && self
-                .seed_extension_search_catalog_hint(request)
+                .seed_extension_search_catalog_hint(ExtensionSearchCatalogSeed {
+                    update: request,
+                    published_event_ids,
+                })
                 .await
                 .is_err()
         {
