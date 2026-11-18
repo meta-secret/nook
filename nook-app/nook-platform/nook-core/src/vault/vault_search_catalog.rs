@@ -29,8 +29,8 @@ mod site_secrets;
 pub use site_secrets::SiteSecretOrigin;
 mod transfer;
 pub use transfer::{
-    EncodedSearchCatalogHint, EncryptedSearchCatalogBucket, SearchCatalogHintContext,
-    SearchCatalogHintSignRequest, SignedSearchCatalogHint,
+    EncodedSearchCatalogHint, EncryptedSearchCatalogBucket, SearchCatalogHintAdmitRequest,
+    SearchCatalogHintContext, SearchCatalogHintSignRequest, SignedSearchCatalogHint,
 };
 
 const SEARCH_CATALOG_VERSION: u8 = 2;

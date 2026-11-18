@@ -34,6 +34,13 @@ impl NookEventLogRecords {
 #[wasm_bindgen]
 pub struct NookExternalEventLogRecords(pub(in crate::manager) Vec<ExternalEventLogRecord>);
 
+/// Opaque typed update that holds the already-parsed external event records.
+#[wasm_bindgen]
+pub struct NookPreparedExtensionLocalEventLogUpdate {
+    request: NookExtensionLocalEventLogUpdate,
+    records: Vec<ExternalEventLogRecord>,
+}
+
 #[wasm_bindgen]
 impl NookExternalEventLogRecords {
     #[wasm_bindgen]
@@ -46,6 +53,17 @@ impl NookExternalEventLogRecords {
             .collect::<Result<Vec<_>, _>>()?;
         let result = { Self(records) };
         Ok(result)
+    }
+
+    #[wasm_bindgen]
+    pub fn with_local_update(
+        self,
+        request: &tsify::Ts<NookExtensionLocalEventLogUpdate>,
+    ) -> Result<NookPreparedExtensionLocalEventLogUpdate, JsError> {
+        Ok(NookPreparedExtensionLocalEventLogUpdate {
+            request: request.decode()?,
+            records: self.0,
+        })
     }
 }
 
@@ -145,17 +163,16 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn import_extension_local_event_log_update_js(
         &mut self,
-        request: tsify::Ts<NookExtensionLocalEventLogUpdate>,
-        records: NookExternalEventLogRecords,
+        update: NookPreparedExtensionLocalEventLogUpdate,
     ) -> Result<NookExtensionEventLogImportStatus, JsError> {
-        let request = request.decode()?;
+        let NookPreparedExtensionLocalEventLogUpdate { request, records } = update;
         let status = self
             .import_extension_event_log_records(
                 request.vault_store_id.as_str(),
                 request.device_id.as_str(),
                 request.device_public_key.as_str(),
                 request.device_signing_public_key.as_str(),
-                records.0,
+                records,
             )
             .await?;
         if status.access_granted

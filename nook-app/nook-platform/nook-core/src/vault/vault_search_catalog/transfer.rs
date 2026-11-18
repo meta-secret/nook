@@ -39,6 +39,12 @@ pub struct SearchCatalogHintSignRequest<'a> {
     pub buckets: Vec<EncryptedSearchCatalogBucket>,
 }
 
+#[derive(Clone, Copy)]
+pub struct SearchCatalogHintAdmitRequest<'a> {
+    pub encoded: &'a EncodedSearchCatalogHint,
+    pub context: SearchCatalogHintContext<'a>,
+}
+
 #[derive(Serialize, Deserialize)]
 enum SearchCatalogHintFormat {
     #[serde(rename = "nook/encrypted-search-catalog-hint/v1")]
@@ -165,9 +171,9 @@ impl SignedSearchCatalogHint {
 
     /// Revalidate the exact current authorized graph before using its opaque buckets.
     pub fn admit(
-        encoded: &EncodedSearchCatalogHint,
-        context: SearchCatalogHintContext<'_>,
+        request: SearchCatalogHintAdmitRequest<'_>,
     ) -> VaultResult<Vec<EncryptedSearchCatalogBucket>> {
+        let SearchCatalogHintAdmitRequest { encoded, context } = request;
         if encoded.0.len() > EncodedSearchCatalogHint::MAX_BYTES {
             return Err(Self::invalid());
         }
@@ -217,6 +223,11 @@ mod tests {
         keys: VaultKeys,
     }
 
+    struct CatalogPublisherAppend {
+        graph: EventGraph,
+        operations: Vec<VaultOperation>,
+    }
+
     impl CatalogPublisher {
         fn new() -> anyhow::Result<Self> {
             let (signing, _) = SigningIdentity::generate()?;
@@ -228,11 +239,8 @@ mod tests {
             })
         }
 
-        fn append(
-            &self,
-            graph: EventGraph,
-            operations: Vec<VaultOperation>,
-        ) -> anyhow::Result<EventGraph> {
+        fn append(&self, request: CatalogPublisherAppend) -> anyhow::Result<EventGraph> {
+            let CatalogPublisherAppend { graph, operations } = request;
             let event = VaultEvent::sign(
                 VaultEventBody {
                     schema_version: VaultEventSchemaVersion::CURRENT,
@@ -262,9 +270,9 @@ mod tests {
                 .identity
                 .auth_record(&self.keys.secrets_key, &self.keys.members_key)?;
             let envelopes = AuthEnvelopes::parse(auth.value.as_str())?;
-            self.append(
-                EventGraph::new(),
-                vec![
+            self.append(CatalogPublisherAppend {
+                graph: EventGraph::new(),
+                operations: vec![
                     VaultOperation::VaultImported {
                         source_content_hash: Sha256Hex::from_bytes(b"catalog fixture"),
                         secrets: Vec::new(),
@@ -278,7 +286,7 @@ mod tests {
                         members_key_ciphertext: envelopes.members_key,
                     },
                 ],
-            )
+            })
         }
 
         fn context<'a>(&'a self, graph: &'a EventGraph) -> SearchCatalogHintContext<'a> {
@@ -314,7 +322,10 @@ mod tests {
         let publisher = CatalogPublisher::new()?;
         let graph = publisher.graph()?;
         let encoded = publisher.encode(&graph)?;
-        let received = SignedSearchCatalogHint::admit(&encoded, publisher.context(&graph))?;
+        let received = SignedSearchCatalogHint::admit(SearchCatalogHintAdmitRequest {
+            encoded: &encoded,
+            context: publisher.context(&graph),
+        })?;
         assert_eq!(
             received
                 .iter()
@@ -325,17 +336,26 @@ mod tests {
         assert!(!encoded.0.contains("Owner"));
         let foreign_store = StoreId::generate()?;
         assert!(
-            SignedSearchCatalogHint::admit(
-                &encoded,
-                SearchCatalogHintContext {
+            SignedSearchCatalogHint::admit(SearchCatalogHintAdmitRequest {
+                encoded: &encoded,
+                context: SearchCatalogHintContext {
                     store_id: &foreign_store,
                     graph: &graph,
                 },
-            )
+            })
             .is_err()
         );
-        let advanced = publisher.append(graph, Vec::new())?;
-        assert!(SignedSearchCatalogHint::admit(&encoded, publisher.context(&advanced)).is_err());
+        let advanced = publisher.append(CatalogPublisherAppend {
+            graph,
+            operations: Vec::new(),
+        })?;
+        assert!(
+            SignedSearchCatalogHint::admit(SearchCatalogHintAdmitRequest {
+                encoded: &encoded,
+                context: publisher.context(&advanced),
+            })
+            .is_err()
+        );
         Ok(())
     }
 
@@ -363,7 +383,13 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("signed catalog fixture is empty"))?;
         *first_bucket = publisher.bucket(2)?;
         let modified = EncodedSearchCatalogHint(serde_json::to_string(&modified)?);
-        assert!(SignedSearchCatalogHint::admit(&modified, publisher.context(&graph)).is_err());
+        assert!(
+            SignedSearchCatalogHint::admit(SearchCatalogHintAdmitRequest {
+                encoded: &modified,
+                context: publisher.context(&graph),
+            })
+            .is_err()
+        );
         Ok(())
     }
 
@@ -398,9 +424,9 @@ mod tests {
             .auth_record(&owner.keys.secrets_key, &owner.keys.members_key)?;
         let envelopes = AuthEnvelopes::parse(auth.value.as_str())?;
         let device_id = member.identity.device_id();
-        let graph = owner.append(
+        let graph = owner.append(CatalogPublisherAppend {
             graph,
-            vec![VaultOperation::JoinApproved {
+            operations: vec![VaultOperation::JoinApproved {
                 device_id: device_id.clone(),
                 encryption_public_key: member.identity.public_key(),
                 signing_public_key: member.signing.public_key(),
@@ -408,21 +434,27 @@ mod tests {
                 secrets_key_ciphertext: envelopes.secrets_key,
                 members_key_ciphertext: envelopes.members_key,
             }],
-        )?;
+        })?;
         let encoded = SignedSearchCatalogHint::sign(SearchCatalogHintSignRequest {
             context: owner.context(&graph),
             issuer: device_id,
             signer: &member.signing,
             buckets: vec![owner.bucket(2)?],
         })?;
-        assert!(SignedSearchCatalogHint::admit(&encoded, owner.context(&graph)).is_ok());
+        assert!(
+            SignedSearchCatalogHint::admit(SearchCatalogHintAdmitRequest {
+                encoded: &encoded,
+                context: owner.context(&graph),
+            })
+            .is_ok()
+        );
 
-        let revoked = owner.append(
+        let revoked = owner.append(CatalogPublisherAppend {
             graph,
-            vec![VaultOperation::DeviceRevoked {
+            operations: vec![VaultOperation::DeviceRevoked {
                 device_id: device_id.clone(),
             }],
-        )?;
+        })?;
         assert!(!EventGraphDeviceAccess::new(&revoked).has_access(
             &EventGraphDeviceAccessRequest {
                 expected_device_id: device_id,
@@ -436,7 +468,13 @@ mod tests {
         let bytes = signed.body.canonical_bytes()?;
         signed.signature = Ed25519Signature::parse(&member.signing.sign_bytes(&bytes))?;
         let edited = EncodedSearchCatalogHint(serde_json::to_string(&signed)?);
-        assert!(SignedSearchCatalogHint::admit(&edited, owner.context(&revoked)).is_err());
+        assert!(
+            SignedSearchCatalogHint::admit(SearchCatalogHintAdmitRequest {
+                encoded: &edited,
+                context: owner.context(&revoked),
+            })
+            .is_err()
+        );
         Ok(())
     }
 }

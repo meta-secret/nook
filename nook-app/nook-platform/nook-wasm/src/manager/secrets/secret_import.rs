@@ -20,7 +20,9 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::Zeroizing;
 
 mod preparation;
-use preparation::{CoalescedSecretImport, ImportSearchCatalog, PreparedSecretImport};
+use preparation::{
+    CoalescedSecretImport, ImportPreparation, ImportSearchCatalog, PreparedSecretImport,
+};
 
 #[derive(Clone, Copy)]
 pub(super) enum SecretImportSource {
@@ -114,7 +116,13 @@ impl NookVaultManager {
         } else {
             ImportSearchCatalog::Disabled
         };
-        let prepared = coalesced.prepare(dedup_state, crypto, catalog).await?;
+        let prepared = coalesced
+            .prepare(ImportPreparation {
+                dedup_state,
+                crypto,
+                catalog,
+            })
+            .await?;
         prepared.commit(self, source, skipped_unsupported).await
     }
 }
@@ -697,11 +705,11 @@ mod secret_import_browser_tests {
                     .collect(),
                 &secrets_key,
             )?;
-            let preparation = coalesced.prepare(
+            let preparation = coalesced.prepare(ImportPreparation {
                 dedup_state,
-                manager.vault.crypto.get()?,
-                ImportSearchCatalog::Disabled,
-            );
+                crypto: manager.vault.crypto.get()?,
+                catalog: ImportSearchCatalog::Disabled,
+            });
             futures_util::pin_mut!(preparation);
             let browser_task = future::sleep(Duration::ZERO);
             futures_util::pin_mut!(browser_task);

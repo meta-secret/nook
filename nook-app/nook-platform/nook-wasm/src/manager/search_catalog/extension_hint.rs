@@ -6,8 +6,9 @@ use nook_core::{
     DeviceId, DevicePublicKey, DeviceSigningPublicKey, EncodedSearchCatalogHint,
     EncryptedSearchCatalogBucket, EventGraphDeviceAccess, EventGraphDeviceAccessRequest, EventId,
     ImportedSearchCatalogRow, ImportedSearchCatalogRows, SECRET_SEARCH_CATALOG_BUCKET_COUNT,
-    SearchCatalogBucketPayload, SearchCatalogHintContext, SearchCatalogHintSignRequest,
-    SecretSearchCatalog, SignedSearchCatalogHint, StoreId, SymmetricKey, VaultType,
+    SearchCatalogBucketPayload, SearchCatalogHintAdmitRequest, SearchCatalogHintContext,
+    SearchCatalogHintSignRequest, SecretSearchCatalog, SignedSearchCatalogHint, StoreId,
+    SymmetricKey, VaultType,
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use tsify::Tsify;
@@ -157,13 +158,13 @@ impl NookVaultManager {
                 "Catalog grant was not current.".to_owned(),
             ));
         }
-        let buckets = SignedSearchCatalogHint::admit(
-            &encoded,
-            SearchCatalogHintContext {
+        let buckets = SignedSearchCatalogHint::admit(SearchCatalogHintAdmitRequest {
+            encoded: &encoded,
+            context: SearchCatalogHintContext {
                 store_id: &request.vault_store_id,
                 graph: &graph,
             },
-        )?;
+        })?;
         NookDatabase::seed_secret_search_catalog_if_empty(SeedSecretSearchCatalogRequest {
             store_id: &request.vault_store_id,
             buckets: &buckets,
@@ -190,11 +191,14 @@ impl NookVaultManager {
         };
         let store = NookDatabase::load_local_event_store(store_id.as_str()).await?;
         let graph = store.load_graph(store_id.as_str())?;
-        let context = SearchCatalogHintContext {
-            store_id,
-            graph: &graph,
+        let admission = SearchCatalogHintAdmitRequest {
+            encoded,
+            context: SearchCatalogHintContext {
+                store_id,
+                graph: &graph,
+            },
         };
-        if SignedSearchCatalogHint::admit(encoded, context).is_err() {
+        if SignedSearchCatalogHint::admit(admission).is_err() {
             return Ok(NookEncryptedSearchCatalogHint::Absent);
         }
         Ok(NookEncryptedSearchCatalogHint::Sealed {

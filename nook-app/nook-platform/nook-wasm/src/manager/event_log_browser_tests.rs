@@ -731,13 +731,14 @@ async fn invalid_encrypted_catalog_keeps_signed_extension_update_receipt() -> an
     });
     let update = js_sys::JSON::parse(&serde_json::to_string(&update)?)
         .map_err(|_| anyhow::anyhow!("construct typed event update fixture"))?;
-    let update = Ts::<NookExtensionLocalEventLogUpdate>::new_unchecked(update);
     let expected_count = fixture.records.len();
-    let status = replacement
-        .import_extension_local_event_log_update_js(
+    let update = NookExternalEventLogRecords(fixture.records)
+        .with_local_update(&Ts::<NookExtensionLocalEventLogUpdate>::new_unchecked(
             update,
-            NookExternalEventLogRecords(fixture.records),
-        )
+        ))
+        .map_err(|error| anyhow::anyhow!("decode typed event update fixture: {error:?}"))?;
+    let status = replacement
+        .import_extension_local_event_log_update_js(update)
         .await
         .and_then(|status| status.to_object())
         .map_err(|error| anyhow::anyhow!("signed event update should be admitted: {error:?}"))?

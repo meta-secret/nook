@@ -24,6 +24,11 @@ type ImportVersions = HashMap<
     nook_core::SecretFingerprint,
     Vec<(nook_core::StoredSecretRecord, nook_core::SecretFingerprint)>,
 >;
+type ImportDedupState = Vec<(
+    nook_core::StoredSecretRecord,
+    nook_core::SecretFingerprint,
+    nook_core::SecretFingerprint,
+)>;
 
 pub(super) struct CoalescedSecretImport<'a> {
     items: Vec<SecretValue>,
@@ -35,6 +40,21 @@ pub(super) struct PreparedSecretImport {
     pub(super) operations: Vec<VaultOperation>,
     pub(super) catalog: ImportSearchCatalog,
     pub(super) skipped_duplicates: usize,
+}
+
+pub(super) struct ImportPreparation<'a> {
+    pub(super) dedup_state: ImportDedupState,
+    pub(super) crypto: &'a nook_core::VaultCrypto,
+    pub(super) catalog: ImportSearchCatalog,
+}
+
+struct ImportItemReconciliation<'a> {
+    value: SecretValue,
+    existing_by_identity: &'a ImportVersions,
+    seen_versions: &'a mut HashSet<nook_core::SecretFingerprint>,
+    crypto: &'a nook_core::VaultCrypto,
+    secrets_key: &'a SymmetricKey,
+    catalog: &'a mut ImportSearchCatalog,
 }
 
 pub(super) enum ImportSearchCatalog {
@@ -117,13 +137,16 @@ impl<'a> CoalescedSecretImport<'a> {
     }
 
     fn reconcile_import_item(
-        mut value: nook_core::SecretValue,
-        existing_by_identity: &ImportVersions,
-        seen_versions: &mut HashSet<nook_core::SecretFingerprint>,
-        crypto: &nook_core::VaultCrypto,
-        secrets_key: &nook_core::SymmetricKey,
-        catalog: &mut ImportSearchCatalog,
+        request: ImportItemReconciliation<'_>,
     ) -> Result<ImportItemOutcome, NookError> {
+        let ImportItemReconciliation {
+            mut value,
+            existing_by_identity,
+            seen_versions,
+            crypto,
+            secrets_key,
+            catalog,
+        } = request;
         let identity_fingerprint = value.identity_fingerprint(secrets_key)?;
         let fingerprint = value.fingerprint(secrets_key)?;
         if let Some((record, _)) =
@@ -210,14 +233,13 @@ impl<'a> CoalescedSecretImport<'a> {
 
     pub(super) async fn prepare(
         self,
-        dedup_state: Vec<(
-            nook_core::StoredSecretRecord,
-            nook_core::SecretFingerprint,
-            nook_core::SecretFingerprint,
-        )>,
-        crypto: &nook_core::VaultCrypto,
-        mut catalog: ImportSearchCatalog,
+        request: ImportPreparation<'_>,
     ) -> Result<PreparedSecretImport, NookError> {
+        let ImportPreparation {
+            dedup_state,
+            crypto,
+            mut catalog,
+        } = request;
         let existing_by_identity = Self::group_import_fingerprints(dedup_state, self.items.len());
         let mut seen_versions = existing_by_identity
             .values()
@@ -231,14 +253,14 @@ impl<'a> CoalescedSecretImport<'a> {
             // A browser task (rather than a resolved Promise) permits input and
             // painting while encrypted operations accumulate before one commit.
             BrowserImportBatchOffset(index).yield_browser_task().await;
-            match Self::reconcile_import_item(
+            match Self::reconcile_import_item(ImportItemReconciliation {
                 value,
-                &existing_by_identity,
-                &mut seen_versions,
+                existing_by_identity: &existing_by_identity,
+                seen_versions: &mut seen_versions,
                 crypto,
-                self.secrets_key,
-                &mut catalog,
-            )? {
+                secrets_key: self.secrets_key,
+                catalog: &mut catalog,
+            })? {
                 ImportItemOutcome::Duplicate => skipped_duplicates += 1,
                 ImportItemOutcome::Operation(operation) => operations.push(operation),
             }
@@ -303,15 +325,15 @@ mod tests {
 
         async fn prepare(&self, note: &str) -> Result<PreparedSecretImport, NookError> {
             CoalescedSecretImport::new(vec![Self::value(note)], &self.key)?
-                .prepare(
-                    vec![(
+                .prepare(ImportPreparation {
+                    dedup_state: vec![(
                         self.record.clone(),
                         self.identity.clone(),
                         self.version.clone(),
                     )],
-                    &self.crypto,
-                    ImportSearchCatalog::Collecting(Vec::new()),
-                )
+                    crypto: &self.crypto,
+                    catalog: ImportSearchCatalog::Collecting(Vec::new()),
+                })
                 .await
         }
     }
@@ -449,8 +471,11 @@ mod tests {
             .map(|index| ImportFixture::value(&format!("unique note {index}")))
             .collect();
         let coalesced = CoalescedSecretImport::new(items, &fixture.key)?;
-        let preparation =
-            coalesced.prepare(Vec::new(), &fixture.crypto, ImportSearchCatalog::Disabled);
+        let preparation = coalesced.prepare(ImportPreparation {
+            dedup_state: Vec::new(),
+            crypto: &fixture.crypto,
+            catalog: ImportSearchCatalog::Disabled,
+        });
         futures_util::pin_mut!(preparation);
         let task = future::sleep(Duration::ZERO);
         futures_util::pin_mut!(task);

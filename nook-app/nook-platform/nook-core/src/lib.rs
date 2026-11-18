@@ -476,9 +476,9 @@ pub use vault_search_catalog::{
     EncodedSearchCatalogHint, EncryptedSearchCatalogBucket, ImportedSearchCatalogRow,
     ImportedSearchCatalogRowSource, ImportedSearchCatalogRows, LoginAccountMetadata,
     LoginAccountUsername, LoginAccountWebsiteUrl, SECRET_SEARCH_CATALOG_BUCKET_COUNT,
-    SearchCatalogBucketPayload, SearchCatalogHintContext, SearchCatalogHintSignRequest,
-    SecretSearchCatalog, SecretSearchCatalogChangeCount, SecretSearchCatalogReconcile,
-    SignedSearchCatalogHint, SiteSecretOrigin,
+    SearchCatalogBucketPayload, SearchCatalogHintAdmitRequest, SearchCatalogHintContext,
+    SearchCatalogHintSignRequest, SecretSearchCatalog, SecretSearchCatalogChangeCount,
+    SecretSearchCatalogReconcile, SignedSearchCatalogHint, SiteSecretOrigin,
 };
 pub use vault_sentinel_genesis::{
     SentinelDeliveryNotPending, SentinelGenesisOutput, SentinelGenesisPhase,
