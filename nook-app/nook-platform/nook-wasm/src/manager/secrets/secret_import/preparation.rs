@@ -449,7 +449,8 @@ mod tests {
             .map(|index| ImportFixture::value(&format!("unique note {index}")))
             .collect();
         let coalesced = CoalescedSecretImport::new(items, &fixture.key)?;
-        let preparation = coalesced.prepare(Vec::new(), &fixture.crypto);
+        let preparation =
+            coalesced.prepare(Vec::new(), &fixture.crypto, ImportSearchCatalog::Disabled);
         futures_util::pin_mut!(preparation);
         let task = future::sleep(Duration::ZERO);
         futures_util::pin_mut!(task);

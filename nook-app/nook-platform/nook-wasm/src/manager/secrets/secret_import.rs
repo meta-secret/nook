@@ -697,7 +697,11 @@ mod secret_import_browser_tests {
                     .collect(),
                 &secrets_key,
             )?;
-            let preparation = coalesced.prepare(dedup_state, manager.vault.crypto.get()?);
+            let preparation = coalesced.prepare(
+                dedup_state,
+                manager.vault.crypto.get()?,
+                ImportSearchCatalog::Disabled,
+            );
             futures_util::pin_mut!(preparation);
             let browser_task = future::sleep(Duration::ZERO);
             futures_util::pin_mut!(browser_task);
