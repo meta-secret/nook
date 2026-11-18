@@ -1,4 +1,5 @@
-use crate::wasm_module_sources::inputs::{ModuleInputs, ModuleSource};
+use crate::wasm_module_sources::inputs::ModuleSource;
+use crate::wasm_module_sources::projects::WebWorkspace;
 pub struct RustWasmNames<'scan> {
     pub root: &'scan Path,
 }
@@ -30,7 +31,8 @@ impl RustWasmNames<'_> {
     ///
     /// Returns an error when an authored Rust source cannot be read or parsed.
     pub fn rust_wasm_callable_name_overrides(self) -> io::Result<Vec<Violation>> {
-        let Self { root } = self;
+        let workspace = WebWorkspace::at(self.root)?;
+        let root = &workspace.root;
         let source_root = root.join("nook-app");
         let mut files = Vec::new();
         RustWasmAttributes::collect_rust_files(&source_root, &mut files)?;
@@ -67,91 +69,63 @@ impl RustWasmNames<'_> {
         } = inventory;
         let mut web_files = Vec::new();
         (WebSourceInventory {
-            directory: &root.join("nook-app/nook-web"),
+            directory: &workspace.web,
             files: &mut web_files,
         })
         .collect_web_source_files()?;
-        let inputs = ModuleInputs::collect(&web_files);
-        for path in web_files {
-            let source_path = ModuleSource {
-                path: &path,
-                inputs: &inputs,
-            };
-            let source = fs::read_to_string(&path)?;
-            let lines = if path
-                .extension()
-                .is_some_and(|extension| extension == "svelte")
-            {
-                (WasmSvelteSources {
-                    source: &source,
-                    source_path: &source_path,
-                    callable_names: &callable_names,
-                    wasm_type_names: &wasm_type_names,
-                    wasm_types: &wasm_types,
-                })
-                .svelte_wasm_import_alias_lines()
-                .map_err(io::Error::other)?
-            } else if path
-                .extension()
-                .is_some_and(|extension| matches!(extension.to_str(), Some("jsx" | "tsx")))
-            {
-                RustWasmNames::tsx_wasm_import_alias_lines(
-                    &source,
-                    &source_path,
-                    1,
-                    &callable_names,
-                    &wasm_type_names,
-                    &wasm_types,
-                )
-                .map_err(io::Error::other)?
-            } else {
-                RustWasmNames::typescript_wasm_import_alias_lines_at_path(
-                    &source,
-                    &source_path,
-                    1,
-                    &callable_names,
-                    &wasm_type_names,
-                    &wasm_types,
-                )
-                .map_err(io::Error::other)?
-            };
-            let relative_path = path.strip_prefix(root).unwrap_or(&path).to_path_buf();
-            violations.extend(lines.into_iter().map(|line| Violation {
-                path: relative_path.clone(),
-                line,
-            }));
+        for project in workspace.collect(web_files)? {
+            for path in project.files {
+                let source_path = project.inputs.source(&path);
+                let source = fs::read_to_string(&path)?;
+                let lines = if path
+                    .extension()
+                    .is_some_and(|extension| extension == "svelte")
+                {
+                    (WasmSvelteSources {
+                        source: &source,
+                        source_path: &source_path,
+                        callable_names: &callable_names,
+                        wasm_type_names: &wasm_type_names,
+                        wasm_types: &wasm_types,
+                    })
+                    .svelte_wasm_import_alias_lines()
+                    .map_err(io::Error::other)?
+                } else if path
+                    .extension()
+                    .is_some_and(|extension| matches!(extension.to_str(), Some("jsx" | "tsx")))
+                {
+                    RustWasmNames::tsx_wasm_import_alias_lines(
+                        &source,
+                        &source_path,
+                        1,
+                        &callable_names,
+                        &wasm_type_names,
+                        &wasm_types,
+                    )
+                    .map_err(io::Error::other)?
+                } else {
+                    RustWasmNames::typescript_wasm_import_alias_lines_at_path(
+                        &source,
+                        &source_path,
+                        1,
+                        &callable_names,
+                        &wasm_type_names,
+                        &wasm_types,
+                    )
+                    .map_err(io::Error::other)?
+                };
+                let relative_path = path.strip_prefix(root).unwrap_or(&path).to_path_buf();
+                violations.extend(lines.into_iter().map(|line| Violation {
+                    path: relative_path.clone(),
+                    line,
+                }));
+            }
         }
 
         violations
             .sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
         violations.dedup();
         Ok(violations)
-    }
-}
-
-#[cfg(test)]
-impl RustWasmNames<'_> {
-    fn typescript_wasm_import_alias_lines(
-        source: &str,
-        first_line: usize,
-        callable_names: &HashSet<String>,
-    ) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-        let wasm_type_names = HashSet::from([
-            "NookVaultArchitecture".to_owned(),
-            "NookVaultManager".to_owned(),
-        ]);
-        let wasm_types = RustWasmNames::test_wasm_methods_by_type();
-        RustWasmNames::typescript_wasm_import_alias_lines_at_path(
-            source,
-            &ModuleSource {
-                path: Path::new("nook-app/nook-web/test.ts"),
-                inputs: &ModuleInputs::default(),
-            },
-            first_line,
-            callable_names,
-            &wasm_type_names,
-            &wasm_types,
-        )
     }
 }
 
@@ -262,37 +236,31 @@ impl RustWasmNames<'_> {
 }
 
 #[cfg(test)]
-impl RustWasmNames<'_> {
-    fn test_wasm_methods_by_type() -> WasmTypeInventory {
-        WasmTypeInventory {
-            methods: HashMap::from([
-                (
-                    "NookVaultManager".to_owned(),
-                    HashSet::from(["connect".to_owned(), "generate_secret_id".to_owned()]),
-                ),
-                (
-                    "NookVaultArchitecture".to_owned(),
-                    HashSet::from(["simple".to_owned()]),
-                ),
-            ]),
-            returns: HashMap::new(),
-            free_returns: HashMap::new(),
-        }
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use std::collections::HashSet;
 
-    use super::RustWasmNames;
+    use super::{ModuleSource, RustWasmNames, WasmTypeInventory};
+    use crate::wasm_module_sources::inputs::ModuleInputs;
 
     #[test]
-    fn rejects_direct_typescript_alias() -> Result<(), tree_sitter::LanguageError> {
+    fn rejects_direct_typescript_alias() -> anyhow::Result<()> {
         let source = "import { generate_secret_id as generateSecretId } from \"$app-wasm\";";
         let names = HashSet::from(["generate_secret_id".to_owned()]);
+        let checkout = tempfile::tempdir()?;
+        let inputs = ModuleInputs::for_directory(checkout.path())?;
+        let path = checkout.path().canonicalize()?.join("consumer.ts");
         assert_eq!(
-            RustWasmNames::typescript_wasm_import_alias_lines(source, 1, &names)?,
+            RustWasmNames::typescript_wasm_import_alias_lines_at_path(
+                source,
+                &ModuleSource {
+                    path: &path,
+                    inputs: &inputs
+                },
+                1,
+                &names,
+                &HashSet::new(),
+                &WasmTypeInventory::default(),
+            )?,
             vec![1]
         );
         Ok(())

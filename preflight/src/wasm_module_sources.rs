@@ -1,4 +1,5 @@
 pub(crate) mod inputs;
+pub(crate) mod projects;
 use crate::javascript_literals::JavaScriptLiteralFailure;
 use inputs::ModuleSource;
 mod traversal;
@@ -9,25 +10,20 @@ pub struct WasmModuleSources<'scan> {
 }
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
-use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
 
 use crate::javascript_literals::JavaScriptLiteral;
 use crate::javascript_scopes::ScopedBinding;
 
-const WASM_MODULE_ALIASES: &[&str] = &[
-    "$app-wasm",
-    "$lib/nook",
-    "$lib/auth/oauth-origin",
-    "$lib/auth/providers",
-    "$lib/vault/architecture-model",
-    "nook-wasm",
+const VAULT_WASM_PATH: &str = "nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm";
+
+const GENERATED_WASM_PATHS: &[&str] = &[
+    VAULT_WASM_PATH,
+    "nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm",
 ];
 
-const WASM_MODULE_PATHS: &[&str] = &[
-    "nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm",
-    "nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm",
+const WASM_FACADE_PATHS: &[&str] = &[
     "nook-web-shared/src/vault-app/lib/nook",
     "nook-web-shared/src/vault-app/lib/auth/oauth-origin",
     "nook-web-shared/src/vault-app/lib/auth/providers",
