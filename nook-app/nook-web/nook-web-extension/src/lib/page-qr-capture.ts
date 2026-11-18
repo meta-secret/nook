@@ -12,6 +12,7 @@ import {
   sendCompanionWasmRuntimeMessage,
 } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-transport'
 import { Effect, Exit, Schema } from 'effect'
+import type { AuthenticationMutationBatch } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import {
   QrPictureCaptureKind,
   QrMediaKind,
@@ -84,6 +85,10 @@ type InstructionCandidate = {
 
 /** Instruction candidates in the order their copy reads them. */
 type InstructionCandidates = InstructionCandidate[]
+type InstructionCandidateMutation = {
+  candidate: InstructionCandidate
+  targets: ReadonlySet<Node>
+}
 
 /** The visible QR media collected for one observation or trusted decode. */
 type VisibleQrMedia = QrMedia[]
@@ -675,21 +680,51 @@ class PageQrCapture {
       )
   }
 
-  authenticationAuthenticatorSetupMutationRequiresScan(
-    record: MutationRecord,
+  authenticationAuthenticatorSetupMutationsRequireScan(
+    records: AuthenticationMutationBatch,
   ): boolean {
-    if (record.type !== 'childList' && record.type !== 'characterData')
-      return false
+    const targets = new Set<Node>()
+    for (const record of records) {
+      switch (record.type) {
+        case 'childList':
+        case 'characterData':
+          targets.add(record.target)
+          break
+        case 'attributes':
+          break
+      }
+    }
+    switch (targets.size) {
+      case 0:
+        return false
+      default:
+        break
+    }
     // Only candidates holding the mutated node need the visibility check.
     return this.setupInstructionCandidateGroups().some((candidates) =>
-      candidates
-        .filter((candidate) => candidate.element.contains(record.target))
-        .some(
-          (candidate) =>
-            this.instructionCandidateCapture(candidate) ===
-            InstructionElementCapture.Visible,
-        ),
+      candidates.some((candidate) => {
+        const mutation: InstructionCandidateMutation = { candidate, targets }
+        return this.instructionCandidateWasMutated(mutation)
+      }),
     )
+  }
+
+  private instructionCandidateWasMutated({
+    candidate,
+    targets,
+  }: InstructionCandidateMutation): boolean {
+    for (const target of targets) {
+      switch (candidate.element.contains(target)) {
+        case true:
+          return (
+            this.instructionCandidateCapture(candidate) ===
+            InstructionElementCapture.Visible
+          )
+        case false:
+          break
+      }
+    }
+    return false
   }
 
   /** Each QR's instruction candidates, or each manual-key scope's without QR media. */

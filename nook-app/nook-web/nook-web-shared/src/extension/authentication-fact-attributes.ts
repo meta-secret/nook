@@ -58,6 +58,8 @@ const authenticationFactElementSelector =
 const authenticationFactNestedScopeSelector =
   'a, button, input, label, legend, select, textarea, [role="button"], [data-nook-passkey-control]';
 
+export type AuthenticationMutationBatch = readonly MutationRecord[];
+
 export type AuthenticationFactMutation = {
   type: MutationRecord["type"];
   target: Node;
@@ -68,6 +70,12 @@ export type AuthenticationFactMutation = {
 type LabelledAuthenticationControlDependency = {
   element: Element;
   previousId: string | false;
+  referencedIdsByDocument?: Map<Document, Set<string>>;
+};
+
+type AuthenticationLabelMutation = {
+  mutation: MutationRecord;
+  referencedIdsByDocument: Map<Document, Set<string>>;
 };
 
 export const AUTHENTICATION_SUBMIT_VALUE_SOURCE =
@@ -119,34 +127,75 @@ class AuthenticationFactObserver {
   private elementLabelsAuthenticationControl({
     element,
     previousId,
+    referencedIdsByDocument,
   }: LabelledAuthenticationControlDependency): boolean {
-    const referencedIds = new Set<string>();
-    if (previousId) referencedIds.add(previousId);
+    const changedIds = new Set<string>();
+    if (previousId) changedIds.add(previousId);
     let labelElement: Element | false = element;
     while (labelElement) {
-      if (labelElement.id) referencedIds.add(labelElement.id);
+      if (labelElement.id) changedIds.add(labelElement.id);
       labelElement = ((v) => (v ? v : false))(labelElement.parentElement);
     }
     for (const labelledDescendant of element.querySelectorAll<HTMLElement>(
       "[id]",
     )) {
-      referencedIds.add(labelledDescendant.id);
+      changedIds.add(labelledDescendant.id);
     }
-    if (referencedIds.size === 0) return false;
-    return Array.from(
-      element.ownerDocument.querySelectorAll<HTMLElement>(
-        authenticationFactLabelledControlSelector,
-      ),
-    ).some((control) =>
-      ((v) => (v ? v : ""))(control.getAttribute("aria-labelledby"))
-        .split(/\s+/u)
-        .some((id) => referencedIds.has(id)),
-    );
+    switch (changedIds.size) {
+      case 0:
+        return false;
+      default:
+        break;
+    }
+    const document = element.ownerDocument;
+    const indexedIds = referencedIdsByDocument?.get(document);
+    switch (true) {
+      case indexedIds instanceof Set:
+        return [...changedIds].some((id) => indexedIds.has(id));
+      case true:
+      default:
+        break;
+    }
+    const referencedIds = this.labelledAuthenticationControlIds(document);
+    referencedIdsByDocument?.set(document, referencedIds);
+    return [...changedIds].some((id) => referencedIds.has(id));
   }
 
-  authenticationFactMutationTouchesLabelDependency(
-    mutation: MutationRecord,
+  private labelledAuthenticationControlIds(document: Document): Set<string> {
+    const ids = new Set<string>();
+    for (const control of document.querySelectorAll(
+      authenticationFactLabelledControlSelector,
+    )) {
+      const labelledBy = control.getAttribute("aria-labelledby");
+      switch (true) {
+        case typeof labelledBy === "string":
+          for (const id of labelledBy.split(/\s+/u)) ids.add(id);
+          break;
+        case true:
+        default:
+          break;
+      }
+    }
+    return ids;
+  }
+
+  authenticationFactMutationsTouchLabelDependency(
+    mutations: AuthenticationMutationBatch,
   ): boolean {
+    const referencedIdsByDocument = new Map<Document, Set<string>>();
+    return mutations.some((mutation) => {
+      const request: AuthenticationLabelMutation = {
+        mutation,
+        referencedIdsByDocument,
+      };
+      return this.authenticationFactMutationTouchesLabelDependency(request);
+    });
+  }
+
+  private authenticationFactMutationTouchesLabelDependency({
+    mutation,
+    referencedIdsByDocument,
+  }: AuthenticationLabelMutation): boolean {
     const elements = new Set<Element>();
     const includeNode = (node: Node): void => {
       if (node instanceof Element) elements.add(node);
@@ -168,6 +217,7 @@ class AuthenticationFactObserver {
       const dependency: LabelledAuthenticationControlDependency = {
         element,
         previousId,
+        referencedIdsByDocument,
       };
       return this.elementLabelsAuthenticationControl(dependency);
     });

@@ -567,21 +567,25 @@ describe('authenticator setup dialogs', () => {
     expect(dialogRecords.length).toBeGreaterThan(0)
     for (const record of dialogRecords) {
       expect(
-        pageQrCapture.authenticationAuthenticatorSetupMutationRequiresScan(
+        pageQrCapture.authenticationAuthenticatorSetupMutationsRequireScan([
           record,
-        ),
+        ]),
       ).toBe(true)
     }
     unrelated.textContent = 'Recent sign-in activity'
     const unrelatedRecords = observer.takeRecords()
     expect(unrelatedRecords.length).toBeGreaterThan(0)
-    for (const record of unrelatedRecords) {
-      expect(
-        pageQrCapture.authenticationAuthenticatorSetupMutationRequiresScan(
-          record,
-        ),
-      ).toBe(false)
-    }
+    expect(
+      pageQrCapture.authenticationAuthenticatorSetupMutationsRequireScan(
+        unrelatedRecords,
+      ),
+    ).toBe(false)
+    expect(
+      pageQrCapture.authenticationAuthenticatorSetupMutationsRequireScan([
+        ...unrelatedRecords,
+        ...dialogRecords,
+      ]),
+    ).toBe(true)
     observer.disconnect()
   })
 

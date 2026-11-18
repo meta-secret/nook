@@ -1,4 +1,5 @@
 import { semanticSubmitControlSelector } from '../../../../nook-web-shared/src/extension/authentication-control-selectors'
+import type { AuthenticationMutationBatch } from '../../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import {
   authenticationSubmissionControls,
   AuthenticationSubmissionDestination,
@@ -488,30 +489,70 @@ export class LoginSubmissionDomSensor extends AuthenticationInputSurface {
     }
   }
 
-  rememberPasswordMutations(mutations: readonly MutationRecord[]): void {
-    for (const mutation of mutations) this.rememberPasswordMutation(mutation)
-    this.rememberPasswordFields()
+  rememberPasswordMutations(mutations: AuthenticationMutationBatch): void {
+    for (const mutation of mutations) {
+      switch (mutation.type) {
+        case 'attributes':
+          this.rememberPasswordAttributeMutation(mutation)
+          break
+        case 'childList':
+          for (const node of mutation.addedNodes) {
+            this.rememberAddedPasswordFields(node)
+          }
+          break
+        case 'characterData':
+          break
+      }
+    }
   }
 
-  private rememberPasswordMutation(mutation: MutationRecord): void {
-    switch (
-      mutation.type === 'attributes' &&
-      mutation.attributeName === 'type' &&
-      mutation.oldValue === 'password'
-    ) {
-      case false:
+  private rememberAddedPasswordFields(node: Node): void {
+    switch (true) {
+      case node instanceof HTMLInputElement:
+        this.rememberCurrentPasswordField(node)
         return
+      case node instanceof Element:
+        for (const field of node.querySelectorAll<HTMLInputElement>(
+          'input[type="password"]',
+        )) {
+          this.passwordIdentities.set(field, this.fieldIdentity(field))
+        }
+        break
       case true:
+      default:
         break
     }
+  }
+
+  private rememberPasswordAttributeMutation({
+    target,
+    attributeName,
+    oldValue,
+  }: MutationRecord): void {
     switch (true) {
-      case mutation.target instanceof HTMLInputElement:
-        this.passwordIdentities.set(
-          mutation.target,
-          this.fieldIdentity(mutation.target),
-        )
+      case target instanceof HTMLInputElement &&
+        attributeName === 'type' &&
+        oldValue?.toLowerCase() === 'password':
+        this.passwordIdentities.set(target, this.fieldIdentity(target))
+        break
+      case target instanceof HTMLInputElement &&
+        (attributeName === 'type' ||
+          attributeName === 'id' ||
+          attributeName === 'name' ||
+          attributeName === 'autocomplete'):
+        this.rememberCurrentPasswordField(target)
         break
       case true:
+      default:
+        break
+    }
+  }
+
+  private rememberCurrentPasswordField(field: HTMLInputElement): void {
+    switch (field.type) {
+      case 'password':
+        this.passwordIdentities.set(field, this.fieldIdentity(field))
+        break
       default:
         break
     }

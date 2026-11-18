@@ -8,6 +8,7 @@ import {
   AUTHENTICATION_FACT_SCAN_DEBOUNCE_MS,
   authenticationFactObserverOptions,
   authenticationFactObserver,
+  type AuthenticationMutationBatch,
 } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import {
   FocusedSurfaceKind,
@@ -76,12 +77,14 @@ import {
   SavePageWatchKind,
   ScanScheduleKind,
   AuthenticationScanValidity,
+  AuthenticatorPickerKind,
+  LoginPickerKind,
   WidgetHostKind,
   WidgetCredentialActuation,
   WidgetWorkflowKeyKind,
   WidgetWorkflowRootKind,
-  type AuthenticationScanMutationBatch,
   saveOfferState,
+  pickerState,
   scanState,
   widgetState,
 } from './autofill/state'
@@ -103,8 +106,6 @@ enum AuthenticationScanOutcome {
 type AuthenticationScanRenderLifecycleRequest = {
   readonly scanState: typeof scanState
 }
-
-type AuthenticationMutationRecords = MutationRecord[]
 
 /** Owns trusted recognition of Namecheap's same-document Sign in drawer control. */
 class NamecheapLoginDrawerActivation {
@@ -548,7 +549,7 @@ export class AuthenticationScanRenderLifecycle {
     )
   }
 
-  schedule(mutations?: AuthenticationScanMutationBatch): void {
+  schedule(mutations?: AuthenticationMutationBatch): void {
     const { scanState } = this.request
     if (
       Array.isArray(mutations) &&
@@ -575,7 +576,7 @@ export class AuthenticationScanRenderLifecycle {
     )
   }
 
-  handleMutations(records: AuthenticationMutationRecords): void {
+  handleMutations(records: AuthenticationMutationBatch): void {
     if (widgetState.host.kind === WidgetHostKind.Attached) {
       const mountedHost = widgetState.host.mountedElement
       const mountedHostWasRemoved = records.some(
@@ -612,11 +613,22 @@ export class AuthenticationScanRenderLifecycle {
       )
     if (!impact.shouldScheduleScan) return
     this.request.scanState.invalidatePendingScan()
-    if (passwordFieldDiscovery.pageHasManualCheckpoint(document)) {
-      this.invalidateRenderedAuthenticationAction()
-      removeScannedWidget()
-      this.schedule()
-      return
+    // Immediate checkpoint detection protects a live action. Idle pages can
+    // read checkpoint evidence with the next scheduled discovery pass.
+    switch (
+      (mountedHost !== false ||
+        widgetState.busy ||
+        pickerState.authenticator.kind === AuthenticatorPickerKind.Open ||
+        pickerState.login.kind === LoginPickerKind.Open) &&
+      passwordFieldDiscovery.pageHasManualCheckpoint(document)
+    ) {
+      case true:
+        this.invalidateRenderedAuthenticationAction()
+        removeScannedWidget()
+        this.schedule()
+        return
+      case false:
+        break
     }
     // Filling may synchronously schedule a framework update that enables the
     // observed advance control. Keep the mount through that update; the action

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { PasswordFormScopeKind } from '../../../../nook-web-shared/src/extension/password-form-fields'
 import {
@@ -117,10 +117,56 @@ function observation(
 }
 
 afterEach(() => {
+  vi.restoreAllMocks()
   document.body.replaceChildren()
 })
 
 describe('authentication surface mutation filtering', () => {
+  test('checks document-wide dependencies once for a burst of unrelated text updates', () => {
+    document.body.innerHTML = `
+      <button aria-labelledby="control-label">Browse</button>
+      <span id="control-label">Browse videos</span>
+    `
+    const feed = document.createElement('main')
+    feed.id = 'feed'
+    document.body.prepend(feed)
+    const records: MutationRecord[] = []
+    for (let update = 0; update < 64; update += 1) {
+      const tile = document.createElement('div')
+      tile.append(document.createElement('img'))
+      const counter = document.createElement('span')
+      counter.id = `counter-${update}`
+      const counterValue = document.createElement('span')
+      const copy = document.createTextNode('Video progress')
+      counterValue.append(copy)
+      counter.append(counterValue)
+      tile.append(counter)
+      feed.append(tile)
+      const mutation: TestMutationRecordState = {
+        type: 'characterData',
+        target: copy,
+      }
+      records.push(new TestMutationRecord(mutation))
+      counter.style.opacity = '0.5'
+      records.push(attributeMutation(counter))
+    }
+    const queries = vi.spyOn(document, 'querySelectorAll')
+    const request: Parameters<
+      typeof authenticationSurfaceObservation.authenticationMutationImpact
+    >[0] = { records, mountedHost: false, renderedWorkflow: false }
+    expect(
+      authenticationSurfaceObservation.authenticationMutationImpact(request),
+    ).toEqual({
+      shouldRemountRenderedWorkflow: false,
+      shouldScheduleScan: false,
+    })
+    // Happy DOM resolves styles with its own document query.
+    const dependencyQueries = queries.mock.calls.filter(
+      ([selector]) => selector !== 'style,link[rel="stylesheet"]',
+    )
+    expect(dependencyQueries.length).toBeLessThanOrEqual(5)
+  })
+
   test('retains the panel for identical adornment writes but invalidates a hidden input', () => {
     const form = document.createElement('form')
     const input = document.createElement('input')
@@ -370,18 +416,32 @@ describe('authentication surface mutation filtering', () => {
   test('rescans controls and forms without treating prose as auth evidence', () => {
     const form = document.createElement('form')
     form.innerHTML = '<input type="password" />'
+    const formInsertion: Parameters<
+      typeof authenticationSurfaceObservation.authenticationMutationImpact
+    >[0] = {
+      records: [childListMutation(document.body, [form])],
+      mountedHost: false,
+      renderedWorkflow: false,
+    }
     expect(
-      authenticationSurfaceObservation.mutationCanChangeAuthenticationWorkflows(
-        childListMutation(document.body, [form]),
-      ),
+      authenticationSurfaceObservation.authenticationMutationImpact(
+        formInsertion,
+      ).shouldScheduleScan,
     ).toBe(true)
 
     const prose = document.createElement('div')
     prose.textContent = 'Marketing copy changed'
+    const proseInsertion: Parameters<
+      typeof authenticationSurfaceObservation.authenticationMutationImpact
+    >[0] = {
+      records: [childListMutation(document.body, [prose])],
+      mountedHost: false,
+      renderedWorkflow: false,
+    }
     expect(
-      authenticationSurfaceObservation.mutationCanChangeAuthenticationWorkflows(
-        childListMutation(document.body, [prose]),
-      ),
+      authenticationSurfaceObservation.authenticationMutationImpact(
+        proseInsertion,
+      ).shouldScheduleScan,
     ).toBe(false)
   })
 

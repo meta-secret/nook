@@ -1,5 +1,8 @@
 /* eslint-disable nook-typed-api/no-raw-object-arguments -- DOM scope discovery retains browser-owned callback shapes. */
-import { AuthenticationInputSurface } from "./authentication-input-surface";
+import {
+  AuthenticationInputSurface,
+  type RenderedElementProbe,
+} from "./authentication-input-surface";
 import { CompanionWasmLabelKind } from "./companion-wasm-runtime-messages";
 import { AuthenticationContainerIdentity } from "./password-form-container-identity";
 import {
@@ -24,7 +27,11 @@ export type UnownedAuthContainerRequest = {
   field: HTMLElement;
   root: ParentNode;
 };
-type RenderedCheckpointTextRequest = { node: Node; text: string[] };
+type RenderedCheckpointTextRequest = {
+  node: Node;
+  text: string[];
+  isRendered: RenderedElementProbe;
+};
 
 export type AutocompleteTokenMatchRequest = {
   field: HTMLInputElement;
@@ -451,6 +458,13 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
       root.nodeType === 9
         ? root
         : ((v) => (v ? v : this.browser.document))(root.ownerDocument);
+    return (
+      this.documentHasExplicitManualCheckpoint(doc) ||
+      this.scopeHasManualCheckpoint(root)
+    );
+  }
+
+  documentHasExplicitManualCheckpoint(doc: ParentNode): boolean {
     switch (
       Array.from(
         doc.querySelectorAll<HTMLElement>("[data-nook-manual-checkpoint]"),
@@ -463,20 +477,19 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
     }
     const checkpointSelector =
       'iframe[src*="recaptcha" i], iframe[src*="hcaptcha" i], iframe[src*="turnstile" i], iframe[title*="captcha" i]';
-    if (
-      Array.from(doc.querySelectorAll(checkpointSelector)).some(
-        (checkpoint) => {
-          const htmlElement = checkpoint.ownerDocument.defaultView?.HTMLElement;
-          return (
-            htmlElement &&
-            checkpoint instanceof htmlElement &&
-            this.isRenderedElement(checkpoint)
-          );
-        },
-      )
-    ) {
-      return true;
-    }
+    return Array.from(doc.querySelectorAll(checkpointSelector)).some(
+      (checkpoint) => {
+        const htmlElement = checkpoint.ownerDocument.defaultView?.HTMLElement;
+        return (
+          htmlElement &&
+          checkpoint instanceof htmlElement &&
+          this.isRenderedElement(checkpoint)
+        );
+      },
+    );
+  }
+
+  scopeHasManualCheckpoint(root: ParentNode): boolean {
     if (
       Array.from(
         root.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
@@ -506,9 +519,10 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
       this.browser.NodeFilter.SHOW_TEXT,
     );
     const text: string[] = [];
+    const isRendered = this.observeElementRendering();
     let node = walker.nextNode();
     while (node) {
-      const request: RenderedCheckpointTextRequest = { node, text };
+      const request: RenderedCheckpointTextRequest = { node, text, isRendered };
       this.appendRenderedCheckpointText(request);
       node = walker.nextNode();
     }
@@ -518,6 +532,7 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
   private appendRenderedCheckpointText({
     node,
     text,
+    isRendered,
   }: RenderedCheckpointTextRequest): void {
     const parent = node.parentElement;
     switch (true) {
@@ -527,10 +542,7 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
       default:
         return;
     }
-    switch (
-      !parent.closest("script, style, template") &&
-      this.isRenderedElement(parent)
-    ) {
+    switch (!parent.closest("script, style, template") && isRendered(parent)) {
       case false:
         return;
       case true:

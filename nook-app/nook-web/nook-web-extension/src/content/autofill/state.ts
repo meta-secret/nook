@@ -1,4 +1,5 @@
 import type { LoginSaveOutcomeSensor } from './login-save-outcome-sensor'
+import type { AuthenticationMutationBatch } from '../../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import type { AuthenticationPageObservationFacts } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { InlineLoginPickerSurface } from './inline-login-picker'
 import { GoogleLoginDocumentContinuation } from './google-login-continuation'
@@ -49,7 +50,6 @@ export enum ScanScheduleKind {
 export type ScanSchedule =
   | { kind: ScanScheduleKind.Idle }
   | { kind: ScanScheduleKind.Scheduled; timer: number }
-export type AuthenticationScanMutationBatch = MutationRecord[]
 export enum WidgetHostKind {
   Detached = 'detached',
   Attached = 'attached',
@@ -167,7 +167,7 @@ class ScanState {
   invalidatePendingScan(): void {
     this.sequence += 1
   }
-  schedule: (mutations?: AuthenticationScanMutationBatch) => void = () => {}
+  schedule: (mutations?: AuthenticationMutationBatch) => void = () => {}
   get scheduleState(): ScanSchedule {
     return this.currentSchedule
   }

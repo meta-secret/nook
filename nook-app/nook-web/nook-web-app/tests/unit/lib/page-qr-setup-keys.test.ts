@@ -114,20 +114,16 @@ describe('manual setup-key views without a QR', () => {
     const dialogRecords = observer.takeRecords()
     expect(dialogRecords.length).toBeGreaterThan(0)
     expect(
-      dialogRecords.some((record) =>
-        pageQrCapture.authenticationAuthenticatorSetupMutationRequiresScan(
-          record,
-        ),
+      pageQrCapture.authenticationAuthenticatorSetupMutationsRequireScan(
+        dialogRecords,
       ),
     ).toBe(true)
     pageProse.textContent = 'Recent sign-in activity'
-    for (const record of observer.takeRecords()) {
-      expect(
-        pageQrCapture.authenticationAuthenticatorSetupMutationRequiresScan(
-          record,
-        ),
-      ).toBe(false)
-    }
+    expect(
+      pageQrCapture.authenticationAuthenticatorSetupMutationsRequireScan(
+        observer.takeRecords(),
+      ),
+    ).toBe(false)
     observer.disconnect()
   })
 })
