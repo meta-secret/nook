@@ -1,3 +1,4 @@
+import { AuthenticationObservationFixture } from './authentication-observation-fixture'
 import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { Window } from 'happy-dom'
 import {
@@ -114,45 +115,18 @@ class CodePageData {
 
   /** One-time-code facts admitted by the Rust snapshot ingress. */
   static approvedFacts(): AuthenticationPageObservationFacts {
+    const observation = AuthenticationObservationFixture.empty(
+      CodePageData.pageOrigin,
+    )
+    observation.fields.oneTimeCodeFieldCount = 1
+    observation.ceremony.authenticationContext.formIdentity = 'totp'
+    observation.ceremony.authenticationContext.destinationIdentity =
+      '/twofa/totp/'
     const admission = AuthenticationWorkflowSnapshotIngress.admit({
       type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot,
       payload: {
         origin: CodePageData.pageOrigin,
-        observations: [
-          {
-            fields: {
-              usernameFieldCount: 0,
-              currentPasswordFieldCount: 0,
-              newPasswordFieldCount: 0,
-              genericPasswordFieldCount: 0,
-              oneTimeCodeFieldCount: 1,
-              actionablePasswordFieldCount: 0,
-              readonlyPasswordFieldCount: 0,
-            },
-            ceremony: {
-              oneTimeCodeProgression: 'advance-control-required',
-              oneTimeCodeHandlerSignal: '',
-              authenticationContext: {
-                authenticationUsername: 'absent',
-                sourceOrigin: CodePageData.pageOrigin,
-                formIdentity: 'totp',
-                destinationIdentity: '/twofa/totp/',
-              },
-              manualCheckpoint: 'absent',
-              advanceControl: 'absent',
-            },
-            authenticator: {
-              authenticatorSetup: 'absent',
-              backupCodesCopy: '',
-              passkeyControl: 'absent',
-              passkeyAccountAvailability: 'unavailable',
-              matchingPasskeyAccountCount: 0,
-              detailedPasskeyControl: { kind: 'absent' },
-            },
-            credentialSubmission: { kind: 'absent' },
-            detailedAdvanceControl: { kind: 'absent' },
-          },
-        ],
+        observations: [observation],
       },
     })
     if (admission.kind !== 'accepted') throw new Error('facts fixture')

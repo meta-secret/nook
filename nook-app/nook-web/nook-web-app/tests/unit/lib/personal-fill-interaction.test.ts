@@ -48,7 +48,7 @@ import {
   type PersonalFillPageDelivery,
   type PersonalFillPageInteraction,
 } from '../../../../nook-web-extension/src/content/autofill/personal-fill-reception'
-import type { PersonalFillWidget } from '../../../../nook-web-extension/src/content/autofill/personal-fill-widget'
+import type { FocusedFieldWidget } from '../../../../nook-web-extension/src/content/autofill/focused-field-widget'
 import type { PersonalPickerFrameMount } from '../../../../nook-web-extension/src/content/autofill/personal-picker-frame'
 import { PilotVaultConnectionKind } from '../../../../nook-web-extension/src/content/autofill/widget-presentation-state'
 import {
@@ -132,7 +132,7 @@ class PersonalInteractionFixture {
   readonly release = vi.fn<() => void>()
   readonly sensor: FocusedCredentialTargetSensor
   readonly interaction: PersonalFillInteraction
-  readonly mounts: PersonalFillWidget[] = []
+  readonly mounts: FocusedFieldWidget[] = []
   readonly groups: (keyof typeof PersonalFieldGroup)[] = []
   readonly pickers: PersonalPickerFrameMount[] = []
   readonly requests: ExtensionRuntimeRequest[] = []
@@ -191,7 +191,7 @@ class PersonalInteractionFixture {
       transport: authenticationRuntimeTransport,
       ui: workflowUi,
       mount: (mount) => {
-        const shell: PersonalFillWidget['shell'] = {
+        const shell: FocusedFieldWidget['shell'] = {
           host: document.createElement('aside'),
           panel: document.createElement('div'),
           toolbar: document.createElement('div'),

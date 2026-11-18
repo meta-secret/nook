@@ -1,3 +1,4 @@
+import { RuntimeLoginSaveCaptureFixture } from './runtime-login-save-capture-fixture'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import { afterEach, beforeAll, describe, expect, test } from 'bun:test'
 import {
@@ -107,45 +108,8 @@ class PendingLoginSaveFixture {
       },
     ]
     const values = ['new-user', 'new-password']
-    const intent: LoginSavePlanRequest['payload']['capture']['intent'] = {
-      event: 'FormSubmit',
-      trust: 'Trusted',
-      target: { kind: 'CredentialScope' },
-      control_label: 'Sign in',
-      context: {
-        fields: {
-          usernameFieldCount: 0,
-          currentPasswordFieldCount: 0,
-          newPasswordFieldCount: 0,
-          genericPasswordFieldCount: 0,
-          oneTimeCodeFieldCount: 0,
-          actionablePasswordFieldCount: 0,
-          readonlyPasswordFieldCount: 0,
-        },
-        ceremony: {
-          oneTimeCodeProgression: 'advance-control-required',
-          oneTimeCodeHandlerSignal: '',
-          authenticationContext: {
-            authenticationUsername: 'absent',
-            sourceOrigin: this.scope.origin,
-            formIdentity: 'login',
-            destinationIdentity: '/login',
-          },
-          manualCheckpoint: 'absent',
-          advanceControl: 'absent',
-        },
-        authenticator: {
-          authenticatorSetup: 'absent',
-          backupCodesCopy: '',
-          passkeyControl: 'absent',
-          passkeyAccountAvailability: 'unavailable',
-          matchingPasskeyAccountCount: 0,
-          detailedPasskeyControl: { kind: 'absent' },
-        },
-        credentialSubmission: { kind: 'absent' },
-        detailedAdvanceControl: { kind: 'absent' },
-      },
-    }
+    const intent: LoginSavePlanRequest['payload']['capture']['intent'] =
+      RuntimeLoginSaveCaptureFixture.intent(this.scope.origin)
     switch (mode) {
       case LoginSaveFixtureCapture.Credentials:
         break
