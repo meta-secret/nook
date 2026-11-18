@@ -1,6 +1,6 @@
 import type { LoginCredentials } from '../../../../nook-web-shared/src/extension/password-forms'
 import type { LoginSubmissionIntent } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { Schema } from 'effect'
 import {
   LoginSubmissionDomObservationKind,
@@ -17,6 +17,10 @@ class LoginSubmissionDomFixture {
   }
   constructor() {
     this.sensor.rememberPasswordFields()
+  }
+
+  rememberPasswordMutations(records: MutationRecord[]): void {
+    this.sensor.rememberPasswordMutations(records)
   }
 
   click(selector: string): LoginSubmissionDomObservation {
@@ -60,9 +64,65 @@ type LoginSubmissionDomDispatch = {
   readonly event: Event
 }
 
-afterEach(() => document.body.replaceChildren())
+afterEach(() => {
+  vi.restoreAllMocks()
+  document.body.replaceChildren()
+})
 
 describe('submitted login DOM snapshot', () => {
+  test('does not discover document password fields again for unrelated updates', () => {
+    const updates = document.createElement('div')
+    document.body.append(updates)
+    const fixture = new LoginSubmissionDomFixture()
+    const observer = new MutationObserver(() => {})
+    const options: MutationObserverInit = { childList: true }
+    observer.observe(updates, options)
+    const queries = vi.spyOn(document, 'querySelectorAll')
+    for (let update = 0; update < 8; update += 1) {
+      updates.textContent = `Video progress ${update}`
+      fixture.rememberPasswordMutations(observer.takeRecords())
+    }
+    observer.disconnect()
+    expect(queries).not.toHaveBeenCalled()
+  })
+
+  test('remembers a dynamic password field under its latest password identity', () => {
+    const fixture = new LoginSubmissionDomFixture()
+    const observer = new MutationObserver(() => {})
+    const options: MutationObserverInit = {
+      attributes: true,
+      attributeOldValue: true,
+      childList: true,
+      subtree: true,
+    }
+    observer.observe(document.body, options)
+    document.body.innerHTML = `<form>
+      <input autocomplete="username" />
+      <input id="password" type="password" />
+    </form>`
+    const password = Schema.decodeUnknownSync(
+      Schema.instanceOf(HTMLInputElement),
+    )(document.querySelector('#password'))
+    fixture.rememberPasswordMutations(observer.takeRecords())
+    password.name = 'sign-in-field'
+    fixture.rememberPasswordMutations(observer.takeRecords())
+    password.type = 'text'
+    fixture.rememberPasswordMutations(observer.takeRecords())
+    observer.disconnect()
+
+    const observation = fixture.enter('#password')
+    switch (observation.kind) {
+      case LoginSubmissionDomObservationKind.Ignored:
+        throw new Error('expected a visible password snapshot')
+      case LoginSubmissionDomObservationKind.Observed:
+        break
+    }
+    expect(
+      observation.snapshot.captureRecord().fields[1]?.password_history,
+    ).toBe('PreviouslyPassword')
+    observation.snapshot.dispose()
+  })
+
   test('captures values before JavaScript clears and replaces form-less fields', () => {
     document.body.innerHTML = `<main><div class="login">
       <input autocomplete="username" value="submitted-user" />

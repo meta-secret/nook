@@ -451,6 +451,13 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
       root.nodeType === 9
         ? root
         : ((v) => (v ? v : this.browser.document))(root.ownerDocument);
+    return (
+      this.documentHasExplicitManualCheckpoint(doc) ||
+      this.scopeHasManualCheckpoint(root)
+    );
+  }
+
+  documentHasExplicitManualCheckpoint(doc: ParentNode): boolean {
     switch (
       Array.from(
         doc.querySelectorAll<HTMLElement>("[data-nook-manual-checkpoint]"),
@@ -463,20 +470,19 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
     }
     const checkpointSelector =
       'iframe[src*="recaptcha" i], iframe[src*="hcaptcha" i], iframe[src*="turnstile" i], iframe[title*="captcha" i]';
-    if (
-      Array.from(doc.querySelectorAll(checkpointSelector)).some(
-        (checkpoint) => {
-          const htmlElement = checkpoint.ownerDocument.defaultView?.HTMLElement;
-          return (
-            htmlElement &&
-            checkpoint instanceof htmlElement &&
-            this.isRenderedElement(checkpoint)
-          );
-        },
-      )
-    ) {
-      return true;
-    }
+    return Array.from(doc.querySelectorAll(checkpointSelector)).some(
+      (checkpoint) => {
+        const htmlElement = checkpoint.ownerDocument.defaultView?.HTMLElement;
+        return (
+          htmlElement &&
+          checkpoint instanceof htmlElement &&
+          this.isRenderedElement(checkpoint)
+        );
+      },
+    );
+  }
+
+  scopeHasManualCheckpoint(root: ParentNode): boolean {
     if (
       Array.from(
         root.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),

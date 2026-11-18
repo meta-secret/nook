@@ -140,21 +140,46 @@ class AuthenticationSurfaceObservation {
     )
   }
 
-  private mutationCanIntroduceManualCheckpoint(
-    record: MutationRecord,
+  private mutationsCanIntroduceManualCheckpoint(
+    records: readonly MutationRecord[],
   ): boolean {
-    const nodeHasManualCheckpoint = (node: Node): boolean => {
-      const root = node instanceof Element ? node : node.parentElement
-      return Boolean(
-        root && passwordFieldDiscovery.pageHasManualCheckpoint(root),
-      )
+    const scopes = new Set<Element>()
+    const addScope = (node: Node): void => {
+      switch (true) {
+        case node instanceof Element:
+          scopes.add(node)
+          break
+        case node.parentElement instanceof Element:
+          scopes.add(node.parentElement)
+          break
+        case true:
+        default:
+          break
+      }
     }
-    if (record.type === 'childList') {
-      return [...record.addedNodes, ...record.removedNodes].some(
-        nodeHasManualCheckpoint,
-      )
+    for (const record of records) {
+      switch (record.type) {
+        case 'childList':
+          record.addedNodes.forEach(addScope)
+          record.removedNodes.forEach(addScope)
+          break
+        case 'attributes':
+        case 'characterData':
+          addScope(record.target)
+          break
+      }
     }
-    return nodeHasManualCheckpoint(record.target)
+    const documents = new Set(
+      Array.from(scopes, (scope) => scope.ownerDocument),
+    )
+    return (
+      [...documents].some((document) =>
+        passwordFieldDiscovery.documentHasExplicitManualCheckpoint(document),
+      ) ||
+      [...scopes].some((scope) =>
+        passwordFieldDiscovery.scopeHasManualCheckpoint(scope),
+      )
+    )
   }
 
   mutationBelongsOnlyToMountedWidget(
@@ -371,19 +396,9 @@ class AuthenticationSurfaceObservation {
     })
   }
 
-  mutationCanChangeAuthenticationWorkflows(record: MutationRecord): boolean {
-    if (
-      pageQrCapture.authenticationAuthenticatorSetupMutationRequiresScan(record)
-    )
-      return true
-    if (
-      authenticationFactObserver.authenticationFactMutationTouchesLabelDependency(
-        record,
-      )
-    )
-      return true
-    if (this.mutationCanIntroduceManualCheckpoint(record)) return true
-    if (this.mutationTouchesAuthenticationRecoveryCopy(record)) return true
+  private mutationTouchesAuthenticationControl(
+    record: MutationRecord,
+  ): boolean {
     const containsAuthenticationControl = (node: Node): boolean =>
       node instanceof Element &&
       (node.matches(AUTHENTICATION_WORKFLOW_MUTATION_SELECTOR) ||
@@ -421,29 +436,32 @@ class AuthenticationSurfaceObservation {
       }
       return !this.mutationBelongsOnlyToMountedWidget(mountedWidgetRequest)
     })
-    const relevantMutations = pageMutations.filter((record) => {
-      if (this.mutationCanChangeAuthenticationWorkflows(record)) return true
-      if (!renderedWorkflow) return false
-      const workflowRequest: AuthenticationWorkflowMutationRequest = {
-        record,
-        workflow: renderedWorkflow,
-      }
-      return this.mutationTouchesAuthenticationWorkflow(workflowRequest)
-    })
-    const shouldRemountRenderedWorkflow = (() => {
-      const workflow = renderedWorkflow
-      if (!workflow) return false
-      return relevantMutations.some((record) => {
+    const shouldRemountRenderedWorkflow =
+      renderedWorkflow !== false &&
+      pageMutations.some((record) => {
         const workflowRequest: AuthenticationWorkflowMutationRequest = {
           record,
-          workflow,
+          workflow: renderedWorkflow,
         }
         return this.mutationTouchesAuthenticationWorkflow(workflowRequest)
       })
-    })()
+    const shouldScheduleScan =
+      shouldRemountRenderedWorkflow ||
+      pageMutations.some(
+        (record) =>
+          this.mutationTouchesAuthenticationControl(record) ||
+          this.mutationTouchesAuthenticationRecoveryCopy(record),
+      ) ||
+      authenticationFactObserver.authenticationFactMutationsTouchLabelDependency(
+        pageMutations,
+      ) ||
+      pageQrCapture.authenticationAuthenticatorSetupMutationsRequireScan(
+        pageMutations,
+      ) ||
+      this.mutationsCanIntroduceManualCheckpoint(pageMutations)
     return {
       shouldRemountRenderedWorkflow,
-      shouldScheduleScan: relevantMutations.length > 0,
+      shouldScheduleScan,
     }
   }
 

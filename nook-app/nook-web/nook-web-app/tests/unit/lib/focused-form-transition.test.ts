@@ -71,6 +71,22 @@ import { recoveryCopyObservation } from '../../../../nook-web-extension/src/lib/
 import { pageQrCapture } from '../../../../nook-web-extension/src/lib/page-qr-capture'
 import { authenticatorEnrollmentInteraction } from '../../../../nook-web-extension/src/content/enrollment-flow'
 
+test('schedules discovery without walking the page for a widget to invalidate', () => {
+  widgetState.clearRenderedWidget()
+  const lifecycle = new AuthenticationScanRenderLifecycle({ scanState })
+  const schedule = vi.spyOn(lifecycle, 'schedule').mockImplementation(() => {})
+  const checkpoint = vi.spyOn(passwordFieldDiscovery, 'pageHasManualCheckpoint')
+  const observer = new MutationObserver(() => {})
+  const options: MutationObserverInit = { childList: true }
+  observer.observe(document.body, options)
+  document.body.append(document.createElement('button'))
+  lifecycle.handleMutations(observer.takeRecords())
+  observer.disconnect()
+
+  expect(schedule).toHaveBeenCalledOnce()
+  expect(checkpoint).not.toHaveBeenCalled()
+})
+
 enum ClassificationDelivery {
   Immediate = 'immediate',
   Held = 'held',

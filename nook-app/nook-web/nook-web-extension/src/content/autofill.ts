@@ -76,12 +76,15 @@ import {
   SavePageWatchKind,
   ScanScheduleKind,
   AuthenticationScanValidity,
+  AuthenticatorPickerKind,
+  LoginPickerKind,
   WidgetHostKind,
   WidgetCredentialActuation,
   WidgetWorkflowKeyKind,
   WidgetWorkflowRootKind,
   type AuthenticationScanMutationBatch,
   saveOfferState,
+  pickerState,
   scanState,
   widgetState,
 } from './autofill/state'
@@ -612,11 +615,22 @@ export class AuthenticationScanRenderLifecycle {
       )
     if (!impact.shouldScheduleScan) return
     this.request.scanState.invalidatePendingScan()
-    if (passwordFieldDiscovery.pageHasManualCheckpoint(document)) {
-      this.invalidateRenderedAuthenticationAction()
-      removeScannedWidget()
-      this.schedule()
-      return
+    // Immediate checkpoint detection protects a live action. Idle pages can
+    // read checkpoint evidence with the next scheduled discovery pass.
+    switch (
+      (mountedHost !== false ||
+        widgetState.busy ||
+        pickerState.authenticator.kind === AuthenticatorPickerKind.Open ||
+        pickerState.login.kind === LoginPickerKind.Open) &&
+      passwordFieldDiscovery.pageHasManualCheckpoint(document)
+    ) {
+      case true:
+        this.invalidateRenderedAuthenticationAction()
+        removeScannedWidget()
+        this.schedule()
+        return
+      case false:
+        break
     }
     // Filling may synchronously schedule a framework update that enables the
     // observed advance control. Keep the mount through that update; the action
