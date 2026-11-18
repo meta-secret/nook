@@ -14,7 +14,6 @@
   import {
     ImportFileSelectionKind,
     PasswordImportFormat,
-    PasswordImportIcon,
     PasswordImportOutcomeKind,
     type ImportFileSelection,
     type PasswordImportOutcome,
@@ -22,13 +21,9 @@
 
   type CommonProps = {
     messages: PasswordImportMessageKeys
-    panelTestId: string
+    providerId: string
     fileTestId: string
-    submitTestId: string
-    errorTestId: string
-    resultTestId: string
     accept: string
-    icon: PasswordImportIcon
   }
   type Props = CommonProps &
     (
@@ -40,15 +35,12 @@
 
   let {
     messages,
-    panelTestId,
+    providerId,
     fileTestId,
-    submitTestId,
-    errorTestId,
-    resultTestId,
     accept,
-    icon,
     ...workflow
   }: Props = $props()
+  const panelTestId = $derived(`${providerId}-import-panel`)
   let selectedFile = $state<ImportFileSelection>({
     kind: ImportFileSelectionKind.NotSelected,
   })
@@ -138,7 +130,7 @@
   <Card class="gap-0 border-border/60 bg-card py-0">
     <CardContent class="space-y-4 p-4 sm:p-5">
       <div class="flex items-start gap-3">
-        {#if icon === PasswordImportIcon.Archive}
+        {#if workflow.format === PasswordImportFormat.Binary}
           <Archive class="mt-0.5 size-5 shrink-0 text-primary" />
         {:else}
           <FileSpreadsheet class="mt-0.5 size-5 shrink-0 text-primary" />
@@ -170,7 +162,7 @@
       </p>
 
       <Button
-        data-testid={submitTestId}
+        data-testid={`${providerId}-import-submit`}
         disabled={selectedFile.kind === ImportFileSelectionKind.NotSelected ||
           busy}
         onclick={() => void importFile()}
@@ -189,7 +181,7 @@
       {/if}
 
       {#if error}
-        <p class="text-sm text-destructive" data-testid={errorTestId}>
+        <p class="text-sm text-destructive" data-testid={`${providerId}-import-error`}>
           {error}
         </p>
       {/if}
@@ -197,7 +189,7 @@
       {#if result.kind === PasswordImportOutcomeKind.Completed}
         <div
           class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-foreground"
-          data-testid={resultTestId}
+          data-testid={`${providerId}-import-result`}
         >
           <p class="font-medium">
             {(() => {

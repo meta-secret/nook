@@ -14,17 +14,8 @@ export enum PasswordImportOutcomeKind {
   Completed = "completed",
 }
 
-export enum PasswordImportIcon {
-  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
-  Archive = "archive",
-  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
-  Spreadsheet = "spreadsheet",
-}
-
 export enum PasswordImportFormat {
-  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
   Text = "text",
-  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
   Binary = "binary",
 }
 
