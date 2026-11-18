@@ -167,47 +167,26 @@ export type Vault = (typeof vaults)[number]
 export type AccessGrant = (typeof accessGrants)[number]
 
 /** Owns lookup over this research identity and vault fixture catalog. */
-type IdentityVaultFixturesContext = {
-  readonly identities: typeof identities
-  readonly vaults: typeof vaults
-  readonly accessGrants: typeof accessGrants
-}
 class IdentityVaultFixtures {
-  constructor(private readonly catalog: IdentityVaultFixturesContext) {}
-
   identityById(id: string): Identity {
-    const identity = this.catalog.identities.find(
-      (candidate) => candidate.id === id,
-    )
+    const identity = identities.find((candidate) => candidate.id === id)
     if (identity) return identity
     throw new Error(`Unknown identity fixture: ${id}`)
   }
 
   vaultById(id: string): Vault {
-    const vault = this.catalog.vaults.find((candidate) => candidate.id === id)
+    const vault = vaults.find((candidate) => candidate.id === id)
     if (vault) return vault
     throw new Error(`Unknown vault fixture: ${id}`)
   }
 
   grantsForIdentity(identityId: string): AccessGrant[] {
-    return this.catalog.accessGrants.filter(
-      (grant) => grant.identityId === identityId,
-    )
+    return accessGrants.filter((grant) => grant.identityId === identityId)
   }
 
   grantsForVault(vaultId: string): AccessGrant[] {
-    return this.catalog.accessGrants.filter(
-      (grant) => grant.vaultId === vaultId,
-    )
+    return accessGrants.filter((grant) => grant.vaultId === vaultId)
   }
 }
 
-const identityVaultFixturesContext: IdentityVaultFixturesContext = {
-  identities,
-  vaults,
-  accessGrants,
-}
-
-export const identityVaultFixtures = new IdentityVaultFixtures(
-  identityVaultFixturesContext,
-)
+export const identityVaultFixtures = new IdentityVaultFixtures()
