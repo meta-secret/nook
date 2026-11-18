@@ -6,7 +6,7 @@
 //! CSV schema admission and conversion bound to the original reader.
 mod personal;
 use super::super::import_support::{
-    CsvHeader, CsvImportConversion, CsvImportReader, CsvRecordFields, ImportMetadata,
+    CsvHeaders, CsvImportConversion, CsvImportReader, CsvRecordFields, ImportMetadata,
     MAX_CSV_BYTES, SourceLabelMetadata,
 };
 use super::{DashlaneImportError, DashlaneImportPlan};
@@ -42,10 +42,9 @@ impl<'a> DashlaneCsvInput<'a> {
         let reader = CsvImportReader::new(self.text);
         let read = reader.headers()?;
         let reader = read.reader;
-        let headers = read.headers;
-        let headers = NormalizedDashlaneHeaders::from_record(&headers);
+        let headers = CsvHeaders::new(&read.headers, DashlaneImportError::MissingColumn);
         let kind = match self.selection {
-            DashlaneCsvSelection::Detect => headers.detect()?,
+            DashlaneCsvSelection::Detect => DashlaneCsvKind::detect(&headers.names)?,
             DashlaneCsvSelection::Archive(kind) => kind,
         };
         let columns = match kind {
@@ -115,61 +114,34 @@ impl DashlaneColumns {
         }
     }
 }
-struct NormalizedDashlaneHeaders {
-    values: Vec<String>,
-}
-impl NormalizedDashlaneHeaders {
-    fn from_record(headers: &StringRecord) -> Self {
-        Self {
-            values: headers
-                .iter()
-                .map(|header| CsvHeader::new(header).normalized())
-                .collect(),
-        }
-    }
-    fn required(&self, name: &'static str) -> Result<usize, DashlaneImportError> {
-        let expected = CsvHeader::new(name).normalized();
-        self.values
-            .iter()
-            .position(|header| header == &expected)
-            .ok_or(DashlaneImportError::MissingColumn(name))
-    }
-    fn optional(&self, names: &[&str]) -> CsvExportColumn {
-        let column = names.iter().find_map(|name| {
-            let expected = CsvHeader::new(name).normalized();
-            self.values.iter().position(|header| header == &expected)
-        });
-        match column {
-            Some(index) => CsvExportColumn::Exported(index),
-            None => CsvExportColumn::NotExported,
-        }
-    }
-    fn detect(&self) -> Result<DashlaneCsvKind, DashlaneImportError> {
-        if self.values.iter().any(|header| header == "username")
-            && self.values.iter().any(|header| header == "password")
+type NormalizedDashlaneHeaders = CsvHeaders<DashlaneImportError>;
+
+impl DashlaneCsvKind {
+    fn detect(names: &[String]) -> Result<Self, DashlaneImportError> {
+        if names.iter().any(|header| header == "username")
+            && names.iter().any(|header| header == "password")
         {
             return Ok(DashlaneCsvKind::Credentials);
         }
-        if self.values.first().is_some_and(|header| header == "title")
-            && self.values.get(1).is_some_and(|header| header == "note")
-            && !self.values.iter().any(|header| header == "username")
+        if names.first().is_some_and(|header| header == "title")
+            && names.get(1).is_some_and(|header| header == "note")
+            && !names.iter().any(|header| header == "username")
         {
             return Ok(DashlaneCsvKind::SecureNotes);
         }
-        if self.values.first().is_some_and(|header| header == "type")
-            && self.values.iter().any(|header| header == "number")
-            && self.values.iter().any(|header| header == "expirationdate")
+        if names.first().is_some_and(|header| header == "type")
+            && names.iter().any(|header| header == "number")
+            && names.iter().any(|header| header == "expirationdate")
         {
             return Ok(DashlaneCsvKind::Ids);
         }
-        if self.values.first().is_some_and(|header| header == "type")
-            && self.values.iter().any(|header| header == "firstname")
+        if names.first().is_some_and(|header| header == "type")
+            && names.iter().any(|header| header == "firstname")
         {
             return Ok(DashlaneCsvKind::PersonalInfo);
         }
-        if self.values.first().is_some_and(|header| header == "type")
-            && self
-                .values
+        if names.first().is_some_and(|header| header == "type")
+            && names
                 .iter()
                 .any(|header| header == "accountname" || header == "ccnumber")
         {

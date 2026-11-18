@@ -7,6 +7,7 @@
 )]
 
 use csv::{Reader, ReaderBuilder, StringRecord, Trim};
+use std::iter;
 
 pub(crate) mod personal;
 
@@ -86,7 +87,7 @@ impl<'a> CsvImportReader<'a> {
     }
 
     pub(crate) fn collect<T, E, F>(
-        mut self,
+        self,
         conversion: CsvImportConversion<E, F>,
     ) -> Result<CsvImportCollection<T>, E>
     where
@@ -97,22 +98,13 @@ impl<'a> CsvImportReader<'a> {
             too_many_records,
             mut convert,
         } = conversion;
-        let mut collection = CsvImportCollection {
-            items: Vec::new(),
-            source_count: 0,
-            skipped_unsupported: 0,
-        };
-        for record in self.reader.records() {
-            if collection.source_count >= MAX_CSV_RECORDS {
-                return Err(too_many_records);
-            }
-            let record = record?;
-            collection.source_count += 1;
-            let (mut converted, skipped) = convert(&record);
-            collection.items.append(&mut converted);
-            collection.skipped_unsupported += skipped;
-        }
-        Ok(collection)
+        self.collect_fallible(
+            CsvImportConversion {
+                too_many_records,
+                convert: |record: &StringRecord| Ok(convert(record)),
+            },
+            drop,
+        )
     }
 
     pub(crate) fn collect_fallible<T, E, F, C>(
@@ -174,6 +166,55 @@ impl<'a> CsvHeader<'a> {
             .trim()
             .to_ascii_lowercase()
             .replace([' ', '_', '-'], "")
+    }
+}
+
+/// Resolves format-specific column names and aliases in their declared priority order.
+/// Duplicate headers select the first matching column in the original export.
+pub(crate) struct CsvHeaders<E> {
+    pub(crate) names: Vec<String>,
+    missing_column: fn(&'static str) -> E,
+}
+
+impl<E> CsvHeaders<E> {
+    pub(crate) fn new(record: &StringRecord, missing_column: fn(&'static str) -> E) -> Self {
+        Self {
+            names: record
+                .iter()
+                .map(|name| CsvHeader::new(name).normalized())
+                .collect(),
+            missing_column,
+        }
+    }
+
+    fn find<'a>(&self, mut candidates: impl Iterator<Item = &'a str>) -> CsvExportColumn {
+        let index = candidates.find_map(|candidate| {
+            let expected = CsvHeader::new(candidate).normalized();
+            self.names.iter().position(|name| name == &expected)
+        });
+        match index {
+            Some(index) => CsvExportColumn::Exported(index),
+            None => CsvExportColumn::NotExported,
+        }
+    }
+
+    pub(crate) fn optional(&self, aliases: &[&str]) -> CsvExportColumn {
+        self.find(aliases.iter().copied())
+    }
+
+    pub(crate) fn required(&self, name: &'static str) -> Result<usize, E> {
+        self.required_with_aliases(name, &[])
+    }
+
+    pub(crate) fn required_with_aliases(
+        &self,
+        name: &'static str,
+        aliases: &[&str],
+    ) -> Result<usize, E> {
+        match self.find(iter::once(name).chain(aliases.iter().copied())) {
+            CsvExportColumn::Exported(index) => Ok(index),
+            CsvExportColumn::NotExported => Err((self.missing_column)(name)),
+        }
     }
 }
 

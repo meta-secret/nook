@@ -90,14 +90,10 @@ impl EventGraph {
 }
 #[cfg(test)]
 mod tests {
-    #![allow(unused_assignments)]
-
-    use super::super::tests::{
-        STORE_STR, assert_self_approval_quarantined, genesis_event, signed_operation,
-    };
+    use super::super::tests::{assert_self_approval_quarantined, signed_operation};
     use super::*;
     use crate::event::SentinelShareIssuedPayload;
-    use crate::test_support::{public_key, signing_key};
+    use crate::test_support::{genesis_event, public_key, signing_key};
     use crate::{EventInsertStatus, EventResult};
     use nook_auth2::{AgeArmoredCiphertext, DeviceId, DevicePublicKey, MemberLabel};
     #[test]
@@ -163,19 +159,7 @@ mod tests {
         let mut graph = EventGraph::new();
         let genesis = genesis_event(&root_key)?;
         let genesis_id = genesis.id()?;
-        match graph.insert(crate::EventGraphInsert {
-            event: genesis,
-            expected_store_id: STORE_STR,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = graph.insert_fixture_event(genesis)?.graph;
 
         let enrol = signed_operation(
             vec![genesis_id],
@@ -188,20 +172,10 @@ mod tests {
             &stranger_key,
         )?;
         let enrol_id = enrol.id()?;
+        let insertion = graph.insert_fixture_event(enrol)?;
+        graph = insertion.graph;
         assert!(matches!(
-            match graph.insert(crate::EventGraphInsert {
-                event: enrol,
-                expected_store_id: STORE_STR
-            }) {
-                Ok(inserted) => {
-                    graph = inserted.graph;
-                    Ok(inserted.status)
-                }
-                Err(rejected) => {
-                    graph = rejected.graph;
-                    Err(rejected.cause)
-                }
-            }?,
+            insertion.status,
             EventInsertStatus::Quarantined(_)
         ));
         assert!(graph.quarantined().contains_key(&enrol_id));
@@ -215,19 +189,7 @@ mod tests {
         let mut graph = EventGraph::new();
         let genesis = genesis_event(&root_key)?;
         let genesis_id = genesis.id()?;
-        match graph.insert(crate::EventGraphInsert {
-            event: genesis,
-            expected_store_id: STORE_STR,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = graph.insert_fixture_event(genesis)?.graph;
 
         let sentinel_enrol = signed_operation(
             vec![genesis_id],
@@ -240,28 +202,9 @@ mod tests {
             &root_key,
         )?;
         let sentinel_enrol_id = sentinel_enrol.id()?;
-        match graph.insert(crate::EventGraphInsert {
-            event: sentinel_enrol,
-            expected_store_id: STORE_STR,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = graph.insert_fixture_event(sentinel_enrol)?.graph;
 
-        {
-            graph = assert_self_approval_quarantined(
-                graph,
-                sentinel_enrol_id,
-                &stranger_key,
-                "age-pub-2",
-            )?;
-        };
+        assert_self_approval_quarantined(graph, sentinel_enrol_id, &stranger_key, "age-pub-2")?;
         Ok(())
     }
     #[test]
@@ -271,19 +214,7 @@ mod tests {
         let mut graph = EventGraph::new();
         let genesis = genesis_event(&root_key)?;
         let genesis_id = genesis.id()?;
-        match graph.insert(crate::EventGraphInsert {
-            event: genesis,
-            expected_store_id: STORE_STR,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = graph.insert_fixture_event(genesis)?.graph;
 
         let shares = signed_operation(
             vec![genesis_id],
@@ -300,23 +231,9 @@ mod tests {
             &root_key,
         )?;
         let shares_id = shares.id()?;
-        match graph.insert(crate::EventGraphInsert {
-            event: shares,
-            expected_store_id: STORE_STR,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = graph.insert_fixture_event(shares)?.graph;
 
-        {
-            graph = assert_self_approval_quarantined(graph, shares_id, &stranger_key, "age-pub")?;
-        };
+        assert_self_approval_quarantined(graph, shares_id, &stranger_key, "age-pub")?;
         Ok(())
     }
     #[test]
@@ -340,31 +257,11 @@ mod tests {
             });
         sentinel_genesis = VaultEvent::sign(sentinel_genesis.body, &root_key)?;
         let sentinel_genesis_id = sentinel_genesis.id()?;
-        assert_eq!(
-            match graph.insert(crate::EventGraphInsert {
-                event: sentinel_genesis,
-                expected_store_id: STORE_STR
-            }) {
-                Ok(inserted) => {
-                    graph = inserted.graph;
-                    Ok(inserted.status)
-                }
-                Err(rejected) => {
-                    graph = rejected.graph;
-                    Err(rejected.cause)
-                }
-            }?,
-            EventInsertStatus::Applied
-        );
+        let insertion = graph.insert_fixture_event(sentinel_genesis)?;
+        graph = insertion.graph;
+        assert_eq!(insertion.status, EventInsertStatus::Applied);
 
-        {
-            graph = assert_self_approval_quarantined(
-                graph,
-                sentinel_genesis_id,
-                &stranger_key,
-                "age-pub-2",
-            )?;
-        };
+        assert_self_approval_quarantined(graph, sentinel_genesis_id, &stranger_key, "age-pub-2")?;
         Ok(())
     }
 }

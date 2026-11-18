@@ -39,14 +39,13 @@ pub struct AuthEnvelopes {
 }
 
 #[cfg(test)]
-mod tests {
+mod fixtures {
+    use super::*;
+    use crate::RecordTypeDeclaration;
     use std::io;
 
-    use super::*;
-    use crate::{DeviceSigningPublicKey, RecordTypeDeclaration};
-
-    const ENROLLED_AT: &str = "2026-06-21T00:00:00Z";
-    fn genesis_vault(
+    pub(super) const ENROLLED_AT: &str = "2026-06-21T00:00:00Z";
+    pub(super) fn genesis_vault(
         keys: &VaultKeys,
     ) -> anyhow::Result<(DeviceIdentity, Vec<StoredSecretRecord>)> {
         let genesis = DeviceIdentity::generate()?;
@@ -61,7 +60,7 @@ mod tests {
         Ok((genesis, records))
     }
 
-    fn user_secret_record(id: &str, value: &str) -> StoredSecretRecord {
+    pub(super) fn user_secret_record(id: &str, value: &str) -> StoredSecretRecord {
         StoredSecretRecord {
             key: SecretId::from_vault_record(id),
             secret_type: RecordTypeDeclaration::Secret(SecretType::Login),
@@ -69,14 +68,14 @@ mod tests {
         }
     }
 
-    fn approve_pending_join(
+    pub(super) fn approve_pending_join(
         keys: &VaultKeys,
         approver: &DeviceIdentity,
-        records: &mut Vec<StoredSecretRecord>,
+        mut records: Vec<StoredSecretRecord>,
         joiner: &DeviceIdentity,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Vec<StoredSecretRecord>> {
         let join = match VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
-            records: records,
+            records: &records,
             device_id: joiner.device_id(),
         })? {
             DeviceJoinStatus::Pending(join) => join,
@@ -89,17 +88,26 @@ mod tests {
             &keys.members_key,
             join,
             approver,
-            records,
+            &records,
         )
         .approve()?;
         records.retain(|record| record.key.as_str() != join_key);
         records.push(auth_record);
         VaultMember::replace_member_records(ReplaceMemberRecordsRequest {
-            records: records,
-            member_records: member_records,
+            records: &mut records,
+            member_records,
         })?;
-        Ok(())
+        Ok(records)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fixtures::{ENROLLED_AT, approve_pending_join, genesis_vault, user_secret_record};
+    use std::io;
+
+    use super::*;
+    use crate::DeviceSigningPublicKey;
 
     #[test]
     fn genesis_device_can_decrypt_vault_keys() -> anyhow::Result<()> {
@@ -124,7 +132,7 @@ mod tests {
         let joiner = DeviceIdentity::generate()?;
         records.push(JoinRequestIssuance::new(&joiner, ENROLLED_AT).issue()?);
 
-        approve_pending_join(&keys, &genesis, &mut records, &joiner)?;
+        records = approve_pending_join(&keys, &genesis, records, &joiner)?;
 
         assert_eq!(
             VaultRecordView::new(&records).secrets_key(&joiner)?,

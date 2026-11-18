@@ -40,6 +40,12 @@ pub struct DeviceRejection {
     pub device: EventLogDevice,
     pub cause: VaultError,
 }
+impl From<DeviceRejection> for VaultError {
+    fn from(rejected: DeviceRejection) -> Self {
+        rejected.cause
+    }
+}
+
 pub struct DeviceAppended {
     pub device: EventLogDevice,
     pub event_id: EventId,
@@ -55,10 +61,6 @@ pub struct DeviceJoinRequested {
 pub struct DeviceProvidersFlushed {
     pub device: EventLogDevice,
     pub providers: ProviderBuckets,
-}
-pub struct ProviderRejection {
-    pub providers: ProviderBuckets,
-    pub cause: VaultError,
 }
 
 impl EventLogDevice {
@@ -366,12 +368,9 @@ pub fn write_all_device_events_to_provider(
     device: &EventLogDevice,
     mut providers: ProviderBuckets,
     provider: &str,
-) -> Result<ProviderBuckets, ProviderRejection> {
+) -> VaultResult<ProviderBuckets> {
     let Some(mut bucket) = providers.remove(provider) else {
-        return Err(ProviderRejection {
-            providers,
-            cause: missing_provider_bucket(provider).into(),
-        });
+        return Err(missing_provider_bucket(provider).into());
     };
     for (id, bytes) in device.remote_events() {
         if matches!(bucket.get_bytes(&id), LocalEventBytes::UnknownEvent) {

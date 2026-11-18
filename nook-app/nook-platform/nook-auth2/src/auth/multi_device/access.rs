@@ -133,60 +133,11 @@ impl VaultMetaState {
 
 #[cfg(test)]
 mod tests {
-    use std::io;
+    use super::super::fixtures::{ENROLLED_AT, approve_pending_join, genesis_vault};
 
-    use super::super::{JoinRequestApproval, JoinRequestIssuance, VaultKeys, VaultRecordView};
+    use super::super::{JoinRequestIssuance, VaultKeys, VaultRecordView};
     use super::*;
     use crate::{GenesisMembersRecordsRequest, ReplaceMemberRecordsRequest};
-
-    const ENROLLED_AT: &str = "2026-06-21T00:00:00Z";
-
-    fn genesis_vault(
-        keys: &VaultKeys,
-    ) -> anyhow::Result<(DeviceIdentity, Vec<StoredSecretRecord>)> {
-        let genesis = DeviceIdentity::generate()?;
-        let mut records = vec![genesis.auth_record(&keys.secrets_key, &keys.members_key)?];
-        records.extend(VaultMember::genesis_members_records(
-            GenesisMembersRecordsRequest {
-                identity: &genesis,
-                members_key: &keys.members_key,
-                enrolled_at: ENROLLED_AT,
-            },
-        )?);
-        Ok((genesis, records))
-    }
-
-    fn approve_pending_join(
-        keys: &VaultKeys,
-        approver: &DeviceIdentity,
-        records: &mut Vec<StoredSecretRecord>,
-        joiner: &DeviceIdentity,
-    ) -> anyhow::Result<()> {
-        let join = match VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
-            records: records,
-            device_id: joiner.device_id(),
-        })? {
-            DeviceJoinStatus::Pending(join) => join,
-            DeviceJoinStatus::NotRequested => {
-                return Err(io::Error::other("pending join fixture must exist").into());
-            }
-        };
-        let (auth_record, join_key, member_records) = JoinRequestApproval::new(
-            &keys.secrets_key,
-            &keys.members_key,
-            join,
-            approver,
-            records,
-        )
-        .approve()?;
-        records.retain(|record| record.key.as_str() != join_key);
-        records.push(auth_record);
-        VaultMember::replace_member_records(ReplaceMemberRecordsRequest {
-            records: records,
-            member_records: member_records,
-        })?;
-        Ok(())
-    }
 
     #[test]
     fn sentinel_member_row_without_auth_counts_as_enrolled() -> anyhow::Result<()> {
@@ -258,7 +209,7 @@ mod tests {
         let (genesis, mut records) = genesis_vault(&keys)?;
         let joiner = DeviceIdentity::generate()?;
         records.push(JoinRequestIssuance::new(&joiner, ENROLLED_AT).issue()?);
-        approve_pending_join(&keys, &genesis, &mut records, &joiner)?;
+        records = approve_pending_join(&keys, &genesis, records, &joiner)?;
 
         let mut missing_joiner_roster = records
             .iter()
