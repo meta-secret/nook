@@ -2,7 +2,7 @@
   "extends": [
     "@tsconfig/svelte/tsconfig.json",
     "../tsconfig.safety.json",
-    "../nook-web-shared/tsconfig.vault-paths.json"
+    "../nook-web-shared/vault-module-paths.json"
   ],
   "compilerOptions": {
     "allowImportingTsExtensions": true,
