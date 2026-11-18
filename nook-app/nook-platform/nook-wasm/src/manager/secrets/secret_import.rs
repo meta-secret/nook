@@ -4,6 +4,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 use super::NookVaultManager;
+use crate::manager::search_catalog::extension_hint::ImportedSearchCatalogHintSource;
 use crate::{NookError, NookImportResult};
 use nook_core::BitwardenExportAccess;
 use nook_core::{
@@ -118,6 +119,7 @@ impl PreparedSecretImport {
     ) -> Result<NookImportResult, JsError> {
         let Self {
             operations,
+            catalog_rows,
             skipped_duplicates,
         } = self;
         let imported = operations
@@ -130,7 +132,13 @@ impl PreparedSecretImport {
             })
             .count();
         if !operations.is_empty() {
-            manager.append_vault_operations(operations).await?;
+            let committed_event = manager.append_vault_operations(operations).await?;
+            manager
+                .create_imported_search_catalog_hint(ImportedSearchCatalogHintSource {
+                    committed_event,
+                    rows: catalog_rows,
+                })
+                .await;
         }
         drop(manager.status.tx.send("READY".to_owned()));
         tracing::info!(

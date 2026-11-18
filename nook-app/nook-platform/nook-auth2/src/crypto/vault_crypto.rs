@@ -35,6 +35,16 @@ impl VaultCrypto {
         })
     }
 
+    /// Catalog buckets have always used the programmatic work factor. Never
+    /// let an imported cache envelope request additional work at unlock.
+    pub fn for_search_catalog(vault_key: &SymmetricKey) -> VaultCryptoResult<Self> {
+        let mut crypto = Self::new(vault_key)?;
+        crypto
+            .identity
+            .set_max_work_factor(PROGRAMMATIC_SCRYPT_LOG_N);
+        Ok(crypto)
+    }
+
     pub fn encrypt_value(
         &self,
         plaintext: impl AsRef<str>,

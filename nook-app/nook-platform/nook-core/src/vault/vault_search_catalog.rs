@@ -13,8 +13,9 @@
 
 use crate::errors::{SessionError, VaultResult};
 use crate::{
-    MAX_SECRET_PAGE_SIZE, SecretId, SecretListItem, SecretPage, SecretType, SecretTypeFilter,
-    StoredRecordPayload, SymmetricKey, VaultCrypto, VaultSecretSession,
+    AgeArmoredCiphertext, MAX_SECRET_PAGE_SIZE, SecretId, SecretListItem, SecretPage, SecretType,
+    SecretTypeFilter, SecretValue, StoredRecordPayload, SymmetricKey, VaultCrypto,
+    VaultSecretSession,
 };
 use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
@@ -26,6 +27,11 @@ mod login_accounts;
 pub use login_accounts::{LoginAccountMetadata, LoginAccountUsername, LoginAccountWebsiteUrl};
 mod site_secrets;
 pub use site_secrets::SiteSecretOrigin;
+mod transfer;
+pub use transfer::{
+    EncodedSearchCatalogHint, EncryptedSearchCatalogBucket, SearchCatalogHintContext,
+    SearchCatalogHintSignRequest, SignedSearchCatalogHint,
+};
 
 const SEARCH_CATALOG_VERSION: u8 = 2;
 const SEARCH_CATALOG_BUCKET_VERSION: u8 = 1;
@@ -122,8 +128,8 @@ impl SecretSearchCatalogEntry {
         self.normalized_search_text = self.item.normalized_search_text();
     }
 
-    fn payload_digest(payload: &StoredRecordPayload) -> SecretSearchCatalogPayloadDigest {
-        let digest = Sha256::digest(payload.as_str().as_bytes());
+    fn payload_digest(payload: &str) -> SecretSearchCatalogPayloadDigest {
+        let digest = Sha256::digest(payload.as_bytes());
         let mut truncated = [0_u8; PAYLOAD_DIGEST_BYTES];
         for (target, source) in truncated.iter_mut().zip(digest) {
             *target = source;
@@ -151,6 +157,34 @@ impl SecretSearchCatalogEntry {
 pub struct SecretSearchCatalog {
     version: u8,
     entries: BTreeMap<SecretId, SecretSearchCatalogEntry>,
+}
+
+/// Metadata projected from the same value that produced a new canonical ciphertext.
+pub struct ImportedSearchCatalogRow {
+    item: SecretListItem,
+    payload_digest: SecretSearchCatalogPayloadDigest,
+}
+
+pub struct ImportedSearchCatalogRowSource<'a> {
+    pub id: &'a SecretId,
+    pub value: &'a SecretValue,
+    pub ciphertext: &'a AgeArmoredCiphertext,
+}
+
+impl ImportedSearchCatalogRow {
+    #[must_use]
+    pub fn from_encrypted_import(source: ImportedSearchCatalogRowSource<'_>) -> Self {
+        Self {
+            item: source.value.list_item_for_id(source.id),
+            payload_digest: SecretSearchCatalogEntry::payload_digest(source.ciphertext.as_str()),
+        }
+    }
+}
+
+pub struct ImportedSearchCatalogRows<'a, S: BuildHasher> {
+    pub rows: Vec<ImportedSearchCatalogRow>,
+    pub live: &'a HashMap<SecretId, (SecretType, StoredRecordPayload), S>,
+    pub integrity_key: &'a SymmetricKey,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -223,6 +257,28 @@ impl Default for SecretSearchCatalog {
 }
 
 impl SecretSearchCatalog {
+    /// Build a sparse catalog using only rows whose exact ciphertext committed.
+    pub fn from_imported_rows<S: BuildHasher>(
+        request: ImportedSearchCatalogRows<'_, S>,
+    ) -> VaultResult<Self> {
+        let mut catalog = Self::default();
+        for row in request.rows {
+            if let Some((secret_type, payload)) = request.live.get(&row.item.id)
+                && *secret_type == row.item.secret_type()
+                && SecretSearchCatalogEntry::payload_digest(payload.as_str()) == row.payload_digest
+            {
+                let id = row.item.id.clone();
+                let entry = SecretSearchCatalogEntry::new(SecretSearchCatalogEntryRequest {
+                    payload_digest: row.payload_digest,
+                    item: row.item,
+                    integrity_key: request.integrity_key,
+                })?;
+                catalog.entries.insert(id, entry);
+            }
+        }
+        Ok(catalog)
+    }
+
     fn bucket_for(id: &SecretId) -> crate::SecretSearchCatalogBucket {
         let digest: [u8; 32] = Sha256::digest(id.as_str().as_bytes()).into();
         let [first, ..] = digest;
@@ -328,7 +384,7 @@ impl SecretSearchCatalog {
         }
         let mut next = BTreeMap::new();
         for (id, (secret_type, payload)) in secrets {
-            let digest = SecretSearchCatalogEntry::payload_digest(payload);
+            let digest = SecretSearchCatalogEntry::payload_digest(payload.as_str());
             if let Some(existing) = self.entries.get(id)
                 && existing.payload_digest == digest
                 && existing.item.secret_type() == *secret_type
@@ -629,6 +685,87 @@ mod tests {
                 tampered
                     .query("trusted-user", SecretTypeFilter::All, 0.into(), 50.into())
                     .total,
+            ),
+            1
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn imported_rows_reuse_only_live_ciphertexts_with_verified_metadata() -> VaultResult<()> {
+        let keys = VaultKeys::generate()?;
+        let crypto = VaultCrypto::new(&keys.secrets_key)?;
+        let id = SecretId::from_vault_record("secret_imported");
+        let removed_id = SecretId::from_vault_record("secret_removed");
+        let imported = SecretValue::Login(LoginSecret {
+            website_url: "https://imported.example.com".to_owned(),
+            username: "imported-user".to_owned(),
+            password: "non-catalogued-password".to_owned(),
+            notes: String::new(),
+        });
+        let ciphertext = crypto.encrypt_value(imported.to_yaml()?)?;
+        let mut live = HashMap::from([(
+            id.clone(),
+            (
+                SecretType::Login,
+                StoredRecordPayload::from_age_armored(ciphertext.clone()),
+            ),
+        )]);
+        let rows = [&id, &removed_id]
+            .into_iter()
+            .map(|id| {
+                ImportedSearchCatalogRow::from_encrypted_import(ImportedSearchCatalogRowSource {
+                    id,
+                    value: &imported,
+                    ciphertext: &ciphertext,
+                })
+            })
+            .collect();
+        let catalog = SecretSearchCatalog::from_imported_rows(ImportedSearchCatalogRows {
+            rows,
+            live: &live,
+            integrity_key: &keys.secrets_key,
+        })?;
+        assert_eq!(catalog.entries.len(), 1);
+
+        let bucket = SecretSearchCatalog::bucket_for(&id);
+        let SearchCatalogBucketPayload::Json(json) = catalog.bucket_json(bucket)? else {
+            panic!("import produces the existing bucket format");
+        };
+        assert!(!json.contains("non-catalogued-password"));
+        let mut restored = SecretSearchCatalog::default();
+        restored.restore_bucket_json(bucket, &json)?;
+        assert!(
+            !restored
+                .reconcile(&live, &crypto, &keys.secrets_key)?
+                .changed()
+        );
+
+        let other_keys = VaultKeys::generate()?;
+        assert_eq!(
+            usize::from(
+                restored
+                    .reconcile(&live, &crypto, &other_keys.secrets_key)?
+                    .updated
+            ),
+            1
+        );
+        let mut restored = SecretSearchCatalog::default();
+        restored.restore_bucket_json(bucket, &json)?;
+        let other_id = SecretId::from_vault_record("secret_missing");
+        let new_ciphertext = crypto.encrypt_value(imported.to_yaml()?)?;
+        let payload = StoredRecordPayload::from_age_armored(new_ciphertext);
+        live.insert(id.clone(), (SecretType::Login, payload.clone()));
+        live.insert(other_id, (SecretType::Login, payload));
+        let reconciled = restored.reconcile(&live, &crypto, &keys.secrets_key)?;
+        assert_eq!(usize::from(reconciled.updated), 1);
+        assert_eq!(usize::from(reconciled.added), 1);
+        live.remove(&id);
+        assert_eq!(
+            usize::from(
+                restored
+                    .reconcile(&live, &crypto, &keys.secrets_key)?
+                    .removed
             ),
             1
         );

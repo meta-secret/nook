@@ -1,6 +1,7 @@
 use super::super::event_log::{
     EventLogStorageRecord, ExtensionEventLogImportStatus, ExternalEventLogRecord,
 };
+use super::super::search_catalog::extension_hint::NookExtensionLocalEventLogUpdate;
 use super::NookVaultManager;
 use crate::NookReplacementConflict;
 use crate::NookSecurityConflict;
@@ -138,6 +139,37 @@ impl NookVaultManager {
                 records.0,
             )
             .await?;
+        Ok(NookExtensionEventLogImportStatus(status))
+    }
+
+    #[wasm_bindgen]
+    pub async fn import_extension_local_event_log_update_js(
+        &mut self,
+        request: tsify::Ts<NookExtensionLocalEventLogUpdate>,
+        records: NookExternalEventLogRecords,
+    ) -> Result<NookExtensionEventLogImportStatus, JsError> {
+        let request = request.decode()?;
+        let status = self
+            .import_extension_event_log_records(
+                request.vault_store_id.as_str(),
+                request.device_id.as_str(),
+                request.device_public_key.as_str(),
+                request.device_signing_public_key.as_str(),
+                records.0,
+            )
+            .await?;
+        if status.access_granted
+            && self
+                .seed_extension_search_catalog_hint(request)
+                .await
+                .is_err()
+        {
+            tracing::warn!(
+                scope = "wasm-search",
+                action = "seed-extension-catalog",
+                "could not seed optional encrypted catalog hint"
+            );
+        }
         Ok(NookExtensionEventLogImportStatus(status))
     }
 

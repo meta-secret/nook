@@ -689,6 +689,47 @@ async fn extension_import_rejects_a_grant_for_an_inactive_identity() -> anyhow::
 }
 
 #[wasm_bindgen_test]
+async fn invalid_encrypted_catalog_keeps_signed_extension_update_receipt() -> anyhow::Result<()> {
+    use crate::TypedInput;
+    use crate::manager::NookExternalEventLogRecords;
+    use crate::manager::search_catalog::extension_hint::NookExtensionLocalEventLogUpdate;
+
+    let fixture = import_fixture(true).await?;
+    let (mut replacement, _) = replacement_manager(&fixture).await?;
+    let update = tsify::Ts::<NookExtensionLocalEventLogUpdate>::new_unchecked(
+        serde_wasm_bindgen::to_value(&serde_json::json!({
+        "vaultStoreId": fixture.store_id,
+        "deviceId": fixture.device_id,
+        "devicePublicKey": fixture.device_public_key,
+        "deviceSigningPublicKey": fixture.signing_public_key,
+        "catalogHint": { "kind": "sealed", "encoded": "invalid signature body" },
+        }))?,
+    );
+    let expected_count = fixture.records.len();
+    let status = replacement
+        .import_extension_local_event_log_update_js(
+            update,
+            NookExternalEventLogRecords(fixture.records),
+        )
+        .await
+        .and_then(|status| status.to_object())
+        .map_err(|_| anyhow::anyhow!("signed event update should be admitted"))?
+        .decode()?;
+    assert!(status.access_granted);
+    assert_eq!(
+        status.event_count,
+        nook_core::ExtensionEventCount::from(u32::try_from(expected_count)?)
+    );
+    assert_eq!(status.vault_store_id.as_str(), fixture.store_id);
+    assert!(
+        NookDatabase::load_secret_search_catalog_buckets(&fixture.store_id)
+            .await?
+            .is_empty()
+    );
+    Ok(())
+}
+
+#[wasm_bindgen_test]
 async fn denied_extension_import_restores_session_and_active_projection() -> anyhow::Result<()> {
     let fixture = import_fixture(false).await?;
     let (mut replacement, previous_store_id) = replacement_manager(&fixture).await?;

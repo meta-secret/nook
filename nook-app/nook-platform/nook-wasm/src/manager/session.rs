@@ -126,6 +126,8 @@ pub(in crate::manager) struct VaultSessionState {
     pub(in crate::manager) search_catalog_store_id: String,
     pub(in crate::manager) search_catalog_dirty: bool,
     pub(in crate::manager) search_catalog_pending_bucket_mask: u64,
+    pub(in crate::manager) encrypted_search_catalog_hint:
+        super::search_catalog::extension_hint::NookEncryptedSearchCatalogHint,
 }
 
 pub(in crate::manager) struct VaultSessionGraphProjection<'a> {
@@ -152,6 +154,8 @@ impl Default for VaultSessionState {
             search_catalog_store_id: String::new(),
             search_catalog_dirty: true,
             search_catalog_pending_bucket_mask: 0,
+            encrypted_search_catalog_hint:
+                super::search_catalog::extension_hint::NookEncryptedSearchCatalogHint::Absent,
         }
     }
 }
@@ -236,6 +240,8 @@ impl VaultSessionState {
         self.search_catalog_store_id.clear();
         self.search_catalog_dirty = true;
         self.search_catalog_pending_bucket_mask = 0;
+        self.encrypted_search_catalog_hint =
+            super::search_catalog::extension_hint::NookEncryptedSearchCatalogHint::Absent;
     }
 
     pub(in crate::manager) fn mark_search_catalog_dirty(&mut self) {

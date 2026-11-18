@@ -473,9 +473,12 @@ pub use vault_runtime_policy::{
     RuntimeConfigValue, VaultRuntimePolicy,
 };
 pub use vault_search_catalog::{
-    LoginAccountMetadata, LoginAccountUsername, LoginAccountWebsiteUrl,
-    SECRET_SEARCH_CATALOG_BUCKET_COUNT, SearchCatalogBucketPayload, SecretSearchCatalog,
-    SecretSearchCatalogChangeCount, SecretSearchCatalogReconcile, SiteSecretOrigin,
+    EncodedSearchCatalogHint, EncryptedSearchCatalogBucket, ImportedSearchCatalogRow,
+    ImportedSearchCatalogRowSource, ImportedSearchCatalogRows, LoginAccountMetadata,
+    LoginAccountUsername, LoginAccountWebsiteUrl, SECRET_SEARCH_CATALOG_BUCKET_COUNT,
+    SearchCatalogBucketPayload, SearchCatalogHintContext, SearchCatalogHintSignRequest,
+    SecretSearchCatalog, SecretSearchCatalogChangeCount, SecretSearchCatalogReconcile,
+    SignedSearchCatalogHint, SiteSecretOrigin,
 };
 pub use vault_sentinel_genesis::{
     SentinelDeliveryNotPending, SentinelGenesisOutput, SentinelGenesisPhase,
