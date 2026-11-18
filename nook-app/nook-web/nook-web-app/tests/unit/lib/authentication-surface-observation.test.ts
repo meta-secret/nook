@@ -124,17 +124,12 @@ afterEach(() => {
 describe('authentication surface mutation filtering', () => {
   test('checks document-wide dependencies once for a burst of unrelated text updates', () => {
     document.body.innerHTML = `
-      <main id="feed"></main>
       <button aria-labelledby="control-label">Browse</button>
       <span id="control-label">Browse videos</span>
     `
-    const feed = document.querySelector('#feed')
-    switch (feed instanceof HTMLElement) {
-      case false:
-        throw new Error('expected feed fixture')
-      case true:
-        break
-    }
+    const feed = document.createElement('main')
+    feed.id = 'feed'
+    document.body.prepend(feed)
     const records: MutationRecord[] = []
     for (let update = 0; update < 64; update += 1) {
       const tile = document.createElement('div')
