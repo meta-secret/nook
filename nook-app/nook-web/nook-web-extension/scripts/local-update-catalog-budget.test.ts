@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  localUpdateCatalogFitsRuntimeMessage,
+  LocalUpdateCatalogBudgetKind,
+  localUpdateCatalogBudget,
   type LocalUpdateCatalogMessageLengths,
 } from '../src/content/local-update-catalog-budget'
 
@@ -9,7 +10,7 @@ const mebibyte = 1024 * 1024
 type CatalogBudgetCase = {
   readonly label: string
   readonly lengths: LocalUpdateCatalogMessageLengths
-  readonly fits: boolean
+  readonly expected: LocalUpdateCatalogBudgetKind
 }
 
 const catalogBudgetCases: CatalogBudgetCase[] = [
@@ -20,7 +21,7 @@ const catalogBudgetCases: CatalogBudgetCase[] = [
       vaultStoreIdCodeUnits: 100,
       catalogCodeUnits: 4 * mebibyte,
     },
-    fits: true,
+    expected: LocalUpdateCatalogBudgetKind.Fits,
   },
   {
     label: 'drops a string above the native catalog size limit',
@@ -29,7 +30,7 @@ const catalogBudgetCases: CatalogBudgetCase[] = [
       vaultStoreIdCodeUnits: 100,
       catalogCodeUnits: 4 * mebibyte + 1,
     },
-    fits: false,
+    expected: LocalUpdateCatalogBudgetKind.Exceeds,
   },
   {
     label: 'drops a small catalog from a near-limit ordinary event update',
@@ -38,7 +39,7 @@ const catalogBudgetCases: CatalogBudgetCase[] = [
       vaultStoreIdCodeUnits: 100,
       catalogCodeUnits: 16_384,
     },
-    fits: false,
+    expected: LocalUpdateCatalogBudgetKind.Exceeds,
   },
   {
     label: 'reserves the bytes needed to escape strings in the envelope',
@@ -47,12 +48,12 @@ const catalogBudgetCases: CatalogBudgetCase[] = [
       vaultStoreIdCodeUnits: 100,
       catalogCodeUnits: 100,
     },
-    fits: false,
+    expected: LocalUpdateCatalogBudgetKind.Exceeds,
   },
 ]
 
 describe('local update catalog delivery budget', () => {
-  test.each(catalogBudgetCases)('$label', ({ lengths, fits }) => {
-    expect(localUpdateCatalogFitsRuntimeMessage(lengths)).toBe(fits)
+  test.each(catalogBudgetCases)('$label', ({ lengths, expected }) => {
+    expect(localUpdateCatalogBudget(lengths)).toBe(expected)
   })
 })

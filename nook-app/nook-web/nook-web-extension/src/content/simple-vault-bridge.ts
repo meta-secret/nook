@@ -9,7 +9,8 @@ import {
   SerializedWireValueAdapter,
 } from '../lib/serialized-wire-value-adapter'
 import {
-  localUpdateCatalogFitsRuntimeMessage,
+  LocalUpdateCatalogBudgetKind,
+  localUpdateCatalogBudget,
   type LocalUpdateCatalogMessageLengths,
 } from './local-update-catalog-budget'
 
@@ -42,16 +43,26 @@ void companionWasmReady.then(() => {
           eventLogRecords: preservedEventLogRecords,
         },
       }
-      if (typeof encryptedSearchCatalog === 'string') {
-        const lengths: LocalUpdateCatalogMessageLengths = {
-          eventLogRecordsJsonCodeUnits: eventLogRecordsSnapshot.value.length,
-          vaultStoreIdCodeUnits: vaultStoreId.length,
-          catalogCodeUnits: encryptedSearchCatalog.length,
+      switch (true) {
+        case typeof encryptedSearchCatalog === 'string': {
+          const lengths: LocalUpdateCatalogMessageLengths = {
+            eventLogRecordsJsonCodeUnits: eventLogRecordsSnapshot.value.length,
+            vaultStoreIdCodeUnits: vaultStoreId.length,
+            catalogCodeUnits: encryptedSearchCatalog.length,
+          }
+          switch (localUpdateCatalogBudget(lengths)) {
+            case LocalUpdateCatalogBudgetKind.Fits:
+              deliveryMessage.payload.encryptedSearchCatalog =
+                encryptedSearchCatalog
+              break
+            case LocalUpdateCatalogBudgetKind.Exceeds:
+              break
+          }
+          break
         }
-        if (localUpdateCatalogFitsRuntimeMessage(lengths)) {
-          deliveryMessage.payload.encryptedSearchCatalog =
-            encryptedSearchCatalog
-        }
+        case true:
+        default:
+          break
       }
       chrome.runtime.sendMessage(deliveryMessage, () => {
         // The bridge is best-effort when the vault is not paired. Reading

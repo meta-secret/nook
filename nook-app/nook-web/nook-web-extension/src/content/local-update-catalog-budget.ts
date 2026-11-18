@@ -24,11 +24,16 @@ export type LocalUpdateCatalogMessageLengths = {
   readonly catalogCodeUnits: number
 }
 
-export function localUpdateCatalogFitsRuntimeMessage({
+export enum LocalUpdateCatalogBudgetKind {
+  Fits = 'fits',
+  Exceeds = 'exceeds',
+}
+
+export function localUpdateCatalogBudget({
   eventLogRecordsJsonCodeUnits,
   vaultStoreIdCodeUnits,
   catalogCodeUnits,
-}: LocalUpdateCatalogMessageLengths): boolean {
+}: LocalUpdateCatalogMessageLengths): LocalUpdateCatalogBudgetKind {
   // The existing record snapshot is already JSON. Each of its UTF-16 code
   // units costs at most three UTF-8 bytes. Raw strings can also require
   // six-byte JSON escapes. The empty array's two bytes are excluded above.
@@ -38,8 +43,12 @@ export function localUpdateCatalogFitsRuntimeMessage({
     6 * (vaultStoreIdCodeUnits + catalogCodeUnits)
   // A larger code-unit count cannot meet Rust's UTF-8 limit. Rust checks the
   // exact byte count and validates the hint after transport.
-  return (
-    catalogCodeUnits <= maximumCatalogUtf8Bytes &&
-    messageByteUpperBound <= maximumRuntimeMessageBytes
-  )
+  switch (true) {
+    case catalogCodeUnits <= maximumCatalogUtf8Bytes &&
+      messageByteUpperBound <= maximumRuntimeMessageBytes:
+      return LocalUpdateCatalogBudgetKind.Fits
+    case true:
+    default:
+      return LocalUpdateCatalogBudgetKind.Exceeds
+  }
 }

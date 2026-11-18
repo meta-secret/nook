@@ -34,6 +34,10 @@ import {
   simplePairingVaultType,
 } from './extension-connect-test-support'
 
+type MalformedSearchCatalogFixture = {
+  readonly malformed: boolean
+}
+
 type LocalUpdateDecodeInput = Pick<
   ExtensionLocalEventLogUpdatedMessageGuard,
   'type'
@@ -41,7 +45,7 @@ type LocalUpdateDecodeInput = Pick<
   payload: Omit<
     ExtensionLocalEventLogUpdatedMessageGuard['payload'],
     'encryptedSearchCatalog'
-  > & { encryptedSearchCatalog: unknown }
+  > & { encryptedSearchCatalog: string | MalformedSearchCatalogFixture }
 }
 
 describe('extension pairing approved message', () => {
