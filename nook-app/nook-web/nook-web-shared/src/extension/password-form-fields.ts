@@ -21,7 +21,12 @@ import {
   type AirbnbLoginModalRouteRequest,
 } from "./airbnb-login-modal-route";
 import {
+  NookPageInputClassifier,
   PageSecondFactorRoute,
+  strongest_authentication_username_evidence,
+  type IndexedPageInputClassification,
+  type PageInputClassification,
+  type PageInputFieldRequest,
   type AuthenticationUsernameEvidence,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
@@ -29,16 +34,11 @@ import {
   CompanionWasmSessionMessageType,
   type CompanionWasmLabelRequest,
   type CompanionWasmPageInputFieldObservation,
-  type CompanionWasmPageInputFieldRequest,
 } from "./companion-wasm-runtime-messages";
 import {
   CompanionWasmRuntimeDeliveryKind,
   sendCompanionWasmRuntimeMessage,
 } from "./companion-wasm-runtime-transport";
-import {
-  PasswordFormFieldDirectClassification,
-  type DirectFieldClassification,
-} from "./password-form-field-direct-classification";
 import { AuthenticationContainerIdentity } from "./password-form-container-identity";
 import { authenticationFieldIndexCatalog } from "./password-form-owned-field-index";
 import {
@@ -76,16 +76,7 @@ type ScopedInputFieldQuery = {
   formScope?: PasswordFormScope;
 };
 
-type PageInputClassificationRequest = {
-  field: HTMLInputElement;
-  loginContext: boolean;
-};
-
-type PageInputObservationRequest = PageInputClassificationRequest & {
-  secondFactorRoute: PageSecondFactorRoute;
-};
-
-type CompanionWasmFieldClassification = DirectFieldClassification;
+type CachedFieldClassification = Omit<IndexedPageInputClassification, "index">;
 
 export type LocalOwnedLoginObservationRootRequest = {
   owner: HTMLFormElement;
@@ -164,15 +155,9 @@ const passkeyControlSelector =
 
 /** Owns this browser host’s resources and interaction lifecycle. */
 class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
-  private readonly directClassification =
-    new PasswordFormFieldDirectClassification();
   private readonly companionFieldClassifications = new WeakMap<
     HTMLInputElement,
-    CompanionWasmFieldClassification
-  >();
-  private readonly companionLoginContexts = new WeakMap<
-    HTMLInputElement,
-    boolean
+    CachedFieldClassification
   >();
   private readonly companionLabels = new Map<string, boolean>();
   /** Rust's username evidence order, strongest first, once classified. */
@@ -183,44 +168,35 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
   focusedFieldObservation(
     field: HTMLInputElement,
   ): CompanionWasmPageInputFieldObservation {
-    const request: PageInputObservationRequest = {
-      field,
-      loginContext: false,
-      secondFactorRoute: PageSecondFactorRoute.Unrelated,
-    };
-    return this.fieldObservation(request);
-  }
-
-  /** Collects one input's raw attributes for every producer; Rust decides its role. */
-  private fieldObservation({
-    field,
-    loginContext,
-    secondFactorRoute,
-  }: PageInputObservationRequest): CompanionWasmPageInputFieldObservation {
     return {
       inputType: field.type,
       disabled: field.disabled,
       readOnly: field.readOnly,
       autocompleteTokens: this.autocompleteTokens(field),
       identityText: this.authenticationFieldIdentityText(field),
-      loginContext,
-      secondFactorRoute,
+      loginContext: false,
+      secondFactorRoute: PageSecondFactorRoute.Unrelated,
       inputMode: ((v) => (v ? v : ""))(field.getAttribute("inputmode")),
       maxLength: field.maxLength,
       pattern: ((v) => (v ? v : ""))(field.getAttribute("pattern")),
     };
   }
 
+  private pageInputRequest(
+    field: HTMLInputElement,
+    index: number,
+  ): PageInputFieldRequest {
+    return {
+      index,
+      observation: this.focusedFieldObservation(field),
+      loginContextObservation: this.loginContextObservation(field),
+    };
+  }
+
   async prepareCompanionClassification(root: ParentNode): Promise<void> {
     const fields = Array.from(root.querySelectorAll<HTMLInputElement>("input"));
     // The offscreen runtime derives both page contexts from the login-context observation.
-    const fieldRequests: CompanionWasmPageInputFieldRequest[] = fields.map(
-      (field, index) => ({
-        index,
-        observation: this.focusedFieldObservation(field),
-        loginContextObservation: this.loginContextObservation(field),
-      }),
-    );
+    const fieldRequests = fields.map(this.pageInputRequest.bind(this));
     const labels = this.companionLabelRequests(root);
     const delivery = await sendCompanionWasmRuntimeMessage(this.browser, {
       type: CompanionWasmSessionMessageType.ClassifyPageInputs,
@@ -240,8 +216,8 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     for (const field of response.fields) {
       const element = fields[field.index];
       if (!element) continue;
-      this.companionLoginContexts.set(element, field.loginContext);
       this.companionFieldClassifications.set(element, {
+        loginContext: field.loginContext,
         authenticationUsernameEvidence: field.authenticationUsernameEvidence,
         looksLikeUsernameField: field.looksLikeUsernameField,
         looksLikeOneTimeCodeField: field.looksLikeOneTimeCodeField,
@@ -393,7 +369,7 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     const labelRequest: CompanionWasmLabelRequest = { kind, value };
     return !this.directClassificationAvailable()
       ? false
-      : this.directClassification.label(labelRequest);
+      : NookPageInputClassifier.classify_label(labelRequest);
   }
 
   private directClassificationAvailable(): boolean {
@@ -653,40 +629,27 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     });
   }
 
-  private hasLoginContext(field: HTMLInputElement): boolean {
-    const cached = this.companionLoginContexts.get(field);
+  protected hasLoginPathContext(field: HTMLInputElement): boolean {
+    const cached = this.companionFieldClassifications.get(field)?.loginContext;
     if (typeof cached === "boolean") return cached;
     return !this.directClassificationAvailable()
       ? false
-      : this.directClassification.loginContext(
+      : NookPageInputClassifier.classify_context(
           this.loginContextObservation(field),
-        );
+        ).loginContext;
   }
 
-  protected hasLoginPathContext(field: HTMLInputElement): boolean {
-    return this.hasLoginContext(field);
-  }
-  private pageInputObservation({
-    field,
-    loginContext,
-  }: PageInputClassificationRequest): CompanionWasmFieldClassification | false {
-    if (
-      this.companionLoginContexts.has(field) &&
-      this.companionLoginContexts.get(field) !== loginContext
-    )
-      return false;
-    const classification = this.companionFieldClassifications.get(field);
-    if (classification) return classification;
+  private pageInputObservation(
+    field: HTMLInputElement,
+  ): PageInputClassification | false {
+    const cached = this.companionFieldClassifications.get(field);
+    if (cached) {
+      // Only a field classified with a definite login context can be reused.
+      return typeof cached.loginContext === "boolean" ? cached : false;
+    }
     if (!this.directClassificationAvailable()) return false;
-    const observationRequest: PageInputObservationRequest = {
-      field,
-      loginContext,
-      secondFactorRoute: this.directClassification.secondFactorRoute(
-        this.loginContextObservation(field),
-      ),
-    };
-    return this.directClassification.field(
-      this.fieldObservation(observationRequest),
+    return NookPageInputClassifier.classify_page_input(
+      this.pageInputRequest(field, 0),
     );
   }
 
@@ -727,17 +690,13 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     if (!this.directClassificationAvailable()) {
       throw new Error();
     }
-    return this.directClassification.strongestUsernameEvidence(scoped);
+    return strongest_authentication_username_evidence(scoped);
   }
 
   authenticationUsernameEvidence(
     field: HTMLInputElement,
   ): AuthenticationUsernameEvidence {
-    const observationRequest: PageInputClassificationRequest = {
-      field,
-      loginContext: this.hasLoginContext(field),
-    };
-    const observation = this.pageInputObservation(observationRequest);
+    const observation = this.pageInputObservation(field);
     if (!observation) throw new Error();
     return observation.authenticationUsernameEvidence;
   }
@@ -745,22 +704,14 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
   private looksLikeUsernameField(field: HTMLInputElement): boolean {
     if (!this.isRenderedInput(field)) return false;
 
-    const observationRequest: PageInputClassificationRequest = {
-      field,
-      loginContext: this.hasLoginContext(field),
-    };
-    const observation = this.pageInputObservation(observationRequest);
+    const observation = this.pageInputObservation(field);
     return Boolean(observation && observation.looksLikeUsernameField);
   }
 
   private looksLikeOneTimeCodeField(field: HTMLInputElement): boolean {
     if (!this.isRenderedInput(field)) return false;
 
-    const observationRequest: PageInputClassificationRequest = {
-      field,
-      loginContext: this.hasLoginContext(field),
-    };
-    const observation = this.pageInputObservation(observationRequest);
+    const observation = this.pageInputObservation(field);
     return Boolean(observation && observation.looksLikeOneTimeCodeField);
   }
 

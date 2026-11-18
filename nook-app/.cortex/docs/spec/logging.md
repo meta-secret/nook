@@ -88,9 +88,12 @@ default is `info`. Almost all app logs today are `debug` (`wasm` status drain,
 
 ## Viewing logs
 
-- **`/logs` page** (human UI, works logged-out): filter by minimum level, paginate
-  (Newer/Older, 100/page), **Copy** all as JSON, **Clear**. Good for users and
-  manual inspection at [nokey.sh/logs](https://nokey.sh/logs).
+Both routes resolve under the active vault app's mount. A root-hosted vault
+serves `/logs` and `/app-logs`. A Simple preview mounted at `/simple/` serves
+`/simple/logs` and `/simple/app-logs`. The same rule applies at `/sentinel/`.
+
+- **`/logs` viewer** works while logged out. Filter by minimum level, page
+  through 100 entries at a time, copy the JSON, or clear the stored logs.
 - **`/app-logs` JSON export** (machine-readable, works logged-out): raw persisted
   logs in a stable envelope suitable for AI agents, Playwright helpers, and log
   aggregation. The page body is JSON only — no app chrome.

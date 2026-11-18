@@ -1,38 +1,19 @@
-import { WorkflowResultKind } from '../agent-workflow/domain.ts';
-
-export class StructuralExpertCatalog {
-  private constructor(private readonly request: string) {}
-
-  static structuralExpertProfile(
-    expertName: string,
-  ): StructuralExpertProfile | false {
-    return new StructuralExpertCatalog(expertName).execute();
-  }
-
-  private execute(): StructuralExpertProfile | false {
-    const expertName = this.request;
-    const [defaulted1 = false] = [
-      STRUCTURAL_EXPERT_CATALOG.find(
-        (candidate) => candidate.name === expertName,
-      ),
-    ];
-    return defaulted1;
-  }
-}
-
 export enum StructuralExpertKind {
   RepositoryEvidence = 'repository-evidence',
   VerifiedViewSynthesis = 'verified-view-synthesis',
+}
+
+export enum StructuralExpertResultKind {
+  CodeRefactoringEvidence = 'code-refactoring-evidence',
+  CortexRefactoringEvidence = 'cortex-refactoring-evidence',
+  SystemCoherenceSynthesis = 'system-coherence-synthesis',
 }
 
 export type StructuralExpertProfile = {
   readonly name: string;
   readonly description: string;
   readonly kind: StructuralExpertKind;
-  readonly resultKind:
-    | WorkflowResultKind.CodeRefactoringEvidence
-    | WorkflowResultKind.CortexRefactoringEvidence
-    | WorkflowResultKind.SystemCoherenceSynthesis;
+  readonly resultKind: StructuralExpertResultKind;
   readonly skillPath: string;
   readonly requiredContextPaths: readonly string[];
   readonly allowedEvidenceFiles: readonly string[];
@@ -114,7 +95,7 @@ export const STRUCTURAL_EXPERT_CATALOG: readonly StructuralExpertProfile[] = [
     description:
       'Read-only evidence expert for architecture, design, code quality, stronger types, and tests in explicitly authorized code scopes.',
     kind: StructuralExpertKind.RepositoryEvidence,
-    resultKind: WorkflowResultKind.CodeRefactoringEvidence,
+    resultKind: StructuralExpertResultKind.CodeRefactoringEvidence,
     skillPath: '.cortex/teams/ai/dynamic-skills/code-refactoring-expert.md',
     requiredContextPaths: COMMON_CONTEXT,
     allowedEvidenceFiles: CODE_REFACTORING_FILES,
@@ -136,7 +117,7 @@ export const STRUCTURAL_EXPERT_CATALOG: readonly StructuralExpertProfile[] = [
     description:
       'Read-only evidence expert for Cortex authority, conflicts, legacy content, complexity, and deterministic Loom extraction candidates.',
     kind: StructuralExpertKind.RepositoryEvidence,
-    resultKind: WorkflowResultKind.CortexRefactoringEvidence,
+    resultKind: StructuralExpertResultKind.CortexRefactoringEvidence,
     skillPath: '.cortex/teams/ai/dynamic-skills/cortex-refactoring-expert.md',
     requiredContextPaths: COMMON_CONTEXT,
     allowedEvidenceFiles: CORTEX_REFACTORING_FILES,
@@ -161,7 +142,7 @@ export const STRUCTURAL_EXPERT_CATALOG: readonly StructuralExpertProfile[] = [
     description:
       'Legacy loom-structural-experts diagnostic aggregator producing SystemCoherenceSynthesis from verified Completed and Failed terminal observations without repository exploration.',
     kind: StructuralExpertKind.VerifiedViewSynthesis,
-    resultKind: WorkflowResultKind.SystemCoherenceSynthesis,
+    resultKind: StructuralExpertResultKind.SystemCoherenceSynthesis,
     skillPath:
       '.cortex/teams/ai/dynamic-skills/system-coherence-synthesizer.md',
     requiredContextPaths: [],

@@ -96,8 +96,7 @@ class ExtensionConnectionBrowser {
   }
 
   isExtensionConnectPath(pathname: string): boolean {
-    const normalized =
-      new ApplicationPath(pathname).relative.replace(/\/$/, "") || "/";
+    const normalized = new ApplicationPath(pathname).relative;
     return normalized === EXTENSION_CONNECT_PATH;
   }
 

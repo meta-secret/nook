@@ -12,8 +12,6 @@ import type {
 export { ModuleDeliveryPlanValidationScenario } from './plan-validation.fixture.ts';
 import { describe, expect, test } from 'bun:test';
 
-import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
-
 import {
   ModuleDeliveryBaselineKind,
   ModuleDeliveryIssueCode,
@@ -52,10 +50,14 @@ type LegacyOwnerHybridNode = LegacyModuleDeliveryNode & {
   readonly functionalOwner: TeamKey;
 };
 
+enum LegacyPlanParentKind {
+  WorkflowRoot = 'workflow-root',
+}
+
 type LegacyLineageHybridNode = LegacyModuleDeliveryNode & {
   readonly team: TeamKey;
   readonly acceptanceOwner: TeamKey;
-  readonly parentLineage: { readonly kind: AgentAttemptParentKind };
+  readonly parentLineage: { readonly kind: LegacyPlanParentKind.WorkflowRoot };
 };
 
 type LegacyAdversarialNode =
@@ -280,7 +282,7 @@ describe('reviewed module delivery plan', () => {
             ...node,
             team: TeamKey.DevelopmentCore,
             acceptanceOwner: TeamKey.Ai,
-            parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
+            parentLineage: { kind: LegacyPlanParentKind.WorkflowRoot },
           },
         ],
       },
@@ -579,7 +581,7 @@ describe('reviewed module delivery plan', () => {
         nodes: [
           {
             ...validPlan.nodes[0],
-            parentLineage: { kind: 'workflow-root' },
+            parentLineage: { kind: LegacyPlanParentKind.WorkflowRoot },
             agentDepthLimit: 2,
           },
           ...validPlan.nodes.slice(1),

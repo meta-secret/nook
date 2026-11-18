@@ -1,8 +1,8 @@
 import { ModuleWriteClaim } from './resource-claims.ts';
 
-import { TaskResourceClaim } from '../agent-workflow/domain.ts';
+import { TaskResourceClaim } from './task-resource-claim.ts';
 
-import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
+import type { TaskResourcePatternPair } from './task-resource-claim.ts';
 
 import type { ResourcePathMatchRequest } from './resource-claims.ts';
 

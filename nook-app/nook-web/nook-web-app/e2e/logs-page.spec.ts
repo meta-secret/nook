@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures'
+import { parseJson } from './helpers/guards'
 import {
   authorizeDeviceProtection,
   addSecret,
@@ -14,22 +15,47 @@ import {
   waitForPersistedAppLog,
 } from './helpers'
 
+const vaultMounts =
+  process.env.NOOK_E2E_ASSEMBLED_PREVIEW === 'true'
+    ? ['', '/simple', '/sentinel']
+    : ['']
+
 test.describe('application logging', () => {
-  test('renders the /logs viewer and returns home', async ({ page }) => {
-    await page.goto('/logs')
+  for (const mount of vaultMounts) {
+    test(`renders the ${mount}/logs viewer and returns home`, async ({
+      page,
+    }) => {
+      await page.goto(`${mount}/logs`)
 
-    await expect(page.getByTestId('logs-page')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
+      await expect(page.getByTestId('logs-page')).toBeVisible({
+        timeout: UI_TIMEOUT_MS,
+      })
+      await expect(page).toHaveTitle(/Application logs · Nook/)
+      await expect(page.getByTestId('logs-level-filter')).toBeVisible()
+      await expect(page.getByTestId('logs-capture-level')).toBeVisible()
+      await expect(page.getByTestId('logs-count')).toBeVisible()
+
+      await page.getByTestId('logs-back-btn').click()
+      await expect(page.getByTestId('logs-page')).not.toBeVisible()
+      await expect(page).toHaveURL(`${mount}/vault`)
     })
-    await expect(page).toHaveTitle(/Application logs · Nook/)
-    await expect(page.getByTestId('logs-level-filter')).toBeVisible()
-    await expect(page.getByTestId('logs-capture-level')).toBeVisible()
-    await expect(page.getByTestId('logs-count')).toBeVisible()
 
-    await page.getByTestId('logs-back-btn').click()
-    await expect(page.getByTestId('logs-page')).not.toBeVisible()
-    await expect(page).toHaveURL('/vault')
-  })
+    test(`returns a queried log export at ${mount}/app-logs`, async ({
+      page,
+    }) => {
+      await page.goto(`${mount}/app-logs?minLevel=warn&limit=3&offset=1`)
+      const document = page.getByTestId('app-logs-json')
+      await expect(document).toBeVisible({ timeout: UI_TIMEOUT_MS })
+      expect(parseJson(await document.innerText())).toMatchObject({
+        meta: {
+          schema: 'nook.app-logs.v1',
+          minLevel: 'warn',
+          limit: 3,
+          offset: 1,
+        },
+      })
+    })
+  }
 
   test('persists info-level milestones when creating a local vault', async ({
     page,

@@ -220,10 +220,6 @@
         "src/lib/guards.ts",
         "src/codec/yaml.ts",
         "src/codec/external.ts",
-        "src/agent-workflow/structural-result-codec.ts",
-        "src/agent-workflow/structured-result-codec.ts",
-        "src/agent-workflow/structural-evidence-codec.ts",
-        "src/structural-experts/request-codec.ts",
         "src/module-delivery/codec.ts",
         "src/module-delivery/codec-fields.ts",
         "src/module-delivery/cortex-authoring-codec.ts"

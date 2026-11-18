@@ -18,9 +18,9 @@ It also preserves one legacy standalone diagnostic aggregation role:
 
 ### Lane identities
 
-`system_coherence_synthesizer` is the `loom-structural-experts` diagnostic
-role. It receives typed `Completed` and `Failed` structural observations from
-the active harness and does not inspect the repository. A failed observation
+The active harness supplies `system_coherence_synthesizer` with
+`Completed` and `Failed` structural observations. The role works from those
+observations without inspecting the repository. A failed observation
 remains failed. The aggregate is diagnostic output for the delivery owner.
 
 Prime and specialists follow the root
@@ -267,8 +267,8 @@ conflict resolution.
 
 ## `system_coherence_synthesizer`
 
-This is the standalone structural/Cortex diagnostic aggregator used by
-`loom-structural-experts`.
+The parent dispatches this diagnostic role through the active harness.
+`loom-structural-experts validate` checks its catalog entry.
 
 Its terminal-observation inputs may carry:
 

@@ -13,7 +13,12 @@ import type {
   AuthenticationObservationBindingToken,
   AuthenticationPageObservationFactsBatch,
   AuthenticationPilotPresentationCapability,
-  AuthenticationUsernameEvidence,
+  BrowserPageInput,
+  LoginContextObservation,
+  PageInputClassification,
+  PageInputsClassification,
+  PageInputsObservation,
+  PageInputLabel,
   FocusedCredentialOpportunity,
   FocusedCredentialSelection,
   PersonalFieldClassification,
@@ -51,7 +56,6 @@ import type {
   AuthenticationImplicitSubmitActuationObservation,
   LoginSaveOutcomeObservation,
   LoginSaveOutcomeDecision,
-  PageSecondFactorRoute,
   SitePageNeed,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type {
@@ -130,40 +134,10 @@ export enum AuthenticationEnrollmentWorkflowMatchResponseKind {
   Matched = "matched",
 }
 
-export type CompanionWasmLoginContextObservation = {
-  readonly formIdentity: string;
-  readonly ancestorIdentities: readonly string[];
-  readonly advanceControlLabel: string;
-  readonly pathContext: string;
-};
-
-/**
- * Raw input attributes for `NookPageInputFieldObservation`; Rust decides every role.
- * Migration decision: the content-script producers and the offscreen consumer ship
- * atomically, so mixed-version payloads are unsupported and fail closed. Every field
- * is required; there are no defaults and no compatibility branch.
- */
-export type CompanionWasmPageInputFieldObservation = {
-  readonly inputType: string;
-  readonly disabled: boolean;
-  readonly readOnly: boolean;
-  readonly autocompleteTokens: readonly string[];
-  readonly identityText: string;
-  readonly loginContext: boolean;
-  readonly secondFactorRoute: PageSecondFactorRoute;
-  /** Raw `inputmode` attribute, empty when absent. */
-  readonly inputMode: string;
-  /** Raw DOM `maxLength`, which the browser reports as -1 when absent. */
-  readonly maxLength: number;
-  /** Raw `pattern` attribute, empty when absent. */
-  readonly pattern: string;
-};
-
-export type CompanionWasmPageInputFieldRequest = {
-  readonly index: number;
-  readonly observation: CompanionWasmPageInputFieldObservation;
-  readonly loginContextObservation: CompanionWasmLoginContextObservation;
-};
+/** Raw DOM attributes for the Rust classifier. The content script and offscreen
+ * document ship atomically. Every field is required, and mixed-version
+ * payloads are unsupported and fail closed. */
+export type CompanionWasmPageInputFieldObservation = BrowserPageInput;
 
 /** The focused field's form-scope inputs in document order; indices are positions. */
 export type CompanionWasmPersonalFillScope = {
@@ -171,10 +145,7 @@ export type CompanionWasmPersonalFillScope = {
   readonly focusedIndex: number;
 };
 
-export type CompanionWasmLabelRequest = {
-  readonly kind: CompanionWasmLabelKind;
-  readonly value: string;
-};
+export type CompanionWasmLabelRequest = PageInputLabel;
 
 export type CompanionWasmSessionMessage =
   | {
@@ -260,7 +231,7 @@ export type CompanionWasmSessionMessage =
   | {
       readonly type: CompanionWasmSessionMessageType.HasLoginContext;
       readonly payload: {
-        readonly observation: CompanionWasmLoginContextObservation;
+        readonly observation: LoginContextObservation;
       };
     }
   | {
@@ -271,10 +242,7 @@ export type CompanionWasmSessionMessage =
     }
   | {
       readonly type: CompanionWasmSessionMessageType.ClassifyPageInputs;
-      readonly payload: {
-        readonly fields: readonly CompanionWasmPageInputFieldRequest[];
-        readonly labels: readonly CompanionWasmLabelRequest[];
-      };
+      readonly payload: PageInputsObservation;
     }
   | {
       readonly type: CompanionWasmSessionMessageType.LooksLikeLoginAdvanceControlLabel;
@@ -470,28 +438,8 @@ export type CompanionWasmSessionResponse =
       readonly activityProgress: readonly AuthenticationDisplayProgress[];
       readonly implicitSubmissions: readonly boolean[];
     }
-  | {
-      readonly authenticationUsernameEvidence: AuthenticationUsernameEvidence;
-      readonly looksLikeUsernameField: boolean;
-      readonly looksLikeOneTimeCodeField: boolean;
-    }
-  | {
-      readonly fields: readonly {
-        readonly index: number;
-        readonly loginContext: boolean;
-        readonly authenticationUsernameEvidence: AuthenticationUsernameEvidence;
-        readonly looksLikeUsernameField: boolean;
-        readonly looksLikeOneTimeCodeField: boolean;
-      }[];
-      readonly strongestAuthenticationUsernameEvidence: AuthenticationUsernameEvidence;
-      /** Rust's evidence order, strongest first, for any scoped subset. */
-      readonly usernameEvidenceByStrength: readonly AuthenticationUsernameEvidence[];
-      readonly labels: readonly {
-        readonly kind: CompanionWasmLabelRequest["kind"];
-        readonly value: string;
-        readonly matches: boolean;
-      }[];
-    };
+  | PageInputClassification
+  | PageInputsClassification;
 
 export type AuthenticationEnrollmentWorkflowMatchResponse =
   | { readonly kind: AuthenticationEnrollmentWorkflowMatchResponseKind.NoMatch }

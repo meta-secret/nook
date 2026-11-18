@@ -1,9 +1,8 @@
 import { err, ok, type Result } from 'neverthrow';
 
-import type { GitCommit } from '../agent-workflow/domain.ts';
-
 import {
   PinnedDevBaseEvidenceContract,
+  type GitCommit,
   type PinnedDevBaseEvidence,
 } from './base-evidence.ts';
 

@@ -5,8 +5,8 @@
 Aggregate typed code-refactoring and Cortex-refactoring terminal observations
 into one standalone diagnostic coherence report.
 
-This is the `loom-structural-experts` profile and produces
-`SystemCoherenceSynthesis`. It is not the static Cortex-audit aggregator.
+The parent invokes this role through the active harness. Its result is
+`SystemCoherenceSynthesis`. Loom audits the registered profile.
 
 Use this role only when multiple structural terminal-observation streams need a
 shared diagnostic join.
