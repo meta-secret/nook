@@ -78,7 +78,7 @@ afterEach(() => {
 
 describe('page input classification boundaries', () => {
   test('direct and offscreen classification preserve ordered DOM fields and form-scoped evidence', async () => {
-    vi.stubGlobal('chrome', undefined)
+    vi.stubGlobal('chrome', {})
     const direct = discoveredFields(renderForms())
     expect(direct).toEqual({
       usernames: ['address', 'account'],
@@ -89,7 +89,7 @@ describe('page input classification boundaries', () => {
 
     const runtime = new PageInputRuntime()
     vi.stubGlobal('chrome', { runtime })
-    const directField = vi.spyOn(NookPageInputClassifier, 'classifyPageInput')
+    const directField = vi.spyOn(NookPageInputClassifier, 'classify_page_input')
     const form = renderForms()
     expect(
       passwordFieldDiscovery.findUsernameFields({ root: document }),
@@ -170,7 +170,7 @@ describe('page input classification boundaries', () => {
     const malformed = { fields: [{}], labels: [] }
     expect(() => {
       Reflect.apply(
-        NookPageInputClassifier.classifyPageInputs,
+        NookPageInputClassifier.classify_page_inputs,
         NookPageInputClassifier,
         [malformed],
       )
