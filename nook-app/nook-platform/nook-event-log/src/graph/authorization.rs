@@ -197,72 +197,12 @@ impl EventGraph {
 
 #[cfg(test)]
 pub(super) mod tests {
-    #![allow(unused_assignments)]
-
     use super::*;
-    use crate::event::{
-        EncryptedSecretPayload, GenesisImportPayload, VaultEvent, VaultEventBody,
-        VaultEventSchemaVersion, VaultOperation,
-    };
-    use crate::test_support::{actor, epoch, public_key, signing_key, store};
-    use crate::{
-        EventGraphRejection, EventId, EventInsertStatus, EventResult, GenesisImportRequest,
-    };
+    use crate::event::{VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation};
+    use crate::test_support::{ChildSecret, actor, epoch, public_key, signing_key, store};
+    use crate::{EventGraphRejection, EventId, EventInsertStatus, EventResult};
     use ed25519_dalek::SigningKey;
-    use nook_auth2::{
-        AgeArmoredCiphertext, DeviceId, DevicePublicKey, IsoTimestamp, MemberLabel,
-        OpaqueCiphertext, SecretId, Sha256Hex,
-    };
-
-    pub(in crate::graph) const STORE_STR: &str = "store_testtoken11";
-
-    pub(super) fn genesis_source_hash() -> Sha256Hex {
-        Sha256Hex::from_trusted("deadbeef".repeat(8))
-    }
-
-    pub(super) fn signed_child(
-        parents: Vec<EventId>,
-        secret_id: &str,
-        signing_key: &SigningKey,
-    ) -> EventResult<VaultEvent> {
-        let body = VaultEventBody {
-            schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: store()?,
-            actor_id: actor(signing_key)?,
-            actor_signing_public_key: public_key(signing_key),
-            parents,
-            created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-            key_epoch: epoch()?,
-            operations: vec![VaultOperation::SecretCreated {
-                secret: EncryptedSecretPayload {
-                    id: SecretId::from_vault_record(secret_id),
-                    secret_type: crate::SecretType::ApiKey,
-                    ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{secret_id}")),
-                    identity_fingerprint: crate::SecretFingerprint::from_trusted(format!(
-                        "test-identity:{secret_id}"
-                    )),
-                    fingerprint: crate::SecretFingerprint::from_trusted(format!(
-                        "test-version:{secret_id}"
-                    )),
-                },
-            }],
-        };
-        VaultEvent::sign(body, signing_key)
-    }
-
-    pub(in crate::graph) fn genesis_event(signing_key: &SigningKey) -> EventResult<VaultEvent> {
-        VaultEvent::build_genesis_import_event(GenesisImportRequest {
-            store_id: &store()?,
-            actor_id: &actor(signing_key)?,
-            key_epoch: &epoch()?,
-            payload: GenesisImportPayload {
-                source_content_hash: genesis_source_hash(),
-                secrets: vec![],
-            },
-            created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-            signing_key,
-        })
-    }
+    use nook_auth2::{AgeArmoredCiphertext, DeviceId, DevicePublicKey, IsoTimestamp, MemberLabel};
 
     pub(in crate::graph) fn signed_operation(
         parents: Vec<EventId>,
@@ -286,21 +226,9 @@ pub(super) mod tests {
         signing_key: &SigningKey,
     ) -> EventResult<(EventGraph, EventId)> {
         let mut graph = EventGraph::new();
-        let genesis = genesis_event(signing_key)?;
+        let genesis = VaultEvent::fixture_genesis(signing_key)?;
         let genesis_id = genesis.id()?;
-        match graph.insert(crate::EventGraphInsert {
-            event: genesis,
-            expected_store_id: STORE_STR,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = graph.insert_fixture_event(genesis)?.graph;
         Ok((graph, genesis_id))
     }
 
@@ -320,92 +248,62 @@ pub(super) mod tests {
         })
     }
 
-    pub(super) fn assert_self_approval_quarantined(
-        mut graph: EventGraph,
-        parent: EventId,
-        stranger_key: &SigningKey,
-        encryption_public_key: &str,
-    ) -> EventResult<EventGraph> {
-        let event = signed_operation(
-            vec![parent],
-            join_approval(
+    pub(super) struct SelfApproval<'a> {
+        pub(super) parent: EventId,
+        pub(super) stranger_key: &'a SigningKey,
+        pub(super) encryption_public_key: &'a str,
+    }
+    impl SelfApproval<'_> {
+        pub(super) fn assert_quarantined(self, graph: EventGraph) -> EventResult<()> {
+            let Self {
+                parent,
                 stranger_key,
-                "fedcba9876543210",
                 encryption_public_key,
-                "laptop",
-            )?,
-            stranger_key,
-        )?;
-        let event_id = event.id()?;
-        assert!(matches!(
-            match graph.insert(crate::EventGraphInsert {
-                event,
-                expected_store_id: STORE_STR
-            }) {
-                Ok(inserted) => {
-                    graph = inserted.graph;
-                    Ok(inserted.status)
-                }
-                Err(rejected) => {
-                    graph = rejected.graph;
-                    Err(rejected.cause)
-                }
-            }?,
-            EventInsertStatus::Quarantined(_)
-        ));
-        assert!(graph.quarantined().contains_key(&event_id));
-        Ok(graph)
+            } = self;
+            let event = signed_operation(
+                vec![parent],
+                join_approval(
+                    stranger_key,
+                    "fedcba9876543210",
+                    encryption_public_key,
+                    "laptop",
+                )?,
+                stranger_key,
+            )?;
+            let event_id = event.id()?;
+            let insertion = graph.insert_fixture_event(event)?;
+            assert!(matches!(
+                insertion.status,
+                EventInsertStatus::Quarantined(_)
+            ));
+            assert!(insertion.graph.quarantined().contains_key(&event_id));
+            Ok(())
+        }
     }
 
     #[test]
     fn unauthorized_pending_event_is_quarantined_when_parent_arrives() -> EventResult<()> {
         let root_key = signing_key();
         let stranger_key = signing_key();
-        let genesis = genesis_event(&root_key)?;
+        let genesis = VaultEvent::fixture_genesis(&root_key)?;
         let genesis_id = genesis.id()?;
 
-        let child = signed_child(
-            vec![genesis_id.clone()],
-            "secret_badpending1",
-            &stranger_key,
-        )?;
+        let child = ChildSecret {
+            parents: vec![genesis_id.clone()],
+            secret_id: "secret_badpending1",
+        }
+        .sign(&stranger_key)?;
         let child_id = child.id()?;
 
         let mut graph = EventGraph::new();
-        assert!(matches!(
-            match graph.insert(crate::EventGraphInsert {
-                event: child,
-                expected_store_id: STORE_STR
-            }) {
-                Ok(inserted) => {
-                    graph = inserted.graph;
-                    Ok(inserted.status)
-                }
-                Err(rejected) => {
-                    graph = rejected.graph;
-                    Err(rejected.cause)
-                }
-            }?,
-            EventInsertStatus::Pending(_)
-        ));
+        let insertion = graph.insert_fixture_event(child)?;
+        graph = insertion.graph;
+        assert!(matches!(insertion.status, EventInsertStatus::Pending(_)));
         assert_eq!(graph.pending_events().len(), 1);
 
-        assert_eq!(
-            match graph.insert(crate::EventGraphInsert {
-                event: genesis,
-                expected_store_id: STORE_STR
-            }) {
-                Ok(inserted) => {
-                    graph = inserted.graph;
-                    Ok(inserted.status)
-                }
-                Err(rejected) => {
-                    graph = rejected.graph;
-                    Err(rejected.cause)
-                }
-            }?,
-            EventInsertStatus::Applied
-        );
+        let insertion = graph.insert_fixture_event(genesis)?;
+        graph = insertion.graph;
+        assert_eq!(insertion.status, EventInsertStatus::Applied);
         assert!(graph.pending_events().is_empty());
         assert!(graph.quarantined().contains_key(&child_id));
         assert_eq!(graph.topological_order()?, vec![genesis_id]);
@@ -417,38 +315,20 @@ pub(super) mod tests {
         let root_key = signing_key();
         let stranger_key = signing_key();
         let mut graph = EventGraph::new();
-        let genesis = genesis_event(&root_key)?;
+        let genesis = VaultEvent::fixture_genesis(&root_key)?;
         let genesis_id = genesis.id()?;
-        match graph.insert(crate::EventGraphInsert {
-            event: genesis,
-            expected_store_id: STORE_STR,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = graph.insert_fixture_event(genesis)?.graph;
 
-        let stranger_event = signed_child(vec![genesis_id], "secret_unauth0001", &stranger_key)?;
+        let stranger_event = ChildSecret {
+            parents: vec![genesis_id],
+            secret_id: "secret_unauth0001",
+        }
+        .sign(&stranger_key)?;
         let stranger_id = stranger_event.id()?;
+        let insertion = graph.insert_fixture_event(stranger_event)?;
+        graph = insertion.graph;
         assert!(matches!(
-            match graph.insert(crate::EventGraphInsert {
-                event: stranger_event,
-                expected_store_id: STORE_STR
-            }) {
-                Ok(inserted) => {
-                    graph = inserted.graph;
-                    Ok(inserted.status)
-                }
-                Err(rejected) => {
-                    graph = rejected.graph;
-                    Err(rejected.cause)
-                }
-            }?,
+            insertion.status,
             EventInsertStatus::Quarantined(_)
         ));
         assert!(graph.quarantined().contains_key(&stranger_id));
@@ -460,21 +340,9 @@ pub(super) mod tests {
         let root_key = signing_key();
         let joiner_key = signing_key();
         let mut graph = EventGraph::new();
-        let genesis = genesis_event(&root_key)?;
+        let genesis = VaultEvent::fixture_genesis(&root_key)?;
         let genesis_id = genesis.id()?;
-        match graph.insert(crate::EventGraphInsert {
-            event: genesis,
-            expected_store_id: STORE_STR,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = graph.insert_fixture_event(genesis)?.graph;
 
         let join = signed_operation(
             vec![genesis_id],
@@ -486,22 +354,8 @@ pub(super) mod tests {
             },
             &joiner_key,
         )?;
-        assert_eq!(
-            match graph.insert(crate::EventGraphInsert {
-                event: join,
-                expected_store_id: STORE_STR
-            }) {
-                Ok(inserted) => {
-                    graph = inserted.graph;
-                    Ok(inserted.status)
-                }
-                Err(rejected) => {
-                    graph = rejected.graph;
-                    Err(rejected.cause)
-                }
-            }?,
-            EventInsertStatus::Applied
-        );
+        let insertion = graph.insert_fixture_event(join)?;
+        assert_eq!(insertion.status, EventInsertStatus::Applied);
         Ok(())
     }
 
@@ -517,40 +371,17 @@ pub(super) mod tests {
             &joiner_key,
         )?;
         let enrol_id = enrol.id()?;
-        assert_eq!(
-            match graph.insert(crate::EventGraphInsert {
-                event: enrol,
-                expected_store_id: STORE_STR
-            }) {
-                Ok(inserted) => {
-                    graph = inserted.graph;
-                    Ok(inserted.status)
-                }
-                Err(rejected) => {
-                    graph = rejected.graph;
-                    Err(rejected.cause)
-                }
-            }?,
-            EventInsertStatus::Applied
-        );
+        let insertion = graph.insert_fixture_event(enrol)?;
+        graph = insertion.graph;
+        assert_eq!(insertion.status, EventInsertStatus::Applied);
 
-        let child = signed_child(vec![enrol_id], "secret_joiner0001", &joiner_key)?;
-        assert_eq!(
-            match graph.insert(crate::EventGraphInsert {
-                event: child,
-                expected_store_id: STORE_STR
-            }) {
-                Ok(inserted) => {
-                    graph = inserted.graph;
-                    Ok(inserted.status)
-                }
-                Err(rejected) => {
-                    graph = rejected.graph;
-                    Err(rejected.cause)
-                }
-            }?,
-            EventInsertStatus::Applied
-        );
+        let child = ChildSecret {
+            parents: vec![enrol_id],
+            secret_id: "secret_joiner0001",
+        }
+        .sign(&joiner_key)?;
+        let insertion = graph.insert_fixture_event(child)?;
+        assert_eq!(insertion.status, EventInsertStatus::Applied);
         Ok(())
     }
 
@@ -566,37 +397,15 @@ pub(super) mod tests {
             &root_key,
         )?;
         let approval_id = approval.id()?;
-        match graph.insert(crate::EventGraphInsert {
-            event: approval,
-            expected_store_id: STORE_STR,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = graph.insert_fixture_event(approval)?.graph;
 
-        let child = signed_child(vec![approval_id], "secret_joiner0001", &joiner_key)?;
-        assert_eq!(
-            match graph.insert(crate::EventGraphInsert {
-                event: child,
-                expected_store_id: STORE_STR
-            }) {
-                Ok(inserted) => {
-                    graph = inserted.graph;
-                    Ok(inserted.status)
-                }
-                Err(rejected) => {
-                    graph = rejected.graph;
-                    Err(rejected.cause)
-                }
-            }?,
-            EventInsertStatus::Applied
-        );
+        let child = ChildSecret {
+            parents: vec![approval_id],
+            secret_id: "secret_joiner0001",
+        }
+        .sign(&joiner_key)?;
+        let insertion = graph.insert_fixture_event(child)?;
+        assert_eq!(insertion.status, EventInsertStatus::Applied);
         Ok(())
     }
 
@@ -606,21 +415,9 @@ pub(super) mod tests {
         let joiner_key = signing_key();
         let device_id = DeviceId::parse("0123456789abcdef")?;
         let mut graph = EventGraph::new();
-        let genesis = genesis_event(&root_key)?;
+        let genesis = VaultEvent::fixture_genesis(&root_key)?;
         let genesis_id = genesis.id()?;
-        match graph.insert(crate::EventGraphInsert {
-            event: genesis,
-            expected_store_id: STORE_STR,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = graph.insert_fixture_event(genesis)?.graph;
 
         let approval = signed_operation(
             vec![genesis_id],
@@ -637,19 +434,7 @@ pub(super) mod tests {
             &root_key,
         )?;
         let approval_id = approval.id()?;
-        match graph.insert(crate::EventGraphInsert {
-            event: approval,
-            expected_store_id: STORE_STR,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = graph.insert_fixture_event(approval)?.graph;
 
         let revoke = signed_operation(
             vec![approval_id],
@@ -657,35 +442,16 @@ pub(super) mod tests {
             &root_key,
         )?;
         let revoke_id = revoke.id()?;
-        match graph.insert(crate::EventGraphInsert {
-            event: revoke,
-            expected_store_id: STORE_STR,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = graph.insert_fixture_event(revoke)?.graph;
 
-        let child = signed_child(vec![revoke_id], "secret_revoked0001", &joiner_key)?;
+        let child = ChildSecret {
+            parents: vec![revoke_id],
+            secret_id: "secret_revoked0001",
+        }
+        .sign(&joiner_key)?;
+        let insertion = graph.insert_fixture_event(child)?;
         assert!(matches!(
-            match graph.insert(crate::EventGraphInsert {
-                event: child,
-                expected_store_id: STORE_STR
-            }) {
-                Ok(inserted) => {
-                    graph = inserted.graph;
-                    Ok(inserted.status)
-                }
-                Err(rejected) => {
-                    graph = rejected.graph;
-                    Err(rejected.cause)
-                }
-            }?,
+            insertion.status,
             EventInsertStatus::Quarantined(_)
         ));
         Ok(())
@@ -696,21 +462,9 @@ pub(super) mod tests {
         let root_key = signing_key();
         let joiner_key = signing_key();
         let mut graph = EventGraph::new();
-        let genesis = genesis_event(&root_key)?;
+        let genesis = VaultEvent::fixture_genesis(&root_key)?;
         let genesis_id = genesis.id()?;
-        match graph.insert(crate::EventGraphInsert {
-            event: genesis,
-            expected_store_id: STORE_STR,
-        }) {
-            Ok(inserted) => {
-                graph = inserted.graph;
-                Ok(inserted.status)
-            }
-            Err(rejected) => {
-                graph = rejected.graph;
-                Err(rejected.cause)
-            }
-        }?;
+        graph = graph.insert_fixture_event(genesis)?.graph;
 
         let enrol = signed_operation(
             vec![genesis_id],
@@ -723,40 +477,17 @@ pub(super) mod tests {
             &root_key,
         )?;
         let enrol_id = enrol.id()?;
-        assert_eq!(
-            match graph.insert(crate::EventGraphInsert {
-                event: enrol,
-                expected_store_id: STORE_STR
-            }) {
-                Ok(inserted) => {
-                    graph = inserted.graph;
-                    Ok(inserted.status)
-                }
-                Err(rejected) => {
-                    graph = rejected.graph;
-                    Err(rejected.cause)
-                }
-            }?,
-            EventInsertStatus::Applied
-        );
+        let insertion = graph.insert_fixture_event(enrol)?;
+        graph = insertion.graph;
+        assert_eq!(insertion.status, EventInsertStatus::Applied);
 
-        let child = signed_child(vec![enrol_id], "secret_joiner0001", &joiner_key)?;
-        assert_eq!(
-            match graph.insert(crate::EventGraphInsert {
-                event: child,
-                expected_store_id: STORE_STR
-            }) {
-                Ok(inserted) => {
-                    graph = inserted.graph;
-                    Ok(inserted.status)
-                }
-                Err(rejected) => {
-                    graph = rejected.graph;
-                    Err(rejected.cause)
-                }
-            }?,
-            EventInsertStatus::Applied
-        );
+        let child = ChildSecret {
+            parents: vec![enrol_id],
+            secret_id: "secret_joiner0001",
+        }
+        .sign(&joiner_key)?;
+        let insertion = graph.insert_fixture_event(child)?;
+        assert_eq!(insertion.status, EventInsertStatus::Applied);
         Ok(())
     }
 
@@ -764,17 +495,18 @@ pub(super) mod tests {
     fn graph_admission_fails_closed_for_corrupt_or_invalid_envelopes() -> anyhow::Result<()> {
         let first_key = signing_key();
         let second_key = signing_key();
-        let incoming = genesis_event(&first_key)?;
+        let incoming = VaultEvent::fixture_genesis(&first_key)?;
         let incoming_id = incoming.id()?;
         let mut corrupt_graph = EventGraph::new();
-        corrupt_graph
-            .events
-            .insert(incoming_id.clone(), genesis_event(&second_key)?);
+        corrupt_graph.events.insert(
+            incoming_id.clone(),
+            VaultEvent::fixture_genesis(&second_key)?,
+        );
 
         let inserted = corrupt_graph
             .insert(crate::EventGraphInsert {
                 event: incoming,
-                expected_store_id: STORE_STR,
+                expected_store_id: EventGraph::FIXTURE_STORE_ID,
             })
             .map_err(EventGraphRejection::into_cause)?;
         assert!(matches!(
@@ -785,7 +517,7 @@ pub(super) mod tests {
 
         let rejected = EventGraph::new()
             .insert(crate::EventGraphInsert {
-                event: genesis_event(&first_key)?,
+                event: VaultEvent::fixture_genesis(&first_key)?,
                 expected_store_id: "store_otherid0001",
             })
             .err()

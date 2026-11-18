@@ -8,13 +8,12 @@
 
 use crate::secrets::import_support::CsvExportColumn;
 use crate::secrets::import_support::{ImportItemDisposition, ImportSkipReason};
-use std::iter;
 
 use csv::StringRecord;
 use thiserror::Error;
 
 use super::import_support::{
-    self, CsvHeader, CsvImportConversion, CsvImportReader, CsvRecordFields, ImportMetadata,
+    self, CsvHeaders, CsvImportConversion, CsvImportReader, CsvRecordFields, ImportMetadata,
     SourceLabelMetadata,
 };
 use crate::{LoginSecret, SecretValue};
@@ -47,69 +46,23 @@ struct ChromePasswordColumns {
     note: CsvExportColumn,
 }
 
-struct ChromePasswordsHeaders {
-    normalized: Vec<String>,
-}
-enum ChromeRequiredColumn {
-    Url,
-    Username,
-    Password,
-}
-impl ChromeRequiredColumn {
-    fn name(&self) -> &'static str {
-        match self {
-            Self::Url => "url",
-            Self::Username => "username",
-            Self::Password => "password",
-        }
-    }
-    fn aliases(&self) -> &'static [&'static str] {
-        match self {
-            Self::Url => &["website url", "website"],
-            Self::Username => &["user name", "login"],
-            Self::Password => &["secret"],
-        }
-    }
-}
-impl ChromePasswordsHeaders {
-    fn new(headers: &StringRecord) -> Self {
-        Self {
-            normalized: headers
-                .iter()
-                .map(|header| CsvHeader::new(header).normalized())
-                .collect(),
-        }
-    }
-    fn required(&self, column: &ChromeRequiredColumn) -> Result<usize, ChromePasswordsImportError> {
-        iter::once(column.name())
-            .chain(column.aliases().iter().copied())
-            .find_map(|candidate| {
-                let expected = CsvHeader::new(candidate).normalized();
-                self.normalized
-                    .iter()
-                    .position(|header| header == &expected)
-            })
-            .ok_or(ChromePasswordsImportError::MissingColumn(column.name()))
-    }
-    fn optional(&self, names: &[&str]) -> CsvExportColumn {
-        let column = names.iter().find_map(|name| {
-            let expected = CsvHeader::new(name).normalized();
-            self.normalized
-                .iter()
-                .position(|header| header == &expected)
-        });
-        match column {
-            Some(index) => CsvExportColumn::Exported(index),
-            None => CsvExportColumn::NotExported,
-        }
-    }
-    fn admit(self) -> Result<ChromePasswordColumns, ChromePasswordsImportError> {
-        Ok(ChromePasswordColumns {
-            name: self.optional(&["name", "title"]),
-            url: self.required(&ChromeRequiredColumn::Url)?,
-            username: self.required(&ChromeRequiredColumn::Username)?,
-            password: self.required(&ChromeRequiredColumn::Password)?,
-            note: self.optional(&["note", "notes"]),
+impl ChromePasswordColumns {
+    fn from_headers(
+        record: &StringRecord,
+    ) -> Result<ChromePasswordColumns, ChromePasswordsImportError> {
+        let headers = CsvHeaders::from(record);
+        Ok(Self {
+            name: headers.find(&["name", "title"]),
+            url: headers
+                .find(&["url", "website url", "website"])
+                .required(ChromePasswordsImportError::MissingColumn("url"))?,
+            username: headers
+                .find(&["username", "user name", "login"])
+                .required(ChromePasswordsImportError::MissingColumn("username"))?,
+            password: headers
+                .find(&["password", "secret"])
+                .required(ChromePasswordsImportError::MissingColumn("password"))?,
+            note: headers.find(&["note", "notes"]),
         })
     }
 }
@@ -234,7 +187,7 @@ impl<'a> ChromePasswordsCsvInput<'a> {
         let reader = CsvImportReader::new(self.text);
         let read = reader.headers()?;
         let reader = read.reader;
-        let columns = ChromePasswordsHeaders::new(&read.headers).admit()?;
+        let columns = ChromePasswordColumns::from_headers(&read.headers)?;
         Ok(CheckedChromePasswordsCsv { reader, columns })
     }
 }

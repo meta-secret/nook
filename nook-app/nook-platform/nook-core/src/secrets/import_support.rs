@@ -86,7 +86,7 @@ impl<'a> CsvImportReader<'a> {
     }
 
     pub(crate) fn collect<T, E, F>(
-        mut self,
+        self,
         conversion: CsvImportConversion<E, F>,
     ) -> Result<CsvImportCollection<T>, E>
     where
@@ -97,22 +97,13 @@ impl<'a> CsvImportReader<'a> {
             too_many_records,
             mut convert,
         } = conversion;
-        let mut collection = CsvImportCollection {
-            items: Vec::new(),
-            source_count: 0,
-            skipped_unsupported: 0,
-        };
-        for record in self.reader.records() {
-            if collection.source_count >= MAX_CSV_RECORDS {
-                return Err(too_many_records);
-            }
-            let record = record?;
-            collection.source_count += 1;
-            let (mut converted, skipped) = convert(&record);
-            collection.items.append(&mut converted);
-            collection.skipped_unsupported += skipped;
-        }
-        Ok(collection)
+        self.collect_fallible(
+            CsvImportConversion {
+                too_many_records,
+                convert: |record: &StringRecord| Ok(convert(record)),
+            },
+            drop,
+        )
     }
 
     pub(crate) fn collect_fallible<T, E, F, C>(
@@ -177,11 +168,50 @@ impl<'a> CsvHeader<'a> {
     }
 }
 
+/// Resolves format-specific column names and aliases in their declared priority order.
+/// Duplicate headers select the first matching column in the original export.
+pub(crate) struct CsvHeaders {
+    pub(crate) names: Vec<String>,
+}
+
+impl From<&StringRecord> for CsvHeaders {
+    fn from(record: &StringRecord) -> Self {
+        Self {
+            names: record
+                .iter()
+                .map(|name| CsvHeader::new(name).normalized())
+                .collect(),
+        }
+    }
+}
+
+impl CsvHeaders {
+    pub(crate) fn find(&self, candidates: &[&str]) -> CsvExportColumn {
+        let index = candidates.iter().find_map(|candidate| {
+            let expected = CsvHeader::new(candidate).normalized();
+            self.names.iter().position(|name| name == &expected)
+        });
+        match index {
+            Some(index) => CsvExportColumn::Exported(index),
+            None => CsvExportColumn::NotExported,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum CsvExportColumn {
     #[default]
     NotExported,
     Exported(usize),
+}
+
+impl CsvExportColumn {
+    pub(crate) fn required<E>(self, missing: E) -> Result<usize, E> {
+        match self {
+            Self::Exported(index) => Ok(index),
+            Self::NotExported => Err(missing),
+        }
+    }
 }
 
 pub(crate) struct CsvRecordFields<'a> {

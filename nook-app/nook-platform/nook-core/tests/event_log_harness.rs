@@ -40,6 +40,12 @@ pub struct DeviceRejection {
     pub device: EventLogDevice,
     pub cause: VaultError,
 }
+impl From<DeviceRejection> for VaultError {
+    fn from(rejected: DeviceRejection) -> Self {
+        rejected.cause
+    }
+}
+
 pub struct DeviceAppended {
     pub device: EventLogDevice,
     pub event_id: EventId,
@@ -55,10 +61,6 @@ pub struct DeviceJoinRequested {
 pub struct DeviceProvidersFlushed {
     pub device: EventLogDevice,
     pub providers: ProviderBuckets,
-}
-pub struct ProviderRejection {
-    pub providers: ProviderBuckets,
-    pub cause: VaultError,
 }
 
 impl EventLogDevice {
@@ -362,27 +364,37 @@ pub fn live_secret_ids(device: &EventLogDevice) -> VaultResult<BTreeSet<String>>
         .collect())
 }
 
-pub fn write_all_device_events_to_provider(
-    device: &EventLogDevice,
-    mut providers: ProviderBuckets,
-    provider: &str,
-) -> Result<ProviderBuckets, ProviderRejection> {
-    let Some(mut bucket) = providers.remove(provider) else {
-        return Err(ProviderRejection {
-            providers,
-            cause: missing_provider_bucket(provider).into(),
-        });
-    };
-    for (id, bytes) in device.remote_events() {
-        if matches!(bucket.get_bytes(&id), LocalEventBytes::UnknownEvent) {
-            bucket = bucket.put_event(nook_core::LocalEventWrite {
-                event_id: id,
-                bytes: bytes.into(),
-            });
+pub struct ProviderEventCopy<'a> {
+    device: &'a EventLogDevice,
+    provider: &'a str,
+}
+
+impl EventLogDevice {
+    pub fn events_for<'a>(&'a self, provider: &'a str) -> ProviderEventCopy<'a> {
+        ProviderEventCopy {
+            device: self,
+            provider,
         }
     }
-    providers.insert(provider.to_owned(), bucket);
-    Ok(providers)
+}
+
+impl ProviderEventCopy<'_> {
+    pub fn write_to(self, mut providers: ProviderBuckets) -> VaultResult<ProviderBuckets> {
+        let Self { device, provider } = self;
+        let Some(mut bucket) = providers.remove(provider) else {
+            return Err(missing_provider_bucket(provider).into());
+        };
+        for (id, bytes) in device.remote_events() {
+            if matches!(bucket.get_bytes(&id), LocalEventBytes::UnknownEvent) {
+                bucket = bucket.put_event(nook_core::LocalEventWrite {
+                    event_id: id,
+                    bytes: bytes.into(),
+                });
+            }
+        }
+        providers.insert(provider.to_owned(), bucket);
+        Ok(providers)
+    }
 }
 
 pub fn pull_provider_into_device(

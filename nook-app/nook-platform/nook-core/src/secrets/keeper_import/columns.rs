@@ -4,11 +4,11 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Keeper header aliases and ordered custom-field schema.
-use super::super::import_support::CsvHeader;
+use super::super::import_support::{CsvHeader, CsvHeaders};
 use super::KeeperImportError;
 use crate::secrets::import_support::CsvExportColumn;
 use csv::StringRecord;
-use std::{collections, iter};
+use std::collections;
 #[derive(Clone)]
 pub(super) struct KeeperColumns {
     pub(super) folder: CsvExportColumn,
@@ -38,71 +38,45 @@ pub(super) enum CustomFieldColumn {
 
 pub(super) struct KeeperHeaders<'a> {
     record: &'a StringRecord,
-    normalized: Vec<String>,
-}
-struct KeeperRequiredColumn<'a> {
-    name: &'static str,
-    aliases: &'a [&'a str],
+    headers: CsvHeaders,
 }
 impl<'a> KeeperHeaders<'a> {
     #[must_use]
     pub(super) fn new(record: &'a StringRecord) -> Self {
         Self {
             record,
-            normalized: record
-                .iter()
-                .map(|header| CsvHeader::new(header).normalized())
-                .collect(),
-        }
-    }
-    fn required(&self, request: &KeeperRequiredColumn<'_>) -> Result<usize, KeeperImportError> {
-        let name = request.name;
-        let aliases = request.aliases;
-        iter::once(name)
-            .chain(aliases.iter().copied())
-            .find_map(|candidate| {
-                let expected = CsvHeader::new(candidate).normalized();
-                self.normalized
-                    .iter()
-                    .position(|header| header == &expected)
-            })
-            .ok_or(KeeperImportError::MissingColumn(name))
-    }
-    fn optional(&self, names: &[&str]) -> CsvExportColumn {
-        let column = names.iter().find_map(|name| {
-            let expected = CsvHeader::new(name).normalized();
-            self.normalized
-                .iter()
-                .position(|header| header == &expected)
-        });
-        match column {
-            Some(index) => CsvExportColumn::Exported(index),
-            None => CsvExportColumn::NotExported,
+            headers: CsvHeaders::from(record),
         }
     }
     pub(super) fn admit(self) -> Result<KeeperColumns, KeeperImportError> {
-        let folder = self.optional(&["folder"]);
-        let title = self.required(&KeeperRequiredColumn {
-            name: "title",
-            aliases: &["name"],
-        })?;
-        let login = self.required(&KeeperRequiredColumn {
-            name: "login",
-            aliases: &["username", "user name"],
-        })?;
-        let password = self.required(&KeeperRequiredColumn {
-            name: "password",
-            aliases: &[],
-        })?;
-        let website = self.required(&KeeperRequiredColumn {
-            name: "website address",
-            aliases: &["login url", "url", "website", "website url"],
-        })?;
-        let notes = self.required(&KeeperRequiredColumn {
-            name: "notes",
-            aliases: &["note"],
-        })?;
-        let shared_folder = self.optional(&["shared folder", "sharedfolder"]);
+        let folder = self.headers.find(&["folder"]);
+        let title = self
+            .headers
+            .find(&["title", "name"])
+            .required(KeeperImportError::MissingColumn("title"))?;
+        let login = self
+            .headers
+            .find(&["login", "username", "user name"])
+            .required(KeeperImportError::MissingColumn("login"))?;
+        let password = self
+            .headers
+            .find(&["password"])
+            .required(KeeperImportError::MissingColumn("password"))?;
+        let website = self
+            .headers
+            .find(&[
+                "website address",
+                "login url",
+                "url",
+                "website",
+                "website url",
+            ])
+            .required(KeeperImportError::MissingColumn("website address"))?;
+        let notes = self
+            .headers
+            .find(&["notes", "note"])
+            .required(KeeperImportError::MissingColumn("notes"))?;
+        let shared_folder = self.headers.find(&["shared folder", "sharedfolder"]);
 
         let known = [
             folder,

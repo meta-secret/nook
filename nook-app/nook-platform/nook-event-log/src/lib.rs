@@ -110,9 +110,17 @@ pub use nook_auth2::{
 mod test_support {
     use core::sync::atomic::{AtomicU64, Ordering};
 
-    use crate::{EventId, EventResult, SigningIdentity};
+    use crate::event::{
+        EncryptedSecretPayload, GenesisImportPayload, VaultEvent, VaultEventBody,
+        VaultEventSchemaVersion, VaultOperation,
+    };
+    use crate::{
+        EventGraph, EventGraphInsert, EventGraphInsertion, EventGraphRejection, EventId,
+        EventResult, GenesisImportRequest, SigningIdentity,
+    };
     use ed25519_dalek::SigningKey;
     use nook_auth2::{AuthKeyId, DeviceSigningPublicKey, StoreId};
+    use nook_auth2::{IsoTimestamp, OpaqueCiphertext, SecretId, Sha256Hex};
 
     pub(crate) fn signing_key() -> SigningKey {
         static NEXT_SIGNING_KEY: AtomicU64 = AtomicU64::new(1);
@@ -138,6 +146,70 @@ mod test_support {
     }
 
     pub(crate) fn store() -> EventResult<StoreId> {
-        StoreId::parse("store_testtoken11").map_err(Into::into)
+        StoreId::parse(EventGraph::FIXTURE_STORE_ID).map_err(Into::into)
+    }
+
+    pub(crate) struct ChildSecret<'a> {
+        pub(crate) parents: Vec<EventId>,
+        pub(crate) secret_id: &'a str,
+    }
+
+    impl ChildSecret<'_> {
+        pub(crate) fn sign(self, signing_key: &SigningKey) -> EventResult<VaultEvent> {
+            let Self { parents, secret_id } = self;
+            let body = VaultEventBody {
+                schema_version: VaultEventSchemaVersion::CURRENT,
+                store_id: store()?,
+                actor_id: actor(signing_key)?,
+                actor_signing_public_key: public_key(signing_key),
+                parents,
+                created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+                key_epoch: epoch()?,
+                operations: vec![VaultOperation::SecretCreated {
+                    secret: EncryptedSecretPayload {
+                        id: SecretId::from_vault_record(secret_id),
+                        secret_type: crate::SecretType::ApiKey,
+                        ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{secret_id}")),
+                        identity_fingerprint: crate::SecretFingerprint::from_trusted(format!(
+                            "test-identity:{secret_id}"
+                        )),
+                        fingerprint: crate::SecretFingerprint::from_trusted(format!(
+                            "test-version:{secret_id}"
+                        )),
+                    },
+                }],
+            };
+            VaultEvent::sign(body, signing_key)
+        }
+    }
+
+    impl VaultEvent {
+        pub(crate) fn fixture_genesis(signing_key: &SigningKey) -> EventResult<Self> {
+            VaultEvent::build_genesis_import_event(GenesisImportRequest {
+                store_id: &store()?,
+                actor_id: &actor(signing_key)?,
+                key_epoch: &epoch()?,
+                payload: GenesisImportPayload {
+                    source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                    secrets: vec![],
+                },
+                created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+                signing_key,
+            })
+        }
+    }
+
+    impl EventGraph {
+        pub(crate) const FIXTURE_STORE_ID: &str = "store_testtoken11";
+        pub(crate) fn insert_fixture_event(
+            self,
+            event: VaultEvent,
+        ) -> EventResult<EventGraphInsertion> {
+            self.insert(EventGraphInsert {
+                event,
+                expected_store_id: Self::FIXTURE_STORE_ID,
+            })
+            .map_err(EventGraphRejection::into_cause)
+        }
     }
 }
