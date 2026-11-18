@@ -1,37 +1,7 @@
-use std::path::{Path, PathBuf};
-use std::{env, fs, ops::Deref};
+#[path = "support/repository_files.rs"]
+mod repository_files;
 
-struct RepositoryFixture {
-    path: PathBuf,
-}
-impl RepositoryFixture {
-    fn repository_root() -> Self {
-        Self {
-            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
-                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-                PathBuf::from,
-            ),
-        }
-    }
-}
-impl Deref for RepositoryFixture {
-    type Target = PathBuf;
-    fn deref(&self) -> &PathBuf {
-        &self.path
-    }
-}
-impl AsRef<Path> for RepositoryFixture {
-    fn as_ref(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl RepositoryFixture {
-    fn read(&self, relative_path: &str) -> String {
-        fs::read_to_string(self.join(relative_path))
-            .unwrap_or_else(|error| panic!("failed to read {relative_path}: {error}"))
-    }
-}
+use repository_files::{RepositoryFixture, RepositoryPathRead};
 
 #[test]
 fn registry_cache_exporters_force_their_existing_compression_chain() {

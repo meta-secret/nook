@@ -421,7 +421,7 @@ pub(super) fn assert_e2e_build_if_needed_contract(root: &Path) {
 impl PrDeliveryScenario<'_> {
     fn assert_release_and_main_delivery_contract(&self) -> anyhow::Result<()> {
         let root = self.root;
-        let release = (root).read(".github/workflows/release.yml");
+        let release = root.read(".github/workflows/release.yml");
         let release_source = release
             .find("- name: Checkout release source")
             .context("release workflow must check out release source")?;
@@ -455,7 +455,13 @@ impl PrDeliveryScenario<'_> {
                 && release.contains("REPO_ROOT=\"$GITHUB_WORKSPACE\""),
             "historical release refs must use current workflow tooling against the immutable source root"
         );
-        let main = (root).read(".github/workflows/main.yml");
+        self.assert_main_delivery_contract();
+        Ok(())
+    }
+
+    fn assert_main_delivery_contract(&self) {
+        let root = self.root;
+        let main = root.read(".github/workflows/main.yml");
         for required in [
             "\n  rust:\n",
             "\n  web:\n",
@@ -526,7 +532,6 @@ impl PrDeliveryScenario<'_> {
             prune_script.contains("--filter until=168h"),
             "runner cleanup must preserve the recent delivery cache"
         );
-        Ok(())
     }
 }
 

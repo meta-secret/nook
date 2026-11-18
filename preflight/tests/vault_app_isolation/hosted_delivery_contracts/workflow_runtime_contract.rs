@@ -92,10 +92,7 @@ impl WorkflowRuntimeContract<'_> {
                 "task _extension:test:e2e",
             ),
         ] {
-            let job = main
-                .split_once(job)
-                .and_then(|(_, remainder)| remainder.split_once(next_job).map(|(job, _)| job))
-                .expect("Main must retain its browser job boundaries");
+            let job = section(&main, job, next_job);
             assert!(
                 job.contains("cp -R /meta-secret/nook/.github \"$GITHUB_WORKSPACE/.github\"")
                     && job.contains("cd /meta-secret/nook")
@@ -150,10 +147,9 @@ impl WorkflowRuntimeContract<'_> {
         }
 
         let ecosystem_source = root.read(".github/workflows/rust-ecosystem-checks.yml");
-        let ecosystem_job = ecosystem_source
-            .split_once("  checks:\n")
-            .map(|(_, job)| job)
-            .unwrap_or_else(|| panic!("rust ecosystem workflow must define its aggregated job"));
+        let Some((_, ecosystem_job)) = ecosystem_source.split_once("  checks:\n") else {
+            panic!("rust ecosystem workflow must define its aggregated job");
+        };
         assert!(
             ecosystem_job.contains("timeout-minutes: ${{ startsWith(vars.NOOK_RUNS_ON || 'nook-k0s', 'nook-k0s') && 15 || 60 }}")
                 && ecosystem_job.contains("task docker:ecosystem:check"),

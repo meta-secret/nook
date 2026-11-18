@@ -13,16 +13,10 @@
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import VaultAdminVaults from '$lib/components/VaultAdminVaults.svelte'
   import IdentityMountsPanel from '$lib/components/identity-control/IdentityMountsPanel.svelte'
+  import PasswordManagerImportPanel from '$lib/components/PasswordManagerImportPanel.svelte'
+  import { PASSWORD_IMPORT_PRESETS } from '$lib/components/password-manager-import-presets'
   import BitwardenImportPanel from '$lib/components/BitwardenImportPanel.svelte'
-  import KeePassXcImportPanel from '$lib/components/KeePassXcImportPanel.svelte'
-  import LastPassImportPanel from '$lib/components/LastPassImportPanel.svelte'
-  import KeeperImportPanel from '$lib/components/KeeperImportPanel.svelte'
-  import OnePasswordImportPanel from '$lib/components/OnePasswordImportPanel.svelte'
-  import ApplePasswordsImportPanel from '$lib/components/ApplePasswordsImportPanel.svelte'
-  import ChromePasswordsImportPanel from '$lib/components/ChromePasswordsImportPanel.svelte'
-  import DashlaneImportPanel from '$lib/components/DashlaneImportPanel.svelte'
   import GoogleAuthenticatorImportPanel from '$lib/components/GoogleAuthenticatorImportPanel.svelte'
-  import ProtonPassImportPanel from '$lib/components/ProtonPassImportPanel.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import type { NookImportResult } from '$lib/nook'
   import type {
@@ -210,7 +204,8 @@
           onToggle={() => toggleImportProvider('apple-passwords')}
           testId="apple-passwords-import-section"
         >
-          <ApplePasswordsImportPanel
+          <PasswordManagerImportPanel
+            {...PASSWORD_IMPORT_PRESETS.ApplePasswords}
             {vault}
             {isSaving}
             embedded
@@ -225,7 +220,8 @@
           onToggle={() => toggleImportProvider('chrome-passwords')}
           testId="chrome-passwords-import-section"
         >
-          <ChromePasswordsImportPanel
+          <PasswordManagerImportPanel
+            {...PASSWORD_IMPORT_PRESETS.ChromePasswords}
             {vault}
             {isSaving}
             embedded
@@ -240,7 +236,8 @@
           onToggle={() => toggleImportProvider('dashlane')}
           testId="dashlane-import-section"
         >
-          <DashlaneImportPanel
+          <PasswordManagerImportPanel
+            {...PASSWORD_IMPORT_PRESETS.Dashlane}
             {vault}
             {isSaving}
             embedded
@@ -285,7 +282,8 @@
           onToggle={() => toggleImportProvider('keepassxc')}
           testId="keepassxc-import-section"
         >
-          <KeePassXcImportPanel
+          <PasswordManagerImportPanel
+            {...PASSWORD_IMPORT_PRESETS.KeePassXc}
             {vault}
             {isSaving}
             embedded
@@ -300,7 +298,8 @@
           onToggle={() => toggleImportProvider('lastpass')}
           testId="lastpass-import-section"
         >
-          <LastPassImportPanel
+          <PasswordManagerImportPanel
+            {...PASSWORD_IMPORT_PRESETS.LastPass}
             {vault}
             {isSaving}
             embedded
@@ -315,7 +314,8 @@
           onToggle={() => toggleImportProvider('keeper')}
           testId="keeper-import-section"
         >
-          <KeeperImportPanel
+          <PasswordManagerImportPanel
+            {...PASSWORD_IMPORT_PRESETS.Keeper}
             {vault}
             {isSaving}
             embedded
@@ -330,7 +330,8 @@
           onToggle={() => toggleImportProvider('onepassword')}
           testId="onepassword-import-section"
         >
-          <OnePasswordImportPanel
+          <PasswordManagerImportPanel
+            {...PASSWORD_IMPORT_PRESETS.OnePassword}
             {vault}
             {isSaving}
             embedded
@@ -345,7 +346,8 @@
           onToggle={() => toggleImportProvider('proton-pass')}
           testId="proton-pass-import-section"
         >
-          <ProtonPassImportPanel
+          <PasswordManagerImportPanel
+            {...PASSWORD_IMPORT_PRESETS.ProtonPass}
             {vault}
             {isSaving}
             embedded

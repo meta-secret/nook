@@ -88,6 +88,66 @@ class VaultLifecycleFixture {
     return operation()
   }
 
+  prepareManagerStartup(): void {
+    this.state.clearManager()
+    vi.spyOn(VaultManagerStartup.prototype, 'open').mockResolvedValue(
+      ok(this.manager),
+    )
+    vi.spyOn(this.state, 'updateLocale').mockResolvedValue(
+      ok(LocaleUpdateOutcome.Updated),
+    )
+    vi.spyOn(this.state, 'refreshLocalVaultCatalog').mockResolvedValue(
+      ok(this.state.localVaultCatalog),
+    )
+  }
+
+  prepareAutomaticUnlock(status: DeviceProtectionStatus): void {
+    this.state.runtimeConfig = new NookRuntimeConfig(
+      NookClientRunModeUtil.parse('production'),
+      true,
+    )
+    sessionStorage.removeItem('nook_vault_session_locked')
+    this.prepareManagerStartup()
+    vi.spyOn(this.manager, 'device_protection_status').mockResolvedValue(status)
+    vi.spyOn(this.manager, 'device_protection_device_mode').mockResolvedValue(
+      DeviceProtectionDeviceModeState.Standard,
+    )
+  }
+
+  preparePasskeyUnlock(): void {
+    localStorage.removeItem('nook_e2e_manual_passkey')
+    this.prepareAutomaticUnlock(DeviceProtectionStatus.Passkey)
+    vi.spyOn(
+      this.manager,
+      'unlock_device_protection_with_passkey',
+    ).mockImplementation(async () => {})
+  }
+
+  observePersistedVaultLoad(): MockInstance<VaultState['loadDb']> {
+    vi.spyOn(
+      this.lifecycle,
+      'continueInitializationAfterDeviceUnlock',
+    ).mockImplementation(async () => {
+      expect(this.state.isInitializing).toBe(true)
+      return ok({
+        deviceId: 'persisted-device',
+        devicePublicKey: 'persisted-public-key',
+      })
+    })
+    const loadDb = vi
+      .spyOn(this.state, 'loadDb')
+      .mockImplementation(async () => {
+        expect(this.state.isInitializing).toBe(false)
+        expect(this.state.deviceAuthorizationInProgress).toBe(false)
+        this.state.isAuthenticated = true
+      })
+    vi.spyOn(this.state, 'runFanOutSyncAfterLocalSave').mockResolvedValue(
+      ok({ publishedEventRecordCount: 0, outboxFlushes: [] }),
+    )
+    vi.spyOn(this.state, 'startVaultSync').mockImplementation(() => {})
+    return loadDb
+  }
+
   dispose(): void {
     this.state.clearManager()
     this.manager.free()
@@ -158,16 +218,7 @@ describe('vault initialization lifecycle', () => {
   test('exposes recovery when persisted protection status cannot be read', async () => {
     const fixture = new VaultLifecycleFixture()
     try {
-      fixture.state.clearManager()
-      vi.spyOn(VaultManagerStartup.prototype, 'open').mockResolvedValue(
-        ok(fixture.manager),
-      )
-      vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(
-        ok(LocaleUpdateOutcome.Updated),
-      )
-      vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
-        ok(fixture.state.localVaultCatalog),
-      )
+      fixture.prepareManagerStartup()
       vi.spyOn(fixture.manager, 'device_protection_status').mockRejectedValue(
         new Error('identity directory cannot be read'),
       )
@@ -190,50 +241,9 @@ describe('vault initialization lifecycle', () => {
   test('auto-unlocks a persisted local vault only after initialization is ready', async () => {
     const fixture = new VaultLifecycleFixture()
     try {
-      fixture.state.clearManager()
       fixture.state.localVaultPresent = true
-      fixture.state.runtimeConfig = new NookRuntimeConfig(
-        NookClientRunModeUtil.parse('production'),
-        true,
-      )
-      sessionStorage.removeItem('nook_vault_session_locked')
-      vi.spyOn(VaultManagerStartup.prototype, 'open').mockResolvedValue(
-        ok(fixture.manager),
-      )
-      vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(
-        ok(LocaleUpdateOutcome.Updated),
-      )
-      vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
-        ok(fixture.state.localVaultCatalog),
-      )
-      vi.spyOn(fixture.manager, 'device_protection_status').mockResolvedValue(
-        DeviceProtectionStatus.Unlocked,
-      )
-      vi.spyOn(
-        fixture.manager,
-        'device_protection_device_mode',
-      ).mockResolvedValue(DeviceProtectionDeviceModeState.Standard)
-      vi.spyOn(
-        fixture.lifecycle,
-        'continueInitializationAfterDeviceUnlock',
-      ).mockImplementation(async () => {
-        expect(fixture.state.isInitializing).toBe(true)
-        return ok({
-          deviceId: 'persisted-device',
-          devicePublicKey: 'persisted-public-key',
-        })
-      })
-      const loadDb = vi
-        .spyOn(fixture.state, 'loadDb')
-        .mockImplementation(async () => {
-          expect(fixture.state.isInitializing).toBe(false)
-          expect(fixture.state.deviceAuthorizationInProgress).toBe(false)
-          fixture.state.isAuthenticated = true
-        })
-      vi.spyOn(fixture.state, 'runFanOutSyncAfterLocalSave').mockResolvedValue(
-        ok({ publishedEventRecordCount: 0, outboxFlushes: [] }),
-      )
-      vi.spyOn(fixture.state, 'startVaultSync').mockImplementation(() => {})
+      fixture.prepareAutomaticUnlock(DeviceProtectionStatus.Unlocked)
+      const loadDb = fixture.observePersistedVaultLoad()
 
       await fixture.lifecycle.initOnce()
 
@@ -249,7 +259,6 @@ describe('vault initialization lifecycle', () => {
   test('defers website unlock while an invite link waits to be admitted', async () => {
     const fixture = new VaultLifecycleFixture()
     try {
-      fixture.state.clearManager()
       fixture.state.localVaultPresent = true
       fixture.state.pendingEnrollmentFromUrl = 'pending-enrollment'
       const clearEnrollmentUrl = vi.spyOn(
@@ -259,48 +268,8 @@ describe('vault initialization lifecycle', () => {
       vi.spyOn(fixture.state, 'refreshDeviceState').mockResolvedValue(
         ok(ProviderSyncOutcome.Synced),
       )
-      fixture.state.runtimeConfig = new NookRuntimeConfig(
-        NookClientRunModeUtil.parse('production'),
-        true,
-      )
-      sessionStorage.removeItem('nook_vault_session_locked')
-      vi.spyOn(VaultManagerStartup.prototype, 'open').mockResolvedValue(
-        ok(fixture.manager),
-      )
-      vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(
-        ok(LocaleUpdateOutcome.Updated),
-      )
-      vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
-        ok(fixture.state.localVaultCatalog),
-      )
-      vi.spyOn(fixture.manager, 'device_protection_status').mockResolvedValue(
-        DeviceProtectionStatus.Unlocked,
-      )
-      vi.spyOn(
-        fixture.manager,
-        'device_protection_device_mode',
-      ).mockResolvedValue(DeviceProtectionDeviceModeState.Standard)
-      vi.spyOn(
-        fixture.lifecycle,
-        'continueInitializationAfterDeviceUnlock',
-      ).mockImplementation(async () => {
-        expect(fixture.state.isInitializing).toBe(true)
-        return ok({
-          deviceId: 'persisted-device',
-          devicePublicKey: 'persisted-public-key',
-        })
-      })
-      const loadDb = vi
-        .spyOn(fixture.state, 'loadDb')
-        .mockImplementation(async () => {
-          expect(fixture.state.isInitializing).toBe(false)
-          expect(fixture.state.deviceAuthorizationInProgress).toBe(false)
-          fixture.state.isAuthenticated = true
-        })
-      vi.spyOn(fixture.state, 'runFanOutSyncAfterLocalSave').mockResolvedValue(
-        ok({ publishedEventRecordCount: 0, outboxFlushes: [] }),
-      )
-      vi.spyOn(fixture.state, 'startVaultSync').mockImplementation(() => {})
+      fixture.prepareAutomaticUnlock(DeviceProtectionStatus.Unlocked)
+      const loadDb = fixture.observePersistedVaultLoad()
 
       await fixture.lifecycle.initOnce()
 
@@ -322,33 +291,7 @@ describe('vault initialization lifecycle', () => {
       const continuationFailure = new VaultStorageFailure(
         VaultStorageFailureKind.OperationFailed,
       )
-      fixture.state.clearManager()
-      fixture.state.runtimeConfig = new NookRuntimeConfig(
-        NookClientRunModeUtil.parse('production'),
-        true,
-      )
-      localStorage.removeItem('nook_e2e_manual_passkey')
-      sessionStorage.removeItem('nook_vault_session_locked')
-      vi.spyOn(VaultManagerStartup.prototype, 'open').mockResolvedValue(
-        ok(fixture.manager),
-      )
-      vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(
-        ok(LocaleUpdateOutcome.Updated),
-      )
-      vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
-        ok(fixture.state.localVaultCatalog),
-      )
-      vi.spyOn(fixture.manager, 'device_protection_status').mockResolvedValue(
-        DeviceProtectionStatus.Passkey,
-      )
-      vi.spyOn(
-        fixture.manager,
-        'device_protection_device_mode',
-      ).mockResolvedValue(DeviceProtectionDeviceModeState.Standard)
-      vi.spyOn(
-        fixture.manager,
-        'unlock_device_protection_with_passkey',
-      ).mockImplementation(async () => {})
+      fixture.preparePasskeyUnlock()
       vi.spyOn(
         fixture.lifecycle,
         'continueInitializationAfterDeviceUnlock',
@@ -377,33 +320,7 @@ describe('vault initialization lifecycle', () => {
     const fixture = new VaultLifecycleFixture()
     try {
       const completionFailure = new Error('completion policy failed')
-      fixture.state.clearManager()
-      fixture.state.runtimeConfig = new NookRuntimeConfig(
-        NookClientRunModeUtil.parse('production'),
-        true,
-      )
-      localStorage.removeItem('nook_e2e_manual_passkey')
-      sessionStorage.removeItem('nook_vault_session_locked')
-      vi.spyOn(VaultManagerStartup.prototype, 'open').mockResolvedValue(
-        ok(fixture.manager),
-      )
-      vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(
-        ok(LocaleUpdateOutcome.Updated),
-      )
-      vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
-        ok(fixture.state.localVaultCatalog),
-      )
-      vi.spyOn(fixture.manager, 'device_protection_status').mockResolvedValue(
-        DeviceProtectionStatus.Passkey,
-      )
-      vi.spyOn(
-        fixture.manager,
-        'device_protection_device_mode',
-      ).mockResolvedValue(DeviceProtectionDeviceModeState.Standard)
-      vi.spyOn(
-        fixture.manager,
-        'unlock_device_protection_with_passkey',
-      ).mockImplementation(async () => {})
+      fixture.preparePasskeyUnlock()
       vi.spyOn(
         fixture.lifecycle,
         'continueInitializationAfterDeviceUnlock',

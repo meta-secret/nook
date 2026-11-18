@@ -1,14 +1,9 @@
 import type { UntrustedYamlNode } from '../lib/guards.ts';
-import type {
-  ModulePlanObjectDecodeRequest,
-  ModulePlanTransportList,
-} from './codec-fields.ts';
 import type { ModuleDeliveryIssueCode } from './domain.ts';
 
 export type ModulePlanIndexedNodeRequest = {
   readonly value: UntrustedYamlNode;
   readonly index: number;
-  readonly legacy: boolean;
 };
 
 export type ModuleDeliveryTeamDecodeRequest = {
@@ -27,74 +22,11 @@ export type ModulePlanIndexedProducerRequest = {
   readonly path: string;
 };
 
-export type ModulePlanResourceDecodeRequest = ModulePlanObjectDecodeRequest & {
-  readonly legacy: boolean;
-  readonly readOnly: boolean;
-};
-
-export type ModulePlanAcceptanceDecodeRequest =
-  ModulePlanObjectDecodeRequest & {
-    readonly legacy: boolean;
-  };
-
-export type LegacyTaskTeamRequest = {
-  readonly kind: string;
-  readonly expert: string;
-  readonly moduleRoot: string;
-};
-
-export type ModulePlanNodeListRequest = {
-  readonly values: ModulePlanTransportList;
-  readonly legacy: boolean;
-};
-
 export type RejectedModulePlanRequest = {
   readonly code: ModuleDeliveryIssueCode;
   readonly path?: string;
   readonly message: string;
 };
-
-export enum ModulePlanRootField {
-  EdgeContracts = 'edgeContracts',
-  Generation = 'generation',
-  MaxAgentDepth = 'maxAgentDepth',
-  MaxAttempts = 'maxAttempts',
-  MaxConcurrency = 'maxConcurrency',
-  Nodes = 'nodes',
-  ParentJoin = 'parentJoin',
-  ParentOwnedResources = 'parentOwnedResources',
-  SourceCommit = 'sourceCommit',
-  Version = 'version',
-}
-
-export enum ModulePlanV3RootField {
-  EdgeContracts = 'edgeContracts',
-  Generation = 'generation',
-  MaxAgentDepth = 'maxAgentDepth',
-  MaxAttempts = 'maxAttempts',
-  Nodes = 'nodes',
-  ParentJoin = 'parentJoin',
-  ParentOwnedResources = 'parentOwnedResources',
-  OriginMainSha = 'originMainSha',
-  PinnedLocalDevSha = 'pinnedLocalDevSha',
-  SourceCommit = 'sourceCommit',
-  Version = 'version',
-}
-
-export enum ModulePlanV4RootField {
-  EdgeContracts = 'edgeContracts',
-  Generation = 'generation',
-  MaxAgentDepth = 'maxAgentDepth',
-  MaxAttempts = 'maxAttempts',
-  Nodes = 'nodes',
-  ParentJoin = 'parentJoin',
-  ParentOwnedResources = 'parentOwnedResources',
-  OriginMainSha = 'originMainSha',
-  PinnedLocalDevSha = 'pinnedLocalDevSha',
-  FeatureHeadSha = 'featureHeadSha',
-  SourceCommit = 'sourceCommit',
-  Version = 'version',
-}
 
 /** Current branch-authoritative plan shape. Feature heads are resolved by Delivery. */
 export enum ModulePlanV7RootField {
@@ -105,18 +37,6 @@ export enum ModulePlanV7RootField {
   Nodes = 'nodes',
   ParentJoin = 'parentJoin',
   ParentOwnedResources = 'parentOwnedResources',
-  Version = 'version',
-}
-
-export enum LegacyModulePlanRootField {
-  EdgeContracts = 'edgeContracts',
-  MaxAgentDepth = 'maxAgentDepth',
-  MaxAttempts = 'maxAttempts',
-  MaxConcurrency = 'maxConcurrency',
-  Nodes = 'nodes',
-  ParentJoin = 'parentJoin',
-  ParentOwnedResources = 'parentOwnedResources',
-  SourceCommit = 'sourceCommit',
   Version = 'version',
 }
 
@@ -182,35 +102,6 @@ export enum ModulePlanCortexAuthoringField {
   SharedWriteClaims = 'sharedWriteClaims',
 }
 
-export enum LegacyModulePlanReadOnlyNodeField {
-  Acceptance = 'acceptance',
-  AgentDepthLimit = 'agentDepthLimit',
-  Baseline = 'baseline',
-  ConsumerOutcome = 'consumerOutcome',
-  Dependencies = 'dependencies',
-  Expert = 'expert',
-  Kind = 'kind',
-  ModuleRoot = 'moduleRoot',
-  ParentOwnedExclusions = 'parentOwnedExclusions',
-  Resources = 'resources',
-  TaskId = 'taskId',
-}
-
-export enum LegacyModulePlanWriteNodeField {
-  Acceptance = 'acceptance',
-  AgentDepthLimit = 'agentDepthLimit',
-  Baseline = 'baseline',
-  ConsumerOutcome = 'consumerOutcome',
-  Dependencies = 'dependencies',
-  Expert = 'expert',
-  Kind = 'kind',
-  ModuleRoot = 'moduleRoot',
-  ParentOwnedExclusions = 'parentOwnedExclusions',
-  Resources = 'resources',
-  TaskId = 'taskId',
-  Workspace = 'workspace',
-}
-
 export enum ModulePlanSynthesisNodeField {
   Acceptance = 'acceptance',
   AcceptanceOwner = 'acceptanceOwner',
@@ -260,16 +151,6 @@ export enum ModulePlanAcceptanceCommandField {
   Read = 'read',
   Selector = 'selector',
   Write = 'write',
-}
-
-export enum LegacyModulePlanResourceField {
-  Read = 'read',
-  Write = 'write',
-}
-
-export enum LegacyModulePlanAcceptanceField {
-  Commands = 'commands',
-  Evidence = 'evidence',
 }
 
 export enum ModulePlanEdgeField {

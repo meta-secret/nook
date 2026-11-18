@@ -266,34 +266,15 @@ closes it.
       case SidePanelViewKind.Unlocked:
         break
     }
-    const read = statusReads.begin()
-    const status = await readStatus()
-    switch (read.freshness()) {
-      case SidePanelReadFreshness.Stale:
-        return
-      case SidePanelReadFreshness.Current:
-        break
-    }
-    switch (status._tag) {
-      case 'Failure':
-        failed(PopupInitializationPhase.DeviceProtectionStatus)
-        return
-      case 'Success': {
-        const arrival: SidePanelArrival = {
-          status: status.success,
-          reason: SidePanelLockReasonKind.None,
-        }
-        await arrive(arrival)
-      }
-    }
+    await refreshStatus(SidePanelLockReasonKind.None)
   }
 
   function onSiteLocked(reason: SidePanelLockReasonKind): void {
-    void siteLocked(reason)
+    void refreshStatus(reason)
   }
 
-  /** This site found the extension locked: re-read which lock it is. */
-  async function siteLocked(reason: SidePanelLockReasonKind): Promise<void> {
+  /** Apply a fresh status while retaining a site-reported lock reason. */
+  async function refreshStatus(reason: SidePanelLockReasonKind): Promise<void> {
     const read = statusReads.begin()
     const status = await readStatus()
     switch (read.freshness()) {

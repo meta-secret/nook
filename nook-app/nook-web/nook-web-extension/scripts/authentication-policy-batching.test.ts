@@ -1,3 +1,4 @@
+import { AuthenticationObservationFixture } from './authentication-observation-fixture'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { evaluateCompanionAuthenticationPolicies } from '../../nook-web-shared/src/extension/companion-authentication-policy-evaluation'
 import {
@@ -47,39 +48,11 @@ enum TestGlobalPropertyName {
 function authenticationFacts(
   destinationIdentity: string,
 ): AuthenticationPageObservationFacts {
-  return {
-    fields: {
-      usernameFieldCount: 1,
-      currentPasswordFieldCount: 0,
-      newPasswordFieldCount: 0,
-      genericPasswordFieldCount: 0,
-      oneTimeCodeFieldCount: 0,
-      actionablePasswordFieldCount: 0,
-      readonlyPasswordFieldCount: 0,
-    },
-    ceremony: {
-      oneTimeCodeProgression: 'advance-control-required',
-      oneTimeCodeHandlerSignal: '',
-      authenticationContext: {
-        authenticationUsername: 'explicit',
-        sourceOrigin: 'https://example.test',
-        formIdentity: 'login',
-        destinationIdentity,
-      },
-      manualCheckpoint: 'absent',
-      advanceControl: 'absent',
-    },
-    authenticator: {
-      authenticatorSetup: 'absent',
-      backupCodesCopy: '',
-      passkeyControl: 'absent',
-      passkeyAccountAvailability: 'unavailable',
-      matchingPasskeyAccountCount: 0,
-      detailedPasskeyControl: { kind: 'absent' },
-    },
-    credentialSubmission: { kind: 'absent' },
-    detailedAdvanceControl: { kind: 'absent' },
-  }
+  const facts = AuthenticationObservationFixture.login('https://example.test')
+  facts.fields.currentPasswordFieldCount = 0
+  facts.fields.actionablePasswordFieldCount = 0
+  facts.ceremony.authenticationContext.destinationIdentity = destinationIdentity
+  return facts
 }
 
 function restoreGlobalProperty(

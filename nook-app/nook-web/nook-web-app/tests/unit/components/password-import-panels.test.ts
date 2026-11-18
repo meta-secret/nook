@@ -12,11 +12,8 @@ import { fireEvent, render, waitFor } from '@testing-library/svelte'
 import { NookImportResult } from '$app-wasm'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import { requireButtonElement, requireInputElement } from '../test-dom-helpers'
-import ApplePasswordsImportPanel from '$lib/components/ApplePasswordsImportPanel.svelte'
-import DashlaneImportPanel from '$lib/components/DashlaneImportPanel.svelte'
-import KeePassXcImportPanel from '$lib/components/KeePassXcImportPanel.svelte'
-import LastPassImportPanel from '$lib/components/LastPassImportPanel.svelte'
-import ProtonPassImportPanel from '$lib/components/ProtonPassImportPanel.svelte'
+import PasswordManagerImportPanel from '$lib/components/PasswordManagerImportPanel.svelte'
+import { PASSWORD_IMPORT_PRESETS } from '$lib/components/password-manager-import-presets'
 import GoogleAuthenticatorImportPanel from '$lib/components/GoogleAuthenticatorImportPanel.svelte'
 import type { TranslationRequest } from '$lib/vault/translation'
 import { TranslationMessage } from '$lib/vault/translation'
@@ -81,43 +78,70 @@ function importResult(): SecretOperationResult<NookImportResult> {
   return ok(result)
 }
 
-describe('KeePassXC import panel', () => {
-  test('enables submission after file selection and renders the result', async () => {
-    const onImport = vi.fn(async () => importResult())
-    const view = render(KeePassXcImportPanel, {
-      vault,
-      isSaving: false,
-      onImport,
-    })
-    const input = requireInputElement(view.getByTestId('keepassxc-csv-file'))
-    const submit = requireButtonElement(
-      view.getByTestId('keepassxc-import-submit'),
-    )
-
-    expect(submit.disabled).toBe(true)
-    await fireEvent.change(input, {
-      target: {
-        files: [
-          new File(
-            ['Group,Title,Username,Password,URL,Notes\n'],
-            'keepassxc.csv',
-          ),
-        ],
-      },
-    })
-    expect(submit.disabled).toBe(false)
-
-    await fireEvent.click(submit)
-    await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
-    expect(onImport).toHaveBeenCalledWith(
-      'Group,Title,Username,Password,URL,Notes\n',
-    )
-    await waitFor(() => {
-      expect(view.getByTestId('keepassxc-import-result').textContent).toContain(
-        'keepassxc_import.result_imported 2',
+describe('CSV password import panels', () => {
+  test.each([
+    {
+      preset: PASSWORD_IMPORT_PRESETS.KeePassXc,
+      id: 'keepassxc',
+      fileTestId: 'keepassxc-csv-file',
+      resultKey: I18N_KEYS.KeepassxcImportResultImported,
+      accept: '.csv,text/csv,application/csv',
+    },
+    {
+      preset: PASSWORD_IMPORT_PRESETS.Keeper,
+      id: 'keeper',
+      fileTestId: 'keeper-csv-file',
+      resultKey: I18N_KEYS.KeeperImportResultImported,
+      accept: '.csv,text/csv,application/csv',
+    },
+    {
+      preset: PASSWORD_IMPORT_PRESETS.ChromePasswords,
+      id: 'chrome-passwords',
+      fileTestId: 'chrome-passwords-csv-file',
+      resultKey: I18N_KEYS.ChromePasswordsImportResultImported,
+      accept: '.csv,text/csv',
+    },
+  ])(
+    '$id submits the selected text and renders the result',
+    async ({ preset, id, fileTestId, resultKey, accept }) => {
+      const onImport = vi.fn(async () => importResult())
+      const view = render(PasswordManagerImportPanel, {
+        ...preset,
+        vault,
+        isSaving: false,
+        onImport,
+      })
+      const input = requireInputElement(view.getByTestId(fileTestId))
+      const submit = requireButtonElement(
+        view.getByTestId(`${id}-import-submit`),
       )
-    })
-  })
+
+      expect(input.accept).toBe(accept)
+      expect(submit.disabled).toBe(true)
+      await fireEvent.change(input, {
+        target: {
+          files: [
+            new File(
+              ['Group,Title,Username,Password,URL,Notes\n'],
+              `${id}.csv`,
+            ),
+          ],
+        },
+      })
+      expect(submit.disabled).toBe(false)
+
+      await fireEvent.click(submit)
+      await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
+      expect(onImport).toHaveBeenCalledWith(
+        'Group,Title,Username,Password,URL,Notes\n',
+      )
+      await waitFor(() => {
+        expect(view.getByTestId(`${id}-import-result`).textContent).toContain(
+          `${resultKey} 2`,
+        )
+      })
+    },
+  )
 })
 
 describe('LastPass import panel', () => {
@@ -131,7 +155,8 @@ describe('LastPass import panel', () => {
           finishImport = resolve
         }),
     )
-    const view = render(LastPassImportPanel, {
+    const view = render(PasswordManagerImportPanel, {
+      ...PASSWORD_IMPORT_PRESETS.LastPass,
       vault,
       isSaving: false,
       onImport,
@@ -165,7 +190,8 @@ describe('LastPass import panel', () => {
 
   test('enables submission after file selection and renders the result', async () => {
     const onImport = vi.fn(async () => importResult())
-    const view = render(LastPassImportPanel, {
+    const view = render(PasswordManagerImportPanel, {
+      ...PASSWORD_IMPORT_PRESETS.LastPass,
       vault,
       isSaving: false,
       onImport,
@@ -199,7 +225,8 @@ describe('LastPass import panel', () => {
         new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
       )
     })
-    const view = render(LastPassImportPanel, {
+    const view = render(PasswordManagerImportPanel, {
+      ...PASSWORD_IMPORT_PRESETS.LastPass,
       vault,
       isSaving: true,
       onImport,
@@ -226,7 +253,8 @@ describe('LastPass import panel', () => {
     const onImport = vi.fn(async () => {
       throw new Error('adapter rejected')
     })
-    const view = render(LastPassImportPanel, {
+    const view = render(PasswordManagerImportPanel, {
+      ...PASSWORD_IMPORT_PRESETS.LastPass,
       vault,
       isSaving: false,
       onImport,
@@ -245,124 +273,90 @@ describe('LastPass import panel', () => {
   })
 })
 
-describe('Safari / Apple Passwords import panel', () => {
-  test('reads selected export bytes and renders the result', async () => {
-    let receivedBytes: number[] = []
-    const onImport = vi.fn(async (bytes: Uint8Array) => {
-      receivedBytes = Array.from(bytes)
-      return importResult()
-    })
-    const view = render(ApplePasswordsImportPanel, {
-      vault,
-      isSaving: false,
-      onImport,
-    })
-    const input = requireInputElement(
-      view.getByTestId('apple-passwords-csv-file'),
-    )
-    const submit = requireButtonElement(
-      view.getByTestId('apple-passwords-import-submit'),
-    )
-
-    expect(submit.disabled).toBe(true)
-    await fireEvent.change(input, {
-      target: {
-        files: [new File([new Uint8Array([80, 75, 3, 4])], 'Safari.zip')],
-      },
-    })
-    expect(submit.disabled).toBe(false)
-
-    await fireEvent.click(submit)
-    await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
-    expect(receivedBytes).toEqual([80, 75, 3, 4])
-    await waitFor(() => {
-      expect(
-        view.getByTestId('apple-passwords-import-result').textContent,
-      ).toContain('apple_passwords_import.result_imported 2')
-    })
-  })
-})
-
-describe('Dashlane import panel', () => {
-  test('reads selected export bytes and renders the result', async () => {
-    let receivedBytes: number[] = []
-    const onImport = vi.fn(async (bytes: Uint8Array) => {
-      receivedBytes = Array.from(bytes)
-      return importResult()
-    })
-    const view = render(DashlaneImportPanel, {
-      vault,
-      isSaving: false,
-      onImport,
-    })
-    const input = requireInputElement(view.getByTestId('dashlane-export-file'))
-    const submit = requireButtonElement(
-      view.getByTestId('dashlane-import-submit'),
-    )
-
-    expect(submit.disabled).toBe(true)
-    await fireEvent.change(input, {
-      target: {
-        files: [new File([new Uint8Array([80, 75, 3, 4])], 'dashlane.zip')],
-      },
-    })
-    expect(submit.disabled).toBe(false)
-
-    await fireEvent.click(submit)
-    await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
-    expect(receivedBytes).toEqual([80, 75, 3, 4])
-    await waitFor(() => {
-      expect(view.getByTestId('dashlane-import-result').textContent).toContain(
-        'dashlane_import.result_imported 2',
+describe('binary password import panels', () => {
+  test.each([
+    {
+      preset: PASSWORD_IMPORT_PRESETS.ApplePasswords,
+      id: 'apple-passwords',
+      fileTestId: 'apple-passwords-csv-file',
+      resultKey: I18N_KEYS.ApplePasswordsImportResultImported,
+      accept: '.csv,.zip,text/csv,application/zip,application/x-zip-compressed',
+      filename: 'Safari.zip',
+    },
+    {
+      preset: PASSWORD_IMPORT_PRESETS.Dashlane,
+      id: 'dashlane',
+      fileTestId: 'dashlane-export-file',
+      resultKey: I18N_KEYS.DashlaneImportResultImported,
+      accept: '.csv,.zip,text/csv,application/zip,application/x-zip-compressed',
+      filename: 'dashlane.zip',
+    },
+    {
+      preset: PASSWORD_IMPORT_PRESETS.ProtonPass,
+      id: 'proton-pass',
+      fileTestId: 'proton-pass-export-file',
+      resultKey: I18N_KEYS.ProtonPassImportResultImported,
+      accept:
+        '.zip,.json,application/zip,application/x-zip-compressed,application/json',
+      filename: 'proton.zip',
+    },
+    {
+      preset: PASSWORD_IMPORT_PRESETS.OnePassword,
+      id: 'onepassword',
+      fileTestId: 'onepassword-pux-file',
+      resultKey: I18N_KEYS.OnepasswordImportResultImported,
+      accept: '.1pux,application/zip,application/x-zip-compressed',
+      filename: 'export.1pux',
+    },
+  ])(
+    '$id submits the selected bytes and renders the result',
+    async ({ preset, id, fileTestId, resultKey, accept, filename }) => {
+      let receivedBytes: number[] = []
+      const onImport = vi.fn(async (bytes: Uint8Array) => {
+        receivedBytes = Array.from(bytes)
+        return importResult()
+      })
+      const view = render(PasswordManagerImportPanel, {
+        ...preset,
+        vault,
+        isSaving: false,
+        onImport,
+      })
+      const input = requireInputElement(view.getByTestId(fileTestId))
+      const submit = requireButtonElement(
+        view.getByTestId(`${id}-import-submit`),
       )
-    })
-  })
+
+      expect(input.accept).toBe(accept)
+      expect(submit.disabled).toBe(true)
+      await fireEvent.change(input, {
+        target: {
+          files: [new File([new Uint8Array([80, 75, 3, 4])], filename)],
+        },
+      })
+      expect(submit.disabled).toBe(false)
+
+      await fireEvent.click(submit)
+      await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
+      expect(receivedBytes).toEqual([80, 75, 3, 4])
+      await waitFor(() => {
+        expect(view.getByTestId(`${id}-import-result`).textContent).toContain(
+          `${resultKey} 2`,
+        )
+      })
+    },
+  )
 })
 
 describe('Proton Pass import panel', () => {
-  test('reads selected export bytes and renders the result', async () => {
-    let receivedBytes: number[] = []
-    const onImport = vi.fn(async (bytes: Uint8Array) => {
-      receivedBytes = Array.from(bytes)
-      return importResult()
-    })
-    const view = render(ProtonPassImportPanel, {
-      vault,
-      isSaving: false,
-      onImport,
-    })
-    const input = requireInputElement(
-      view.getByTestId('proton-pass-export-file'),
-    )
-    const submit = requireButtonElement(
-      view.getByTestId('proton-pass-import-submit'),
-    )
-
-    expect(submit.disabled).toBe(true)
-    await fireEvent.change(input, {
-      target: {
-        files: [new File([new Uint8Array([80, 75, 3, 4])], 'proton.zip')],
-      },
-    })
-    expect(submit.disabled).toBe(false)
-
-    await fireEvent.click(submit)
-    await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
-    expect(receivedBytes).toEqual([80, 75, 3, 4])
-    await waitFor(() => {
-      expect(
-        view.getByTestId('proton-pass-import-result').textContent,
-      ).toContain('proton_pass_import.result_imported 2')
-    })
-  })
-
   test('renders import errors', async () => {
     const onImport = vi.fn(async () => {
       return err(
         new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
       )
     })
-    const view = render(ProtonPassImportPanel, {
+    const view = render(PasswordManagerImportPanel, {
+      ...PASSWORD_IMPORT_PRESETS.ProtonPass,
       vault,
       isSaving: false,
       onImport,

@@ -6,7 +6,7 @@
 //! CSV schema admission and conversion bound to the original reader.
 mod personal;
 use super::super::import_support::{
-    CsvHeader, CsvImportConversion, CsvImportReader, CsvRecordFields, ImportMetadata,
+    CsvHeaders, CsvImportConversion, CsvImportReader, CsvRecordFields, ImportMetadata,
     MAX_CSV_BYTES, SourceLabelMetadata,
 };
 use super::{DashlaneImportError, DashlaneImportPlan};
@@ -42,10 +42,9 @@ impl<'a> DashlaneCsvInput<'a> {
         let reader = CsvImportReader::new(self.text);
         let read = reader.headers()?;
         let reader = read.reader;
-        let headers = read.headers;
-        let headers = NormalizedDashlaneHeaders::from_record(&headers);
+        let headers = CsvHeaders::from(&read.headers);
         let kind = match self.selection {
-            DashlaneCsvSelection::Detect => headers.detect()?,
+            DashlaneCsvSelection::Detect => DashlaneCsvKind::detect(&headers.names)?,
             DashlaneCsvSelection::Archive(kind) => kind,
         };
         let columns = match kind {
@@ -115,61 +114,33 @@ impl DashlaneColumns {
         }
     }
 }
-struct NormalizedDashlaneHeaders {
-    values: Vec<String>,
-}
-impl NormalizedDashlaneHeaders {
-    fn from_record(headers: &StringRecord) -> Self {
-        Self {
-            values: headers
-                .iter()
-                .map(|header| CsvHeader::new(header).normalized())
-                .collect(),
-        }
-    }
-    fn required(&self, name: &'static str) -> Result<usize, DashlaneImportError> {
-        let expected = CsvHeader::new(name).normalized();
-        self.values
-            .iter()
-            .position(|header| header == &expected)
-            .ok_or(DashlaneImportError::MissingColumn(name))
-    }
-    fn optional(&self, names: &[&str]) -> CsvExportColumn {
-        let column = names.iter().find_map(|name| {
-            let expected = CsvHeader::new(name).normalized();
-            self.values.iter().position(|header| header == &expected)
-        });
-        match column {
-            Some(index) => CsvExportColumn::Exported(index),
-            None => CsvExportColumn::NotExported,
-        }
-    }
-    fn detect(&self) -> Result<DashlaneCsvKind, DashlaneImportError> {
-        if self.values.iter().any(|header| header == "username")
-            && self.values.iter().any(|header| header == "password")
+
+impl DashlaneCsvKind {
+    fn detect(names: &[String]) -> Result<Self, DashlaneImportError> {
+        if names.iter().any(|header| header == "username")
+            && names.iter().any(|header| header == "password")
         {
             return Ok(DashlaneCsvKind::Credentials);
         }
-        if self.values.first().is_some_and(|header| header == "title")
-            && self.values.get(1).is_some_and(|header| header == "note")
-            && !self.values.iter().any(|header| header == "username")
+        if names.first().is_some_and(|header| header == "title")
+            && names.get(1).is_some_and(|header| header == "note")
+            && !names.iter().any(|header| header == "username")
         {
             return Ok(DashlaneCsvKind::SecureNotes);
         }
-        if self.values.first().is_some_and(|header| header == "type")
-            && self.values.iter().any(|header| header == "number")
-            && self.values.iter().any(|header| header == "expirationdate")
+        if names.first().is_some_and(|header| header == "type")
+            && names.iter().any(|header| header == "number")
+            && names.iter().any(|header| header == "expirationdate")
         {
             return Ok(DashlaneCsvKind::Ids);
         }
-        if self.values.first().is_some_and(|header| header == "type")
-            && self.values.iter().any(|header| header == "firstname")
+        if names.first().is_some_and(|header| header == "type")
+            && names.iter().any(|header| header == "firstname")
         {
             return Ok(DashlaneCsvKind::PersonalInfo);
         }
-        if self.values.first().is_some_and(|header| header == "type")
-            && self
-                .values
+        if names.first().is_some_and(|header| header == "type")
+            && names
                 .iter()
                 .any(|header| header == "accountname" || header == "ccnumber")
         {
@@ -211,18 +182,22 @@ struct PaymentColumns {
 }
 
 impl CredentialColumns {
-    fn from_headers(headers: &NormalizedDashlaneHeaders) -> Result<Self, DashlaneImportError> {
+    fn from_headers(headers: &CsvHeaders) -> Result<Self, DashlaneImportError> {
         Ok(CredentialColumns {
-            username: headers.required("username")?,
-            username2: headers.optional(&["username2"]),
-            username3: headers.optional(&["username3"]),
-            title: headers.optional(&["title", "name"]),
-            password: headers.required("password")?,
-            note: headers.optional(&["note", "notes"]),
-            url: headers.optional(&["url", "website"]),
-            category: headers.optional(&["category", "folder"]),
-            otp_secret: headers.optional(&["otpSecret", "otp_secret"]),
-            otp_url: headers.optional(&["otpUrl", "otp_url"]),
+            username: headers
+                .find(&["username"])
+                .required(DashlaneImportError::MissingColumn("username"))?,
+            username2: headers.find(&["username2"]),
+            username3: headers.find(&["username3"]),
+            title: headers.find(&["title", "name"]),
+            password: headers
+                .find(&["password"])
+                .required(DashlaneImportError::MissingColumn("password"))?,
+            note: headers.find(&["note", "notes"]),
+            url: headers.find(&["url", "website"]),
+            category: headers.find(&["category", "folder"]),
+            otp_secret: headers.find(&["otpSecret", "otp_secret"]),
+            otp_url: headers.find(&["otpUrl", "otp_url"]),
         })
     }
     #[expect(
@@ -345,10 +320,14 @@ impl CredentialColumns {
     }
 }
 impl SecureNoteColumns {
-    fn from_headers(headers: &NormalizedDashlaneHeaders) -> Result<Self, DashlaneImportError> {
+    fn from_headers(headers: &CsvHeaders) -> Result<Self, DashlaneImportError> {
         Ok(SecureNoteColumns {
-            title: headers.required("title")?,
-            note: headers.required("note")?,
+            title: headers
+                .find(&["title"])
+                .required(DashlaneImportError::MissingColumn("title"))?,
+            note: headers
+                .find(&["note"])
+                .required(DashlaneImportError::MissingColumn("note"))?,
         })
     }
     fn convert(&self, record: &StringRecord) -> (Vec<SecretValue>, usize) {
@@ -365,15 +344,17 @@ impl SecureNoteColumns {
     }
 }
 impl PaymentColumns {
-    fn from_headers(headers: &NormalizedDashlaneHeaders) -> Result<Self, DashlaneImportError> {
+    fn from_headers(headers: &CsvHeaders) -> Result<Self, DashlaneImportError> {
         Ok(PaymentColumns {
-            kind: headers.required("type")?,
-            account_name: headers.optional(&["account_name", "account name"]),
-            account_holder: headers.optional(&["account_holder", "account holder"]),
-            cc_number: headers.optional(&["cc_number", "cc number"]),
-            code: headers.optional(&["code", "cvv"]),
-            expiration_month: headers.optional(&["expiration_month", "expiration month"]),
-            expiration_year: headers.optional(&["expiration_year", "expiration year"]),
+            kind: headers
+                .find(&["type"])
+                .required(DashlaneImportError::MissingColumn("type"))?,
+            account_name: headers.find(&["account_name", "account name"]),
+            account_holder: headers.find(&["account_holder", "account holder"]),
+            cc_number: headers.find(&["cc_number", "cc number"]),
+            code: headers.find(&["code", "cvv"]),
+            expiration_month: headers.find(&["expiration_month", "expiration month"]),
+            expiration_year: headers.find(&["expiration_year", "expiration year"]),
             bank: BankPaymentColumns::from_headers(headers),
         })
     }

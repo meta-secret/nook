@@ -1,17 +1,16 @@
 #!/usr/bin/env bun
-import { parseArgs } from 'node:util';
-
-import { resolve } from 'node:path';
+import { ExpertValidationArguments } from '../lib/expert-validation-arguments.ts';
+import type { ExpertValidationCommand } from '../lib/expert-validation-arguments.ts';
 
 import { StructuralExpertContract } from './audit.ts';
 
 export class StructuralExpertCommandLine {
   constructor(private readonly request: readonly string[]) {}
-  static parse(argv: readonly string[]): StructuralExpertCommand | false {
-    return new StructuralExpertCommandLine(argv).execute();
+  static parse(argv: readonly string[]): ExpertValidationCommand | false {
+    return new ExpertValidationArguments(argv).parse();
   }
   async main(): Promise<number> {
-    const command = this.execute();
+    const command = StructuralExpertCommandLine.parse(this.request);
     if (!command) {
       console.error(HELP);
       return 2;
@@ -22,51 +21,6 @@ export class StructuralExpertCommandLine {
     console.log(JSON.stringify(result));
     return result.auditOk ? 0 : 1;
   }
-
-  private execute(): StructuralExpertCommand | false {
-    let parsed;
-    try {
-      parsed = parseArgs({
-        args: [...this.request],
-        options: {
-          'working-directory': { type: 'string' },
-        },
-        allowPositionals: true,
-        strict: false,
-        tokens: true,
-      });
-    } catch {
-      return false;
-    }
-    const { values, positionals, tokens } = parsed;
-    const [command] = positionals;
-    const directory = values['working-directory'];
-    const expected = ['working-directory'];
-    if (
-      positionals.length !== 1 ||
-      tokens.length !== expected.length + 1 ||
-      tokens[0]?.kind !== 'positional' ||
-      Array.from(tokens.slice(1).entries()).some((entry) => {
-        const [index, token] = entry;
-        return (
-          token.kind !== 'option' ||
-          token.name !== expected[index] ||
-          token.inlineValue ||
-          token.index !== index * 2 + 1
-        );
-      }) ||
-      typeof directory !== 'string' ||
-      !directory ||
-      directory.startsWith('--')
-    )
-      return false;
-    return command === StructuralExpertCommandKind.Validate
-      ? {
-          kind: StructuralExpertCommandKind.Validate,
-          workingDirectory: resolve(directory),
-        }
-      : false;
-  }
 }
 
 const HELP = `Loom structural experts
@@ -74,17 +28,6 @@ const HELP = `Loom structural experts
 Usage:
   loom-structural-experts validate --working-directory <repo-root>
 `;
-
-enum StructuralExpertCommandKind {
-  Validate = 'validate',
-}
-
-type ValidateCommand = {
-  readonly kind: StructuralExpertCommandKind.Validate;
-  readonly workingDirectory: string;
-};
-
-type StructuralExpertCommand = ValidateCommand;
 
 if (import.meta.main) {
   try {

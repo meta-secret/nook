@@ -66,21 +66,6 @@ export class ModuleDeliveryPlanDecoder {
       };
       return rejection;
     }
-    if (
-      decoded.inputVersion !== MODULE_DELIVERY_PLAN_VERSION ||
-      decoded.plan.version !== MODULE_DELIVERY_PLAN_VERSION
-    ) {
-      const issue: ModuleDeliveryIssue = {
-        code: ModuleDeliveryIssueCode.InvalidField,
-        path: '$.version',
-        message: 'Canonical validation requires authored plan version 6.',
-      };
-      const rejection: RejectedModuleDeliveryPlan = {
-        status: ModuleDeliveryValidationStatus.Rejected,
-        issues: [issue],
-      };
-      return rejection;
-    }
     return this.validateDecodedModuleDeliveryPlan(decoded.plan);
   }
 

@@ -1,3 +1,4 @@
+import { AuthenticationObservationFixture } from './authentication-observation-fixture'
 import { describe, expect, test } from 'bun:test'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import { AuthenticationWorkflowSnapshotIngress } from '../src/lib/auth-workflow-messages'
@@ -15,39 +16,7 @@ const messageAdmission = AuthenticationWorkflowSnapshotIngress.admit({
   payload: {
     origin: 'https://login.example.test',
     observations: [
-      {
-        fields: {
-          usernameFieldCount: 0,
-          currentPasswordFieldCount: 0,
-          newPasswordFieldCount: 0,
-          genericPasswordFieldCount: 0,
-          oneTimeCodeFieldCount: 0,
-          actionablePasswordFieldCount: 0,
-          readonlyPasswordFieldCount: 0,
-        },
-        ceremony: {
-          oneTimeCodeProgression: 'advance-control-required',
-          oneTimeCodeHandlerSignal: '',
-          authenticationContext: {
-            authenticationUsername: 'absent',
-            sourceOrigin: 'https://login.example.test',
-            formIdentity: 'login',
-            destinationIdentity: '/login',
-          },
-          manualCheckpoint: 'absent',
-          advanceControl: 'absent',
-        },
-        authenticator: {
-          authenticatorSetup: 'absent',
-          backupCodesCopy: '',
-          passkeyControl: 'absent',
-          passkeyAccountAvailability: 'unavailable',
-          matchingPasskeyAccountCount: 0,
-          detailedPasskeyControl: { kind: 'absent' },
-        },
-        credentialSubmission: { kind: 'absent' },
-        detailedAdvanceControl: { kind: 'absent' },
-      },
+      AuthenticationObservationFixture.empty('https://login.example.test'),
     ],
   },
 })

@@ -98,10 +98,11 @@ impl EventGraph {
 
 #[cfg(test)]
 mod tests {
-    use super::super::authorization::tests::{STORE_STR, genesis_event, signed_operation};
+    use super::super::authorization::tests::signed_operation;
     use super::*;
+    use crate::EventResult;
+    use crate::VaultEvent;
     use crate::test_support::{public_key, signing_key};
-    use crate::{EventGraphInsert, EventResult};
     use nook_auth2::AgeArmoredCiphertext;
 
     fn approval(device: &str, signer: &ed25519_dalek::SigningKey) -> EventResult<VaultOperation> {
@@ -120,7 +121,7 @@ mod tests {
         let owner = signing_key();
         let phone = signing_key();
         let tablet = signing_key();
-        let genesis = genesis_event(&owner)?;
+        let genesis = VaultEvent::fixture_genesis(&owner)?;
         let genesis_id = genesis.id()?;
         let approve = signed_operation(
             vec![genesis_id],
@@ -152,13 +153,7 @@ mod tests {
         )?;
         let mut graph = EventGraph::new();
         for event in [genesis, approve, approve_tablet, rename, revoke] {
-            graph = graph
-                .insert(EventGraphInsert {
-                    event,
-                    expected_store_id: STORE_STR,
-                })
-                .map_err(|rejection| rejection.cause)?
-                .graph;
+            graph = graph.insert_fixture_event(event)?.graph;
         }
         let roster = graph.authorized_roster()?;
         assert_eq!(roster.members.len(), 1);

@@ -69,7 +69,7 @@ import {
   FocusedCredentialInteraction,
   FocusedUiDisposition,
 } from '../../../../nook-web-extension/src/content/autofill/focused-credential-interaction'
-import type { FocusedCredentialWidget } from '../../../../nook-web-extension/src/content/autofill/focused-credential-widget'
+import type { FocusedFieldWidget } from '../../../../nook-web-extension/src/content/autofill/focused-field-widget'
 import {
   passwordFieldDiscovery,
   passwordFormInteraction,
@@ -235,7 +235,7 @@ class FocusedInteractionFixture {
   )
   readonly sensor: FocusedCredentialTargetSensor
   readonly interaction: FocusedCredentialInteraction
-  readonly mounts: FocusedCredentialWidget[] = []
+  readonly mounts: FocusedFieldWidget[] = []
 
   constructor() {
     this.input.autocomplete = 'username'
@@ -307,7 +307,7 @@ class FocusedInteractionFixture {
       transport: authenticationRuntimeTransport,
       ui: workflowUi,
       mount: (request) => {
-        const shell: FocusedCredentialWidget['shell'] = {
+        const shell: FocusedFieldWidget['shell'] = {
           host: document.createElement('aside'),
           panel: document.createElement('div'),
           toolbar: document.createElement('div'),

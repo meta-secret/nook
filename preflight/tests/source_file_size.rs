@@ -1,24 +1,13 @@
-use std::path::{Path, PathBuf};
-use std::{env, fs, ops::Deref};
+#[path = "support/repository.rs"]
+mod repository;
+
+use repository::RepositoryFixture;
+use std::fs;
 
 use nook_preflight::source_size::{
     AUTHORED_SOURCE_LINE_LIMIT, SOURCE_SIZE_REMEDIATION, SourceRepository,
     UNIT_TEST_COLOCATION_REMEDIATION,
 };
-
-struct RepositoryFixture {
-    path: PathBuf,
-}
-impl RepositoryFixture {
-    fn repository_root() -> Self {
-        Self {
-            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
-                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-                PathBuf::from,
-            ),
-        }
-    }
-}
 
 struct SourceArchitectureScenario {
     root: RepositoryFixture,
@@ -31,12 +20,7 @@ impl SourceArchitectureScenario {
         }
     }
 
-    fn task_body<'a>(
-        &self,
-        taskfile: &'a str,
-        task: &str,
-        next_task: &str,
-    ) -> anyhow::Result<&'a str> {
+    fn task_body<'a>(taskfile: &'a str, task: &str, next_task: &str) -> anyhow::Result<&'a str> {
         let start_marker = format!("  {task}:\n");
         let end_marker = format!("  {next_task}:\n");
         let start = taskfile
@@ -105,22 +89,21 @@ impl SourceArchitectureScenario {
                 && pr_taskfile.contains("ci:pr:tests:policy:"),
             "every consolidated PR route must execute repository policy in both product and policy-only paths"
         );
-        let policy_only = self.task_body(
+        let policy_only = Self::task_body(
             &pr_taskfile,
             "ci:pr:tests:policy-with-delivery-helpers",
             "ci:pr:delivery-helpers",
         )?;
         assert!(
             policy_only.contains("task --parallel ci:pr:tests:policy ci:pr:delivery-helpers")
-                && self
-                    .task_body(
-                        &pr_taskfile,
-                        "ci:pr:tests:policy",
-                        "ci:pr:tests:policy-with-delivery-helpers",
-                    )?
-                    .contains(
-                        "task --taskfile \"{{.REPO_ROOT}}/Taskfile.yml\" preflight:repository-policy",
-                    ),
+                && Self::task_body(
+                    &pr_taskfile,
+                    "ci:pr:tests:policy",
+                    "ci:pr:tests:policy-with-delivery-helpers",
+                )?
+                .contains(
+                    "task --taskfile \"{{.REPO_ROOT}}/Taskfile.yml\" preflight:repository-policy",
+                ),
             "policy-only PR tests must delegate to the policy dependency and delivery helpers"
         );
         assert!(workflow.contains("workflow_call:"));
@@ -137,7 +120,7 @@ impl SourceArchitectureScenario {
                 && workflow_taskfile.contains("task: preflight:repository-policy-untrusted"),
             "repository policy must route untrusted PR source architecture through Taskfile"
         );
-        self.assert_dockerized_preflight_tools(&workflow, "repository-policy")?;
+        Self::assert_dockerized_preflight_tools(&workflow, "repository-policy")?;
         assert!(
             preflight_dockerfile.contains("--test source_file_size"),
             "preflight:source-architecture must run the source_file_size test"
@@ -145,7 +128,7 @@ impl SourceArchitectureScenario {
         Ok(())
     }
 
-    fn assert_dockerized_preflight_tools(&self, workflow: &str, name: &str) -> anyhow::Result<()> {
+    fn assert_dockerized_preflight_tools(workflow: &str, name: &str) -> anyhow::Result<()> {
         assert!(workflow.contains("uses: ./.github/actions/nook-docker-setup"));
         let buildkit = workflow
             .find("uses: docker/setup-buildx-action")
@@ -161,18 +144,6 @@ impl SourceArchitectureScenario {
             );
         }
         Ok(())
-    }
-}
-
-impl Deref for RepositoryFixture {
-    type Target = PathBuf;
-    fn deref(&self) -> &PathBuf {
-        &self.path
-    }
-}
-impl AsRef<Path> for RepositoryFixture {
-    fn as_ref(&self) -> &Path {
-        &self.path
     }
 }
 

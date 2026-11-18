@@ -1,6 +1,9 @@
+#[path = "support/repository_files.rs"]
+mod repository_files;
+
+use repository_files::{RepositoryFixture, RepositoryPathRead};
 use std::{
     env, fs,
-    ops::Deref,
     os::unix::fs::{self as unix_fs, PermissionsExt},
     path::{Path, PathBuf},
     process::{self, Command},
@@ -8,49 +11,6 @@ use std::{
 };
 
 use anyhow::Context;
-
-struct RepositoryFixture {
-    path: PathBuf,
-}
-impl RepositoryFixture {
-    fn repository_root() -> Self {
-        Self {
-            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
-                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-                PathBuf::from,
-            ),
-        }
-    }
-}
-
-trait RepositoryPathRead {
-    fn read(&self, path: &str) -> String;
-}
-
-impl RepositoryPathRead for Path {
-    fn read(&self, path: &str) -> String {
-        fs::read_to_string(self.join(path))
-            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
-    }
-}
-impl Deref for RepositoryFixture {
-    type Target = PathBuf;
-    fn deref(&self) -> &PathBuf {
-        &self.path
-    }
-}
-impl AsRef<Path> for RepositoryFixture {
-    fn as_ref(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl RepositoryFixture {
-    fn read(&self, path: &str) -> String {
-        fs::read_to_string(self.join(path))
-            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
-    }
-}
 
 fn section<'a>(content: &'a str, start: &str, end: &str) -> &'a str {
     content

@@ -21,31 +21,28 @@ export interface SentinelLaunch {
   vaultName: string
 }
 
+export enum VaultAuthStage {
+  Chooser = 'chooser',
+  Sentinel = 'sentinel',
+}
+
+export type VaultAuthDestination =
+  | { stage: VaultAuthStage.Chooser }
+  | { stage: VaultAuthStage.Sentinel; launch: SentinelLaunch }
+
 interface SelectedVaultPathRequest {
   name: string
   path: SelectedVaultPathKind
 }
 
-export interface VaultAuthTransition {
-  previous: VaultAuthPresentation
-  next: VaultAuthPresentation
-}
-
-export enum VaultAuthExperimentStage {
-  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
-  Auth = 'auth',
-  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
-  Sentinel = 'sentinel',
-}
-
-export class AwaitingVaultName {
+class AwaitingVaultName {
   readonly step = 0
   readonly path = VaultPath.Undecided
   respond(name: string): AwaitingVaultKind {
     return AwaitingVaultKind.admitName(name)
   }
 }
-export class AwaitingVaultKind {
+class AwaitingVaultKind {
   readonly step = 1
   readonly path = VaultPath.Undecided
   private constructor(private readonly name: string) {}
@@ -62,7 +59,7 @@ export class AwaitingVaultKind {
   }
 }
 type SelectedVaultPathKind = VaultPath.Simple | VaultPath.Sentinel
-export class SelectedVaultPath {
+class SelectedVaultPath {
   readonly step = 2
   private readonly name: string
   readonly path: SelectedVaultPathKind
@@ -79,14 +76,14 @@ export class SelectedVaultPath {
     return AwaitingVaultKind.admitName(this.name)
   }
 }
-export class AwaitingExistingVault {
+class AwaitingExistingVault {
   readonly step = 0
   readonly path = VaultPath.Undecided
   identify(): IdentifiedExistingVault {
     return IdentifiedExistingVault.identify(this)
   }
 }
-export class IdentifiedExistingVault {
+class IdentifiedExistingVault {
   readonly step = 1
   readonly path = VaultPath.Undecided
   private constructor(private readonly previous: AwaitingExistingVault) {}
@@ -97,7 +94,7 @@ export class IdentifiedExistingVault {
     return this.previous
   }
 }
-export type VaultAuthPresentation =
+type VaultAuthPresentation =
   | AwaitingVaultName
   | AwaitingVaultKind
   | SelectedVaultPath
@@ -106,9 +103,7 @@ export type VaultAuthPresentation =
 
 export class VaultAuthWorkflowState {
   private current = $state<VaultAuthPresentation>(new AwaitingVaultName())
-  get phase(): VaultAuthPresentation {
-    return this.current
-  }
+  vaultName = $state('')
   get presence(): Presence {
     return this.current instanceof AwaitingExistingVault ||
       this.current instanceof IdentifiedExistingVault
@@ -121,10 +116,29 @@ export class VaultAuthWorkflowState {
   get path(): VaultPath {
     return this.current.path
   }
-  transition(request: VaultAuthTransition): void {
-    if (this.current !== request.previous) return
-    this.current = request.next
+  continueAfterName(): void {
+    if (this.current instanceof AwaitingVaultName && this.vaultName.trim())
+      this.current = this.current.respond(this.vaultName)
   }
+
+  choose(path: SelectedVaultPathKind): void {
+    if (this.current instanceof AwaitingVaultKind)
+      this.current = this.current.choose(path)
+  }
+
+  back(): void {
+    if ('back' in this.current) this.current = this.current.back()
+  }
+
+  identifyExisting(): void {
+    if (this.current instanceof AwaitingExistingVault)
+      this.current = this.current.identify()
+  }
+
+  launch(ui: SentinelUi): SentinelLaunch {
+    return { ui, vaultName: this.vaultName.trim() }
+  }
+
   get steps(): VaultAuthStepKey[] {
     if (this.presence === Presence.Existing) {
       return [
@@ -156,6 +170,7 @@ export class VaultAuthWorkflowState {
   }
 
   setPresence(next: Presence): void {
+    this.vaultName = ''
     this.current =
       next === Presence.Existing
         ? new AwaitingExistingVault()

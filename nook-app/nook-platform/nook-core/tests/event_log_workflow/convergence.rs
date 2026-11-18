@@ -1,22 +1,11 @@
 //! Projection, epoch, and delivery integration scenarios.
-#![allow(clippy::too_many_lines)]
-
 use super::*;
 use nook_core::EventPublicationDestination;
 
 #[test]
 fn concurrent_replace_creates_conflict() -> VaultResult<()> {
     let mut device = EventLogDevice::genesis("main")?;
-    match device.append_secret("secret_original1", "base") {
-        Ok(outcome) => {
-            device = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device = device.append_secret("secret_original1", "base")?.device;
     let head = device
         .session
         .heads
@@ -25,45 +14,31 @@ fn concurrent_replace_creates_conflict() -> VaultResult<()> {
         .unwrap_or_else(|| panic!("event head must exist"));
 
     device.session.heads = vec![head.clone()];
-    match device.append_signed(vec![VaultOperation::SecretReplaced {
-        old_id: SecretId::from_vault_record("secret_original1"),
-        new_secret: EncryptedSecretPayload {
-            id: SecretId::from_vault_record("secret_newaaaaaaa"),
-            secret_type: SecretType::ApiKey,
-            ciphertext: OpaqueCiphertext::from_trusted("cipher-secret_newaaaaaaa".to_owned()),
-            identity_fingerprint: test_fingerprint("replace-a-identity"),
-            fingerprint: test_fingerprint("replace-a-version"),
-        },
-    }]) {
-        Ok(outcome) => {
-            device = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device = device
+        .append_signed(vec![VaultOperation::SecretReplaced {
+            old_id: SecretId::from_vault_record("secret_original1"),
+            new_secret: EncryptedSecretPayload {
+                id: SecretId::from_vault_record("secret_newaaaaaaa"),
+                secret_type: SecretType::ApiKey,
+                ciphertext: OpaqueCiphertext::from_trusted("cipher-secret_newaaaaaaa".to_owned()),
+                identity_fingerprint: test_fingerprint("replace-a-identity"),
+                fingerprint: test_fingerprint("replace-a-version"),
+            },
+        }])?
+        .device;
     device.session.heads = vec![head];
-    match device.append_signed(vec![VaultOperation::SecretReplaced {
-        old_id: SecretId::from_vault_record("secret_original1"),
-        new_secret: EncryptedSecretPayload {
-            id: SecretId::from_vault_record("secret_newbbbbbbb"),
-            secret_type: SecretType::ApiKey,
-            ciphertext: OpaqueCiphertext::from_trusted("cipher-secret_newbbbbbbb".to_owned()),
-            identity_fingerprint: test_fingerprint("replace-b-identity"),
-            fingerprint: test_fingerprint("replace-b-version"),
-        },
-    }]) {
-        Ok(outcome) => {
-            device = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device = device
+        .append_signed(vec![VaultOperation::SecretReplaced {
+            old_id: SecretId::from_vault_record("secret_original1"),
+            new_secret: EncryptedSecretPayload {
+                id: SecretId::from_vault_record("secret_newbbbbbbb"),
+                secret_type: SecretType::ApiKey,
+                ciphertext: OpaqueCiphertext::from_trusted("cipher-secret_newbbbbbbb".to_owned()),
+                identity_fingerprint: test_fingerprint("replace-b-identity"),
+                fingerprint: test_fingerprint("replace-b-version"),
+            },
+        }])?
+        .device;
 
     let graph = device.session.store.load_graph(device.store_id())?;
     let projection = device.project()?;
@@ -87,43 +62,22 @@ fn causal_join_observes_all_heads_and_collapses_branch_vector() -> VaultResult<(
         .unwrap_or_else(|| panic!("genesis head must exist"));
 
     device.session.heads = vec![genesis_head.clone()];
-    let branch_a = match device.append_secret("secret_branchaaaa", "a") {
-        Ok(outcome) => {
-            device = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    let outcome = device.append_secret("secret_branchaaaa", "a")?;
+    device = outcome.device;
+    let branch_a = outcome.event_id;
     device.session.heads = vec![genesis_head];
-    let branch_b = match device.append_secret("secret_branchbbbb", "b") {
-        Ok(outcome) => {
-            device = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    let outcome = device.append_secret("secret_branchbbbb", "b")?;
+    device = outcome.device;
+    let branch_b = outcome.event_id;
 
     let graph = device.session.store.load_graph(device.store_id())?;
     assert!(graph.are_concurrent(&branch_a, &branch_b));
     assert_eq!(graph.heads().len(), 2);
 
     device.session.heads = vec![branch_a.as_str().to_owned(), branch_b.as_str().to_owned()];
-    let join = match device.append_secret("secret_joinvector", "joined") {
-        Ok(outcome) => {
-            device = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    let outcome = device.append_secret("secret_joinvector", "joined")?;
+    device = outcome.device;
+    let join = outcome.event_id;
 
     let graph = device.session.store.load_graph(device.store_id())?;
     assert!(graph.is_ancestor(&branch_a, &join));
@@ -169,30 +123,18 @@ fn pending_child_from_one_provider_applies_after_parent_arrives_from_another() -
     let drive_events = vec![(genesis_head, genesis_bytes)];
     let mut joiner = EventLogDevice::replica_of(&device)?;
 
-    match joiner.session.union_remote(&github_events) {
-        Ok(outcome) => {
-            joiner.session = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            joiner.session = rejected.session;
-            Err(rejected.cause)
-        }
-    }?;
+    joiner.session = joiner
+        .session
+        .union_remote(&github_events)
+        .map_err(|rejected| rejected.cause)?;
     let graph = joiner.session.store.load_graph(joiner.store_id())?;
     assert_eq!(graph.pending_events().len(), 1);
     assert!(live_secret_ids(&joiner)?.is_empty());
 
-    match joiner.session.union_remote(&drive_events) {
-        Ok(outcome) => {
-            joiner.session = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            joiner.session = rejected.session;
-            Err(rejected.cause)
-        }
-    }?;
+    joiner.session = joiner
+        .session
+        .union_remote(&drive_events)
+        .map_err(|rejected| rejected.cause)?;
     let graph = joiner.session.store.load_graph(joiner.store_id())?;
     assert!(graph.pending_events().is_empty());
     assert!(live_secret_ids(&joiner)?.contains("secret_splitparent"));
@@ -202,39 +144,18 @@ fn pending_child_from_one_provider_applies_after_parent_arrives_from_another() -
 #[test]
 fn duplicate_union_is_idempotent() -> VaultResult<()> {
     let mut a = EventLogDevice::genesis("a")?;
-    match a.append_secret("secret_duplicate1", "v") {
-        Ok(outcome) => {
-            a = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    a = a.append_secret("secret_duplicate1", "v")?.device;
     let events = a.remote_events();
 
     let mut b = EventLogDevice::replica_of(&a)?;
-    match b.session.union_remote(&events) {
-        Ok(outcome) => {
-            b.session = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            b.session = rejected.session;
-            Err(rejected.cause)
-        }
-    }?;
-    match b.session.union_remote(&events) {
-        Ok(outcome) => {
-            b.session = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            b.session = rejected.session;
-            Err(rejected.cause)
-        }
-    }?;
+    b.session = b
+        .session
+        .union_remote(&events)
+        .map_err(|rejected| rejected.cause)?;
+    b.session = b
+        .session
+        .union_remote(&events)
+        .map_err(|rejected| rejected.cause)?;
 
     assert_eq!(
         b.session.store.event_ids().len(),
@@ -254,47 +175,26 @@ fn join_merge_single_head() -> VaultResult<()> {
         .unwrap_or_else(|| panic!("genesis head must exist"));
 
     device.session.heads = vec![genesis_head.clone()];
-    let a_id = match device.append_secret("secret_concurrenta", "a") {
-        Ok(outcome) => {
-            device = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    let outcome = device.append_secret("secret_concurrenta", "a")?;
+    device = outcome.device;
+    let a_id = outcome.event_id;
     device.session.heads = vec![genesis_head.clone()];
-    let b_id = match device.append_secret("secret_concurrentb", "b") {
-        Ok(outcome) => {
-            device = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    let outcome = device.append_secret("secret_concurrentb", "b")?;
+    device = outcome.device;
+    let b_id = outcome.event_id;
 
     device.session.heads = vec![a_id.as_str().to_owned(), b_id.as_str().to_owned()];
-    match device.append_signed(vec![VaultOperation::SecretCreated {
-        secret: EncryptedSecretPayload {
-            id: SecretId::from_vault_record("secret_joinmerge1"),
-            secret_type: SecretType::ApiKey,
-            ciphertext: OpaqueCiphertext::from_trusted("cipher-join".to_owned()),
-            identity_fingerprint: test_fingerprint("join-identity"),
-            fingerprint: test_fingerprint("join-version"),
-        },
-    }]) {
-        Ok(outcome) => {
-            device = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device = device
+        .append_signed(vec![VaultOperation::SecretCreated {
+            secret: EncryptedSecretPayload {
+                id: SecretId::from_vault_record("secret_joinmerge1"),
+                secret_type: SecretType::ApiKey,
+                ciphertext: OpaqueCiphertext::from_trusted("cipher-join".to_owned()),
+                identity_fingerprint: test_fingerprint("join-identity"),
+                fingerprint: test_fingerprint("join-version"),
+            },
+        }])?
+        .device;
 
     let graph = device.session.store.load_graph(device.store_id())?;
     assert_eq!(graph.heads().len(), 1);
@@ -304,19 +204,12 @@ fn join_merge_single_head() -> VaultResult<()> {
 #[test]
 fn epoch_rotation_decrypts_under_new_key() -> VaultResult<()> {
     let mut device = EventLogDevice::genesis("main")?;
-    match device.append_secret(
-        "secret_epochrot1",
-        "websiteUrl: https://example.com\nkey: rotate-me\nexpiresAt: ''\n",
-    ) {
-        Ok(outcome) => {
-            device = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device = device
+        .append_secret(
+            "secret_epochrot1",
+            "websiteUrl: https://example.com\nkey: rotate-me\nexpiresAt: ''\n",
+        )?
+        .device;
     let graph = device.session.store.load_graph(device.store_id())?;
     let user_records: Vec<_> = device
         .project()?
@@ -394,46 +287,18 @@ fn provider_switch_outbox_flush_and_union() -> VaultResult<()> {
     let mut providers: ProviderBuckets =
         HashMap::from([("github".to_owned(), LocalEventStore::new())]);
 
-    providers = write_all_device_events_to_provider(&a, providers, "github")
-        .map_err(|rejected| rejected.cause)?;
+    providers = a.events_for("github").write_to(providers)?;
 
     let mut b = EventLogDevice::replica_of(&a)?;
-    match union_device_from_providers(b, &providers) {
-        Ok(outcome) => {
-            b = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    b = union_device_from_providers(b, &providers)?;
 
-    match a.append_secret("secret_outbox0001", "synced") {
-        Ok(outcome) => {
-            a = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    a = a.append_secret("secret_outbox0001", "synced")?.device;
     {
         let outcome = push_device_outbox(a, providers);
         providers = outcome.providers;
         Ok::<(), nook_core::VaultError>(())
     }?;
-    match union_device_from_providers(b, &providers) {
-        Ok(outcome) => {
-            b = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    b = union_device_from_providers(b, &providers)?;
 
     let graph = b.session.store.load_graph(b.store_id())?;
     assert!(!b.project()?.live_secrets(&graph).is_empty());
@@ -448,28 +313,9 @@ fn provider_advanced_before_local_flush_keeps_both_event_log_writes() -> VaultRe
     let mut providers: ProviderBuckets =
         HashMap::from([("github".to_owned(), LocalEventStore::new())]);
 
-    providers = write_all_device_events_to_provider(&root, providers, "github")
-        .map_err(|rejected| rejected.cause)?;
-    match union_device_from_providers(local, &providers) {
-        Ok(outcome) => {
-            local = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            local = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match union_device_from_providers(remote_device, &providers) {
-        Ok(outcome) => {
-            remote_device = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            remote_device = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    providers = root.events_for("github").write_to(providers)?;
+    local = union_device_from_providers(local, &providers)?;
+    remote_device = union_device_from_providers(remote_device, &providers)?;
 
     let shared_head = root
         .session
@@ -478,28 +324,14 @@ fn provider_advanced_before_local_flush_keeps_both_event_log_writes() -> VaultRe
         .cloned()
         .unwrap_or_else(|| panic!("genesis head must exist"));
     local.session.heads = vec![shared_head.clone()];
-    match local.append_secret("secret_localflush1", "local draft") {
-        Ok(outcome) => {
-            local = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            local = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    local = local
+        .append_secret("secret_localflush1", "local draft")?
+        .device;
 
     remote_device.session.heads = vec![shared_head];
-    match remote_device.append_secret("secret_remotewrite", "remote draft") {
-        Ok(outcome) => {
-            remote_device = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            remote_device = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    remote_device = remote_device
+        .append_secret("secret_remotewrite", "remote draft")?
+        .device;
     {
         let outcome = push_device_outbox(remote_device, providers);
         providers = outcome.providers;
@@ -515,16 +347,7 @@ fn provider_advanced_before_local_flush_keeps_both_event_log_writes() -> VaultRe
     }?;
 
     let mut reloaded = EventLogDevice::replica_of(&root)?;
-    match union_device_from_providers(reloaded, &providers) {
-        Ok(outcome) => {
-            reloaded = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            reloaded = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    reloaded = union_device_from_providers(reloaded, &providers)?;
     let graph = reloaded.session.store.load_graph(reloaded.store_id())?;
     let live = reloaded.project()?.live_secrets(&graph);
 
@@ -542,26 +365,8 @@ fn three_device_decentralized_convergence() -> VaultResult<()> {
     let mut c = EventLogDevice::replica_of(&a)?;
 
     // All devices start from the same genesis.
-    match b.union_from(&a) {
-        Ok(outcome) => {
-            b = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match c.union_from(&a) {
-        Ok(outcome) => {
-            c = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            c = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    b = b.union_from(&a)?;
+    c = c.union_from(&a)?;
 
     // Each device appends concurrently from the shared genesis head.
     let shared_head = a
@@ -571,100 +376,19 @@ fn three_device_decentralized_convergence() -> VaultResult<()> {
         .cloned()
         .unwrap_or_else(|| panic!("genesis head must exist"));
     a.session.heads = vec![shared_head.clone()];
-    match a.append_secret("secret_deviceaaaa", "from-a") {
-        Ok(outcome) => {
-            a = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    a = a.append_secret("secret_deviceaaaa", "from-a")?.device;
     b.session.heads = vec![shared_head.clone()];
-    match b.append_secret("secret_devicebbbb", "from-b") {
-        Ok(outcome) => {
-            b = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    b = b.append_secret("secret_devicebbbb", "from-b")?.device;
     c.session.heads = vec![shared_head];
-    match c.append_secret("secret_devicecccc", "from-c") {
-        Ok(outcome) => {
-            c = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            c = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    c = c.append_secret("secret_devicecccc", "from-c")?.device;
 
     // Pairwise decentralized sync (no central coordinator).
-    match a.union_from(&b) {
-        Ok(outcome) => {
-            a = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match a.union_from(&c) {
-        Ok(outcome) => {
-            a = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match b.union_from(&a) {
-        Ok(outcome) => {
-            b = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match b.union_from(&c) {
-        Ok(outcome) => {
-            b = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match c.union_from(&a) {
-        Ok(outcome) => {
-            c = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            c = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match c.union_from(&b) {
-        Ok(outcome) => {
-            c = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            c = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    a = a.union_from(&b)?;
+    a = a.union_from(&c)?;
+    b = b.union_from(&a)?;
+    b = b.union_from(&c)?;
+    c = c.union_from(&a)?;
+    c = c.union_from(&b)?;
 
     let graph_a = a.session.store.load_graph(a.store_id())?;
     let graph_b = b.session.store.load_graph(b.store_id())?;
@@ -684,16 +408,7 @@ fn three_device_decentralized_convergence() -> VaultResult<()> {
 fn partial_sync_then_completion() -> VaultResult<()> {
     let mut a = EventLogDevice::genesis("a")?;
     let mut b = EventLogDevice::replica_of(&a)?;
-    match b.union_from(&a) {
-        Ok(outcome) => {
-            b = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    b = b.union_from(&a)?;
 
     let head = a
         .session
@@ -702,54 +417,18 @@ fn partial_sync_then_completion() -> VaultResult<()> {
         .cloned()
         .unwrap_or_else(|| panic!("event head must exist"));
     a.session.heads = vec![head.clone()];
-    match a.append_secret("secret_partial0001", "first") {
-        Ok(outcome) => {
-            a = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match b.union_from(&a) {
-        Ok(outcome) => {
-            b = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    a = a.append_secret("secret_partial0001", "first")?.device;
+    b = b.union_from(&a)?;
 
     a.session.heads = vec![head];
-    match a.append_secret("secret_partial0002", "second") {
-        Ok(outcome) => {
-            a = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    a = a.append_secret("secret_partial0002", "second")?.device;
     // B has not synced the second append yet.
     let graph_a = a.session.store.load_graph(a.store_id())?;
     let graph_b = b.session.store.load_graph(b.store_id())?;
     assert_eq!(a.project()?.live_secrets(&graph_a).len(), 2);
     assert_eq!(b.project()?.live_secrets(&graph_b).len(), 1);
 
-    match b.union_from(&a) {
-        Ok(outcome) => {
-            b = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    b = b.union_from(&a)?;
     let graph_b = b.session.store.load_graph(b.store_id())?;
     assert_eq!(b.project()?.live_secrets(&graph_b).len(), 2);
     Ok(())
@@ -765,53 +444,23 @@ fn union_order_does_not_change_projection() -> VaultResult<()> {
         .cloned()
         .unwrap_or_else(|| panic!("event head must exist"));
     a.session.heads = vec![head.clone()];
-    match a.append_secret("secret_order00001", "x") {
-        Ok(outcome) => {
-            a = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    a = a.append_secret("secret_order00001", "x")?.device;
     a.session.heads = vec![head];
-    match a.append_secret("secret_order00002", "y") {
-        Ok(outcome) => {
-            a = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    a = a.append_secret("secret_order00002", "y")?.device;
 
     let events = a.remote_events();
     let mut forward = EventLogDevice::replica_of(&a)?;
     let mut reverse = EventLogDevice::replica_of(&a)?;
 
-    match forward.session.union_remote(&events) {
-        Ok(outcome) => {
-            forward.session = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            forward.session = rejected.session;
-            Err(rejected.cause)
-        }
-    }?;
+    forward.session = forward
+        .session
+        .union_remote(&events)
+        .map_err(|rejected| rejected.cause)?;
     for event in events.iter().rev() {
-        match reverse.session.union_remote(slice::from_ref(event)) {
-            Ok(outcome) => {
-                reverse.session = outcome;
-                Ok(())
-            }
-            Err(rejected) => {
-                reverse.session = rejected.session;
-                Err(rejected.cause)
-            }
-        }?;
+        reverse.session = reverse
+            .session
+            .union_remote(slice::from_ref(event))
+            .map_err(|rejected| rejected.cause)?;
     }
 
     let graph_f = forward.session.store.load_graph(forward.store_id())?;

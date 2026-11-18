@@ -1,47 +1,13 @@
 #![allow(clippy::unnecessary_wraps)]
 
+#[path = "support/repository_files.rs"]
+mod repository_files;
+
+use repository_files::{RepositoryFixture, RepositoryPathRead};
 #[path = "sccache_s3/delivery_cache_contracts.rs"]
 mod delivery_cache_contracts;
 
-use std::{
-    env, fs,
-    ops::Deref,
-    path::{Path, PathBuf},
-};
-
 use anyhow::Context;
-
-struct RepositoryFixture {
-    path: PathBuf,
-}
-impl RepositoryFixture {
-    fn repository_root() -> Self {
-        Self {
-            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
-                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-                PathBuf::from,
-            ),
-        }
-    }
-}
-impl Deref for RepositoryFixture {
-    type Target = PathBuf;
-    fn deref(&self) -> &PathBuf {
-        &self.path
-    }
-}
-impl AsRef<Path> for RepositoryFixture {
-    fn as_ref(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl RepositoryFixture {
-    fn read(&self, path: &str) -> String {
-        fs::read_to_string(self.join(path))
-            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
-    }
-}
 
 #[test]
 fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyhow::Result<()> {
@@ -303,7 +269,7 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         .split_once("      - name: Connect trusted host compiler cache")
         .and_then(|(_, tail)| tail.split_once("      - run: task tooling:static"))
         .map(|(trusted, _)| trusted)
-        .expect("repository policy host tooling must configure its compiler cache");
+        .context("repository policy host tooling must configure its compiler cache")?;
     for required in [
         "uses: ./.github/actions/nook-cache-connect",
         "sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}",
@@ -320,7 +286,7 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         .split_once("      - name: Connect private ARC BuildKit")
         .and_then(|(_, tail)| tail.split_once("      - name: Setup secret-free hosted BuildKit"))
         .map(|(trusted, _)| trusted)
-        .expect("repository policy must keep trusted and untrusted setup branches");
+        .context("repository policy must keep trusted and untrusted setup branches")?;
     for credential in compiler_credentials {
         assert!(
             trusted_policy.contains(credential),
@@ -350,10 +316,10 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
     ] {
         let body = pr
             .split_once(&format!("  {job}:\n"))
-            .expect("non-compiler PR job must exist")
+            .context("non-compiler PR job must exist")?
             .1;
         let boundary = format!("\n  {next}:\n");
-        let body = body.split(&boundary).next().expect("job body must exist");
+        let body = body.split_once(&boundary).map_or(body, |(job, _)| job);
         for credential in compiler_credentials {
             assert!(
                 !body.contains(credential),

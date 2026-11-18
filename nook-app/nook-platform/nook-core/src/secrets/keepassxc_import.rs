@@ -11,7 +11,7 @@ use csv::StringRecord;
 use thiserror::Error;
 
 use super::import_support::{
-    self, CsvHeader, CsvImportConversion, CsvImportReader, CsvRecordFields, ImportMetadata,
+    self, CsvHeaders, CsvImportConversion, CsvImportReader, CsvRecordFields, ImportMetadata,
     SourceLabelMetadata,
 };
 use crate::{
@@ -51,44 +51,29 @@ struct KeePassXcColumns {
     totp: CsvExportColumn,
 }
 
-struct KeePassXcHeaders {
-    normalized: Vec<String>,
-}
-impl KeePassXcHeaders {
-    fn new(headers: &StringRecord) -> Self {
-        Self {
-            normalized: headers
-                .iter()
-                .map(|header| CsvHeader::new(header).normalized())
-                .collect(),
-        }
-    }
-    fn required(&self, name: &'static str) -> Result<usize, KeePassXcImportError> {
-        self.normalized
-            .iter()
-            .position(|header| header == &CsvHeader::new(name).normalized())
-            .ok_or(KeePassXcImportError::MissingColumn(name))
-    }
-    fn optional(&self, name: &str) -> CsvExportColumn {
-        let expected = CsvHeader::new(name).normalized();
-        let column = self
-            .normalized
-            .iter()
-            .position(|header| header == &expected);
-        match column {
-            Some(index) => CsvExportColumn::Exported(index),
-            None => CsvExportColumn::NotExported,
-        }
-    }
-    fn admit(self) -> Result<KeePassXcColumns, KeePassXcImportError> {
-        Ok(KeePassXcColumns {
-            group: self.required("Group")?,
-            title: self.required("Title")?,
-            username: self.required("Username")?,
-            password: self.required("Password")?,
-            url: self.required("URL")?,
-            notes: self.required("Notes")?,
-            totp: self.optional("TOTP"),
+impl KeePassXcColumns {
+    fn from_headers(record: &StringRecord) -> Result<KeePassXcColumns, KeePassXcImportError> {
+        let headers = CsvHeaders::from(record);
+        Ok(Self {
+            group: headers
+                .find(&["Group"])
+                .required(KeePassXcImportError::MissingColumn("Group"))?,
+            title: headers
+                .find(&["Title"])
+                .required(KeePassXcImportError::MissingColumn("Title"))?,
+            username: headers
+                .find(&["Username"])
+                .required(KeePassXcImportError::MissingColumn("Username"))?,
+            password: headers
+                .find(&["Password"])
+                .required(KeePassXcImportError::MissingColumn("Password"))?,
+            url: headers
+                .find(&["URL"])
+                .required(KeePassXcImportError::MissingColumn("URL"))?,
+            notes: headers
+                .find(&["Notes"])
+                .required(KeePassXcImportError::MissingColumn("Notes"))?,
+            totp: headers.find(&["TOTP"]),
         })
     }
 }
@@ -322,7 +307,7 @@ impl<'a> KeePassXcCsvInput<'a> {
         let reader = CsvImportReader::new(self.text);
         let read = reader.headers()?;
         let reader = read.reader;
-        let columns = KeePassXcHeaders::new(&read.headers).admit()?;
+        let columns = KeePassXcColumns::from_headers(&read.headers)?;
         Ok(CheckedKeePassXcCsv { reader, columns })
     }
 }

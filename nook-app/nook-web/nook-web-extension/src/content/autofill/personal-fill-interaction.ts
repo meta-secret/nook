@@ -36,7 +36,11 @@ import {
   type PersonalFillInputMutation,
   type PersonalFillPlanReading,
 } from './personal-fill-scope'
-import { PersonalFillWidget } from './personal-fill-widget'
+import {
+  FocusedFieldKind,
+  FocusedFieldWidget,
+  type FocusedFieldWidgetMount,
+} from './focused-field-widget'
 import {
   PersonalPickerFrame,
   type PersonalPickerFrameMount,
@@ -99,7 +103,7 @@ type PersonalFillSurface =
       readonly kind: PersonalFillSurfaceKind.Visible
       readonly scope: PersonalFillScope
       readonly plan: PersonalFillPlan
-      readonly widget: PersonalFillWidget
+      readonly widget: FocusedFieldWidget
     }
 type VisiblePersonalFillSurface = Extract<
   PersonalFillSurface,
@@ -135,7 +139,9 @@ type PersonalFillInteractionDependencies = {
   readonly sensor: FocusedCredentialTargetSensor
   readonly transport: typeof authenticationRuntimeTransport
   readonly ui: typeof workflowUi
-  readonly mount: typeof PersonalFillWidget.mount
+  readonly mount: (
+    request: FocusedFieldWidgetMount<FocusedFieldKind.Personal>,
+  ) => FocusedFieldWidget
   readonly mountPicker: (
     request: PersonalPickerFrameMount,
   ) => PersonalPickerFrameSurface
@@ -368,7 +374,8 @@ export class PersonalFillInteraction {
       this.closePicker()
       this.surface = { kind: PersonalFillSurfaceKind.Empty }
       this.dependencies.ui.removeWidget()
-      const mountRequest: Parameters<typeof PersonalFillWidget.mount>[0] = {
+      const mountRequest: FocusedFieldWidgetMount<FocusedFieldKind.Personal> = {
+        kind: FocusedFieldKind.Personal,
         vaultConnection,
         group: request.plan.group,
         field: request.scope.target.input,
@@ -834,7 +841,7 @@ const personalInteractionRequest: PersonalFillInteractionDependencies = {
   sensor: personalFillTargetSensor,
   transport: authenticationRuntimeTransport,
   ui: workflowUi,
-  mount: PersonalFillWidget.mount,
+  mount: FocusedFieldWidget.mount,
   mountPicker: PersonalPickerFrame.mount,
   fill: passwordFormCredentialInteraction.setNativeInputValue.bind(
     passwordFormCredentialInteraction,

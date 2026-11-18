@@ -362,15 +362,12 @@ enum TsifyOverride {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{env, process};
 
     #[test]
     fn reports_implicit_boundary_absence_but_allows_named_types() -> anyhow::Result<()> {
-        let root = env::temp_dir().join(format!("nook-rust-tsify-state-{}", process::id()));
+        let directory = tempfile::tempdir()?;
+        let root = directory.path();
         let source_root = root.join("nook-app/nook-platform/nook-core/src");
-        if root.exists() {
-            fs::remove_dir_all(&root)?;
-        }
         fs::create_dir_all(&source_root)?;
         fs::write(
             source_root.join("boundary.rs"),
@@ -406,8 +403,7 @@ value
 "#,
         )?;
 
-        let violations =
-            (RustBoundaryState { root: &root }).rust_tsify_implicit_absence_overrides()?;
+        let violations = (RustBoundaryState { root }).rust_tsify_implicit_absence_overrides()?;
         assert_eq!(
             violations,
             vec![
@@ -433,7 +429,7 @@ value
                 },
             ]
         );
-        fs::remove_dir_all(root)?;
+        directory.close()?;
         Ok(())
     }
 }

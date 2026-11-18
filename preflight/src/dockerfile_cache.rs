@@ -110,15 +110,11 @@ impl DockerfileRepository<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::time::{SystemTime, UNIX_EPOCH};
-    use std::{env, process};
-
-    static TEMPORARY_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
     #[test]
     fn reports_only_cache_mounts_in_dockerfiles() -> anyhow::Result<()> {
-        let root = temporary_directory()?;
+        let directory = tempfile::tempdir()?;
+        let root = directory.path();
         fs::create_dir_all(root.join("nested"))?;
         fs::create_dir_all(root.join("nook-app/nook-platform/docker/rust/base"))?;
         fs::create_dir_all(
@@ -138,7 +134,7 @@ mod tests {
         )?;
         fs::write(root.join("notes.txt"), "--mount=type=cache")?;
 
-        let violations = DockerfileRepository::new(&root).dockerfile_cache_mounts()?;
+        let violations = DockerfileRepository::new(root).dockerfile_cache_mounts()?;
 
         assert_eq!(
             violations,
@@ -157,30 +153,20 @@ mod tests {
                 },
             ]
         );
-        fs::remove_dir_all(root)?;
+        directory.close()?;
         Ok(())
     }
 
     #[test]
     fn fails_when_repository_root_contains_no_dockerfiles() -> anyhow::Result<()> {
-        let root = temporary_directory()?;
-        let error = DockerfileRepository::new(&root)
+        let directory = tempfile::tempdir()?;
+        let root = directory.path();
+        let error = DockerfileRepository::new(root)
             .dockerfile_cache_mounts()
             .err()
             .ok_or_else(|| anyhow::anyhow!("dockerfile cache test should reject invalid input"))?;
         assert_eq!(error.kind(), io::ErrorKind::NotFound);
-        fs::remove_dir_all(root)?;
+        directory.close()?;
         Ok(())
-    }
-
-    fn temporary_directory() -> anyhow::Result<PathBuf> {
-        let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        let process_id = process::id();
-        let sequence = TEMPORARY_DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let path = env::temp_dir().join(format!(
-            "nook-preflight-dockerfile-cache-{process_id}-{unique}-{sequence}"
-        ));
-        fs::create_dir(&path)?;
-        Ok(path)
     }
 }

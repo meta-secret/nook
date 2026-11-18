@@ -5,8 +5,6 @@
 //! edits, and reconnect. Domain sync semantics live here; Node wasm-bindgen
 //! tests cannot drive the browser File System Access API.
 
-#![allow(clippy::result_large_err, clippy::too_many_lines)]
-
 #[path = "event_log_harness.rs"]
 mod harness;
 
@@ -14,7 +12,7 @@ use nook_core::{LocalEventStore, SecretFingerprint};
 
 use harness::{
     EventLogDevice, ProviderBuckets, approve_join, live_secret_ids, missing_provider_bucket,
-    pull_provider_into_device, request_join, write_all_device_events_to_provider,
+    pull_provider_into_device, request_join,
 };
 use nook_core::{
     EncryptedSecretPayload, OpaqueCiphertext, SecretId, SecretType, VaultOperation, VaultResult,
@@ -25,20 +23,6 @@ const VAULT_A: &str = "vault-a";
 const VAULT_A_DEVICE_B: &str = "vault-a-device-b";
 const LOGIN_SITE: &str = "https://login-a-1.example.com";
 const LOGIN_USER: &str = "alice";
-
-fn clear_provider(
-    mut providers: ProviderBuckets,
-    provider: &str,
-) -> Result<ProviderBuckets, harness::ProviderRejection> {
-    if !providers.contains_key(provider) {
-        return Err(harness::ProviderRejection {
-            providers,
-            cause: missing_provider_bucket(provider).into(),
-        });
-    }
-    providers.insert(provider.to_owned(), LocalEventStore::new());
-    Ok(providers)
-}
 
 fn provider_event_count(providers: &ProviderBuckets, provider: &str) -> VaultResult<usize> {
     Ok(providers
@@ -57,110 +41,22 @@ fn enrolled_pair_with_file_providers()
         (VAULT_A_DEVICE_B.to_owned(), LocalEventStore::new()),
     ]);
 
-    match write_all_device_events_to_provider(&device_a, providers, VAULT_A) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
+    providers = device_a.events_for(VAULT_A).write_to(providers)?;
 
     let mut device_b = EventLogDevice::replica_of(&device_a)?;
-    match pull_provider_into_device(device_b, &providers, VAULT_A) {
-        Ok(outcome) => {
-            device_b = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            device_b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
     let device_b_identity = device_b.identity.clone();
-    let join = match request_join(device_b, &device_b_identity, "device-b") {
-        Ok(outcome) => {
-            device_b = outcome.device;
-            Ok(outcome.join)
-        }
-        Err(rejected) => {
-            device_b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match write_all_device_events_to_provider(&device_b, providers, VAULT_A) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
-    match write_all_device_events_to_provider(&device_b, providers, VAULT_A_DEVICE_B) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
+    let outcome = request_join(device_b, &device_b_identity, "device-b")?;
+    device_b = outcome.device;
+    let join = outcome.join;
+    providers = device_b.events_for(VAULT_A).write_to(providers)?;
+    providers = device_b.events_for(VAULT_A_DEVICE_B).write_to(providers)?;
 
-    match pull_provider_into_device(device_a, &providers, VAULT_A) {
-        Ok(outcome) => {
-            device_a = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            device_a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match approve_join(device_a, &join, "device-b") {
-        Ok(outcome) => {
-            device_a = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            device_a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match write_all_device_events_to_provider(&device_a, providers, VAULT_A) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
-    match pull_provider_into_device(device_b, &providers, VAULT_A) {
-        Ok(outcome) => {
-            device_b = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            device_b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match write_all_device_events_to_provider(&device_b, providers, VAULT_A_DEVICE_B) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
+    device_a = pull_provider_into_device(device_a, &providers, VAULT_A)?;
+    device_a = approve_join(device_a, &join, "device-b")?;
+    providers = device_a.events_for(VAULT_A).write_to(providers)?;
+    device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
+    providers = device_b.events_for(VAULT_A_DEVICE_B).write_to(providers)?;
 
     Ok((device_a, device_b, providers))
 }
@@ -174,7 +70,9 @@ fn disconnected_pair_with_shared_head()
         .first()
         .cloned()
         .unwrap_or_else(|| panic!("genesis head must exist"));
-    providers = clear_provider(providers, VAULT_A).map_err(|rejected| rejected.cause)?;
+    *providers
+        .get_mut(VAULT_A)
+        .ok_or_else(|| missing_provider_bucket(VAULT_A))? = LocalEventStore::new();
     Ok((device_a, device_b, providers, shared_head))
 }
 
@@ -189,95 +87,36 @@ fn disconnect_then_concurrent_same_identity_logins_both_survive_on_reconnect() -
 
     // 6–7. Concurrent offline creates of the same login identity, different passwords.
     device_a.session.heads = vec![shared_head.clone()];
-    match device_a.append_login(
-        "secret_logina1aaaa",
-        LOGIN_SITE,
-        LOGIN_USER,
-        "password-from-device-a",
-        "created offline on device-a",
-    ) {
-        Ok(outcome) => {
-            device_a = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device_a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device_a = device_a
+        .append_login(
+            "secret_logina1aaaa",
+            LOGIN_SITE,
+            LOGIN_USER,
+            "password-from-device-a",
+            "created offline on device-a",
+        )?
+        .device;
     device_b.session.heads = vec![shared_head];
-    match device_b.append_login(
-        "secret_logina1bbbb",
-        LOGIN_SITE,
-        LOGIN_USER,
-        "password-from-device-b",
-        "created offline on device-b",
-    ) {
-        Ok(outcome) => {
-            device_b = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device_b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device_b = device_b
+        .append_login(
+            "secret_logina1bbbb",
+            LOGIN_SITE,
+            LOGIN_USER,
+            "password-from-device-b",
+            "created offline on device-b",
+        )?
+        .device;
 
     // While disconnected, device-b can still write its local backup; vault-a stays empty.
-    match write_all_device_events_to_provider(&device_b, providers, VAULT_A_DEVICE_B) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
+    providers = device_b.events_for(VAULT_A_DEVICE_B).write_to(providers)?;
     assert_eq!(provider_event_count(&providers, VAULT_A)?, 0);
 
     // 8. device-b reconnects by attaching a fresh file-sync provider to vault-a.yaml.
     // Seed vault-a from device-a's offline history, then pull into device-b.
-    match write_all_device_events_to_provider(&device_a, providers, VAULT_A) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
-    match pull_provider_into_device(device_b, &providers, VAULT_A) {
-        Ok(outcome) => {
-            device_b = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            device_b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match write_all_device_events_to_provider(&device_b, providers, VAULT_A) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
-    match pull_provider_into_device(device_a, &providers, VAULT_A) {
-        Ok(outcome) => {
-            device_a = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            device_a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    providers = device_a.events_for(VAULT_A).write_to(providers)?;
+    device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
+    providers = device_b.events_for(VAULT_A).write_to(providers)?;
+    device_a = pull_provider_into_device(device_a, &providers, VAULT_A)?;
 
     let live_a = live_secret_ids(&device_a)?;
     let live_b = live_secret_ids(&device_b)?;
@@ -329,80 +168,30 @@ fn reconnect_keeps_identical_password_duplicates_as_separate_records() -> VaultR
         disconnected_pair_with_shared_head()?;
 
     device_a.session.heads = vec![shared_head.clone()];
-    match device_a.append_login(
-        "secret_samepwdaaaa",
-        LOGIN_SITE,
-        LOGIN_USER,
-        "same-password",
-        "device-a",
-    ) {
-        Ok(outcome) => {
-            device_a = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device_a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device_a = device_a
+        .append_login(
+            "secret_samepwdaaaa",
+            LOGIN_SITE,
+            LOGIN_USER,
+            "same-password",
+            "device-a",
+        )?
+        .device;
     device_b.session.heads = vec![shared_head];
-    match device_b.append_login(
-        "secret_samepwdbbbb",
-        LOGIN_SITE,
-        LOGIN_USER,
-        "same-password",
-        "device-b",
-    ) {
-        Ok(outcome) => {
-            device_b = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device_b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device_b = device_b
+        .append_login(
+            "secret_samepwdbbbb",
+            LOGIN_SITE,
+            LOGIN_USER,
+            "same-password",
+            "device-b",
+        )?
+        .device;
 
-    match write_all_device_events_to_provider(&device_a, providers, VAULT_A) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
-    match pull_provider_into_device(device_b, &providers, VAULT_A) {
-        Ok(outcome) => {
-            device_b = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            device_b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match write_all_device_events_to_provider(&device_b, providers, VAULT_A) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
-    match pull_provider_into_device(device_a, &providers, VAULT_A) {
-        Ok(outcome) => {
-            device_a = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            device_a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    providers = device_a.events_for(VAULT_A).write_to(providers)?;
+    device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
+    providers = device_b.events_for(VAULT_A).write_to(providers)?;
+    device_a = pull_provider_into_device(device_a, &providers, VAULT_A)?;
 
     assert_eq!(live_secret_ids(&device_a)?.len(), 2);
     assert_eq!(
@@ -420,117 +209,50 @@ fn reconnect_after_mixed_offline_edits_converges_without_losing_either_branch() 
         disconnected_pair_with_shared_head()?;
 
     device_a.session.heads = vec![shared_head.clone()];
-    match device_a.append_login(
-        "secret_logina1aaaa",
-        LOGIN_SITE,
-        LOGIN_USER,
-        "password-from-device-a",
-        "",
-    ) {
-        Ok(outcome) => {
-            device_a = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device_a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match device_a.append_login(
-        "secret_onlyonaaaaa",
-        "https://only-a.example.com",
-        "bob",
-        "only-a-password",
-        "",
-    ) {
-        Ok(outcome) => {
-            device_a = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device_a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device_a = device_a
+        .append_login(
+            "secret_logina1aaaa",
+            LOGIN_SITE,
+            LOGIN_USER,
+            "password-from-device-a",
+            "",
+        )?
+        .device;
+    device_a = device_a
+        .append_login(
+            "secret_onlyonaaaaa",
+            "https://only-a.example.com",
+            "bob",
+            "only-a-password",
+            "",
+        )?
+        .device;
 
     device_b.session.heads = vec![shared_head];
-    match device_b.append_login(
-        "secret_logina1bbbb",
-        LOGIN_SITE,
-        LOGIN_USER,
-        "password-from-device-b",
-        "",
-    ) {
-        Ok(outcome) => {
-            device_b = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device_b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match device_b.append_login(
-        "secret_onlyonbbbbb",
-        "https://only-b.example.com",
-        "carol",
-        "only-b-password",
-        "",
-    ) {
-        Ok(outcome) => {
-            device_b = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device_b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device_b = device_b
+        .append_login(
+            "secret_logina1bbbb",
+            LOGIN_SITE,
+            LOGIN_USER,
+            "password-from-device-b",
+            "",
+        )?
+        .device;
+    device_b = device_b
+        .append_login(
+            "secret_onlyonbbbbb",
+            "https://only-b.example.com",
+            "carol",
+            "only-b-password",
+            "",
+        )?
+        .device;
 
-    match write_all_device_events_to_provider(&device_a, providers, VAULT_A) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
-    match pull_provider_into_device(device_b, &providers, VAULT_A) {
-        Ok(outcome) => {
-            device_b = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            device_b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match write_all_device_events_to_provider(&device_b, providers, VAULT_A) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
-    match pull_provider_into_device(device_a, &providers, VAULT_A) {
-        Ok(outcome) => {
-            device_a = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            device_a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match write_all_device_events_to_provider(&device_b, providers, VAULT_A_DEVICE_B) {
-        Ok(_) => Ok(()),
-        Err(rejected) => Err(rejected.cause),
-    }?;
+    providers = device_a.events_for(VAULT_A).write_to(providers)?;
+    device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
+    providers = device_b.events_for(VAULT_A).write_to(providers)?;
+    device_a = pull_provider_into_device(device_a, &providers, VAULT_A)?;
+    device_b.events_for(VAULT_A_DEVICE_B).write_to(providers)?;
 
     let live = live_secret_ids(&device_a)?;
     assert_eq!(live.len(), 4);
@@ -552,85 +274,35 @@ fn device_b_local_backup_alone_cannot_heal_cleared_shared_vault() -> VaultResult
     let (mut device_a, mut device_b, mut providers, shared_head) =
         disconnected_pair_with_shared_head()?;
     device_a.session.heads = vec![shared_head.clone()];
-    match device_a.append_login(
-        "secret_logina1aaaa",
-        LOGIN_SITE,
-        LOGIN_USER,
-        "password-from-device-a",
-        "",
-    ) {
-        Ok(outcome) => {
-            device_a = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device_a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device_a = device_a
+        .append_login(
+            "secret_logina1aaaa",
+            LOGIN_SITE,
+            LOGIN_USER,
+            "password-from-device-a",
+            "",
+        )?
+        .device;
     device_b.session.heads = vec![shared_head];
-    match device_b.append_login(
-        "secret_logina1bbbb",
-        LOGIN_SITE,
-        LOGIN_USER,
-        "password-from-device-b",
-        "",
-    ) {
-        Ok(outcome) => {
-            device_b = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device_b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match write_all_device_events_to_provider(&device_b, providers, VAULT_A_DEVICE_B) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
+    device_b = device_b
+        .append_login(
+            "secret_logina1bbbb",
+            LOGIN_SITE,
+            LOGIN_USER,
+            "password-from-device-b",
+            "",
+        )?
+        .device;
+    providers = device_b.events_for(VAULT_A_DEVICE_B).write_to(providers)?;
 
     // Pulling an empty shared vault must not erase device-b's local offline secret.
-    match pull_provider_into_device(device_b, &providers, VAULT_A) {
-        Ok(outcome) => {
-            device_b = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            device_b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
     assert_eq!(live_secret_ids(&device_b)?.len(), 1);
     assert!(live_secret_ids(&device_b)?.contains("secret_logina1bbbb"));
 
     // Healing requires reseeding vault-a from a device that still has the missing events.
-    match write_all_device_events_to_provider(&device_a, providers, VAULT_A) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
-    match pull_provider_into_device(device_b, &providers, VAULT_A) {
-        Ok(outcome) => {
-            device_b = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            device_b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    providers = device_a.events_for(VAULT_A).write_to(providers)?;
+    device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
     assert_eq!(live_secret_ids(&device_b)?.len(), 2);
     Ok(())
 }
@@ -639,52 +311,18 @@ fn device_b_local_backup_alone_cannot_heal_cleared_shared_vault() -> VaultResult
 fn concurrent_replace_of_shared_secret_surfaces_conflict_group_after_reconnect() -> VaultResult<()>
 {
     let (mut device_a, mut device_b, mut providers) = enrolled_pair_with_file_providers()?;
-    match device_a.append_login(
-        "secret_sharedlogin",
-        LOGIN_SITE,
-        LOGIN_USER,
-        "shared-password",
-        "",
-    ) {
-        Ok(outcome) => {
-            device_a = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device_a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match write_all_device_events_to_provider(&device_a, providers, VAULT_A) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
-    match pull_provider_into_device(device_b, &providers, VAULT_A) {
-        Ok(outcome) => {
-            device_b = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            device_b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match write_all_device_events_to_provider(&device_b, providers, VAULT_A_DEVICE_B) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
+    device_a = device_a
+        .append_login(
+            "secret_sharedlogin",
+            LOGIN_SITE,
+            LOGIN_USER,
+            "shared-password",
+            "",
+        )?
+        .device;
+    providers = device_a.events_for(VAULT_A).write_to(providers)?;
+    device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
+    providers = device_b.events_for(VAULT_A_DEVICE_B).write_to(providers)?;
 
     let shared_head = device_a
         .session
@@ -692,93 +330,45 @@ fn concurrent_replace_of_shared_secret_surfaces_conflict_group_after_reconnect()
         .first()
         .cloned()
         .unwrap_or_else(|| panic!("genesis head must exist"));
-    providers = clear_provider(providers, VAULT_A).map_err(|rejected| rejected.cause)?;
+    *providers
+        .get_mut(VAULT_A)
+        .ok_or_else(|| missing_provider_bucket(VAULT_A))? = LocalEventStore::new();
 
     device_a.session.heads = vec![shared_head.clone()];
-    match device_a.append_signed(vec![VaultOperation::SecretReplaced {
-        old_id: SecretId::from_vault_record("secret_sharedlogin"),
-        new_secret: EncryptedSecretPayload {
-            id: SecretId::from_vault_record("secret_replaceaaaa"),
-            secret_type: SecretType::Login,
-            ciphertext: OpaqueCiphertext::from_trusted("cipher-replace-a".to_owned()),
-            identity_fingerprint: SecretFingerprint::from_trusted(
-                "test:replace-a-identity".to_owned(),
-            ),
-            fingerprint: SecretFingerprint::from_trusted("test:replace-a-version".to_owned()),
-        },
-    }]) {
-        Ok(outcome) => {
-            device_a = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device_a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device_a = device_a
+        .append_signed(vec![VaultOperation::SecretReplaced {
+            old_id: SecretId::from_vault_record("secret_sharedlogin"),
+            new_secret: EncryptedSecretPayload {
+                id: SecretId::from_vault_record("secret_replaceaaaa"),
+                secret_type: SecretType::Login,
+                ciphertext: OpaqueCiphertext::from_trusted("cipher-replace-a".to_owned()),
+                identity_fingerprint: SecretFingerprint::from_trusted(
+                    "test:replace-a-identity".to_owned(),
+                ),
+                fingerprint: SecretFingerprint::from_trusted("test:replace-a-version".to_owned()),
+            },
+        }])?
+        .device;
     device_b.session.heads = vec![shared_head];
-    match device_b.append_signed(vec![VaultOperation::SecretReplaced {
-        old_id: SecretId::from_vault_record("secret_sharedlogin"),
-        new_secret: EncryptedSecretPayload {
-            id: SecretId::from_vault_record("secret_replacebbbb"),
-            secret_type: SecretType::Login,
-            ciphertext: OpaqueCiphertext::from_trusted("cipher-replace-b".to_owned()),
-            identity_fingerprint: SecretFingerprint::from_trusted(
-                "test:replace-b-identity".to_owned(),
-            ),
-            fingerprint: SecretFingerprint::from_trusted("test:replace-b-version".to_owned()),
-        },
-    }]) {
-        Ok(outcome) => {
-            device_b = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device_b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device_b = device_b
+        .append_signed(vec![VaultOperation::SecretReplaced {
+            old_id: SecretId::from_vault_record("secret_sharedlogin"),
+            new_secret: EncryptedSecretPayload {
+                id: SecretId::from_vault_record("secret_replacebbbb"),
+                secret_type: SecretType::Login,
+                ciphertext: OpaqueCiphertext::from_trusted("cipher-replace-b".to_owned()),
+                identity_fingerprint: SecretFingerprint::from_trusted(
+                    "test:replace-b-identity".to_owned(),
+                ),
+                fingerprint: SecretFingerprint::from_trusted("test:replace-b-version".to_owned()),
+            },
+        }])?
+        .device;
 
-    match write_all_device_events_to_provider(&device_a, providers, VAULT_A) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
-    match pull_provider_into_device(device_b, &providers, VAULT_A) {
-        Ok(outcome) => {
-            device_b = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            device_b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match write_all_device_events_to_provider(&device_b, providers, VAULT_A) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
-    match pull_provider_into_device(device_a, &providers, VAULT_A) {
-        Ok(outcome) => {
-            device_a = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            device_a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    providers = device_a.events_for(VAULT_A).write_to(providers)?;
+    device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
+    providers = device_b.events_for(VAULT_A).write_to(providers)?;
+    device_a = pull_provider_into_device(device_a, &providers, VAULT_A)?;
 
     let projection = device_a.project()?;
     assert!(projection.has_blocking_conflicts());
@@ -796,28 +386,10 @@ fn concurrent_replace_of_shared_secret_surfaces_conflict_group_after_reconnect()
 fn three_way_file_provider_fanout_keeps_concurrent_logins() -> VaultResult<()> {
     let (mut device_a, mut device_b, mut providers) = enrolled_pair_with_file_providers()?;
     providers.insert("vault-a-backup".to_owned(), LocalEventStore::new());
-    match write_all_device_events_to_provider(&device_a, providers, "vault-a-backup") {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
+    providers = device_a.events_for("vault-a-backup").write_to(providers)?;
 
     let mut device_c = EventLogDevice::replica_of(&device_a)?;
-    match pull_provider_into_device(device_c, &providers, VAULT_A) {
-        Ok(outcome) => {
-            device_c = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            device_c = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device_c = pull_provider_into_device(device_c, &providers, VAULT_A)?;
     let shared_head = device_a
         .session
         .heads
@@ -826,159 +398,48 @@ fn three_way_file_provider_fanout_keeps_concurrent_logins() -> VaultResult<()> {
         .unwrap_or_else(|| panic!("genesis head must exist"));
 
     device_a.session.heads = vec![shared_head.clone()];
-    match device_a.append_login(
-        "secret_threewayaaa",
-        "https://a.example.com",
-        "a",
-        "pw-a",
-        "",
-    ) {
-        Ok(outcome) => {
-            device_a = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device_a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device_a = device_a
+        .append_login(
+            "secret_threewayaaa",
+            "https://a.example.com",
+            "a",
+            "pw-a",
+            "",
+        )?
+        .device;
     device_b.session.heads = vec![shared_head.clone()];
-    match device_b.append_login(
-        "secret_threewaybbb",
-        "https://b.example.com",
-        "b",
-        "pw-b",
-        "",
-    ) {
-        Ok(outcome) => {
-            device_b = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device_b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device_b = device_b
+        .append_login(
+            "secret_threewaybbb",
+            "https://b.example.com",
+            "b",
+            "pw-b",
+            "",
+        )?
+        .device;
     device_c.session.heads = vec![shared_head];
-    match device_c.append_login(
-        "secret_threewayccc",
-        "https://c.example.com",
-        "c",
-        "pw-c",
-        "",
-    ) {
-        Ok(outcome) => {
-            device_c = outcome.device;
-            Ok(outcome.event_id)
-        }
-        Err(rejected) => {
-            device_c = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
+    device_c = device_c
+        .append_login(
+            "secret_threewayccc",
+            "https://c.example.com",
+            "c",
+            "pw-c",
+            "",
+        )?
+        .device;
 
     // Each device publishes its offline branch into the shared vault (and backups).
-    match write_all_device_events_to_provider(&device_a, providers, VAULT_A) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
-    match write_all_device_events_to_provider(&device_a, providers, "vault-a-backup") {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
-    match write_all_device_events_to_provider(&device_b, providers, VAULT_A) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
-    match write_all_device_events_to_provider(&device_b, providers, VAULT_A_DEVICE_B) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
-    match write_all_device_events_to_provider(&device_c, providers, VAULT_A) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
+    providers = device_a.events_for(VAULT_A).write_to(providers)?;
+    providers = device_a.events_for("vault-a-backup").write_to(providers)?;
+    providers = device_b.events_for(VAULT_A).write_to(providers)?;
+    providers = device_b.events_for(VAULT_A_DEVICE_B).write_to(providers)?;
+    providers = device_c.events_for(VAULT_A).write_to(providers)?;
 
-    match pull_provider_into_device(device_a, &providers, VAULT_A) {
-        Ok(outcome) => {
-            device_a = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            device_a = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match pull_provider_into_device(device_b, &providers, VAULT_A) {
-        Ok(outcome) => {
-            device_b = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            device_b = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match pull_provider_into_device(device_c, &providers, VAULT_A) {
-        Ok(outcome) => {
-            device_c = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            device_c = rejected.device;
-            Err(rejected.cause)
-        }
-    }?;
-    match write_all_device_events_to_provider(&device_a, providers, "vault-a-backup") {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
-    match write_all_device_events_to_provider(&device_b, providers, VAULT_A_DEVICE_B) {
-        Ok(outcome) => {
-            providers = outcome;
-            Ok(())
-        }
-        Err(rejected) => {
-            providers = rejected.providers;
-            Err(rejected.cause)
-        }
-    }?;
+    device_a = pull_provider_into_device(device_a, &providers, VAULT_A)?;
+    device_b = pull_provider_into_device(device_b, &providers, VAULT_A)?;
+    device_c = pull_provider_into_device(device_c, &providers, VAULT_A)?;
+    providers = device_a.events_for("vault-a-backup").write_to(providers)?;
+    providers = device_b.events_for(VAULT_A_DEVICE_B).write_to(providers)?;
 
     for device in [&device_a, &device_b, &device_c] {
         assert_eq!(live_secret_ids(device)?.len(), 3);

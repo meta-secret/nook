@@ -50,28 +50,7 @@ impl TypeScriptApplicationState<'_> {
     ///
     /// Returns an error when the repository source tree cannot be read.
     pub fn typescript_implicit_application_state(self) -> io::Result<Vec<Violation>> {
-        let Self { root } = self;
-        let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
-
-        let mut violations = Vec::new();
-        for path in files {
-            let contents = fs::read_to_string(&path)?;
-            for line in TypeScriptApplicationState::undefined_token_lines(
-                &contents,
-                language_dispatch::SourceLanguage::of_path(&path),
-            )
-            .map_err(io::Error::other)?
-            {
-                violations.push(Violation {
-                    path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
-                    line,
-                });
-            }
-        }
-        violations
-            .sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-        violations.dedup();
-        Ok(violations)
+        self.scan_violations(Self::undefined_token_lines)
     }
 }
 
@@ -88,27 +67,7 @@ impl TypeScriptApplicationState<'_> {
     ///
     /// Returns an error when the repository source tree cannot be read.
     pub fn typescript_null_absence_sentinels(root: &Path) -> io::Result<Vec<Violation>> {
-        let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
-
-        let mut violations = Vec::new();
-        for path in files {
-            let contents = fs::read_to_string(&path)?;
-            for line in TypeScriptApplicationState::null_token_lines(
-                &contents,
-                language_dispatch::SourceLanguage::of_path(&path),
-            )
-            .map_err(io::Error::other)?
-            {
-                violations.push(Violation {
-                    path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
-                    line,
-                });
-            }
-        }
-        violations
-            .sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-        violations.dedup();
-        Ok(violations)
+        TypeScriptApplicationState { root }.scan_violations(Self::null_token_lines)
     }
 }
 
@@ -128,27 +87,7 @@ impl TypeScriptApplicationState<'_> {
     ///
     /// Returns an error when the repository source tree cannot be read.
     pub fn typescript_mutable_void_state(root: &Path) -> io::Result<Vec<Violation>> {
-        let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
-
-        let mut violations = Vec::new();
-        for path in files {
-            let contents = fs::read_to_string(&path)?;
-            for line in TypeScriptApplicationState::mutable_void_state_lines(
-                &contents,
-                language_dispatch::SourceLanguage::of_path(&path),
-            )
-            .map_err(io::Error::other)?
-            {
-                violations.push(Violation {
-                    path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
-                    line,
-                });
-            }
-        }
-        violations
-            .sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-        violations.dedup();
-        Ok(violations)
+        TypeScriptApplicationState { root }.scan_violations(Self::mutable_void_state_lines)
     }
 }
 
@@ -162,27 +101,7 @@ impl TypeScriptApplicationState<'_> {
     ///
     /// Returns an error when the repository source tree cannot be read.
     pub fn typescript_generic_optional_state(root: &Path) -> io::Result<Vec<Violation>> {
-        let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
-
-        let mut violations = Vec::new();
-        for path in files {
-            let contents = fs::read_to_string(&path)?;
-            for line in TypeScriptApplicationState::generic_optional_state_lines(
-                &contents,
-                language_dispatch::SourceLanguage::of_path(&path),
-            )
-            .map_err(io::Error::other)?
-            {
-                violations.push(Violation {
-                    path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
-                    line,
-                });
-            }
-        }
-        violations
-            .sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-        violations.dedup();
-        Ok(violations)
+        TypeScriptApplicationState { root }.scan_violations(Self::generic_optional_state_lines)
     }
 }
 
@@ -202,16 +121,26 @@ impl TypeScriptApplicationState<'_> {
     ///
     /// Returns an error when the repository source tree cannot be read.
     pub fn typescript_raw_string_discriminants(root: &Path) -> io::Result<Vec<Violation>> {
+        TypeScriptApplicationState { root }.scan_violations(Self::raw_string_discriminant_lines)
+    }
+}
+
+impl TypeScriptApplicationState<'_> {
+    fn scan_violations(
+        self,
+        scan: impl Fn(
+            &str,
+            language_dispatch::SourceLanguage,
+        ) -> Result<Vec<usize>, tree_sitter::LanguageError>,
+    ) -> io::Result<Vec<Violation>> {
+        let Self { root } = self;
         let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
 
         let mut violations = Vec::new();
         for path in files {
             let contents = fs::read_to_string(&path)?;
-            for line in TypeScriptApplicationState::raw_string_discriminant_lines(
-                &contents,
-                language_dispatch::SourceLanguage::of_path(&path),
-            )
-            .map_err(io::Error::other)?
+            for line in scan(&contents, language_dispatch::SourceLanguage::of_path(&path))
+                .map_err(io::Error::other)?
             {
                 violations.push(Violation {
                     path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),

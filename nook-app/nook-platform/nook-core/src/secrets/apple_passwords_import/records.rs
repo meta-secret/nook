@@ -5,7 +5,7 @@
 )]
 //! Original CSV reader and admitted columns consume ordered conversion.
 use super::super::import_support::{
-    CsvHeader, CsvImportConversion, CsvImportReader, CsvRecordFields, ImportMetadata,
+    CsvHeaders, CsvImportConversion, CsvImportReader, CsvRecordFields, ImportMetadata,
     MAX_CSV_BYTES, SourceLabelMetadata,
 };
 use super::{ApplePasswordsImportError, ApplePasswordsImportPlan};
@@ -68,7 +68,7 @@ impl<'a> ApplePasswordsCsvInput<'a> {
         let reader = CsvImportReader::new(self.text);
         let read = reader.headers()?;
         let reader = read.reader;
-        let columns = ApplePasswordHeaders::new(&read.headers).admit()?;
+        let columns = ApplePasswordColumns::from_headers(&read.headers)?;
         Ok(CheckedApplePasswordsCsv { reader, columns })
     }
 }
@@ -100,43 +100,26 @@ impl CheckedApplePasswordsCsv<'_> {
         })
     }
 }
-struct ApplePasswordHeaders {
-    normalized: Vec<String>,
-}
-impl ApplePasswordHeaders {
-    fn new(headers: &StringRecord) -> Self {
-        Self {
-            normalized: headers
-                .iter()
-                .map(|header| CsvHeader::new(header).normalized())
-                .collect(),
-        }
-    }
-    fn required(&self, name: &'static str) -> Result<usize, ApplePasswordsImportError> {
-        self.normalized
-            .iter()
-            .position(|header| header == &CsvHeader::new(name).normalized())
-            .ok_or(ApplePasswordsImportError::MissingColumn(name))
-    }
-    fn optional(&self, name: &str) -> CsvExportColumn {
-        let expected = CsvHeader::new(name).normalized();
-        let column = self
-            .normalized
-            .iter()
-            .position(|header| header == &expected);
-        match column {
-            Some(index) => CsvExportColumn::Exported(index),
-            None => CsvExportColumn::NotExported,
-        }
-    }
-    fn admit(self) -> Result<ApplePasswordColumns, ApplePasswordsImportError> {
-        Ok(ApplePasswordColumns {
-            title: self.required("Title")?,
-            url: self.required("URL")?,
-            username: self.required("Username")?,
-            password: self.required("Password")?,
-            notes: self.optional("Notes"),
-            otp_auth: self.optional("OTPAuth"),
+impl ApplePasswordColumns {
+    fn from_headers(
+        record: &StringRecord,
+    ) -> Result<ApplePasswordColumns, ApplePasswordsImportError> {
+        let headers = CsvHeaders::from(record);
+        Ok(Self {
+            title: headers
+                .find(&["Title"])
+                .required(ApplePasswordsImportError::MissingColumn("Title"))?,
+            url: headers
+                .find(&["URL"])
+                .required(ApplePasswordsImportError::MissingColumn("URL"))?,
+            username: headers
+                .find(&["Username"])
+                .required(ApplePasswordsImportError::MissingColumn("Username"))?,
+            password: headers
+                .find(&["Password"])
+                .required(ApplePasswordsImportError::MissingColumn("Password"))?,
+            notes: headers.find(&["Notes"]),
+            otp_auth: headers.find(&["OTPAuth"]),
         })
     }
 }

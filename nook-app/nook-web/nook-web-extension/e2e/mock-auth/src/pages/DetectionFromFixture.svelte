@@ -17,6 +17,7 @@
     SiteFixtureSubmitType,
     type SiteFixtureLookup,
     type SiteFixtureField,
+    type SiteFixtureStep,
   } from '../lib/site-fixtures'
 
   let {
@@ -249,54 +250,11 @@
   {/if}
 {/snippet}
 
-{#if renderState.kind === DetectionFixtureRenderKind.Missing}
-  <main>
-    <h1>Unknown site fixture</h1>
-    <p data-testid="mock-auth-scenario">missing-fixture</p>
-    <p class="error" role="alert">No fixture for {label}</p>
-  </main>
-{:else if wrapAriaHidden}
-  {@const step = requiredRenderStep(renderState)}
-  <div aria-hidden="true">
-    <main>
-      <h1>{label}</h1>
-      <p data-testid="mock-auth-scenario">{label}-login</p>
-      {#if error}
-        <p class="error" role="alert">{error}</p>
-      {/if}
-      <form {...fixtureFormAttributes} {onsubmit}>
-        {#each step.fields as field, fieldIndex (`${stepIndex}:${fieldIndex}`)}
-          {@render fixtureField(field)}
-        {/each}
-        {#if step.submit.type === SiteFixtureSubmitType.Button}
-          <button
-            type="button"
-            name={step.submit.name}
-            id={step.submit.id}
-            data-qa={step.submit['data-qa']}
-            onclick={onButtonAdvance}
-          >
-            {step.submit.label}
-          </button>
-        {:else}
-          <button
-            type="submit"
-            name={step.submit.name}
-            id={step.submit.id}
-            data-qa={step.submit['data-qa']}
-          >
-            {step.submit.label}
-          </button>
-        {/if}
-      </form>
-    </main>
-  </div>
-{:else}
-  {@const step = requiredRenderStep(renderState)}
+{#snippet fixturePage(step: SiteFixtureStep)}
   <main>
     <h1>{label}</h1>
     <p data-testid="mock-auth-scenario">{label}-login</p>
-    {#if selectedAccountDisplay}
+    {#if selectedAccountDisplay && !wrapAriaHidden}
       <p data-testid="google-selected-account">{previousUsername}</p>
     {/if}
     {#if error}
@@ -328,4 +286,18 @@
       {/if}
     </form>
   </main>
+{/snippet}
+
+{#if renderState.kind === DetectionFixtureRenderKind.Missing}
+  <main>
+    <h1>Unknown site fixture</h1>
+    <p data-testid="mock-auth-scenario">missing-fixture</p>
+    <p class="error" role="alert">No fixture for {label}</p>
+  </main>
+{:else if wrapAriaHidden}
+  <div aria-hidden="true">
+    {@render fixturePage(requiredRenderStep(renderState))}
+  </div>
+{:else}
+  {@render fixturePage(requiredRenderStep(renderState))}
 {/if}

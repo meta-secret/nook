@@ -1,9 +1,4 @@
 <script lang="ts">
-  import {
-    AwaitingVaultName,
-    AwaitingVaultKind,
-    AwaitingExistingVault,
-  } from './vault-auth-workflow-state.svelte'
   import { Check, Fingerprint, Timer } from '@lucide/svelte'
   import ScenarioBar from '../../nook-auth/_shared/ScenarioBar.svelte'
   import { VaultAuthStepMessage } from './vault-auth-workflow-messages'
@@ -11,7 +6,6 @@
     VaultAuthWorkflowState,
     Presence,
     type SentinelLaunch,
-    type VaultAuthTransition,
     SentinelUi,
     VaultPath,
   } from './vault-auth-workflow-state.svelte'
@@ -22,83 +16,18 @@
 
   let { onSentinel }: Props = $props()
   const workflow = new VaultAuthWorkflowState()
-  let vaultName = $state('')
   const presence = $derived(workflow.presence)
   const step = $derived(workflow.step)
   const path = $derived(workflow.path)
   const steps = $derived(workflow.steps)
-  const setPresence = (next: Presence) => {
-    workflow.setPresence(next)
-    vaultName = ''
-  }
-  const continueAfterName = () => {
-    const previous = workflow.phase
-    if (previous instanceof AwaitingVaultName && vaultName.trim()) {
-      const transition: VaultAuthTransition = {
-        previous,
-        next: previous.respond(vaultName),
-      }
-      workflow.transition(transition)
-    }
-  }
-  const chooseSimple = () => {
-    const previous = workflow.phase
-    if (previous instanceof AwaitingVaultKind) {
-      const transition: VaultAuthTransition = {
-        previous,
-        next: previous.choose(VaultPath.Simple),
-      }
-      workflow.transition(transition)
-    }
-  }
-  const chooseSentinel = () => {
-    const previous = workflow.phase
-    if (previous instanceof AwaitingVaultKind) {
-      const transition: VaultAuthTransition = {
-        previous,
-        next: previous.choose(VaultPath.Sentinel),
-      }
-      workflow.transition(transition)
-    }
-  }
-  const goBack = () => {
-    const previous = workflow.phase
-    if ('back' in previous) {
-      const transition: VaultAuthTransition = {
-        previous,
-        next: previous.back(),
-      }
-      workflow.transition(transition)
-    }
-  }
-  const identifyExisting = () => {
-    const previous = workflow.phase
-    if (previous instanceof AwaitingExistingVault) {
-      const transition: VaultAuthTransition = {
-        previous,
-        next: previous.identify(),
-      }
-      workflow.transition(transition)
-    }
-  }
-  const openCardStack = () => {
-    const launch: SentinelLaunch = {
-      ui: SentinelUi.CardStack,
-      vaultName: vaultName.trim(),
-    }
-    onSentinel(launch)
-  }
-  const openTerminal = () => {
-    const launch: SentinelLaunch = {
-      ui: SentinelUi.Terminal,
-      vaultName: vaultName.trim(),
-    }
-    onSentinel(launch)
-  }
 </script>
 
 <div class="min-h-screen bg-[#f8f8f6] text-[#111]">
-  <ScenarioBar {presence} onPresence={setPresence} light />
+  <ScenarioBar
+    {presence}
+    onPresence={(next: Presence) => workflow.setPresence(next)}
+    light
+  />
 
   <section
     class="mx-auto grid min-h-screen max-w-5xl gap-12 px-6 py-24 lg:grid-cols-[1fr_1.1fr] lg:items-center"
@@ -139,12 +68,12 @@
                 <input
                   class="mt-3 w-full border-b border-black/20 bg-transparent py-2 text-base outline-none"
                   placeholder="Vault name"
-                  bind:value={vaultName}
+                  bind:value={workflow.vaultName}
                 />
                 <button
                   class="mt-3 rounded-full bg-black px-4 py-2 text-sm text-white disabled:opacity-40"
-                  disabled={!vaultName.trim()}
-                  onclick={continueAfterName}
+                  disabled={!workflow.vaultName.trim()}
+                  onclick={() => workflow.continueAfterName()}
                 >
                   Continue
                 </button>
@@ -152,20 +81,21 @@
                 <div class="mt-3 flex flex-wrap gap-2">
                   <button
                     class="rounded-full border border-black/15 px-4 py-2 text-sm"
-                    onclick={chooseSimple}
+                    onclick={() => workflow.choose(VaultPath.Simple)}
                   >
                     Simple vault
                   </button>
                   <button
                     class="rounded-full bg-black px-4 py-2 text-sm text-white"
-                    onclick={chooseSentinel}
+                    onclick={() => workflow.choose(VaultPath.Sentinel)}
                   >
                     Build Sentinel vault
                   </button>
                 </div>
               {:else if presence === Presence.Empty && path === VaultPath.Simple && index === step && step === 2}
                 <p class="mt-2 text-sm text-[#666]">
-                  Create “{vaultName.trim()}” locally — no passkey prologue.
+                  Create “{workflow.vaultName.trim()}” locally — no passkey
+                  prologue.
                 </p>
                 <button
                   class="mt-3 rounded-full bg-black px-4 py-2 text-sm text-white"
@@ -176,25 +106,27 @@
                 <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   <button
                     class="rounded-full bg-black px-4 py-2 text-sm text-white"
-                    onclick={openCardStack}
+                    onclick={() =>
+                      onSentinel(workflow.launch(SentinelUi.CardStack))}
                   >
                     Sentinel card stack · default
                   </button>
                   <button
                     class="rounded-full border border-black/15 px-4 py-2 text-sm"
-                    onclick={openTerminal}
+                    onclick={() =>
+                      onSentinel(workflow.launch(SentinelUi.Terminal))}
                   >
                     Vault terminal
                   </button>
                 </div>
                 <p class="mt-3 text-sm text-[#777]">
-                  Opens the full setup UI for “{vaultName.trim()}”. Passkey
-                  comes later at device init.
+                  Opens the full setup UI for “{workflow.vaultName.trim()}”.
+                  Passkey comes later at device init.
                 </p>
               {:else if presence === Presence.Existing && index === step && step === 0}
                 <button
                   class="mt-3 rounded-full bg-black px-4 py-2 text-sm text-white"
-                  onclick={identifyExisting}
+                  onclick={() => workflow.identifyExisting()}
                 >
                   Continue to unlock
                 </button>
@@ -214,7 +146,7 @@
         <button
           class="rounded-full border border-black/15 px-4 py-2 text-sm disabled:opacity-40"
           disabled={step === 0}
-          onclick={goBack}
+          onclick={() => workflow.back()}
         >
           Back
         </button>

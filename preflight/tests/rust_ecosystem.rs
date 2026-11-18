@@ -1,30 +1,8 @@
-use std::path::{Path, PathBuf};
-use std::{env, fs, ops::Deref};
+#[path = "support/repository.rs"]
+mod repository;
 
-struct RepositoryFixture {
-    path: PathBuf,
-}
-impl RepositoryFixture {
-    fn repository_root() -> Self {
-        Self {
-            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
-                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-                PathBuf::from,
-            ),
-        }
-    }
-}
-impl Deref for RepositoryFixture {
-    type Target = PathBuf;
-    fn deref(&self) -> &PathBuf {
-        &self.path
-    }
-}
-impl AsRef<Path> for RepositoryFixture {
-    fn as_ref(&self) -> &Path {
-        &self.path
-    }
-}
+use repository::RepositoryFixture;
+use std::fs;
 
 impl RepositoryFixture {
     fn read(&self, relative_path: &str) -> anyhow::Result<String> {

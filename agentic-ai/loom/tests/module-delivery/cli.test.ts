@@ -15,15 +15,13 @@ import {
   ModuleDeliveryTaskKind,
 } from '../../src/module-delivery/index.ts';
 
-import type {
-  LegacyModuleDeliveryPlan,
-  ModuleDeliveryPlanV7,
-} from '../../src/module-delivery/index.ts';
+import type { ModuleDeliveryPlanV7 } from '../../src/module-delivery/index.ts';
 
+import { ModuleDeliveryPlanValidationScenario } from './plan-validation.fixture.ts';
 import { TeamKey } from '../../src/project-context/catalog.ts';
 
 export class ModuleDeliveryCliScenario {
-  private constructor(private readonly request: string) {}
+  constructor(private readonly planPath: string) {}
 
   static cliPlan(): ModuleDeliveryPlanV7 {
     return {
@@ -75,59 +73,30 @@ export class ModuleDeliveryCliScenario {
     };
   }
 
-  static legacyCliPlan(): LegacyModuleDeliveryPlan {
-    return {
-      version: 1,
-      sourceCommit: SOURCE_COMMIT,
-      maxConcurrency: 1,
-      maxAgentDepth: 2,
-      maxAttempts: 2,
-      parentOwnedResources: [...REQUIRED_PARENT_OWNED_RESOURCES],
-      parentJoin: {
-        kind: ModuleDeliveryJoinKind.WorkerBranches,
-        owner: 'delivery-owner',
-        validationCommands: ['task loom:verify'],
-      },
-      nodes: [
-        {
-          kind: ModuleDeliveryTaskKind.ReadOnly,
-          taskId: 'legacy-core-audit',
-          expert: 'core_expert',
-          moduleRoot: CORE_ROOT,
-          consumerOutcome: 'Legacy evidence is decoded for compatibility only.',
-          baseline: {
-            kind: ModuleDeliveryBaselineKind.FeatureBranch,
-          },
-          agentDepthLimit: 2,
-          dependencies: [],
-          resources: { read: [`${CORE_ROOT}/**`], write: [] },
-          parentOwnedExclusions: [...REQUIRED_PARENT_OWNED_RESOURCES],
-          acceptance: {
-            commands: ['task loom:module-experts:validate'],
-            evidence: ['Legacy evidence is complete.'],
-          },
-        },
+  validate() {
+    const options = {
+      cmd: [
+        'task',
+        '--dir',
+        REPOSITORY_ROOT,
+        'loom:module-delivery:validate',
+        `PLAN=${this.planPath}`,
       ],
-      edgeContracts: [],
+      stderr: 'pipe' as const,
+      stdout: 'pipe' as const,
     };
-  }
-
-  static resultLine(output: string): string {
-    return new ModuleDeliveryCliScenario(output).execute();
-  }
-
-  private execute(): string {
-    const output = this.request;
-    const [defaulted1 = ''] = [
-      output.split('\n').find((line) => line.startsWith('{"status"')),
+    const result = Bun.spawnSync(options);
+    const [resultLine = ''] = [
+      result.stdout
+        .toString()
+        .split('\n')
+        .find((line) => line.startsWith('{"status"')),
     ];
-    return defaulted1;
+    return { exitCode: result.exitCode, resultLine };
   }
 }
 
 const REPOSITORY_ROOT = resolve(import.meta.dir, '../../../..');
-
-const SOURCE_COMMIT = '3'.repeat(40);
 
 const CORE_ROOT = 'nook-app/nook-platform/nook-core';
 
@@ -145,72 +114,29 @@ test('module delivery CLI validates one plan file with deterministic JSON', asyn
     );
     await writeFile(
       legacyPath,
-      JSON.stringify(ModuleDeliveryCliScenario.legacyCliPlan()),
+      JSON.stringify(ModuleDeliveryPlanValidationScenario.legacyPlan()),
       'utf8',
     );
     await writeFile(rejectedPath, '{', 'utf8');
 
-    const acceptedCommand = [
-      'task',
-      '--dir',
-      REPOSITORY_ROOT,
-      'loom:module-delivery:validate',
-      `PLAN=${acceptedPath}`,
-    ];
-    const acceptedOptions = {
-      cmd: acceptedCommand,
-      stderr: 'pipe' as const,
-      stdout: 'pipe' as const,
-    };
-    const first = Bun.spawnSync(acceptedOptions);
-    const second = Bun.spawnSync(acceptedOptions);
+    const accepted = new ModuleDeliveryCliScenario(acceptedPath);
+    const first = accepted.validate();
+    const second = accepted.validate();
     expect(first.exitCode).toBe(0);
-    const firstResult = ModuleDeliveryCliScenario.resultLine(
-      first.stdout.toString(),
-    );
-    const secondResult = ModuleDeliveryCliScenario.resultLine(
-      second.stdout.toString(),
-    );
-    expect(firstResult).toBe(secondResult);
-    expect(firstResult).toContain('"status":"accepted"');
-    expect(firstResult).toContain('"inputVersion":7');
-    expect(firstResult).toMatch(/"planDigest":"[0-9a-f]{64}"/u);
+    expect(first.resultLine).toBe(second.resultLine);
+    expect(first.resultLine).toContain('"status":"accepted"');
+    expect(first.resultLine).toContain('"inputVersion":7');
+    expect(first.resultLine).toMatch(/"planDigest":"[0-9a-f]{64}"/u);
 
-    const legacyCommand = [
-      'task',
-      '--dir',
-      REPOSITORY_ROOT,
-      'loom:module-delivery:validate',
-      `PLAN=${legacyPath}`,
-    ];
-    const legacyOptions = {
-      cmd: legacyCommand,
-      stderr: 'pipe' as const,
-      stdout: 'pipe' as const,
-    };
-    const legacy = Bun.spawnSync(legacyOptions);
+    const legacy = new ModuleDeliveryCliScenario(legacyPath).validate();
     expect(legacy.exitCode).not.toBe(0);
-    expect(
-      ModuleDeliveryCliScenario.resultLine(legacy.stdout.toString()),
-    ).toContain('only canonical plan version 6 is accepted');
+    expect(legacy.resultLine).toContain(
+      'only canonical plan version 6 is accepted',
+    );
 
-    const rejectedCommand = [
-      'task',
-      '--dir',
-      REPOSITORY_ROOT,
-      'loom:module-delivery:validate',
-      `PLAN=${rejectedPath}`,
-    ];
-    const rejectedOptions = {
-      cmd: rejectedCommand,
-      stderr: 'pipe' as const,
-      stdout: 'pipe' as const,
-    };
-    const rejected = Bun.spawnSync(rejectedOptions);
+    const rejected = new ModuleDeliveryCliScenario(rejectedPath).validate();
     expect(rejected.exitCode).not.toBe(0);
-    expect(
-      ModuleDeliveryCliScenario.resultLine(rejected.stdout.toString()),
-    ).toContain('"status":"rejected"');
+    expect(rejected.resultLine).toContain('"status":"rejected"');
   } finally {
     await rm(directory, cleanupOptions);
   }

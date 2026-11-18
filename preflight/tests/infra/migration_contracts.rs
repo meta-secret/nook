@@ -1,15 +1,10 @@
-use std::{env, fs, path::PathBuf};
+use super::{RepositoryFixture, RepositoryPathRead};
 
 struct MigrationContractFixture;
 
 impl MigrationContractFixture {
     fn read(path: &str) -> String {
-        let root = env::var_os("NOOK_REPO_ROOT").map_or_else(
-            || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-            PathBuf::from,
-        );
-        fs::read_to_string(root.join(path))
-            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+        RepositoryFixture::repository_root().read(path)
     }
 
     fn ordered(source: &str, earlier: &str, later: &str) {

@@ -30,7 +30,10 @@ import {
 } from '../../../../nook-web-extension/src/lib/site-vault-connect-messages'
 import { FocusedCredentialTargetSensor } from '../../../../nook-web-extension/src/content/autofill/focused-credential-target'
 import { FocusedCredentialTargetKind } from '../../../../nook-web-extension/src/content/autofill/focused-credential-target'
-import { FocusedCredentialWidget } from '../../../../nook-web-extension/src/content/autofill/focused-credential-widget'
+import {
+  FocusedFieldKind,
+  FocusedFieldWidget,
+} from '../../../../nook-web-extension/src/content/autofill/focused-field-widget'
 import {
   authenticationRuntimeTransport,
   RuntimeMessageDeliveryKind,
@@ -243,7 +246,8 @@ describe('connect-first widget state', () => {
     document.body.append(field)
     const choose = vi.fn<() => void>()
     const send = connectAnswer(SiteVaultConnectResponseKind.Opened)
-    const widget = FocusedCredentialWidget.mount({
+    const widget = FocusedFieldWidget.mount({
+      kind: FocusedFieldKind.Credential,
       vaultConnection: { kind: PilotVaultConnectionKind.NotConnected },
       field,
       choose,
@@ -262,7 +266,8 @@ describe('connect-first widget state', () => {
     document.body.append(field)
     const choose = vi.fn<() => void>()
     const send = connectAnswer(SiteVaultConnectResponseKind.Opened)
-    const widget = FocusedCredentialWidget.mount({
+    const widget = FocusedFieldWidget.mount({
+      kind: FocusedFieldKind.Credential,
       vaultConnection: { kind: PilotVaultConnectionKind.KeyringWithoutVault },
       field,
       choose,
