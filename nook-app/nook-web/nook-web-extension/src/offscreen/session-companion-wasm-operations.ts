@@ -11,15 +11,12 @@ import {
   CompanionWasmContentResponseKind,
   CompanionWasmLabelKind,
   CompanionWasmSessionMessageType,
-  type CompanionWasmPageInputFieldObservation,
-  type CompanionWasmPageInputFieldRequest,
-  type CompanionWasmLabelRequest,
   type CompanionWasmSessionMessage,
   type CompanionWasmSessionResponse,
 } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
-  NookLoginContextObservation,
+  NookPageInputClassifier,
   project_authentication_login_checklist,
   classify_authentication_authenticator_setup_batch,
   extract_authentication_backup_code_candidates,
@@ -35,7 +32,6 @@ import {
   decode_authenticator_picker_open_response,
   decode_generated_password_response,
   decode_authenticator_options_response,
-  NookPageInputFieldObservation,
   AuthenticationWorkflowActivity,
   site_page_need,
   authentication_page_observation_facts_match_binding,
@@ -51,28 +47,14 @@ import {
   decode_login_picker_open_response,
   decode_website_login_options,
   decode_website_login_save_pending_response,
-  authentication_username_evidence,
   authentication_workflow_pilot_presentation_capability,
   authentication_workflow_activity_progress,
   authentication_implicit_submit_actuation_is_safe,
   bind_authentication_page_observation_facts,
-  has_login_context,
-  looks_like_email_verification_body,
-  looks_like_authentication_container_identity,
-  looks_like_login_advance_control_label,
-  looks_like_manual_checkpoint_label,
-  looks_like_one_time_code_auto_submit_signal,
-  looks_like_one_time_code_field,
-  looks_like_passkey_control_label,
-  looks_like_username_field,
-  parse_page_input_type,
   is_nook_vault_app_url,
   project_password_workflow_activity,
   revalidate_approved_authentication_workflow,
-  strongest_authentication_username_evidence,
-  authentication_username_evidence_by_strength,
   can_activate_authentication_route_control,
-  second_factor_route,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   SessionOperationFailure,
@@ -83,107 +65,6 @@ function invalidRequest(): Result<never, SessionOperationFailure> {
   return err(
     new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
   )
-}
-
-function classifyPageInputField(
-  observation: CompanionWasmPageInputFieldObservation,
-): CompanionWasmSessionResponse {
-  const field = new NookPageInputFieldObservation(
-    parse_page_input_type(observation.inputType),
-    observation.disabled,
-    observation.readOnly,
-    [...observation.autocompleteTokens],
-    observation.identityText,
-    observation.loginContext,
-    observation.secondFactorRoute,
-    observation.inputMode,
-    observation.maxLength,
-    observation.pattern,
-  )
-  try {
-    return {
-      authenticationUsernameEvidence: authentication_username_evidence(field),
-      looksLikeUsernameField: looks_like_username_field(field),
-      looksLikeOneTimeCodeField: looks_like_one_time_code_field(field),
-    }
-  } finally {
-    field.free()
-  }
-}
-
-function classifyPageInputs(
-  fields: readonly CompanionWasmPageInputFieldRequest[],
-  labels: readonly CompanionWasmLabelRequest[],
-): CompanionWasmSessionResponse {
-  const classified = fields.map((request) => {
-    const context = request.loginContextObservation
-    const loginContextObservation = new NookLoginContextObservation(
-      context.formIdentity,
-      [...context.ancestorIdentities],
-      context.advanceControlLabel,
-      context.pathContext,
-    )
-    try {
-      const loginContext = has_login_context(loginContextObservation)
-      const field = new NookPageInputFieldObservation(
-        parse_page_input_type(request.observation.inputType),
-        request.observation.disabled,
-        request.observation.readOnly,
-        [...request.observation.autocompleteTokens],
-        request.observation.identityText,
-        loginContext,
-        second_factor_route(loginContextObservation),
-        request.observation.inputMode,
-        request.observation.maxLength,
-        request.observation.pattern,
-      )
-      try {
-        return {
-          index: request.index,
-          loginContext,
-          authenticationUsernameEvidence:
-            authentication_username_evidence(field),
-          looksLikeUsernameField: looks_like_username_field(field),
-          looksLikeOneTimeCodeField: looks_like_one_time_code_field(field),
-        }
-      } finally {
-        field.free()
-      }
-    } finally {
-      loginContextObservation.free()
-    }
-  })
-  const evidence = classified.map(
-    (field) => field.authenticationUsernameEvidence,
-  )
-  const labelResults = labels.map((label) => ({
-    ...label,
-    matches: labelMatches(label),
-  }))
-  return {
-    fields: classified,
-    strongestAuthenticationUsernameEvidence:
-      strongest_authentication_username_evidence(evidence),
-    usernameEvidenceByStrength: authentication_username_evidence_by_strength(),
-    labels: labelResults,
-  }
-}
-
-function labelMatches(label: CompanionWasmLabelRequest): boolean {
-  switch (label.kind) {
-    case CompanionWasmLabelKind.AuthenticationContainerIdentity:
-      return looks_like_authentication_container_identity(label.value)
-    case CompanionWasmLabelKind.LoginAdvance:
-      return looks_like_login_advance_control_label(label.value)
-    case CompanionWasmLabelKind.ManualCheckpoint:
-      return looks_like_manual_checkpoint_label(label.value)
-    case CompanionWasmLabelKind.PasskeyControl:
-      return looks_like_passkey_control_label(label.value)
-    case CompanionWasmLabelKind.EmailVerificationBody:
-      return looks_like_email_verification_body(label.value)
-    case CompanionWasmLabelKind.OneTimeCodeAutoSubmitSignal:
-      return looks_like_one_time_code_auto_submit_signal(label.value)
-  }
 }
 
 export async function handleCompanionWasmMessage(
@@ -251,20 +132,11 @@ export async function handleCompanionWasmMessage(
             ),
         })
       }
-      case CompanionWasmSessionMessageType.HasLoginContext: {
-        const observation = message.payload.observation
-        const loginContext = new NookLoginContextObservation(
-          observation.formIdentity,
-          [...observation.ancestorIdentities],
-          observation.advanceControlLabel,
-          observation.pathContext,
+      case CompanionWasmSessionMessageType.HasLoginContext:
+        return ok(
+          NookPageInputClassifier.classifyContext(message.payload.observation)
+            .loginContext,
         )
-        try {
-          return ok(has_login_context(loginContext))
-        } finally {
-          loginContext.free()
-        }
-      }
       case CompanionWasmSessionMessageType.ClassifyFocusedCredentialField:
       case CompanionWasmSessionMessageType.RevalidateFocusedCredentialField:
         return ok(new FocusedFieldRecognitionOperation(message).run())
@@ -272,11 +144,11 @@ export async function handleCompanionWasmMessage(
       case CompanionWasmSessionMessageType.PlanPersonalFill:
         return ok(new PersonalFieldFillOperation(message).run())
       case CompanionWasmSessionMessageType.ClassifyPageInputField:
-        return ok(classifyPageInputField(message.payload.observation))
-      case CompanionWasmSessionMessageType.ClassifyPageInputs:
         return ok(
-          classifyPageInputs(message.payload.fields, message.payload.labels),
+          NookPageInputClassifier.classifyField(message.payload.observation),
         )
+      case CompanionWasmSessionMessageType.ClassifyPageInputs:
+        return ok(NookPageInputClassifier.classifyPageInputs(message.payload))
       case CompanionWasmSessionMessageType.EvaluateAuthenticationPolicies:
         return ok({
           transportability: message.payload.transportability.map((request) =>
@@ -349,16 +221,39 @@ export async function handleCompanionWasmMessage(
           sitePageNeed: site_page_need(message.payload.workflowMatch),
         })
       case CompanionWasmSessionMessageType.LooksLikeLoginAdvanceControlLabel:
-        return ok(looks_like_login_advance_control_label(message.payload.label))
+        return ok(
+          NookPageInputClassifier.classifyLabel({
+            kind: CompanionWasmLabelKind.LoginAdvance,
+            value: message.payload.label,
+          }),
+        )
       case CompanionWasmSessionMessageType.LooksLikeManualCheckpointLabel:
-        return ok(looks_like_manual_checkpoint_label(message.payload.label))
+        return ok(
+          NookPageInputClassifier.classifyLabel({
+            kind: CompanionWasmLabelKind.ManualCheckpoint,
+            value: message.payload.label,
+          }),
+        )
       case CompanionWasmSessionMessageType.LooksLikePasskeyControlLabel:
-        return ok(looks_like_passkey_control_label(message.payload.label))
+        return ok(
+          NookPageInputClassifier.classifyLabel({
+            kind: CompanionWasmLabelKind.PasskeyControl,
+            value: message.payload.label,
+          }),
+        )
       case CompanionWasmSessionMessageType.LooksLikeEmailVerificationBody:
-        return ok(looks_like_email_verification_body(message.payload.body))
+        return ok(
+          NookPageInputClassifier.classifyLabel({
+            kind: CompanionWasmLabelKind.EmailVerificationBody,
+            value: message.payload.body,
+          }),
+        )
       case CompanionWasmSessionMessageType.LooksLikeOneTimeCodeAutoSubmitSignal:
         return ok(
-          looks_like_one_time_code_auto_submit_signal(message.payload.signal),
+          NookPageInputClassifier.classifyLabel({
+            kind: CompanionWasmLabelKind.OneTimeCodeAutoSubmitSignal,
+            value: message.payload.signal,
+          }),
         )
       case CompanionWasmSessionMessageType.AuthenticationRecoveryCopyEvidence:
         return ok(
