@@ -112,7 +112,7 @@ impl NookVaultManager {
         let catalog = if self.application.is_simple()
             && self.vault.architecture.vault_type == VaultType::Simple
         {
-            ImportSearchCatalog::Collecting(Vec::new())
+            ImportSearchCatalog::collecting()
         } else {
             ImportSearchCatalog::Disabled
         };
@@ -151,7 +151,7 @@ impl PreparedSecretImport {
         if !operations.is_empty() {
             let committed_event = manager.append_vault_operations(operations).await?;
             match catalog {
-                ImportSearchCatalog::Collecting(rows) => {
+                ImportSearchCatalog::Collecting { rows, .. } => {
                     manager
                         .create_imported_search_catalog_hint(ImportedSearchCatalogHintSource {
                             committed_event,

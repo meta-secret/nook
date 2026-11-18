@@ -59,21 +59,43 @@ struct ImportItemReconciliation<'a> {
 
 pub(super) enum ImportSearchCatalog {
     Disabled,
-    Collecting(Vec<ImportedSearchCatalogRow>),
+    Collecting {
+        rows: Vec<ImportedSearchCatalogRow>,
+        remaining_bytes: usize,
+    },
 }
 
 impl ImportSearchCatalog {
-    fn record(&mut self, source: ImportedSearchCatalogRowSource<'_>) {
-        // The serialized digest and 64-hex-digit HMAC fields alone cost
-        // at least 128 JSON bytes, before metadata or base64 armor.
-        const MINIMUM_ROW_BYTES: usize = 128;
-        if let Self::Collecting(rows) = self {
-            if rows.len() == EncodedSearchCatalogHint::MAX_BYTES / MINIMUM_ROW_BYTES {
-                *self = Self::Disabled;
-            } else {
-                rows.push(ImportedSearchCatalogRow::from_encrypted_import(source));
-            }
+    pub(super) const fn collecting() -> Self {
+        Self::Collecting {
+            rows: Vec::new(),
+            remaining_bytes: EncodedSearchCatalogHint::MAX_BYTES,
         }
+    }
+
+    fn record(&mut self, source: ImportedSearchCatalogRowSource<'_>) {
+        let Self::Collecting {
+            rows,
+            remaining_bytes,
+        } = self
+        else {
+            return;
+        };
+        // The original armor accounts for the imported value's bytes without
+        // serializing its new catalog row. Reserve space for digest and HMAC
+        // fields. The sealed envelope also has its own exact byte limit.
+        const ROW_OVERHEAD_BYTES: usize = 128;
+        let cost = source
+            .ciphertext
+            .as_str()
+            .len()
+            .saturating_add(ROW_OVERHEAD_BYTES);
+        let Some(remaining) = remaining_bytes.checked_sub(cost) else {
+            *self = Self::Disabled;
+            return;
+        };
+        *remaining_bytes = remaining;
+        rows.push(ImportedSearchCatalogRow::from_encrypted_import(source));
     }
 }
 
@@ -279,7 +301,8 @@ impl<'a> CoalescedSecretImport<'a> {
 mod tests {
     use super::*;
     use nook_core::{
-        SecretFingerprint, SecureNoteSecret, StoredRecordPayload, StoredSecretRecord, VaultCrypto,
+        LoginSecret, SecretFingerprint, SecretId, SecureNoteSecret, StoredRecordPayload,
+        StoredSecretRecord, VaultCrypto,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -332,10 +355,104 @@ mod tests {
                         self.version.clone(),
                     )],
                     crypto: &self.crypto,
-                    catalog: ImportSearchCatalog::Collecting(Vec::new()),
+                    catalog: ImportSearchCatalog::collecting(),
                 })
                 .await
         }
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
+    )]
+    async fn encrypted_catalog_budget_skips_one_oversized_row_and_preserves_import()
+    -> anyhow::Result<()> {
+        let key = SymmetricKey::parse(&"ab".repeat(32))?;
+        let crypto = VaultCrypto::new(&key)?;
+        let value = SecretValue::SecureNote(SecureNoteSecret {
+            title: "Synthetic large note".to_owned(),
+            note: "a".repeat(EncodedSearchCatalogHint::MAX_BYTES),
+        });
+        let prepared = CoalescedSecretImport::new(vec![value], &key)?
+            .prepare(ImportPreparation {
+                dedup_state: Vec::new(),
+                crypto: &crypto,
+                catalog: ImportSearchCatalog::collecting(),
+            })
+            .await?;
+        assert!(matches!(&prepared.catalog, ImportSearchCatalog::Disabled));
+        assert!(matches!(
+            prepared.operations.as_slice(),
+            [VaultOperation::SecretCreated { .. }]
+        ));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
+    )]
+    fn encrypted_catalog_budget_accepts_two_thousand_typical_logins_then_bounds_total()
+    -> anyhow::Result<()> {
+        const LOGIN_COUNT: usize = 2_000;
+        let key = SymmetricKey::parse(&"ab".repeat(32))?;
+        let crypto = VaultCrypto::new(&key)?;
+        let value = SecretValue::Login(LoginSecret {
+            website_url: "https://signin.example.test/app/login".to_owned(),
+            username: "user-0001@example.test".to_owned(),
+            password: "synthetic-placeholder".to_owned(),
+            notes: "Imported login with a representative note.".to_owned(),
+        });
+        let mut yaml = value.to_yaml()?;
+        let ciphertext = crypto.encrypt_value(yaml.as_str())?;
+        yaml.zeroize_plaintext();
+        let mut catalog = ImportSearchCatalog::collecting();
+        for index in 0..LOGIN_COUNT {
+            let id = SecretId::from_vault_record(&format!("secret_budget{index:04}"));
+            catalog.record(ImportedSearchCatalogRowSource {
+                id: &id,
+                value: &value,
+                ciphertext: &ciphertext,
+            });
+        }
+        let ImportSearchCatalog::Collecting {
+            rows,
+            remaining_bytes,
+        } = &mut catalog
+        else {
+            anyhow::bail!("representative bulk login import exceeded the catalog budget");
+        };
+        assert_eq!(rows.len(), LOGIN_COUNT);
+        // Reduce the remaining budget to exactly one observed row to exercise
+        // the aggregate limit without allocating thousands more fixture rows.
+        *remaining_bytes = (EncodedSearchCatalogHint::MAX_BYTES - *remaining_bytes) / LOGIN_COUNT;
+        let id = SecretId::from_vault_record("secret_budget_extra");
+        let source = ImportedSearchCatalogRowSource {
+            id: &id,
+            value: &value,
+            ciphertext: &ciphertext,
+        };
+        catalog.record(source);
+        assert!(matches!(
+            &catalog,
+            ImportSearchCatalog::Collecting {
+                remaining_bytes: 0,
+                ..
+            }
+        ));
+        catalog.record(source);
+        assert!(matches!(&catalog, ImportSearchCatalog::Disabled));
+        catalog.record(source);
+        assert!(matches!(&catalog, ImportSearchCatalog::Disabled));
+        Ok(())
     }
 
     #[wasm_bindgen_test]
