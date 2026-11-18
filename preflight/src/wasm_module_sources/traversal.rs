@@ -1,8 +1,5 @@
 use super::inputs::{ModuleInputs, ModuleSource};
-use super::{
-    ExportResolutionFailure, ForwardedExport, HashSet, Path, PathBuf, WASM_MODULE_ALIASES,
-    WasmModuleSources,
-};
+use super::{ExportResolutionFailure, ForwardedExport, HashSet, Path, PathBuf, WasmModuleSources};
 
 /// Each recursive branch returns its visited set before the next sibling starts.
 pub(super) struct ModuleTraversal<'scan> {
@@ -20,16 +17,7 @@ impl<'scan> ModuleTraversal<'scan> {
     }
 
     pub(super) fn any(mut self, module: &str, source_path: &Path) -> (Self, bool) {
-        if WASM_MODULE_ALIASES.contains(&module) {
-            return (self, true);
-        }
-        let Ok(resolved) = WasmModuleSources::resolve_module(
-            module,
-            &ModuleSource {
-                path: source_path,
-                inputs: self.inputs,
-            },
-        ) else {
+        let Ok(resolved) = self.inputs.source(source_path).resolve(module) else {
             return (self, false);
         };
         if WasmModuleSources::is_known_wasm_path(&WasmModuleSources::strip_module_extension(
@@ -66,16 +54,7 @@ impl<'scan> ModuleTraversal<'scan> {
         exported_name: &str,
         source_path: &Path,
     ) -> (Self, bool) {
-        if WASM_MODULE_ALIASES.contains(&module) {
-            return (self, exported_name != "default");
-        }
-        let Ok(resolved) = WasmModuleSources::resolve_module(
-            module,
-            &ModuleSource {
-                path: source_path,
-                inputs: self.inputs,
-            },
-        ) else {
+        let Ok(resolved) = self.inputs.source(source_path).resolve(module) else {
             return (self, false);
         };
         if WasmModuleSources::is_known_wasm_path(&WasmModuleSources::strip_module_extension(
@@ -124,23 +103,7 @@ impl<'scan> ModuleTraversal<'scan> {
         source_path: &Path,
         callable_names: &HashSet<String>,
     ) -> (Self, Result<String, ExportResolutionFailure>) {
-        if WASM_MODULE_ALIASES.contains(&module) {
-            return (
-                self,
-                if callable_names.contains(exported_name) {
-                    Ok(exported_name.to_owned())
-                } else {
-                    Err(ExportResolutionFailure::NoMatchingExport)
-                },
-            );
-        }
-        let resolved = match WasmModuleSources::resolve_module(
-            module,
-            &ModuleSource {
-                path: source_path,
-                inputs: self.inputs,
-            },
-        ) {
+        let resolved = match self.inputs.source(source_path).resolve(module) {
             Ok(path) => path,
             Err(failure) => return (self, Err(ExportResolutionFailure::Module(failure))),
         };
@@ -198,13 +161,7 @@ impl<'scan> ModuleTraversal<'scan> {
         exported_name: &str,
         source_path: &Path,
     ) -> (Self, Result<String, ExportResolutionFailure>) {
-        let resolved = match WasmModuleSources::resolve_module(
-            module,
-            &ModuleSource {
-                path: source_path,
-                inputs: self.inputs,
-            },
-        ) {
+        let resolved = match self.inputs.source(source_path).resolve(module) {
             Ok(path) => path,
             Err(failure) => return (self, Err(ExportResolutionFailure::Module(failure))),
         };
@@ -227,14 +184,10 @@ impl<'scan> ModuleTraversal<'scan> {
                 ForwardedExport::Namespace { exported, module } if exported == exported_name => {
                     found = if Self::new(self.inputs).any(&module, &resolved).1 {
                         Ok({
-                            WasmModuleSources::resolve_module(
-                                &module,
-                                &ModuleSource {
-                                    path: &resolved,
-                                    inputs: self.inputs,
-                                },
-                            )
-                            .map_or(module, |path| path.to_string_lossy().into_owned())
+                            self.inputs
+                                .source(&resolved)
+                                .resolve(&module)
+                                .map_or(module, |path| path.to_string_lossy().into_owned())
                         })
                     } else {
                         Err(ExportResolutionFailure::NoMatchingExport)
@@ -265,13 +218,7 @@ impl<'scan> ModuleTraversal<'scan> {
         source_path: &Path,
         wasm_type_names: &HashSet<String>,
     ) -> (Self, Result<String, ExportResolutionFailure>) {
-        let resolved = match WasmModuleSources::resolve_module(
-            module,
-            &ModuleSource {
-                path: source_path,
-                inputs: self.inputs,
-            },
-        ) {
+        let resolved = match self.inputs.source(source_path).resolve(module) {
             Ok(path) => path,
             Err(failure) => return (self, Err(ExportResolutionFailure::Module(failure))),
         };

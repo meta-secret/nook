@@ -1,19 +1,19 @@
-use super::local_resolution::TypeScriptAliasConfiguration;
+use super::local_resolution::ModuleResolver;
+#[cfg(test)]
+use super::projects::{WebSurface, WebWorkspace};
 use super::{ExportResolutionFailure, ForwardedExport, WasmModuleSources};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
+#[cfg(test)]
 use std::io;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-/// Successful inputs from one authored-source scan. Query failures still use
-/// the ordinary reader; preparing an unused input cannot fail the scan.
-#[derive(Default)]
+/// Parsed authored modules are shared by all application contexts in this scan.
 pub(crate) struct ModuleInputs {
-    modules: HashMap<PathBuf, Rc<ParsedModule>>,
-    configurations: HashMap<PathBuf, Rc<TypeScriptAliasConfiguration>>,
-    directories: HashMap<PathBuf, Vec<PathBuf>>,
+    pub(super) modules: Rc<HashMap<PathBuf, Rc<ParsedModule>>>,
+    pub(super) resolver: ModuleResolver,
 }
 
 pub(crate) struct ModuleSource<'scan> {
@@ -68,48 +68,27 @@ impl ParsedModule {
 }
 
 impl ModuleInputs {
-    pub(crate) fn collect(files: &[PathBuf]) -> Self {
-        let directories = files
-            .iter()
-            .flat_map(|path| WasmModuleSources::configuration_ancestors(path))
-            .collect::<HashSet<_>>();
-        let inputs = files
-            .iter()
-            .map(PathBuf::as_path)
-            .fold(Self::default(), Self::with_module);
-        directories.iter().fold(inputs, Self::with_directory)
+    pub(crate) fn source<'scan>(&'scan self, path: &'scan Path) -> ModuleSource<'scan> {
+        ModuleSource { path, inputs: self }
+    }
+    #[cfg(test)]
+    pub(crate) fn for_directory(root: &Path) -> io::Result<Self> {
+        Ok(Self {
+            modules: Rc::default(),
+            resolver: WebWorkspace::at(root)?.resolver(WebSurface::Standalone(None))?,
+        })
     }
 
-    #[must_use]
-    fn with_module(mut self, path: &Path) -> Self {
-        if let Ok(module) = ParsedModule::read(path) {
-            self.modules.insert(path.to_path_buf(), Rc::new(module));
-        }
-        self
-    }
-
-    #[must_use]
-    fn with_configuration(mut self, path: PathBuf) -> Self {
-        if let Ok(configuration) = TypeScriptAliasConfiguration::read(&path) {
-            self.configurations.insert(path, Rc::new(configuration));
-        }
-        self
-    }
-
-    #[must_use]
-    fn with_directory(self, directory: &PathBuf) -> Self {
-        let mut inputs = self.with_configuration(directory.join("tsconfig.json"));
-        if let Ok(entries) = fs::read_dir(directory) {
-            let paths = entries
-                .filter_map(Result::ok)
-                .map(|entry| entry.path())
-                .collect::<Vec<_>>();
-            inputs = paths.iter().fold(inputs, |inputs, path| {
-                inputs.with_configuration(path.join("tsconfig.json"))
-            });
-            inputs.directories.insert(directory.clone(), paths);
-        }
-        inputs
+    pub(super) fn parse(
+        files: impl Iterator<Item = PathBuf>,
+    ) -> HashMap<PathBuf, Rc<ParsedModule>> {
+        files
+            .filter_map(|path| {
+                ParsedModule::read(&path)
+                    .ok()
+                    .map(|module| (path, Rc::new(module)))
+            })
+            .collect()
     }
 
     pub(super) fn module(&self, path: &Path) -> Result<Rc<ParsedModule>, ExportResolutionFailure> {
@@ -118,39 +97,17 @@ impl ModuleInputs {
             None => ParsedModule::read(path).map(Rc::new),
         }
     }
-
-    pub(super) fn configuration(
-        &self,
-        path: &Path,
-    ) -> Result<Rc<TypeScriptAliasConfiguration>, super::local_resolution::ModuleResolutionFailure>
-    {
-        match self.configurations.get(path) {
-            Some(configuration) => Ok(Rc::clone(configuration)),
-            None => TypeScriptAliasConfiguration::read(path).map(Rc::new),
-        }
-    }
-
-    pub(super) fn directory(&self, path: &Path) -> Result<Vec<PathBuf>, io::Error> {
-        match self.directories.get(path) {
-            Some(entries) => Ok(entries.clone()),
-            None => fs::read_dir(path).map(|entries| {
-                entries
-                    .filter_map(Result::ok)
-                    .map(|entry| entry.path())
-                    .collect()
-            }),
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ModuleInputs, ModuleSource};
+    use super::{ModuleInputs, ModuleSource, WebSurface, WebWorkspace};
     use crate::wasm_module_sources::WasmModuleSources;
     use crate::wasm_module_sources::local_resolution::ModuleResolutionFailure;
     use std::collections::BTreeMap;
     use std::fs;
     use std::path::PathBuf;
+    use std::rc::Rc;
     use tempfile::TempDir;
 
     struct SourceFixture {
@@ -172,9 +129,18 @@ mod tests {
     impl SourceFixture {
         fn create() -> anyhow::Result<Self> {
             let directory = tempfile::tempdir()?;
-            let root = directory.path().join("nook-web");
+            let root = directory.path().canonicalize()?.join("nook-web");
             fs::create_dir(&root)?;
             Ok(Self { directory, root })
+        }
+
+        fn inputs(&self, files: &[PathBuf]) -> anyhow::Result<ModuleInputs> {
+            let config = self.root.join("tsconfig.json");
+            let surface = WebSurface::Standalone(config.is_file().then_some(config));
+            Ok(ModuleInputs {
+                modules: Rc::new(ModuleInputs::parse(files.iter().cloned())),
+                resolver: WebWorkspace::at(self.directory.path())?.resolver(surface)?,
+            })
         }
 
         fn consumer(&self) -> PathBuf {
@@ -210,7 +176,7 @@ mod tests {
             &cycle,
             "export * from './bridge'; export { connect } from 'socket-lib';",
         )?;
-        let inputs = ModuleInputs::collect(&[consumer.clone(), bridge, cycle]);
+        let inputs = fixture.inputs(&[consumer.clone(), bridge, cycle])?;
         let source = ModuleSource {
             path: &consumer,
             inputs: &inputs,
@@ -240,7 +206,7 @@ mod tests {
         fs::write(&bridge, "export { generate_secret_id } from '$app-wasm';")?;
         fixture.configuration("./bridge.ts")?;
         let files = vec![consumer.clone(), bridge.clone()];
-        let first = ModuleInputs::collect(&files);
+        let first = fixture.inputs(&files)?;
         let source = ModuleSource {
             path: &consumer,
             inputs: &first,
@@ -252,7 +218,7 @@ mod tests {
         ));
         fs::write(&bridge, "export { generate_secret_id } from 'unrelated';")?;
         fixture.configuration("./missing.ts")?;
-        let second = ModuleInputs::collect(&files);
+        let second = fixture.inputs(&files)?;
         let updated = ModuleSource {
             path: &consumer,
             inputs: &second,
@@ -263,8 +229,8 @@ mod tests {
             &updated
         ));
         assert!(matches!(
-            WasmModuleSources::resolve_module("$bridge", &updated),
-            Err(ModuleResolutionFailure::ModuleNotFound)
+            updated.resolve("$bridge"),
+            Err(ModuleResolutionFailure::Resolve(_))
         ));
         assert!(WasmModuleSources::is_wasm_callable_export(
             "$bridge",
@@ -280,14 +246,19 @@ mod tests {
         let consumer = fixture.consumer();
         fs::write(&consumer, "")?;
         fs::write(fixture.root.join("tsconfig.json"), "malformed")?;
-        let inputs = ModuleInputs::collect(&[consumer.clone(), fixture.root.join("absent.ts")]);
+        assert!(fixture.inputs(&[]).is_err());
+        fs::rename(
+            fixture.root.join("tsconfig.json"),
+            fixture.root.join("unused.json"),
+        )?;
+        let inputs = fixture.inputs(&[consumer.clone(), fixture.root.join("absent.ts")])?;
         let source = ModuleSource {
             path: &consumer,
             inputs: &inputs,
         };
         assert!(matches!(
-            WasmModuleSources::resolve_module("$missing", &source),
-            Err(ModuleResolutionFailure::UnresolvedAlias)
+            source.resolve("$missing"),
+            Err(ModuleResolutionFailure::Resolve(_))
         ));
         let external = fixture.directory.path().join("external.ts");
         fs::write(&external, "export { generate_secret_id } from '$app-wasm';")?;

@@ -1,177 +1,165 @@
 use super::inputs::ModuleSource;
+use super::projects::{WebSurface, WebWorkspace};
 use super::{
-    Component, MODULE_EXTENSIONS, OsStr, Path, PathBuf, WASM_MODULE_PATHS, WasmModuleSources, fs,
+    Component, GENERATED_WASM_PATHS, MODULE_EXTENSIONS, OsStr, Path, PathBuf, WASM_FACADE_PATHS,
+    WasmModuleSources,
 };
-use std::collections::BTreeMap;
+use oxc_resolver::{
+    ResolveError, ResolveOptions, Resolver, Restriction, TsConfig, TsconfigDiscovery,
+    TsconfigOptions, TsconfigReferences,
+};
 use std::io;
+use std::sync::Arc;
 
-impl WasmModuleSources<'_> {
-    pub(super) fn resolve_module(
-        module: &str,
-        source_path: &ModuleSource<'_>,
-    ) -> Result<PathBuf, ModuleResolutionFailure> {
-        if Path::new(module).is_absolute() {
-            return WasmModuleSources::resolve_local_module(Path::new(module));
+pub(super) struct ModuleResolver {
+    resolver: Resolver,
+    workspace: WebWorkspace,
+    surface: WebSurface,
+    config: Option<Arc<TsConfig>>,
+}
+
+impl WebWorkspace {
+    pub(super) fn resolver(&self, surface: WebSurface) -> io::Result<ModuleResolver> {
+        let config = surface.paths(&self.web);
+        let mut options = ModuleResolver::options();
+        let boundary = self.root.clone();
+        options
+            .restrictions
+            .push(Restriction::Fn(Arc::new(move |path| {
+                path.starts_with(&boundary)
+            })));
+        if let Some(config) = &config {
+            options.tsconfig = Some(TsconfigDiscovery::Manual(TsconfigOptions {
+                config_file: config.clone(),
+                references: TsconfigReferences::Disabled,
+            }));
         }
-        if !module.starts_with('.') {
-            return WasmModuleSources::configured_alias_path(module, source_path);
+        let resolver = Resolver::new(options);
+        let config = config
+            .map(|path| {
+                resolver
+                    .resolve_tsconfig(&path)
+                    .map_err(|error| io::Error::other(format!("{}: {error}", path.display())))
+            })
+            .transpose()?;
+        Ok(ModuleResolver {
+            resolver,
+            workspace: self.clone(),
+            surface,
+            config,
+        })
+    }
+}
+
+impl ModuleResolver {
+    fn generated_binding(&self, module: &str) -> Option<PathBuf> {
+        let extension = self.surface.generated_entry(module)?;
+        // Standalone fixtures may explicitly point a conventional binding name
+        // at an authored module. Keep that project's declared ownership.
+        if matches!(self.surface, WebSurface::Standalone(Some(_)))
+            && self
+                .config
+                .as_ref()
+                .is_some_and(|c| !c.resolve_path_alias_or_base_url(module).is_empty())
+        {
+            return None;
         }
-        let parent = source_path
+        Some(
+            self.workspace
+                .web
+                .join(super::VAULT_WASM_PATH)
+                .with_extension(extension),
+        )
+    }
+
+    fn options() -> ResolveOptions {
+        ResolveOptions {
+            extensions: MODULE_EXTENSIONS
+                .iter()
+                .map(|ext| format!(".{ext}"))
+                .collect(),
+            extension_alias: [
+                ("js", &["ts", "tsx", "js"][..]),
+                ("jsx", &["tsx", "jsx"]),
+                ("mjs", &["mts", "mjs"]),
+                ("cjs", &["cts", "cjs"]),
+            ]
+            .into_iter()
+            .map(|(ext, targets)| {
+                (
+                    ext.to_owned(),
+                    targets.iter().map(|ext| format!(".{ext}")).collect(),
+                )
+            })
+            .collect(),
+            // Third-party package code isn't authored WASM policy input.
+            modules: Vec::new(),
+            main_fields: Vec::new(),
+            ..ResolveOptions::default()
+        }
+    }
+}
+
+#[derive(Debug)]
+#[expect(dead_code, reason = "retain the library's resolution diagnostic")]
+pub(crate) enum ModuleResolutionFailure {
+    ParentlessSource,
+    OutsideRepository,
+    Resolve(ResolveError),
+}
+
+impl ModuleSource<'_> {
+    pub(super) fn resolve(&self, module: &str) -> Result<PathBuf, ModuleResolutionFailure> {
+        let resolver = &self.inputs.resolver;
+        let parent = self
             .parent()
             .ok_or(ModuleResolutionFailure::ParentlessSource)?;
-        let unresolved = WasmModuleSources::normalize_local_module_path(&parent.join(module));
-        let stripped = WasmModuleSources::strip_module_extension(unresolved.clone());
-        if WasmModuleSources::is_known_wasm_path(&stripped) {
-            return Ok(unresolved);
+        // Generated WASM glue is deliberately absent in a sealed source checkout.
+        // Its known Rust-owned identity remains valid before the artifact is built.
+        if let Some(binding) = resolver.generated_binding(module) {
+            return Ok(binding);
         }
-        WasmModuleSources::resolve_local_module(&unresolved)
-    }
-}
-
-#[cfg(test)]
-mod bounds_tests {
-    use super::WasmModuleSources;
-    use std::path::{Path, PathBuf};
-
-    #[test]
-    fn alias_configuration_search_stops_at_the_web_workspace() {
-        let source = Path::new("/checkout/nook-app/nook-web/nook-web-app/src/lib/provider.ts");
-        assert_eq!(
-            WasmModuleSources::configuration_ancestors(source),
-            vec![
-                PathBuf::from("/checkout/nook-app/nook-web/nook-web-app/src/lib"),
-                PathBuf::from("/checkout/nook-app/nook-web/nook-web-app/src"),
-                PathBuf::from("/checkout/nook-app/nook-web/nook-web-app"),
-                PathBuf::from("/checkout/nook-app/nook-web"),
-            ],
-            "module resolution must not inspect sibling worktrees or filesystem ancestors"
-        );
-    }
-}
-
-impl WasmModuleSources<'_> {
-    pub(super) fn configured_alias_path(
-        module: &str,
-        source_path: &ModuleSource<'_>,
-    ) -> Result<PathBuf, ModuleResolutionFailure> {
-        let ancestors = WasmModuleSources::configuration_ancestors(source_path);
-        for ancestor in &ancestors {
-            if let Ok(path) = WasmModuleSources::tsconfig_alias_path(
-                &ModuleSource {
-                    path: &ancestor.join("tsconfig.json"),
-                    inputs: source_path.inputs,
-                },
-                module,
-            ) {
-                return WasmModuleSources::resolve_local_module(&path);
+        if module.starts_with('.') || Path::new(module).is_absolute() {
+            let target = WasmModuleSources::normalize_local_module_path(&parent.join(module));
+            if target.starts_with(&resolver.workspace.root)
+                && GENERATED_WASM_PATHS.iter().any(|name| {
+                    WasmModuleSources::strip_module_extension(target.clone()).ends_with(name)
+                })
+            {
+                return Ok(target);
             }
         }
-        for ancestor in ancestors {
-            let Ok(entries) = source_path.inputs.directory(&ancestor) else {
-                continue;
-            };
-            for entry in entries {
-                let config = entry.join("tsconfig.json");
-                if let Ok(path) = WasmModuleSources::tsconfig_alias_path(
-                    &ModuleSource {
-                        path: &config,
-                        inputs: source_path.inputs,
-                    },
-                    module,
-                ) && let Ok(resolved) = WasmModuleSources::resolve_local_module(&path)
-                {
-                    return Ok(resolved);
-                }
-            }
+        let target = resolver
+            .resolver
+            .resolve(parent, module)
+            .map_err(ModuleResolutionFailure::Resolve)?
+            .into_path_buf();
+        if target.starts_with(&resolver.workspace.root) {
+            Ok(target)
+        } else {
+            Err(ModuleResolutionFailure::OutsideRepository)
         }
-        Err(ModuleResolutionFailure::UnresolvedAlias)
-    }
-}
-
-impl WasmModuleSources<'_> {
-    pub(super) fn configuration_ancestors(source_path: &Path) -> Vec<PathBuf> {
-        let ancestors = source_path
-            .parent()
-            .into_iter()
-            .flat_map(Path::ancestors)
-            .map(Path::to_path_buf)
-            .collect::<Vec<_>>();
-        let Some(web_root) = ancestors
-            .iter()
-            .position(|ancestor| ancestor.file_name().is_some_and(|name| name == "nook-web"))
-        else {
-            return ancestors;
-        };
-        ancestors.into_iter().take(web_root + 1).collect()
-    }
-}
-
-impl WasmModuleSources<'_> {
-    pub(super) fn tsconfig_alias_path(
-        config: &ModuleSource<'_>,
-        module: &str,
-    ) -> Result<PathBuf, ModuleResolutionFailure> {
-        let value = config.inputs.configuration(config.path)?;
-        for (alias, targets) in &value.compiler_options.paths {
-            let suffix = if let Some(prefix) = alias.strip_suffix('*') {
-                let Some(suffix) = module.strip_prefix(prefix) else {
-                    continue;
-                };
-                suffix
-            } else if alias == module {
-                ""
-            } else {
-                continue;
-            };
-            let Some(target) = targets.first() else {
-                continue;
-            };
-            let target = target.strip_suffix('*').unwrap_or(target);
-            let Some(parent) = config.parent() else {
-                continue;
-            };
-            return Ok(WasmModuleSources::normalize_local_module_path(
-                &parent.join(format!("{target}{suffix}")),
-            ));
-        }
-        Err(ModuleResolutionFailure::UnresolvedAlias)
     }
 }
 
 impl WasmModuleSources<'_> {
     pub(super) fn is_known_wasm_path(path: &Path) -> bool {
-        let path = path.to_string_lossy();
-        WASM_MODULE_PATHS
+        GENERATED_WASM_PATHS
             .iter()
-            .any(|candidate| path == *candidate || path.ends_with(&format!("/{candidate}")))
-    }
-}
-
-impl WasmModuleSources<'_> {
-    pub(super) fn resolve_local_module(path: &Path) -> Result<PathBuf, ModuleResolutionFailure> {
-        if path.is_file() {
-            return Ok(path.to_path_buf());
-        }
-        if path.extension().is_none() {
-            for extension in MODULE_EXTENSIONS {
-                let candidate = path.with_extension(extension);
-                if candidate.is_file() {
-                    return Ok(candidate);
-                }
-            }
-            for extension in MODULE_EXTENSIONS {
-                let candidate = path.join(format!("index.{extension}"));
-                if candidate.is_file() {
-                    return Ok(candidate);
-                }
-            }
-        }
-        Err(ModuleResolutionFailure::ModuleNotFound)
+            .chain(WASM_FACADE_PATHS)
+            .any(|name| path.ends_with(name))
     }
 }
 
 impl WasmModuleSources<'_> {
     pub(super) fn strip_module_extension(mut path: PathBuf) -> PathBuf {
+        if let Some(name) = path
+            .file_name()
+            .and_then(OsStr::to_str)
+            .and_then(|name| name.strip_suffix(".d.ts"))
+        {
+            return path.with_file_name(name);
+        }
         if path
             .extension()
             .and_then(OsStr::to_str)
@@ -209,7 +197,7 @@ mod tests {
     #[test]
     fn follows_arbitrary_local_reexport_chains() -> Result<(), io::Error> {
         let directory = tempfile::tempdir()?;
-        let root = directory.path();
+        let root = &directory.path().canonicalize()?;
         fs::write(root.join("bridge.ts"), "export * from '$app-wasm';")?;
         let consumer = root.join("consumer.ts");
         fs::write(&consumer, "")?;
@@ -218,7 +206,7 @@ mod tests {
                 module: "./bridge",
                 source_path: &ModuleSource {
                     path: &consumer,
-                    inputs: &ModuleInputs::default()
+                    inputs: &ModuleInputs::for_directory(root)?
                 }
             })
             .is_wasm_callable_source()
@@ -230,7 +218,7 @@ mod tests {
     #[test]
     fn follows_import_then_export_facades() -> Result<(), io::Error> {
         let directory = tempfile::tempdir()?;
-        let root = directory.path();
+        let root = &directory.path().canonicalize()?;
         fs::write(
             root.join("bridge.ts"),
             "import { generate_secret_id as secret } from '$app-wasm'; export { secret as generate_secret_id };",
@@ -242,7 +230,7 @@ mod tests {
             "generate_secret_id",
             &ModuleSource {
                 path: &consumer,
-                inputs: &ModuleInputs::default()
+                inputs: &ModuleInputs::for_directory(root)?
             },
         ));
         directory.close()?;
@@ -252,7 +240,7 @@ mod tests {
     #[test]
     fn follows_commonjs_facade_exports() -> Result<(), io::Error> {
         let directory = tempfile::tempdir()?;
-        let root = directory.path();
+        let root = &directory.path().canonicalize()?;
         fs::write(
             root.join("bridge.cjs"),
             "module.exports = require('nook-wasm');",
@@ -264,7 +252,7 @@ mod tests {
             "generate_secret_id",
             &ModuleSource {
                 path: &consumer,
-                inputs: &ModuleInputs::default()
+                inputs: &ModuleInputs::for_directory(root)?
             },
         ));
         directory.close()?;
@@ -274,7 +262,7 @@ mod tests {
     #[test]
     fn preserves_provenance_per_exported_symbol() -> Result<(), io::Error> {
         let directory = tempfile::tempdir()?;
-        let root = directory.path();
+        let root = &directory.path().canonicalize()?;
         fs::write(
             root.join("bridge.ts"),
             "export { generate_secret_id } from '$app-wasm'; export { connect } from 'socket-lib';",
@@ -286,7 +274,7 @@ mod tests {
             "generate_secret_id",
             &ModuleSource {
                 path: &consumer,
-                inputs: &ModuleInputs::default()
+                inputs: &ModuleInputs::for_directory(root)?
             },
         ));
         assert!(!WasmModuleSources::is_wasm_callable_export(
@@ -294,41 +282,10 @@ mod tests {
             "connect",
             &ModuleSource {
                 path: &consumer,
-                inputs: &ModuleInputs::default()
+                inputs: &ModuleInputs::for_directory(root)?
             }
         ));
         directory.close()?;
         Ok(())
-    }
-}
-
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct TypeScriptAliasConfiguration {
-    compiler_options: TypeScriptAliasOptions,
-}
-#[derive(serde::Deserialize)]
-struct TypeScriptAliasOptions {
-    paths: BTreeMap<String, Vec<String>>,
-}
-
-#[derive(Debug)]
-#[expect(
-    dead_code,
-    reason = "typed module resolution causes are retained for diagnostics"
-)]
-pub(crate) enum ModuleResolutionFailure {
-    ParentlessSource,
-    UnresolvedAlias,
-    ModuleNotFound,
-    ConfigurationRead(io::Error),
-    ConfigurationSyntax(serde_json::Error),
-}
-
-impl TypeScriptAliasConfiguration {
-    pub(super) fn read(path: &Path) -> Result<Self, ModuleResolutionFailure> {
-        let source =
-            fs::read_to_string(path).map_err(ModuleResolutionFailure::ConfigurationRead)?;
-        serde_json::from_str(&source).map_err(ModuleResolutionFailure::ConfigurationSyntax)
     }
 }
