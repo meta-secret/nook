@@ -71,10 +71,10 @@ impl WebWorkspace {
 impl WebSurface {
     pub(super) fn paths(&self, web: &Path) -> Option<PathBuf> {
         let config = match self {
-            Self::App | Self::AppTest => "nook-web-app/module-paths.json",
-            Self::Vault => "nook-web-shared/vault-module-paths.json",
-            Self::Sentinel => "nook-vault-sentinel/module-paths.json",
-            Self::Research => "nook-web-research/module-paths.json",
+            Self::App | Self::AppTest => "nook-web-app/config/tsconfig.paths.json",
+            Self::Vault => "nook-web-shared/config/tsconfig.paths.json",
+            Self::Sentinel => "nook-vault-sentinel/config/tsconfig.paths.json",
+            Self::Research => "nook-web-research/config/tsconfig.paths.json",
             Self::ExtensionRuntime | Self::MockAuth => return None,
             Self::Standalone(config) => return config.clone(),
         };

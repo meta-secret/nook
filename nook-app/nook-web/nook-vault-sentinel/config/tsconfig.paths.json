@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "paths": {
+      "$lib/extension/connect": ["../src/extension-connect-disabled.ts"],
+      "$lib/components/ExtensionConnectConsent.svelte": [
+        "../src/ExtensionConnectDisabled.svelte"
+      ],
+      "$lib/components/identities/ExtensionRequestPanel.svelte": [
+        "../src/ExtensionRequestPanelDisabled.svelte"
+      ],
+      "$lib/extension/connect-progress": [
+        "../src/extension-connect-progress-disabled.ts"
+      ],
+      "$lib/components/extension-connect-progress-steps": [
+        "../src/extension-connect-progress-steps-disabled.ts"
+      ],
+      "$lib": ["../../nook-web-shared/src/vault-app/lib"],
+      "$lib/*": ["../../nook-web-shared/src/vault-app/lib/*"],
+      "$vault-shared": ["../../nook-web-shared/src/vault-app"],
+      "$vault-shared/*": ["../../nook-web-shared/src/vault-app/*"],
+      "$web-shared/*": ["../../nook-web-shared/src/*"],
+      "$app-wasm": [
+        "../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.d.ts"
+      ]
+    }
+  }
+}

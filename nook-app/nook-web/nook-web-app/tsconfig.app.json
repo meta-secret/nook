@@ -2,7 +2,7 @@
   "extends": [
     "@tsconfig/svelte/tsconfig.json",
     "../tsconfig.safety.json",
-    "./module-paths.json"
+    "./config/tsconfig.paths.json"
   ],
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
