@@ -370,8 +370,9 @@ describe('extension pairing grant transport', () => {
           if (receiver === 'failed') throw new Error('receiver unavailable')
           return ok(unusedSessionTransport)
         },
-        importEventLog: async () => {
+        importEventLog: async ({ catalogHint }) => {
           events.push('import')
+          expect(catalogHint).toEqual({ kind: 'absent' })
           return {
             vaultStoreId: storedGrant.vaultStoreId,
             accessGranted: true,

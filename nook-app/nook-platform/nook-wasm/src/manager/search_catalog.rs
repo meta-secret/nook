@@ -14,6 +14,8 @@ use nook_core::{
     AgeArmoredCiphertext, SearchCatalogBucketPayload, SecretSearchCatalog, SymmetricKey,
 };
 
+pub(super) mod extension_hint;
+
 impl SearchCatalogRestore {
     fn restore(buckets: Vec<(u8, String)>, crypto: &nook_core::VaultCrypto) -> Self {
         let mut catalog = SecretSearchCatalog::default();
@@ -26,11 +28,10 @@ impl SearchCatalogRestore {
                     plaintext.zeroize_plaintext();
                     result.map_err(NookError::from)
                 });
-            if let Err(error) = result {
+            if result.is_err() {
                 tracing::warn!(
                     scope = "wasm-search",
                     action = "discard-catalog",
-                    reason = %error,
                     "discarding an invalid encrypted secret search catalog"
                 );
                 return Self::Rebuild;
@@ -126,8 +127,10 @@ impl NookVaultManager {
             self.vault.catalog_availability(),
             SessionCatalogAvailability::Restore
         ) {
-            let crypto = self.vault.crypto.get()?;
-            let restored = SearchCatalogRestore::load(&store_id, crypto).await;
+            self.vault.crypto.get()?;
+            let vault_key = SymmetricKey::parse(&self.vault.secrets_key)?;
+            let crypto = nook_core::VaultCrypto::for_search_catalog(&vault_key)?;
+            let restored = SearchCatalogRestore::load(&store_id, &crypto).await;
             self.vault.search_catalog = match restored {
                 SearchCatalogRestore::Restored(catalog) => SearchCatalogState::Ready(catalog),
                 SearchCatalogRestore::Rebuild => {

@@ -27,6 +27,9 @@ import initNookWasm, {
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
   ExtensionPairingState,
+  NookEncryptedSearchCatalogHint,
+  NookExtensionEventLogImportStatus,
+  NookExtensionLocalEventLogUpdate,
   NookKeyringProviderSharesAdmission,
   StorageProvider,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -80,6 +83,21 @@ type AuthenticationOutcomeClassificationRequest = {
 type ExtensionEventLogImportRequest = {
   grant: ExtensionSessionGrantIdentity
   records: ExtensionEventLogRecord[]
+}
+
+type ExtensionLocalEventLogImportRequest = ExtensionEventLogImportRequest & {
+  catalogHint: NookEncryptedSearchCatalogHint
+}
+
+type ExtensionNativeEventLogImport = {
+  manager: NookVaultManager
+  records: NookExternalEventLogRecords
+}
+
+type ExtensionManagedEventLogImport = ExtensionEventLogImportRequest & {
+  importRecords: (
+    native: ExtensionNativeEventLogImport,
+  ) => Promise<NookExtensionEventLogImportStatus>
 }
 
 type ExtensionStorageProviders = StorageProvider[]
@@ -211,10 +229,53 @@ class BackgroundVaultRuntime {
     )
   }
 
-  async importExtensionEventLog({
+  importExtensionEventLog({
     grant,
     records,
   }: ExtensionEventLogImportRequest): Promise<ImportedEventLogState> {
+    const request: ExtensionManagedEventLogImport = {
+      grant,
+      records,
+      importRecords: ({ manager, records: recordValues }) =>
+        manager.import_extension_event_log_records_js(
+          grant.vaultStoreId,
+          grant.deviceId,
+          grant.devicePublicKey,
+          grant.deviceSigningPublicKey,
+          recordValues,
+        ),
+    }
+    return this.importManagedEventLog(request)
+  }
+
+  importExtensionLocalEventLogUpdate({
+    grant,
+    records,
+    catalogHint,
+  }: ExtensionLocalEventLogImportRequest): Promise<ImportedEventLogState> {
+    const update: NookExtensionLocalEventLogUpdate = {
+      vaultStoreId: grant.vaultStoreId,
+      deviceId: grant.deviceId,
+      devicePublicKey: grant.devicePublicKey,
+      deviceSigningPublicKey: grant.deviceSigningPublicKey,
+      catalogHint,
+    }
+    const request: ExtensionManagedEventLogImport = {
+      grant,
+      records,
+      importRecords: ({ manager, records: recordValues }) => {
+        const prepared = recordValues.with_local_update(update)
+        return manager.import_extension_local_event_log_update_js(prepared)
+      },
+    }
+    return this.importManagedEventLog(request)
+  }
+
+  private async importManagedEventLog({
+    grant,
+    records,
+    importRecords,
+  }: ExtensionManagedEventLogImport): Promise<ImportedEventLogState> {
     await this.ensureExtensionWasm()
     const manager = new NookVaultManager()
     try {
@@ -222,16 +283,13 @@ class BackgroundVaultRuntime {
       // The WASM import consumes the nested event objects. Preserve the caller's
       // records because pairing forwards the same canonical events to the
       // offscreen session after validating them in the background runtime.
-      const recordValues = NookExternalEventLogRecords.from_array(
-        structuredClone(records),
-      )
-      const statusValue = await manager.import_extension_event_log_records_js(
-        grant.vaultStoreId,
-        grant.deviceId,
-        grant.devicePublicKey,
-        grant.deviceSigningPublicKey,
-        recordValues,
-      )
+      const native: ExtensionNativeEventLogImport = {
+        manager,
+        records: NookExternalEventLogRecords.from_array(
+          structuredClone(records),
+        ),
+      }
+      const statusValue = await importRecords(native)
       try {
         return statusValue.to_object()
       } finally {

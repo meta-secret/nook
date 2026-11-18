@@ -1,6 +1,9 @@
 use super::super::event_log::{
     EventLogStorageRecord, ExtensionEventLogImportStatus, ExternalEventLogRecord,
 };
+use super::super::search_catalog::extension_hint::{
+    ExtensionSearchCatalogSeed, NookEncryptedSearchCatalogHint, NookExtensionLocalEventLogUpdate,
+};
 use super::NookVaultManager;
 use crate::NookReplacementConflict;
 use crate::NookSecurityConflict;
@@ -33,6 +36,13 @@ impl NookEventLogRecords {
 #[wasm_bindgen]
 pub struct NookExternalEventLogRecords(pub(in crate::manager) Vec<ExternalEventLogRecord>);
 
+/// Opaque typed update that holds the already-parsed external event records.
+#[wasm_bindgen]
+pub struct NookPreparedExtensionLocalEventLogUpdate {
+    request: NookExtensionLocalEventLogUpdate,
+    records: Vec<ExternalEventLogRecord>,
+}
+
 #[wasm_bindgen]
 impl NookExternalEventLogRecords {
     #[wasm_bindgen]
@@ -45,6 +55,17 @@ impl NookExternalEventLogRecords {
             .collect::<Result<Vec<_>, _>>()?;
         let result = { Self(records) };
         Ok(result)
+    }
+
+    #[wasm_bindgen]
+    pub fn with_local_update(
+        self,
+        request: &tsify::Ts<NookExtensionLocalEventLogUpdate>,
+    ) -> Result<NookPreparedExtensionLocalEventLogUpdate, JsError> {
+        Ok(NookPreparedExtensionLocalEventLogUpdate {
+            request: request.decode()?,
+            records: self.0,
+        })
     }
 }
 
@@ -138,6 +159,46 @@ impl NookVaultManager {
                 records.0,
             )
             .await?;
+        Ok(NookExtensionEventLogImportStatus(status))
+    }
+
+    #[wasm_bindgen]
+    pub async fn import_extension_local_event_log_update_js(
+        &mut self,
+        update: NookPreparedExtensionLocalEventLogUpdate,
+    ) -> Result<NookExtensionEventLogImportStatus, JsError> {
+        let NookPreparedExtensionLocalEventLogUpdate { request, records } = update;
+        let published_event_ids = match &request.catalog_hint {
+            NookEncryptedSearchCatalogHint::Absent => Vec::new(),
+            NookEncryptedSearchCatalogHint::Sealed { .. } => records
+                .iter()
+                .map(|record| record.event_id.clone())
+                .collect(),
+        };
+        let status = self
+            .import_extension_event_log_records(
+                request.vault_store_id.as_str(),
+                request.device_id.as_str(),
+                request.device_public_key.as_str(),
+                request.device_signing_public_key.as_str(),
+                records,
+            )
+            .await?;
+        if status.access_granted
+            && self
+                .seed_extension_search_catalog_hint(ExtensionSearchCatalogSeed {
+                    update: request,
+                    published_event_ids,
+                })
+                .await
+                .is_err()
+        {
+            tracing::warn!(
+                scope = "wasm-search",
+                action = "seed-extension-catalog",
+                "could not seed optional encrypted catalog hint"
+            );
+        }
         Ok(NookExtensionEventLogImportStatus(status))
     }
 

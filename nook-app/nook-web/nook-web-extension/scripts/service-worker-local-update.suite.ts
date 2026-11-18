@@ -30,6 +30,8 @@ describe('local event-log update routing', () => {
         return ok(response)
       }
       if (message.type === ExtensionSessionMessageType.UpdateVault) {
+        expect(message.payload).not.toHaveProperty('encryptedSearchCatalog')
+        expect(message.payload).not.toHaveProperty('catalogHint')
         delivered.push(ExtensionSessionMessageType.UpdateVault)
         const response: ExtensionSessionResponse = { ok: true }
         return ok(response)
@@ -52,6 +54,11 @@ describe('local event-log update routing', () => {
     const update = await routeDecodedLocalUpdate(sendSession)
 
     expect(update.response).toEqual({ ok: true, eventCount: 1 })
+    expect(update.imports).toHaveLength(1)
+    expect(update.imports[0]?.catalogHint).toEqual({
+      kind: 'sealed',
+      encoded: 'sealed-catalog-fixture',
+    })
     expect(update.closeSession).not.toHaveBeenCalled()
     const { ExtensionAuthenticatorSession } =
       await import('../src/background/service-worker/authenticator-session-adapter')
@@ -94,6 +101,7 @@ describe('local event-log update routing', () => {
         reason: LocalEventLogUpdateFailure.EventLogImportFailed,
       })
       expect(update.closeSession).toHaveBeenCalledTimes(1)
+      expect(update.imports).toEqual([])
     },
   )
 })
