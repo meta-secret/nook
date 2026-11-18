@@ -1,5 +1,4 @@
 import { UntrustedYamlBoundary } from '../lib/guards.ts';
-import { MODULE_EXPERT_CATALOG } from '../module-experts/catalog.ts';
 import { TeamKey, TeamAuthorityCatalog } from '../project-context/catalog.ts';
 import {
   CORTEX_TEAM_WRITER_EXPERT,
@@ -12,7 +11,6 @@ import {
   ModuleDeliveryOwner,
   ModuleDeliveryTaskKind,
   ModuleDeliveryWorkspaceKind,
-  ModuleTaskOwnership,
   ModuleDeliveryIssueCode,
 } from './domain.ts';
 import type {
@@ -25,14 +23,9 @@ import type {
   ModuleDeliveryAcceptance,
   ModuleDeliveryNodeV2,
   ModuleDeliveryParentJoin,
-  LegacyModuleDeliveryNode,
 } from './domain.ts';
 import {
-  LegacyModulePlanAcceptanceField,
   ModulePlanAcceptanceCommandField,
-  LegacyModulePlanReadOnlyNodeField,
-  LegacyModulePlanResourceField,
-  LegacyModulePlanWriteNodeField,
   ModulePlanAcceptanceField,
   ModulePlanCortexAuthoringField,
   ModulePlanCortexWriteNodeField,
@@ -50,14 +43,10 @@ import {
 } from './codec-schema.ts';
 import { ModulePlanDecodeFailure, ModulePlanFields } from './codec-fields.ts';
 import type {
-  ModulePlanAcceptanceDecodeRequest,
   ModuleDeliveryOwnerDecodeRequest,
   ModuleDeliveryTeamDecodeRequest,
-  LegacyTaskTeamRequest,
   ModulePlanIndexedNodeRequest,
   ModulePlanIndexedProducerRequest,
-  ModulePlanNodeListRequest,
-  ModulePlanResourceDecodeRequest,
 } from './codec-schema.ts';
 import {
   CortexAuthoringResources,
@@ -91,56 +80,24 @@ export class ModuleDeliveryPlanNodeCodec {
   }
 
   static decodeNodes(
-    request: ModulePlanNodeListRequest & { readonly legacy: true },
-  ): readonly LegacyModuleDeliveryNode[];
-  static decodeNodes(
-    request: ModulePlanNodeListRequest & { readonly legacy: false },
-  ): readonly ModuleDeliveryNodeV2[];
-  static decodeNodes(
-    request: ModulePlanNodeListRequest,
-  ): readonly (LegacyModuleDeliveryNode | ModuleDeliveryNodeV2)[] {
+    values: ModulePlanTransportList,
+  ): readonly ModuleDeliveryNodeV2[] {
     ModuleDeliveryPlanNodeCodec.assertCollectionLimit({
-      values: request.values,
+      values,
       path: '$.nodes',
       maximum: MAX_MODULE_DELIVERY_NODES,
     });
-    if (request.legacy) {
-      const nodes: LegacyModuleDeliveryNode[] = [];
-      for (const [index, value] of request.values.entries()) {
-        const nodeRequest: ModulePlanIndexedNodeRequest & {
-          readonly legacy: true;
-        } = {
-          value,
-          index,
-          legacy: true,
-        };
-        nodes.push(ModuleDeliveryPlanNodeCodec.decodeNode(nodeRequest));
-      }
-      return nodes;
-    }
     const nodes: ModuleDeliveryNodeV2[] = [];
-    for (const [index, value] of request.values.entries()) {
-      const nodeRequest: ModulePlanIndexedNodeRequest & {
-        readonly legacy: false;
-      } = {
-        value,
-        index,
-        legacy: false,
-      };
+    for (const [index, value] of values.entries()) {
+      const nodeRequest: ModulePlanIndexedNodeRequest = { value, index };
       nodes.push(ModuleDeliveryPlanNodeCodec.decodeNode(nodeRequest));
     }
     return nodes;
   }
 
   private static decodeNode(
-    request: ModulePlanIndexedNodeRequest & { readonly legacy: true },
-  ): LegacyModuleDeliveryNode;
-  private static decodeNode(
-    request: ModulePlanIndexedNodeRequest & { readonly legacy: false },
-  ): ModuleDeliveryNodeV2;
-  private static decodeNode(
     request: ModulePlanIndexedNodeRequest,
-  ): LegacyModuleDeliveryNode | ModuleDeliveryNodeV2 {
+  ): ModuleDeliveryNodeV2 {
     const path = `$.nodes[${request.index}]`;
     if (!UntrustedYamlBoundary.isRecord(request.value))
       ModuleDeliveryPlanNodeCodec.fail(`${path}: node must be an object.`);
@@ -150,17 +107,7 @@ export class ModuleDeliveryPlanNodeCodec {
     };
     const fields = new ModulePlanFields(fieldRequest);
     const kind = fields.string('kind');
-    if (request.legacy) {
-      if (kind === ModuleDeliveryTaskKind.Write) {
-        fields.requireExactKeys(LegacyModulePlanWriteNodeField);
-      } else if (kind === ModuleDeliveryTaskKind.ReadOnly) {
-        fields.requireExactKeys(LegacyModulePlanReadOnlyNodeField);
-      } else {
-        ModuleDeliveryPlanNodeCodec.fail(
-          `${path}.kind: legacy plans only support read-only and write tasks.`,
-        );
-      }
-    } else if (kind === ModuleDeliveryTaskKind.Write) {
+    if (kind === ModuleDeliveryTaskKind.Write) {
       if (Object.hasOwn(request.value, 'cortexAuthoring'))
         fields.requireExactKeys(ModulePlanCortexWriteNodeField);
       else fields.requireExactKeys(ModulePlanWriteNodeField);
@@ -185,46 +132,25 @@ export class ModuleDeliveryPlanNodeCodec {
     };
     const expert = fields.identifier('expert');
     const moduleRoot = fields.string('moduleRoot');
-    const legacyTeamRequest: LegacyTaskTeamRequest = {
-      kind,
-      expert,
-      moduleRoot,
-    };
     const teamRequest: ModuleDeliveryTeamDecodeRequest = {
-      value: request.legacy
-        ? ModuleDeliveryPlanNodeCodec.legacyTaskTeam(legacyTeamRequest)
-        : fields.string('team'),
+      value: fields.string('team'),
       path,
     };
     const allowGizmoPrime =
-      !request.legacy &&
       kind === ModuleDeliveryTaskKind.Write &&
       teamRequest.value === TeamKey.Ai &&
       expert === CORTEX_TEAM_WRITER_EXPERT &&
       moduleRoot === TeamAuthorityCatalog.teamCortexRoot(TeamKey.Ai) &&
       Object.hasOwn(request.value, 'cortexAuthoring');
     const functionalOwnerRequest: ModuleDeliveryOwnerDecodeRequest = {
-      value: request.legacy
-        ? teamRequest.value
-        : fields.string('functionalOwner'),
+      value: fields.string('functionalOwner'),
       path: `${path}.functionalOwner`,
       allowGizmoPrime,
     };
     const acceptanceOwnerRequest: ModuleDeliveryOwnerDecodeRequest = {
-      value: request.legacy
-        ? teamRequest.value
-        : fields.string('acceptanceOwner'),
+      value: fields.string('acceptanceOwner'),
       path: `${path}.acceptanceOwner`,
       allowGizmoPrime,
-    };
-    const resourceClaimsRequest: ModulePlanResourceDecodeRequest = {
-      ...resourceRequest,
-      legacy: request.legacy,
-      readOnly: kind === ModuleDeliveryTaskKind.ReadOnly,
-    };
-    const acceptanceDecodeRequest: ModulePlanAcceptanceDecodeRequest = {
-      ...acceptanceRequest,
-      legacy: request.legacy,
     };
     const common = {
       taskId: fields.identifier('taskId'),
@@ -240,13 +166,11 @@ export class ModuleDeliveryPlanNodeCodec {
       consumerOutcome: fields.string('consumerOutcome'),
       baseline: ModuleDeliveryPlanNodeCodec.decodeBaseline(baselineRequest),
       dependencies: fields.stringList('dependencies'),
-      resources: ModuleDeliveryPlanNodeCodec.decodeResourceClaims(
-        resourceClaimsRequest,
-      ),
+      resources:
+        ModuleDeliveryPlanNodeCodec.decodeResourceClaims(resourceRequest),
       parentOwnedExclusions: fields.nonEmptyStringList('parentOwnedExclusions'),
-      acceptance: ModuleDeliveryPlanNodeCodec.decodeAcceptance(
-        acceptanceDecodeRequest,
-      ),
+      acceptance:
+        ModuleDeliveryPlanNodeCodec.decodeAcceptance(acceptanceRequest),
     };
     if (kind === ModuleDeliveryTaskKind.ReadOnly) {
       return { kind: ModuleDeliveryTaskKind.ReadOnly, ...common };
@@ -366,20 +290,14 @@ export class ModuleDeliveryPlanNodeCodec {
   }
 
   private static decodeResourceClaims(
-    request: ModulePlanResourceDecodeRequest,
+    request: ModulePlanObjectDecodeRequest,
   ): ModuleDeliveryNodeV2['resources'] {
     const fields = new ModulePlanFields(request);
-    if (request.legacy) fields.requireExactKeys(LegacyModulePlanResourceField);
-    else fields.requireExactKeys(ModulePlanResourceField);
-    const read = fields.stringList('read');
+    fields.requireExactKeys(ModulePlanResourceField);
     return {
-      read,
+      read: fields.stringList('read'),
       write: fields.stringList('write'),
-      evidenceSurface: request.legacy
-        ? request.readOnly
-          ? read
-          : []
-        : fields.stringList('evidenceSurface'),
+      evidenceSurface: fields.stringList('evidenceSurface'),
     };
   }
 
@@ -401,24 +319,6 @@ export class ModuleDeliveryPlanNodeCodec {
     )
       return ModuleDeliveryOwner.GizmoPrime;
     return ModuleDeliveryPlanNodeCodec.decodeTeam(request);
-  }
-
-  private static legacyTaskTeam(request: LegacyTaskTeamRequest): TeamKey {
-    const profile = MODULE_EXPERT_CATALOG.find(
-      ({ name }) => name === request.expert,
-    );
-    const taskKind = Object.values(ModuleDeliveryTaskKind).find(
-      (candidate) => candidate === request.kind,
-    );
-    if (!taskKind) return TeamKey.Ai;
-    const [defaulted1 = []] = [profile?.canonicalContextPaths];
-    const teamRequest = {
-      kind: taskKind,
-      moduleRoot: request.moduleRoot,
-      expertContextPaths: defaulted1,
-    };
-    const team = ModuleTaskOwnership.moduleDeliveryTaskTeam(teamRequest);
-    return team === false ? TeamKey.Ai : team;
   }
 
   private static decodeEvidenceInput(
@@ -494,21 +394,11 @@ export class ModuleDeliveryPlanNodeCodec {
   }
 
   private static decodeAcceptance(
-    request: ModulePlanAcceptanceDecodeRequest,
+    request: ModulePlanObjectDecodeRequest,
   ): ModuleDeliveryAcceptance {
     const fields = new ModulePlanFields(request);
-    if (request.legacy)
-      fields.requireExactKeys(LegacyModulePlanAcceptanceField);
-    else fields.requireExactKeys(ModulePlanAcceptanceField);
+    fields.requireExactKeys(ModulePlanAcceptanceField);
     const evidence = fields.nonEmptyStringList('evidence');
-    if (request.legacy) {
-      return {
-        commands: fields
-          .nonEmptyStringList('commands')
-          .map((selector) => ({ selector, read: [], write: [], output: [] })),
-        evidence,
-      };
-    }
     const commandValues = fields.list('commands');
     if (commandValues.length === 0)
       ModuleDeliveryPlanNodeCodec.fail(

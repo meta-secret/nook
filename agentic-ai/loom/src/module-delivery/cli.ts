@@ -1,14 +1,10 @@
 import { readFile } from 'node:fs/promises';
-import { ModuleDeliveryPlanSchema } from './codec.ts';
 import { ModuleDeliveryPlanDecoder } from './validation.ts';
 import {
   MODULE_DELIVERY_PLAN_VERSION,
-  ModuleDeliveryCompatibilityStatus,
-  ModuleDeliveryIssueCode,
   ModuleDeliveryValidationStatus,
 } from './domain.ts';
 import type {
-  ModuleDeliveryIssue,
   ModuleDeliveryPlanValidation,
   RejectedModuleDeliveryPlan,
 } from './domain.ts';
@@ -23,13 +19,8 @@ type AcceptedModuleDeliveryCliOutput = {
   readonly waves: readonly (readonly string[])[];
 };
 
-type RejectedModuleDeliveryCliOutput = {
-  readonly status: ModuleDeliveryValidationStatus.Rejected;
-  readonly issues: readonly ModuleDeliveryIssue[];
-};
-
 type ModuleDeliveryCliOutput =
-  AcceptedModuleDeliveryCliOutput | RejectedModuleDeliveryCliOutput;
+  AcceptedModuleDeliveryCliOutput | RejectedModuleDeliveryPlan;
 
 export class ModuleDeliveryCli {
   private constructor(private readonly request: ModuleDeliveryCliArguments) {}
@@ -54,34 +45,11 @@ export class ModuleDeliveryCli {
       process.stderr.write('Unable to read module delivery plan.\n');
       return 2;
     }
-    const result = ModuleDeliveryCli.moduleDeliveryCliValidation(serialized);
+    const result = ModuleDeliveryPlanDecoder.decodeAndValidate(serialized);
     const output = ModuleDeliveryCli.moduleDeliveryCliOutput(result);
     const rendered = `${JSON.stringify(output)}\n`;
     process.stdout.write(rendered);
     return output.status === ModuleDeliveryValidationStatus.Accepted ? 0 : 1;
-  }
-
-  private static moduleDeliveryCliValidation(
-    serialized: string,
-  ): ModuleDeliveryPlanValidation {
-    const decoded =
-      ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(serialized);
-    if (
-      decoded.status === ModuleDeliveryCompatibilityStatus.Decoded &&
-      decoded.inputVersion !== MODULE_DELIVERY_PLAN_VERSION
-    ) {
-      const issue: ModuleDeliveryIssue = {
-        code: ModuleDeliveryIssueCode.InvalidField,
-        path: '$.version',
-        message: 'Canonical CLI admission requires plan version 6.',
-      };
-      const rejection: RejectedModuleDeliveryPlan = {
-        status: ModuleDeliveryValidationStatus.Rejected,
-        issues: [issue],
-      };
-      return rejection;
-    }
-    return ModuleDeliveryPlanDecoder.decodeAndValidate(serialized);
   }
 
   private static moduleDeliveryCliOutput(
