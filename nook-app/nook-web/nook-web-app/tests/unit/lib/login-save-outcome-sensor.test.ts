@@ -1,4 +1,10 @@
 import type { LoginSaveEvidenceKind } from '../../../../nook-web-extension/src/lib/login-save-observation-codecs'
+import {
+  CompanionWasmLabelKind,
+  CompanionWasmSessionMessageType,
+} from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import * as companionRuntimeTransport from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-transport'
+import { passwordFieldDiscovery } from '../../../../nook-web-shared/src/extension/password-forms'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { Schema } from 'effect'
 import { handleCompanionWasmMessage } from '../../../../nook-web-extension/src/offscreen/session-companion-wasm-operations'
@@ -74,10 +80,80 @@ beforeEach(() => {
 })
 afterEach(() => {
   const navigationState: Record<string, never> = {}
+  vi.restoreAllMocks()
   vi.useRealTimers()
   vi.unstubAllGlobals()
   document.body.replaceChildren()
   history.replaceState(navigationState, '', '/')
+})
+
+test('reads each shared ancestor style once and submits the current checkpoint text in DOM order', async () => {
+  const root = document.createElement('main')
+  root.innerHTML = [
+    '<section id="first" aria-hidden="true">excluded directly<span>First</span><span>Second</span></section>',
+    '<section><article id="siblings"></article></section>',
+    '<section id="hidden" hidden><span>Revealed</span></section>',
+    '<section inert><span>Inert</span></section>',
+    '<section aria-disabled="true"><span>Disabled</span></section>',
+    '<section style="display:none"><span>Display hidden</span></section>',
+    '<section style="visibility:hidden"><span style="visibility:visible">Inherited hidden</span></section>',
+    '<section style="overflow:clip;height:0px"><span>Clipped</span></section>',
+    '<dialog><span>Closed</span></dialog><dialog open><span>Open</span></dialog>',
+    '<script>Mock script</script><style>.fixture-unused {color: red}</style><template>Template text</template>',
+  ].join('')
+  document.body.append(root)
+  const select = Schema.decodeUnknownSync(Schema.instanceOf(HTMLElement))
+  const siblings = select(root.querySelector('#siblings'))
+  const copies: string[] = []
+  for (let index = 0; index < 32; index += 1) {
+    const child = document.createElement('p')
+    child.textContent = `Entry ${index}`
+    copies.push(child.textContent)
+    siblings.append(child)
+  }
+  const styleReads = vi.spyOn(window, 'getComputedStyle')
+  const send = vi.spyOn(
+    companionRuntimeTransport,
+    'sendCompanionWasmRuntimeMessage',
+  )
+
+  await passwordFieldDiscovery.prepareCompanionClassification(root)
+  const expectedFirst = ['First', 'Second', ...copies, 'Open'].join(' ')
+  expect(send.mock.lastCall?.[1]).toMatchObject({
+    type: CompanionWasmSessionMessageType.ClassifyPageInputs,
+    payload: {
+      labels: [
+        {
+          kind: CompanionWasmLabelKind.EmailVerificationBody,
+          value: expectedFirst,
+        },
+      ],
+    },
+  })
+  const styledElements = styleReads.mock.calls.map(([element]) => element)
+  expect(styledElements).toHaveLength(new Set(styledElements).size)
+
+  select(root.querySelector('#first')).hidden = true
+  select(root.querySelector('#hidden')).hidden = false
+  const untilFound = document.createElement('section')
+  untilFound.setAttribute('hidden', 'until-found')
+  const untilFoundText = document.createElement('span')
+  untilFoundText.textContent = 'Hidden until found'
+  untilFound.append(untilFoundText)
+  root.append(untilFound)
+  await passwordFieldDiscovery.prepareCompanionClassification(root)
+  const expectedSecond = [...copies, 'Revealed', 'Open'].join(' ')
+  expect(send.mock.lastCall?.[1]).toMatchObject({
+    type: CompanionWasmSessionMessageType.ClassifyPageInputs,
+    payload: {
+      labels: [
+        {
+          kind: CompanionWasmLabelKind.EmailVerificationBody,
+          value: expectedSecond,
+        },
+      ],
+    },
+  })
 })
 
 describe('submitted login fresh save evidence', () => {

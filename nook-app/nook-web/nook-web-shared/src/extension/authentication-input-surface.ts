@@ -4,6 +4,13 @@ export enum PageInputRendering {
   Hidden = "hidden",
 }
 
+export type RenderedElementProbe = (candidate: HTMLElement) => boolean;
+
+type InheritedElementRenderingObservation = {
+  readonly candidate: HTMLElement;
+  readonly observed: Map<HTMLElement, PageInputRendering>;
+};
+
 /** Owns browser observations shared by the concrete authentication interaction. */
 export class AuthenticationInputSurface {
   constructor(protected readonly browser: typeof globalThis) {}
@@ -23,47 +30,117 @@ export class AuthenticationInputSurface {
   }
 
   protected isRenderedElement(candidate: HTMLElement): boolean {
-    if (candidate.closest("dialog:not([open])")) return false;
+    return (
+      this.candidateCanRender(candidate) && this.ancestryCanRender(candidate)
+    );
+  }
+
+  /** Reuses inherited visibility only within one synchronous DOM observation. */
+  protected observeElementRendering(): RenderedElementProbe {
+    const observed = new Map<HTMLElement, PageInputRendering>();
+    return (candidate) => {
+      const request: InheritedElementRenderingObservation = {
+        candidate,
+        observed,
+      };
+      return (
+        this.candidateCanRender(candidate) &&
+        this.observedAncestryCanRender(request)
+      );
+    };
+  }
+
+  private candidateCanRender(candidate: HTMLElement): boolean {
     // Cookie/consent layers often mark large subtrees aria-hidden while the
     // login fields remain CSS-visible and focusable (common on Meta). Only the
     // candidate itself is rejected for aria-hidden; ancestors still fail on
     // hidden / display:none / visibility:hidden so closed menus stay ignored.
-    if (candidate.getAttribute("aria-hidden") === "true") {
-      return false;
+    return (
+      !candidate.closest("dialog:not([open])") &&
+      candidate.getAttribute("aria-hidden") !== "true"
+    );
+  }
+
+  private ancestryCanRender(candidate: HTMLElement): boolean {
+    for (
+      let element: HTMLElement["parentElement"] = candidate;
+      element;
+      element = element.parentElement
+    ) {
+      switch (this.ancestorCanRender(element)) {
+        case false:
+          return false;
+        case true:
+          break;
+      }
     }
-    let element = candidate;
-    while (true) {
-      const dialogElement =
-        element.ownerDocument.defaultView?.HTMLDialogElement;
-      if (
+    return true;
+  }
+
+  private observedAncestryCanRender({
+    candidate,
+    observed,
+  }: InheritedElementRenderingObservation): boolean {
+    const visited: HTMLElement[] = [];
+    let rendering = PageInputRendering.Rendered;
+    ancestry: for (
+      let element: HTMLElement["parentElement"] = candidate;
+      element;
+      element = element.parentElement
+    ) {
+      const previous = observed.get(element);
+      switch (true) {
+        case previous === PageInputRendering.Rendered:
+        case previous === PageInputRendering.Hidden:
+          rendering = previous;
+          break ancestry;
+        case true:
+        default:
+          break;
+      }
+      visited.push(element);
+      switch (this.ancestorCanRender(element)) {
+        case false:
+          rendering = PageInputRendering.Hidden;
+          break ancestry;
+        case true:
+          break;
+      }
+    }
+    for (const element of visited) observed.set(element, rendering);
+    return rendering === PageInputRendering.Rendered;
+  }
+
+  private ancestorCanRender(element: HTMLElement): boolean {
+    const ownerView = element.ownerDocument.defaultView;
+    const dialogElement = ownerView?.HTMLDialogElement;
+    switch (
+      Boolean(
         element.hidden ||
         element.hasAttribute("inert") ||
         element.inert ||
         element.getAttribute("aria-disabled") === "true" ||
-        (dialogElement && element instanceof dialogElement && !element.open)
-      ) {
+        (dialogElement && element instanceof dialogElement && !element.open),
+      )
+    ) {
+      case true:
         return false;
-      }
-      const style =
-        element.ownerDocument.defaultView?.getComputedStyle(element);
-      if (style?.display === "none" || style?.visibility === "hidden") {
-        return false;
-      }
-      if (
+      case false:
+        break;
+    }
+    const style = ownerView?.getComputedStyle(element);
+    return (
+      style?.display !== "none" &&
+      style?.visibility !== "hidden" &&
+      !(
         style &&
         (style.overflow === "hidden" ||
           style.overflow === "clip" ||
           style.overflowY === "hidden" ||
           style.overflowY === "clip") &&
         style.height === "0px"
-      ) {
-        return false;
-      }
-      const parent = element.parentElement;
-      if (!parent) break;
-      element = parent;
-    }
-    return true;
+      )
+    );
   }
 
   protected inputIsEffectivelyDisabled(field: HTMLInputElement): boolean {
