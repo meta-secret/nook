@@ -52,6 +52,10 @@ mod oauth_origin_policy;
 mod outcome_evidence;
 pub use login_save::*;
 mod page_field_classification;
+pub use page_field_classification::browser::{
+    BrowserPageInput, IndexedPageInputClassification, PageInputClassification, PageInputContext,
+    PageInputFieldRequest, PageInputLabel, PageInputsClassification, PageInputsObservation,
+};
 mod simple_vault_target;
 mod site_secret_listing;
 mod vault_host_policy;

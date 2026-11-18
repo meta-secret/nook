@@ -2,6 +2,8 @@
 
 use nook_companion_core::{PageInputType, PageSecondFactorRoute};
 mod input_field_observation;
+mod page_input_classifier;
+pub use page_input_classifier::NookPageInputClassifier;
 mod observation_priority;
 mod passkey_control;
 

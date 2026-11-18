@@ -11,6 +11,7 @@ use form_identity::{
 };
 mod authentication_advance_control;
 mod authentication_route_evidence;
+pub(crate) mod browser;
 mod container_identity;
 mod control_identity;
 mod control_labels;
@@ -105,10 +106,11 @@ pub struct PageInputFieldObservation {
 }
 
 /// Browser-collected login-surface identity text without DOM handles.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginContextObservation {
     pub form_identity: String,
+    #[tsify(type = "readonly string[]")]
     pub ancestor_identities: Vec<String>,
     pub advance_control_label: String,
     pub path_context: String,
@@ -176,6 +178,16 @@ pub(crate) enum AuthenticationFieldUsability {
     Unavailable,
     Role(AuthenticationInputRole),
 }
+impl AuthenticationFieldUsability {
+    fn is_username(&self) -> bool {
+        matches!(self, Self::Role(AuthenticationInputRole::Username(_)))
+    }
+
+    fn is_one_time_code(&self) -> bool {
+        matches!(self, Self::Role(AuthenticationInputRole::OneTimeCode(_)))
+    }
+}
+
 impl PageInputFieldObservation {
     pub(crate) fn usable_authentication_role(&self) -> AuthenticationFieldUsability {
         if self.disabled || self.read_only {
@@ -189,10 +201,7 @@ impl PageInputFieldObservation {
 impl PageInputFieldObservation {
     #[must_use]
     pub fn looks_like_username_field(&self) -> bool {
-        matches!(
-            self.usable_authentication_role(),
-            AuthenticationFieldUsability::Role(AuthenticationInputRole::Username(_))
-        )
+        self.usable_authentication_role().is_username()
     }
 }
 
@@ -200,10 +209,7 @@ impl PageInputFieldObservation {
 impl PageInputFieldObservation {
     #[must_use]
     pub fn looks_like_one_time_code_field(&self) -> bool {
-        matches!(
-            self.usable_authentication_role(),
-            AuthenticationFieldUsability::Role(AuthenticationInputRole::OneTimeCode(_))
-        )
+        self.usable_authentication_role().is_one_time_code()
     }
 }
 
@@ -516,8 +522,15 @@ pub enum AuthenticationUsernameEvidence {
 impl PageInputFieldObservation {
     #[must_use]
     pub fn authentication_username_evidence(&self) -> AuthenticationUsernameEvidence {
+        self.username_evidence_for(&self.usable_authentication_role())
+    }
+
+    fn username_evidence_for(
+        &self,
+        role: &AuthenticationFieldUsability,
+    ) -> AuthenticationUsernameEvidence {
         let field = self;
-        if !(field).looks_like_username_field() {
+        if !role.is_username() {
             return AuthenticationUsernameEvidence::Absent;
         }
         if PageInputFieldObservation::has_autocomplete_token(AutocompleteTokenQuery {
