@@ -21,6 +21,15 @@ export interface SentinelLaunch {
   vaultName: string
 }
 
+export enum VaultAuthStage {
+  Chooser = 'chooser',
+  Sentinel = 'sentinel',
+}
+
+export type VaultAuthDestination =
+  | { stage: VaultAuthStage.Chooser }
+  | { stage: VaultAuthStage.Sentinel; launch: SentinelLaunch }
+
 interface SelectedVaultPathRequest {
   name: string
   path: SelectedVaultPathKind

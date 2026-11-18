@@ -7,6 +7,8 @@
   import {
     type SentinelLaunch,
     SentinelUi,
+    type VaultAuthDestination,
+    VaultAuthStage,
   } from './vault-auth-workflow-state.svelte'
 
   interface Props extends ExperimentProps {
@@ -14,26 +16,30 @@
   }
 
   let { navigate, Auth }: Props = $props()
-  let destination = $state<SentinelLaunch>()
+  const chooser: VaultAuthDestination = { stage: VaultAuthStage.Chooser }
+  let destination = $state<VaultAuthDestination>(chooser)
 
   function openSentinel(launch: SentinelLaunch) {
-    destination = launch
+    destination = { stage: VaultAuthStage.Sentinel, launch }
   }
 
   function backToAuth() {
-    destination = undefined
+    destination = chooser
   }
 </script>
 
-{#if destination}
+{#if destination.stage === VaultAuthStage.Sentinel}
   <ExperimentBack {navigate} />
-  {#if destination.ui === SentinelUi.CardStack}
+  {#if destination.launch.ui === SentinelUi.CardStack}
     <SentinelCardStack
-      initialName={destination.vaultName}
+      initialName={destination.launch.vaultName}
       onBack={backToAuth}
     />
   {:else}
-    <VaultTerminal initialName={destination.vaultName} onBack={backToAuth} />
+    <VaultTerminal
+      initialName={destination.launch.vaultName}
+      onBack={backToAuth}
+    />
   {/if}
 {:else}
   <ExperimentBack {navigate} light />
