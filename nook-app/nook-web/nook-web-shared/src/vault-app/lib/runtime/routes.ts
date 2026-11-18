@@ -1,37 +1,34 @@
-/** Shared SPA route helpers (no markdown or heavy imports). */
-
-/** Prefixes a relative-base build is mounted under besides a domain root. */
-const RELATIVE_BASE_MOUNTS: readonly string[] = ["/simple/", "/sentinel/"];
-
-/**
- * The absolute path this app is served under. Simple and Sentinel build with
- * a relative base so one bundle runs at a domain root and under `/simple/` or
- * `/sentinel/` in the preview harness. Workspace routes are nested, so URLs
- * built from a relative base must still be absolute.
- */
-export class ApplicationBase {
-  constructor(private readonly pathname: string) {}
-  get root(): string {
-    const base = import.meta.env.BASE_URL;
-    if (base.startsWith("/")) return base;
-    const mounted = `${this.pathname.replace(/\/$/, "")}/`;
-    const mount = RELATIVE_BASE_MOUNTS.find((prefix) =>
-      mounted.startsWith(prefix),
-    );
-    return mount ? mount : "/";
-  }
-}
+/** Relative builds run at the domain root or under a split-app preview mount. */
+const SPLIT_APP_MOUNT = /^\/(?:simple|sentinel)(?=\/|$)/;
 
 export class ApplicationPath {
-  constructor(private readonly request: string) {}
-  get relative(): string {
-    const pathname = this.request;
+  constructor(private readonly pathname: string) {}
 
+  private get mount(): string {
     const base = import.meta.env.BASE_URL;
-    if (base !== "/" && pathname.startsWith(base)) {
-      const rest = pathname.slice(base.length);
-      return rest ? `/${rest.replace(/^\//, "")}` : "/";
-    }
-    return pathname;
+    if (base.startsWith("/")) return base.replace(/\/$/, "");
+    return this.pathname.match(SPLIT_APP_MOUNT)?.[0] ?? "";
+  }
+
+  /** Build an absolute link so navigating from a nested page never stacks paths. */
+  link(route: string): string {
+    return `${this.mount}/${route.replace(/^\//, "")}`;
+  }
+
+  /** Decode only the complete mount segment, ignoring one terminal slash. */
+  get relative(): string {
+    const path = this.pathname.replace(/\/$/, "");
+    const mount = this.mount;
+    if (path === mount) return "/";
+    if (path.startsWith(`${mount}/`)) return path.slice(mount.length);
+    return path || "/";
+  }
+
+  /** Absolute-base deployments also accepted split-app bookmarks for workspaces. */
+  get workspaceRelative(): string {
+    const route = this.relative;
+    if (import.meta.env.BASE_URL.startsWith("/"))
+      return route.replace(SPLIT_APP_MOUNT, "") || "/";
+    return route;
   }
 }

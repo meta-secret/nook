@@ -90,10 +90,8 @@ const configuredProjects = isFocusedDebug ? focusedProjects : projectDefinitions
 
 /** CI runs e2e after `ci:main:parallel` — serve production dist (no Vite dev optimizer). */
 const usePreviewServer = isCi && fs.existsSync(distDir)
-// The assembled production preview mounts the independent nokey.sh artifact
-// under /site. The default local Vite server serves that same public surface
-// at /, so keep the spec runnable in both environments.
-process.env.NOOK_E2E_PUBLIC_SITE_PATH = usePreviewServer ? '/site' : ''
+// The assembled preview adds the independent site and both split vault builds.
+process.env.NOOK_E2E_ASSEMBLED_PREVIEW = String(usePreviewServer)
 const webServerCommand = usePreviewServer
   ? `bun run preview -- --host 127.0.0.1 --port ${webPort}`
   : `bun run dev -- --host 127.0.0.1 --port ${webPort}`

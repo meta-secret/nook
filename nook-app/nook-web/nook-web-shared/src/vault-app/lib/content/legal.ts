@@ -1,6 +1,6 @@
 import privacyPolicyMd from "../../../../../../../docs/privacy-policy.md?raw";
 import termsOfServiceMd from "../../../../../../../docs/terms-of-service.md?raw";
-import { ApplicationBase, ApplicationPath } from "$lib/runtime/routes";
+import { ApplicationPath } from "$lib/runtime/routes";
 
 export enum LegalPageId {
   Privacy = "privacy",
@@ -42,31 +42,20 @@ const LEGAL_PATHS = new Map(
   Object.values(LEGAL_PAGES).map((page) => [page.path, page.id] as const),
 );
 
-/** Build an app URL that respects Vite `BASE_URL` (e.g. GitHub Pages subpaths). */
-
 /** Diagnostic application-log viewer route (`/logs`). */
 export const LOGS_PATH = "/logs";
-
-export { ApplicationPath } from "$lib/runtime/routes";
-
-/** Resolve `/privacy` or `/terms` from the current location pathname. */
-
-/** True when the current location resolves to the `/logs` diagnostic page. */
 
 export class ApplicationRoutePresentation {
   constructor(private readonly value: string) {}
   appPath(): string {
     const path = this.value;
     const pathname = "window" in globalThis ? window.location.pathname : "/";
-    const root = new ApplicationBase(pathname).root;
-    const normalized = path.startsWith("/") ? path.slice(1) : path;
-    return `${root}${normalized}`;
+    return new ApplicationPath(pathname).link(path);
   }
 
   getLegalPageFromPath(): LegalPageLookup {
     const pathname = this.value;
-    const normalized =
-      new ApplicationPath(pathname).relative.replace(/\/$/, "") || "/";
+    const normalized = new ApplicationPath(pathname).relative;
     const page = LEGAL_PATHS.get(normalized);
     if (!page) {
       return { kind: LegalPageLookupKind.ApplicationPath };
@@ -79,8 +68,7 @@ export class ApplicationRoutePresentation {
 
   isLogsPath(): boolean {
     const pathname = this.value;
-    const normalized =
-      new ApplicationPath(pathname).relative.replace(/\/$/, "") || "/";
+    const normalized = new ApplicationPath(pathname).relative;
     return normalized === LOGS_PATH;
   }
 }

@@ -1,9 +1,7 @@
 import { err, ok, type Result } from "neverthrow";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
-import {
-  ApplicationRoutePresentation,
-  ApplicationPath,
-} from "$lib/content/legal";
+import { ApplicationRoutePresentation } from "$lib/content/legal";
+import { ApplicationPath } from "$lib/runtime/routes";
 
 export enum WorkspaceRoute {
   Vault = "vault",
@@ -111,11 +109,7 @@ export class WorkspaceLocation {
 export class WorkspacePath {
   constructor(private readonly request: string) {}
   get route(): WorkspaceRouteLookup {
-    const pathname = this.request;
-
-    const relativePath =
-      new ApplicationPath(pathname).relative.replace(/\/$/, "") || "/";
-    const normalized = relativePath.replace(/^\/(?:simple|sentinel)(?=\/)/, "");
+    const normalized = new ApplicationPath(this.request).workspaceRelative;
     const legacy = LEGACY_WORKSPACE_PATHS[normalized];
     if (legacy) {
       return { kind: WorkspaceRouteLookupKind.Workspace, route: legacy };
