@@ -19,7 +19,6 @@ impl NookPageInputClassifier {
 
 #[wasm_bindgen]
 impl NookPageInputClassifier {
-    #[wasm_bindgen(js_name = classifyPageInputs)]
     pub fn classify_page_inputs(
         input: &Ts<PageInputsObservation>,
     ) -> Result<Ts<PageInputsClassification>, JsError> {
@@ -27,7 +26,6 @@ impl NookPageInputClassifier {
         input.classify().into_ts().map_err(Self::conversion_error)
     }
 
-    #[wasm_bindgen(js_name = classifyPageInput)]
     pub fn classify_page_input(
         input: &Ts<PageInputFieldRequest>,
     ) -> Result<Ts<IndexedPageInputClassification>, JsError> {
@@ -35,7 +33,6 @@ impl NookPageInputClassifier {
         input.classify().into_ts().map_err(Self::conversion_error)
     }
 
-    #[wasm_bindgen(js_name = classifyField)]
     pub fn classify_field(
         input: &Ts<BrowserPageInput>,
     ) -> Result<Ts<PageInputClassification>, JsError> {
@@ -43,7 +40,6 @@ impl NookPageInputClassifier {
         input.classify().into_ts().map_err(Self::conversion_error)
     }
 
-    #[wasm_bindgen(js_name = classifyContext)]
     pub fn classify_context(
         input: &Ts<LoginContextObservation>,
     ) -> Result<Ts<PageInputContext>, JsError> {
@@ -53,7 +49,6 @@ impl NookPageInputClassifier {
             .map_err(Self::conversion_error)
     }
 
-    #[wasm_bindgen(js_name = classifyLabel)]
     pub fn classify_label(input: &Ts<PageInputLabel>) -> Result<bool, JsError> {
         Ok(input.to_rust().map_err(Self::conversion_error)?.matches())
     }
