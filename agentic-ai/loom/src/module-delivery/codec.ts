@@ -221,10 +221,7 @@ export class ModuleDeliveryPlanSchema {
     );
     const parentJoin =
       ModuleDeliveryPlanNodeCodec.decodeParentJoin(parentJoinRequest);
-    const nodes = ModuleDeliveryPlanNodeCodec.decodeNodes({
-      values: nodeValues,
-      legacy: false,
-    });
+    const nodes = ModuleDeliveryPlanNodeCodec.decodeNodes(nodeValues);
     const edgeContracts = ModuleDeliveryPlanNodeCodec.decodeEdgeContracts(
       fields.list('edgeContracts', MAX_MODULE_DELIVERY_EDGE_CONTRACTS),
     );
