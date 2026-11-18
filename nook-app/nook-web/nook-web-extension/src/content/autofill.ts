@@ -8,6 +8,7 @@ import {
   AUTHENTICATION_FACT_SCAN_DEBOUNCE_MS,
   authenticationFactObserverOptions,
   authenticationFactObserver,
+  type AuthenticationMutationBatch,
 } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import {
   FocusedSurfaceKind,
@@ -82,7 +83,6 @@ import {
   WidgetCredentialActuation,
   WidgetWorkflowKeyKind,
   WidgetWorkflowRootKind,
-  type AuthenticationScanMutationBatch,
   saveOfferState,
   pickerState,
   scanState,
@@ -106,8 +106,6 @@ enum AuthenticationScanOutcome {
 type AuthenticationScanRenderLifecycleRequest = {
   readonly scanState: typeof scanState
 }
-
-type AuthenticationMutationRecords = MutationRecord[]
 
 /** Owns trusted recognition of Namecheap's same-document Sign in drawer control. */
 class NamecheapLoginDrawerActivation {
@@ -551,7 +549,7 @@ export class AuthenticationScanRenderLifecycle {
     )
   }
 
-  schedule(mutations?: AuthenticationScanMutationBatch): void {
+  schedule(mutations?: AuthenticationMutationBatch): void {
     const { scanState } = this.request
     if (
       Array.isArray(mutations) &&
@@ -578,7 +576,7 @@ export class AuthenticationScanRenderLifecycle {
     )
   }
 
-  handleMutations(records: AuthenticationMutationRecords): void {
+  handleMutations(records: AuthenticationMutationBatch): void {
     if (widgetState.host.kind === WidgetHostKind.Attached) {
       const mountedHost = widgetState.host.mountedElement
       const mountedHostWasRemoved = records.some(

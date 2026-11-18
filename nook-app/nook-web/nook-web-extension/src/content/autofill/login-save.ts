@@ -30,6 +30,7 @@ import {
   sendCompanionWasmRuntimeMessage,
 } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-transport'
 import { AuthenticationGesture } from '../../lib/auth-widget-policy'
+import type { AuthenticationMutationBatch } from '../../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import {
   NookWebsiteLoginSaveDecision,
   WebsiteLoginSaveCommitMessageType,
@@ -133,7 +134,7 @@ class LoginSaveInteraction {
   }
 
   rememberSubmissionPasswordMutations(
-    mutations: readonly MutationRecord[],
+    mutations: AuthenticationMutationBatch,
   ): void {
     this.submissionCapture.sensor.rememberPasswordMutations(mutations)
   }

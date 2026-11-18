@@ -1,4 +1,5 @@
 import type { LoginCredentials } from '../../../../nook-web-shared/src/extension/password-forms'
+import type { AuthenticationMutationBatch } from '../../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import type { LoginSubmissionIntent } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { Schema } from 'effect'
@@ -19,8 +20,22 @@ class LoginSubmissionDomFixture {
     this.sensor.rememberPasswordFields()
   }
 
-  rememberPasswordMutations(records: MutationRecord[]): void {
+  rememberPasswordMutations(records: AuthenticationMutationBatch): void {
     this.sensor.rememberPasswordMutations(records)
+  }
+
+  expectRememberedPassword(): void {
+    const observation = this.enter('#password')
+    switch (observation.kind) {
+      case LoginSubmissionDomObservationKind.Ignored:
+        throw new Error('expected a password snapshot')
+      case LoginSubmissionDomObservationKind.Observed:
+        break
+    }
+    expect(
+      observation.snapshot.captureRecord().fields[1]?.password_history,
+    ).toBe('PreviouslyPassword')
+    observation.snapshot.dispose()
   }
 
   click(selector: string): LoginSubmissionDomObservation {
@@ -104,23 +119,15 @@ describe('submitted login DOM snapshot', () => {
       Schema.instanceOf(HTMLInputElement),
     )(document.querySelector('#password'))
     fixture.rememberPasswordMutations(observer.takeRecords())
+    fixture.expectRememberedPassword()
     password.name = 'sign-in-field'
     fixture.rememberPasswordMutations(observer.takeRecords())
+    fixture.expectRememberedPassword()
     password.type = 'text'
     fixture.rememberPasswordMutations(observer.takeRecords())
     observer.disconnect()
 
-    const observation = fixture.enter('#password')
-    switch (observation.kind) {
-      case LoginSubmissionDomObservationKind.Ignored:
-        throw new Error('expected a visible password snapshot')
-      case LoginSubmissionDomObservationKind.Observed:
-        break
-    }
-    expect(
-      observation.snapshot.captureRecord().fields[1]?.password_history,
-    ).toBe('PreviouslyPassword')
-    observation.snapshot.dispose()
+    fixture.expectRememberedPassword()
   })
 
   test('captures values before JavaScript clears and replaces form-less fields', () => {

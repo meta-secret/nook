@@ -12,6 +12,7 @@ import {
   sendCompanionWasmRuntimeMessage,
 } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-transport'
 import { Effect, Exit, Schema } from 'effect'
+import type { AuthenticationMutationBatch } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import {
   QrPictureCaptureKind,
   QrMediaKind,
@@ -680,7 +681,7 @@ class PageQrCapture {
   }
 
   authenticationAuthenticatorSetupMutationsRequireScan(
-    records: readonly MutationRecord[],
+    records: AuthenticationMutationBatch,
   ): boolean {
     const targets = new Set<Node>()
     for (const record of records) {

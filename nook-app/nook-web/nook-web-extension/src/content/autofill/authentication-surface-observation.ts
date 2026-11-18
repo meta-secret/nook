@@ -1,5 +1,8 @@
 import { Match } from 'effect'
-import { authenticationFactObserver } from '../../../../nook-web-shared/src/extension/authentication-fact-attributes'
+import {
+  authenticationFactObserver,
+  type AuthenticationMutationBatch,
+} from '../../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import {
   type PasswordFormObservation,
   passwordFieldDiscovery,
@@ -63,7 +66,7 @@ export type AuthenticationWorkflowMutationRequest = {
 }
 
 export type AuthenticationMutationImpactRequest = {
-  records: MutationRecord[]
+  records: AuthenticationMutationBatch
   mountedHost: HTMLElement | false
   renderedWorkflow: PasswordFormObservation | false
 }
@@ -141,7 +144,7 @@ class AuthenticationSurfaceObservation {
   }
 
   private mutationsCanIntroduceManualCheckpoint(
-    records: readonly MutationRecord[],
+    records: AuthenticationMutationBatch,
   ): boolean {
     const scopes = new Set<Element>()
     const addScope = (node: Node): void => {

@@ -40,6 +40,7 @@ import {
   scanState,
   widgetState,
   WidgetCredentialActuation,
+  WidgetHostKind,
 } from '../../../../nook-web-extension/src/content/autofill/state'
 import { workflowUi } from '../../../../nook-web-extension/src/content/autofill/workflow-ui'
 import { PilotVaultConnectionKind } from '../../../../nook-web-extension/src/content/autofill/widget-presentation-state'
@@ -71,9 +72,13 @@ import { recoveryCopyObservation } from '../../../../nook-web-extension/src/lib/
 import { pageQrCapture } from '../../../../nook-web-extension/src/lib/page-qr-capture'
 import { authenticatorEnrollmentInteraction } from '../../../../nook-web-extension/src/content/enrollment-flow'
 
+const lifecycleRequest: ConstructorParameters<
+  typeof AuthenticationScanRenderLifecycle
+>[0] = { scanState }
+
 test('schedules discovery without walking the page for a widget to invalidate', () => {
   widgetState.clearRenderedWidget()
-  const lifecycle = new AuthenticationScanRenderLifecycle({ scanState })
+  const lifecycle = new AuthenticationScanRenderLifecycle(lifecycleRequest)
   const schedule = vi.spyOn(lifecycle, 'schedule').mockImplementation(() => {})
   const checkpoint = vi.spyOn(passwordFieldDiscovery, 'pageHasManualCheckpoint')
   const observer = new MutationObserver(() => {})
@@ -85,6 +90,27 @@ test('schedules discovery without walking the page for a widget to invalidate', 
 
   expect(schedule).toHaveBeenCalledOnce()
   expect(checkpoint).not.toHaveBeenCalled()
+})
+
+test('removes the live authentication widget as soon as a checkpoint appears', () => {
+  const lifecycle = new AuthenticationScanRenderLifecycle(lifecycleRequest)
+  const schedule = vi.spyOn(lifecycle, 'schedule').mockImplementation(() => {})
+  const host = document.createElement('aside')
+  document.body.append(host)
+  widgetState.attachHost(host)
+  const observer = new MutationObserver(() => {})
+  const options: MutationObserverInit = { childList: true }
+  observer.observe(document.body, options)
+  const checkpoint = document.createElement('section')
+  checkpoint.setAttribute('data-nook-manual-checkpoint', '')
+  document.body.append(checkpoint)
+
+  lifecycle.handleMutations(observer.takeRecords())
+  observer.disconnect()
+
+  expect(widgetState.host.kind).toBe(WidgetHostKind.Detached)
+  expect(host.isConnected).toBe(false)
+  expect(schedule).toHaveBeenCalledOnce()
 })
 
 enum ClassificationDelivery {
@@ -104,7 +130,7 @@ class FocusedFormTransitionFixture {
   readonly released = Effect.runSync(Deferred.make<void>())
   readonly recognitions: FocusedCredentialOpportunity[] = []
   delivery = ClassificationDelivery.Immediate
-  readonly lifecycle = new AuthenticationScanRenderLifecycle({ scanState })
+  readonly lifecycle = new AuthenticationScanRenderLifecycle(lifecycleRequest)
   private readonly generatorContext: TransitionFixtureContext = { self: this }
 
   constructor() {

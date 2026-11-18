@@ -58,6 +58,8 @@ const authenticationFactElementSelector =
 const authenticationFactNestedScopeSelector =
   'a, button, input, label, legend, select, textarea, [role="button"], [data-nook-passkey-control]';
 
+export type AuthenticationMutationBatch = readonly MutationRecord[];
+
 export type AuthenticationFactMutation = {
   type: MutationRecord["type"];
   target: Node;
@@ -178,7 +180,7 @@ class AuthenticationFactObserver {
   }
 
   authenticationFactMutationsTouchLabelDependency(
-    mutations: readonly MutationRecord[],
+    mutations: AuthenticationMutationBatch,
   ): boolean {
     const referencedIdsByDocument = new Map<Document, Set<string>>();
     return mutations.some((mutation) => {

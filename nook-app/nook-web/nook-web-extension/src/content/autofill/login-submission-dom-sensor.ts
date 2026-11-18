@@ -1,4 +1,5 @@
 import { semanticSubmitControlSelector } from '../../../../nook-web-shared/src/extension/authentication-control-selectors'
+import type { AuthenticationMutationBatch } from '../../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import {
   authenticationSubmissionControls,
   AuthenticationSubmissionDestination,
@@ -488,7 +489,7 @@ export class LoginSubmissionDomSensor extends AuthenticationInputSurface {
     }
   }
 
-  rememberPasswordMutations(mutations: readonly MutationRecord[]): void {
+  rememberPasswordMutations(mutations: AuthenticationMutationBatch): void {
     for (const mutation of mutations) {
       switch (mutation.type) {
         case 'attributes':
