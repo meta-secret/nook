@@ -369,7 +369,7 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     const labelRequest: CompanionWasmLabelRequest = { kind, value };
     return !this.directClassificationAvailable()
       ? false
-      : NookPageInputClassifier.classifyLabel(labelRequest);
+      : NookPageInputClassifier.classify_label(labelRequest);
   }
 
   private directClassificationAvailable(): boolean {
@@ -634,7 +634,7 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     if (typeof cached === "boolean") return cached;
     return !this.directClassificationAvailable()
       ? false
-      : NookPageInputClassifier.classifyContext(
+      : NookPageInputClassifier.classify_context(
           this.loginContextObservation(field),
         ).loginContext;
   }
@@ -648,7 +648,7 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
       return typeof cached.loginContext === "boolean" ? cached : false;
     }
     if (!this.directClassificationAvailable()) return false;
-    return NookPageInputClassifier.classifyPageInput(
+    return NookPageInputClassifier.classify_page_input(
       this.pageInputRequest(field, 0),
     );
   }

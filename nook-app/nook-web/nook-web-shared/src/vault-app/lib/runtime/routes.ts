@@ -7,7 +7,8 @@ export class ApplicationPath {
   private get mount(): string {
     const base = import.meta.env.BASE_URL;
     if (base.startsWith("/")) return base.replace(/\/$/, "");
-    return this.pathname.match(SPLIT_APP_MOUNT)?.[0] ?? "";
+    const match = this.pathname.match(SPLIT_APP_MOUNT);
+    return match ? match[0] : "";
   }
 
   /** Build an absolute link so navigating from a nested page never stacks paths. */

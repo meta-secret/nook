@@ -134,7 +134,7 @@ export async function handleCompanionWasmMessage(
       }
       case CompanionWasmSessionMessageType.HasLoginContext:
         return ok(
-          NookPageInputClassifier.classifyContext(message.payload.observation)
+          NookPageInputClassifier.classify_context(message.payload.observation)
             .loginContext,
         )
       case CompanionWasmSessionMessageType.ClassifyFocusedCredentialField:
@@ -145,10 +145,10 @@ export async function handleCompanionWasmMessage(
         return ok(new PersonalFieldFillOperation(message).run())
       case CompanionWasmSessionMessageType.ClassifyPageInputField:
         return ok(
-          NookPageInputClassifier.classifyField(message.payload.observation),
+          NookPageInputClassifier.classify_field(message.payload.observation),
         )
       case CompanionWasmSessionMessageType.ClassifyPageInputs:
-        return ok(NookPageInputClassifier.classifyPageInputs(message.payload))
+        return ok(NookPageInputClassifier.classify_page_inputs(message.payload))
       case CompanionWasmSessionMessageType.EvaluateAuthenticationPolicies:
         return ok({
           transportability: message.payload.transportability.map((request) =>
@@ -222,35 +222,35 @@ export async function handleCompanionWasmMessage(
         })
       case CompanionWasmSessionMessageType.LooksLikeLoginAdvanceControlLabel:
         return ok(
-          NookPageInputClassifier.classifyLabel({
+          NookPageInputClassifier.classify_label({
             kind: CompanionWasmLabelKind.LoginAdvance,
             value: message.payload.label,
           }),
         )
       case CompanionWasmSessionMessageType.LooksLikeManualCheckpointLabel:
         return ok(
-          NookPageInputClassifier.classifyLabel({
+          NookPageInputClassifier.classify_label({
             kind: CompanionWasmLabelKind.ManualCheckpoint,
             value: message.payload.label,
           }),
         )
       case CompanionWasmSessionMessageType.LooksLikePasskeyControlLabel:
         return ok(
-          NookPageInputClassifier.classifyLabel({
+          NookPageInputClassifier.classify_label({
             kind: CompanionWasmLabelKind.PasskeyControl,
             value: message.payload.label,
           }),
         )
       case CompanionWasmSessionMessageType.LooksLikeEmailVerificationBody:
         return ok(
-          NookPageInputClassifier.classifyLabel({
+          NookPageInputClassifier.classify_label({
             kind: CompanionWasmLabelKind.EmailVerificationBody,
             value: message.payload.body,
           }),
         )
       case CompanionWasmSessionMessageType.LooksLikeOneTimeCodeAutoSubmitSignal:
         return ok(
-          NookPageInputClassifier.classifyLabel({
+          NookPageInputClassifier.classify_label({
             kind: CompanionWasmLabelKind.OneTimeCodeAutoSubmitSignal,
             value: message.payload.signal,
           }),
