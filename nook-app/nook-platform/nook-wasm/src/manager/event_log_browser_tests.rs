@@ -757,7 +757,7 @@ async fn invalid_encrypted_catalog_keeps_signed_extension_update_receipt() -> an
     Ok(())
 }
 
-#[path = "event_log_browser_tests/catalog_handoff.rs"]
+#[path = "event_log_browser_tests/catalog_handoff_tests.rs"]
 mod catalog_handoff;
 
 #[wasm_bindgen_test]
