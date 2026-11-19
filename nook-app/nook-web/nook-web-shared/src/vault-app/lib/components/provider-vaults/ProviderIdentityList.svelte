@@ -98,7 +98,11 @@ tells, nothing more.
       data-store-ids={choice.vaults.map((summary) => summary.storeId).join(' ')}
       data-standing={standing.kind}
     >
-      <IdentityCardHeader {vault} {choice} {details} />
+      {#if details}
+        <IdentityCardHeader {vault} {choice} {details} />
+      {:else}
+        <IdentityCardHeader {vault} {choice} />
+      {/if}
       {#if choice.decisions.length > 0}
         <div
           class="flex flex-wrap items-center gap-2"
