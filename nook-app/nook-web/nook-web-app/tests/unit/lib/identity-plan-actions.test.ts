@@ -60,6 +60,8 @@ function family(decisions: IdentityDecision[]): ProviderIdentityChoice {
     decisions,
     setup: { kind: 'requestToJoin' },
     recovery: 'notOffered',
+    details: { devices: { state: 'unavailable' }, vaults: [] },
+    passkeyCheck: 'available',
     vaults: [],
   }
 }

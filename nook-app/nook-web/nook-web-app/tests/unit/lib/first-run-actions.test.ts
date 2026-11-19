@@ -70,6 +70,8 @@ function locked(): ProviderIdentityChoice {
     decisions: ['addToBrowser', 'askToJoin'],
     setup: { kind: 'requestToJoin' },
     recovery: 'notOffered',
+    details: { devices: { state: 'unavailable' }, vaults: [] },
+    passkeyCheck: 'available',
     vaults: [],
   }
 }

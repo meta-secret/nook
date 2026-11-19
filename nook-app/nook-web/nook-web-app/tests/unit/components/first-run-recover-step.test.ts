@@ -135,6 +135,8 @@ describe('first-run recovery with a passphrase', () => {
       decisions: [],
       setup: { kind: 'requestToJoin' },
       recovery: 'offered',
+      details: { devices: { state: 'unavailable' }, vaults: [] },
+      passkeyCheck: 'available',
       vaults: [],
     }
 

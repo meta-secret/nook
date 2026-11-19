@@ -100,6 +100,22 @@ test.describe('an identity another browser keeps in the Nook folder', () => {
     await expect(
       identityA.getByTestId('provider-identity-standing'),
     ).toHaveText(enLocale.first_run.identity_not_member)
+    const devices = identityA.getByTestId('provider-keyring-devices')
+    await expect(devices.getByRole('listitem')).toHaveCount(1)
+    const advanced = devices.getByTestId('provider-keyring-device-advanced')
+    await expect(advanced.locator('dd')).toBeHidden()
+    await advanced.locator('summary').click()
+    await expect(advanced.locator('dd')).toBeVisible()
+    const vaults = identityA.getByTestId('provider-keyring-vaults')
+    await expect(vaults.getByRole('listitem')).toHaveCount(1)
+    await expect(vaults).toContainText(vaultA.store_id)
+    await expect(vaults).toContainText(
+      enLocale.provider_vaults.vault_name_unavailable,
+    )
+    await expect(vaults.getByRole('button')).toHaveCount(0)
+    await expect(
+      identityA.getByTestId('provider-identity-find-passkey'),
+    ).toHaveText(enLocale.provider_vaults.reveal_details)
     await expect(identityA.getByTestId('setup-identity-join')).toHaveCount(1)
     await expect(deviceB.getByTestId('provider-identity-decision')).toHaveCount(
       0,

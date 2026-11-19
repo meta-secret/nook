@@ -9,6 +9,7 @@ once: there is no plan to apply.
 -->
 <script lang="ts">
   import { ArrowRight, KeyRound, RefreshCw, Send } from '@lucide/svelte'
+  import type { Snippet } from 'svelte'
   import type { ProviderIdentityChoice } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
@@ -31,6 +32,7 @@ once: there is no plan to apply.
     onAskToJoin,
     onCheck,
     recovery,
+    details,
   }: {
     vault: VaultState
     choices: readonly ProviderIdentityChoice[]
@@ -45,6 +47,7 @@ once: there is no plan to apply.
     onAskToJoin: (choice: ProviderIdentityChoice) => void | Promise<void>
     /** Read a join this browser already asked for again. */
     onCheck: (choice: ProviderIdentityChoice) => void | Promise<void>
+    details?: Snippet<[ProviderIdentityChoice]>
   } = $props()
 
   const busy = $derived(disabled || working !== '' || vault.isVerifying)
@@ -76,7 +79,12 @@ once: there is no plan to apply.
       data-identity-id={choice.identity.identityId}
       data-setup={choice.setup.kind}
     >
-      <IdentityCardHeader {vault} {choice} tag={IdentityCardTag.Setup} />
+      <IdentityCardHeader
+        {vault}
+        {choice}
+        tag={IdentityCardTag.Setup}
+        {details}
+      />
       {#if offered === SetupIdentityOffer.Continue}
         <Button
           type="button"

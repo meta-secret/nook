@@ -82,7 +82,13 @@ function renderChoice(
   identities: FilingIdentity[] = [],
 ) {
   const vault = VaultStateTestFixture.create()
-  const choices: RemoteVaultChoiceList = { vaults, identities }
+  const choices: RemoteVaultChoiceList = {
+    vaults,
+    identities: identities.map((identity) => ({
+      identity,
+      details: { devices: { state: 'unavailable' }, vaults: [] },
+    })),
+  }
   vault.remoteVaultChoices = new RemoteVaultChoices(choices)
   const onApplied = vi.fn()
   const props = { vault, busy: false, onApplied } satisfies ComponentProps<

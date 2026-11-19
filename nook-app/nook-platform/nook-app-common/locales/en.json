@@ -1454,7 +1454,18 @@
     "root_absent": "Connect & sync creates a folder named “meta-secret-nook” in your Google Drive, with a folder for each keyring.",
     "root_empty": "Your “meta-secret-nook” folder holds no keyrings yet. Connect & sync adds yours to it.",
     "devices": "Devices: {count}",
-    "identity_vaults": "Vaults of this keyring: {count}"
+    "identity_vaults": "Vaults of this keyring: {count}",
+    "linked_devices": "Linked devices",
+    "linked_vaults": "Linked vaults",
+    "devices_unavailable": "The device list is unavailable.",
+    "no_linked_devices": "No linked devices.",
+    "no_linked_vaults": "No linked vaults.",
+    "unnamed_device": "Unnamed device",
+    "vault_name_unavailable": "Vault name unavailable",
+    "advanced": "Advanced",
+    "app_id": "App ID",
+    "reveal_details": "Reveal name and vault details with a passkey",
+    "reveal_no_match": "This passkey did not open this keyring."
   },
   "access_check": {
     "title": "Check access",

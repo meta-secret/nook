@@ -5,7 +5,7 @@ import {
   NookVaultManager,
   ProviderSyncFailureHandling,
   ProviderSyncVisibility,
-  type FilingIdentity,
+  type ProviderListedIdentity,
   type ProviderKeyringDiscovery,
   type StorageConnection,
 } from '$app-wasm'
@@ -243,12 +243,15 @@ describe('local-folder provider connection', () => {
 })
 
 describe('keyring recovery from a sync provider', () => {
-  const keyring: FilingIdentity = {
-    identityId: 'idn_strangerabc',
-    shortId: 'stranger',
-    name: { state: 'unknown' },
-    words: ['amber', 'falcon', 'tide'],
-    log: { state: 'absent' },
+  const keyring: ProviderListedIdentity = {
+    identity: {
+      identityId: 'idn_strangerabc',
+      shortId: 'stranger',
+      name: { state: 'unknown' },
+      words: ['amber', 'falcon', 'tide'],
+      log: { state: 'absent' },
+    },
+    details: { devices: { state: 'unavailable' }, vaults: [] },
   }
 
   /** The recovery screen with a picked folder staged, and what the folder
