@@ -79,12 +79,16 @@ once: there is no plan to apply.
       data-identity-id={choice.identity.identityId}
       data-setup={choice.setup.kind}
     >
-      <IdentityCardHeader
-        {vault}
-        {choice}
-        tag={IdentityCardTag.Setup}
-        {details}
-      />
+      {#if details}
+        <IdentityCardHeader
+          {vault}
+          {choice}
+          tag={IdentityCardTag.Setup}
+          {details}
+        />
+      {:else}
+        <IdentityCardHeader {vault} {choice} tag={IdentityCardTag.Setup} />
+      {/if}
       {#if offered === SetupIdentityOffer.Continue}
         <Button
           type="button"

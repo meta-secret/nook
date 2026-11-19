@@ -557,8 +557,8 @@ describe('Google Drive provider setup', () => {
         devices: {
           state: 'Listed',
           devices: [
-            { label: 'Office laptop', app_id: 'app_laptop' },
-            { label: '', app_id: 'app_phone' },
+            { label: 'Office laptop', app_id: '0011223344556677' },
+            { label: '', app_id: '8899aabbccddeeff' },
           ],
         },
         vaults: [first, second].map(({ storeId, name }) => ({
@@ -629,7 +629,7 @@ describe('Google Drive provider setup', () => {
       devices.getByText(vault.t(I18N_KEYS.ProviderVaultsUnnamedDevice))
         .textContent,
     ).toBe(vault.t(I18N_KEYS.ProviderVaultsUnnamedDevice))
-    const laptopId = devices.getByText('app_laptop')
+    const laptopId = devices.getByText('0011223344556677')
     expect(laptopId.closest('details')?.hasAttribute('open')).toBe(false)
     const vaults = within(card.getByTestId('provider-keyring-vaults'))
     expect(
