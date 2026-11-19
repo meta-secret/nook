@@ -555,13 +555,16 @@ describe('Google Drive provider setup', () => {
       identity: first.identity,
       details: {
         devices: {
-          state: 'listed',
+          state: 'Listed',
           devices: [
-            { label: 'Office laptop', appId: 'app_laptop' },
-            { label: '', appId: 'app_phone' },
+            { label: 'Office laptop', app_id: 'app_laptop' },
+            { label: '', app_id: 'app_phone' },
           ],
         },
-        vaults: [first, second].map(({ storeId, name }) => ({ storeId, name })),
+        vaults: [first, second].map(({ storeId, name }) => ({
+          store_id: storeId,
+          name,
+        })),
       },
     }
     listVaults({
@@ -796,7 +799,7 @@ describe('Google Drive provider setup', () => {
                 join: 'notAsked',
               },
             },
-            details: { devices: { state: 'listed', devices: [] }, vaults: [] },
+            details: { devices: { state: 'Listed', devices: [] }, vaults: [] },
           },
         ],
       },

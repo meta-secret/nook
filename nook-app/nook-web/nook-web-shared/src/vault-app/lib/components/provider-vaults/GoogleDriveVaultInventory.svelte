@@ -393,7 +393,7 @@ nothing.
 {#snippet details(choice: ProviderIdentityChoice)}
   {#if inventory.kind === DriveVaultInventoryKind.Loaded}
     {@const check = inventory.passkeyCheck}
-    {#if choice.passkeyCheck === 'available'}
+    {#if choice.passkey_check === 'Available'}
       <Button
         type="button"
         size="sm"

@@ -251,7 +251,7 @@ describe('keyring recovery from a sync provider', () => {
       words: ['amber', 'falcon', 'tide'],
       log: { state: 'absent' },
     },
-    details: { devices: { state: 'unavailable' }, vaults: [] },
+    details: { devices: { state: 'Unavailable' }, vaults: [] },
   }
 
   /** The recovery screen with a picked folder staged, and what the folder

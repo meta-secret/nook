@@ -18,7 +18,7 @@
     <p class="nk-subpanel-head">
       {vault.t(I18N_KEYS.ProviderVaultsLinkedDevices)}
     </p>
-    {#if details.devices.state === 'unavailable'}
+    {#if details.devices.state === 'Unavailable'}
       <p class="text-xs text-muted-foreground">
         {vault.t(I18N_KEYS.ProviderVaultsDevicesUnavailable)}
       </p>
@@ -28,7 +28,7 @@
       </p>
     {:else}
       <ul class="divide-y divide-border/60">
-        {#each details.devices.devices as device (device.appId)}
+        {#each details.devices.devices as device (device.app_id)}
           <li class="min-w-0 space-y-1 py-1.5 text-sm">
             <p class="break-words">
               {#if device.label === ''}
@@ -46,7 +46,7 @@
               </summary>
               <dl class="mt-1 space-y-0.5">
                 <dt>{vault.t(I18N_KEYS.ProviderVaultsAppId)}</dt>
-                <dd class="break-all font-mono">{device.appId}</dd>
+                <dd class="break-all font-mono">{device.app_id}</dd>
               </dl>
             </details>
           </li>
@@ -68,7 +68,7 @@
       </p>
     {:else}
       <ul class="divide-y divide-border/60">
-        {#each details.vaults as entry (entry.storeId)}
+        {#each details.vaults as entry (entry.store_id)}
           <li class="min-w-0 space-y-1 py-1.5 text-sm">
             {#if entry.name.state === 'named'}
               <p class="break-words">{entry.name.name}</p>
@@ -78,7 +78,7 @@
               </p>
             {/if}
             <p class="break-all font-mono text-xs text-muted-foreground">
-              {entry.storeId}
+              {entry.store_id}
             </p>
           </li>
         {/each}

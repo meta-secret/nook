@@ -86,7 +86,7 @@ function renderChoice(
     vaults,
     identities: identities.map((identity) => ({
       identity,
-      details: { devices: { state: 'unavailable' }, vaults: [] },
+      details: { devices: { state: 'Unavailable' }, vaults: [] },
     })),
   }
   vault.remoteVaultChoices = new RemoteVaultChoices(choices)

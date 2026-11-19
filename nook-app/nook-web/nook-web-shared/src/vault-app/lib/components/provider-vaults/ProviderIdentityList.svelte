@@ -133,7 +133,7 @@ tells, nothing more.
           {/each}
         </div>
       {/if}
-      {#if !details && choice.passkeyCheck === 'available'}
+      {#if !details && choice.passkey_check === 'Available'}
         <button
           type="button"
           class="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground disabled:opacity-60"
