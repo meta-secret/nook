@@ -176,9 +176,10 @@ nothing.
 
   /** One passkey tap: which listed identity it opens, decrypted in memory. */
   async function checkPasskey(choice: ProviderIdentityChoice): Promise<void> {
+    const token = accessToken
     if (
       inventory.kind !== DriveVaultInventoryKind.Loaded ||
-      inventory.token !== accessToken ||
+      inventory.token !== token ||
       checking
     )
       return
@@ -189,9 +190,9 @@ nothing.
     }
     inventory = pending
     const checked = await new AccessCheckActions(vault).checkPasskey(
-      driveTarget(pending.token),
+      driveTarget(token),
     )
-    if (inventory !== pending || pending.token !== accessToken) return
+    if (inventory !== pending || token !== accessToken) return
     if (checked.isErr()) {
       inventory = {
         ...pending,
