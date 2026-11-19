@@ -4,15 +4,15 @@
 
 A sync provider's Nook folder can hold identities other than the one in use.
 Passkeys and devices belong to identities, not vaults, so everything the user
-decides about what a provider holds is decided per identity. Vaults are listed
-under their identity and are never acted on one by one in this step.
+decides about what a provider holds is decided per identity. Google Drive
+lists linked vaults and devices under their keyring for inspection.
 
 Two screens read the folder. Setup (first run, and adding a sync provider to
 the identity in use) gives each identity one [setup action](#setup-action)
-that runs at once. The recovery screen, with no identity in use, plans
-decisions and applies them together. An S3 location is read the same way on
-first run and on the recovery screen, but its Sync page wizard lists no
-identities.
+that runs at once. The recovery screen has no identity in use. In the
+Drive wizard, each decision button runs its action for that keyring. An S3
+location is read the same way on first run and on the recovery screen, but
+its Sync page wizard lists no identities.
 
 On the recovery screen:
 
@@ -20,8 +20,8 @@ On the recovery screen:
   iCloud, and a local folder alike.
   - An identity is listed whether it owns several vaults, one, or none.
   - No vault opens on its own, not even a location's only one.
-- A location that holds no identity's log says that no keyring was found
-  there, and another provider can be picked.
+- A location that lists no keyring says none was found there. The user can
+  pick another provider.
 - An identity recovered or joined there keeps that provider.
   - The provider is saved for it, and its log syncs.
   - The page lands on the identities page with that identity.
@@ -37,22 +37,23 @@ owns what is read from the provider without a key.
 
 - **The identity is the unit.**
   - Each listed identity gets one decision.
-  - Vaults are never listed or acted on in this step; the card shows only
-    the identity's vault count from its log.
-- **At most one decision per identity, mutually exclusive.**
+  - The linked vault and device rows on a Drive card are read-only. Setup
+    and recovery actions target the keyring.
+- **Planned decisions.** A picker with a plan allows at most one choice
+  per identity.
   - Every decision does something; none is a "do nothing" choice.
   - Nothing starts picked. An identity nothing is picked for stays as it is.
   - Pressing the picked decision again unpicks it.
   - Nothing runs when a decision is picked.
-- **One action applies the plan** (with no identity in use).
+- **One action applies the plan** in a picker with a plan.
   - The step's single button runs every picked decision, in listing order.
-  - In the Drive wizard it reads **Connect and sync**, or **Connect and
-    apply** once a decision is picked; the recovery screen's reads **Apply**.
+  - The recovery screen's button reads **Apply**.
   - A "What will happen" summary lists every picked decision.
   - While it runs, every other control is disabled.
-- **Checks are not decisions.**
-  - "Which passkey opens it?" decrypts in memory and changes nothing.
-  - It sits beside the decision as a quiet link.
+- **Passkey checks.**
+  - An explicit passkey check can reveal names in memory. See
+    [the Drive listing](auth-providers.md#what-the-provider-already-holds)
+    for its metadata and name sources.
 - **Identities are never merged.**
   - A passkey that opens a listed identity completes it here: the identity
     is added to this browser as its own, and nothing else is decided.
@@ -60,8 +61,8 @@ owns what is read from the provider without a key.
 **Prohibited:** offer "Import as a separate vault" on one vault row while the
 same identity offers "Ask to join".
 
-**Required:** the identity offers one list of ways in. The step's copy
-speaks of identities, never of vaults.
+**Required:** group the ways in under the identity. Keep linked details
+separate from those actions.
 
 ## Decisions by standing
 
@@ -116,8 +117,8 @@ See [recover a keyring with a recovery passphrase](identity-vault-architecture.m
 Setup offers no plan, on first run and when the Sync page adds Google Drive
 to the identity in use. Each listed identity gets one action that Rust
 decides from its standing (`IdentitySetup`), and picking it runs at once.
-Setup already used the passkey that made this browser's key, so it never
-offers adding by another passkey.
+The separate passkey check can reveal names in Drive setup. A matching
+passkey can also make **Continue** available.
 
 - **This browser, first run:** **Continue** (Finish joining: a passkey made before restores the identity's record without its log or vault keys, so the provider's log and this key's grants come here; then Drive is saved, the log syncs, and a vault the identity granted opens through it, as after an invite; setup ends on the identities page with that vault's panel open beside the card, not inside the vault).
 - **This browser, identity in use:** **In use** (no action).
@@ -263,9 +264,12 @@ accent, no pills.
 
 - **Card:** one `nk-frame` per identity. A tile shows a person when the
   identity opens here and a lock when it does not.
-- **Header:** the identity's name or words, and one tag, success toned when
-  it opens: its standing on the recovery screen, its setup tag in setup. Below it, one spec line of public log facts: its
-  device and vault counts.
+- **Header.** Show the identity's words with any available name. Keep the
+  standing tag on the recovery screen and the setup tag in setup. Use the
+  success tone when the identity opens.
+- **Drive details.** Show the linked vault and device rows under the
+  keyring. Put the device's installation ID in **Advanced**. Other
+  provider cards can show device and vault counts.
 - **Decision:** one `nk-vault-row` per allowed decision, a way in.
   - Each row has an icon tile for what it uses: a passkey, written-down
     words, or a device.
@@ -273,7 +277,9 @@ accent, no pills.
     needs.
   - The picked row (`aria-pressed`) takes the selected row tone and a check
     at its end.
-- **Checks:** "Which passkey opens it?" is a quiet underlined link.
+- **Checks.** Give an eligible Drive card a visible passkey action that
+  explains it can reveal names. Keep it separate from the ways to open,
+  recover, or join the keyring.
 - **Plan:** a subpanel head, "What will happen", over one line per picked
   decision.
 - **Action:** the step's single primary button, with the steel finish.
