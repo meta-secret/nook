@@ -18,7 +18,10 @@ use std::cmp::Ordering;
 
 use crate::errors::{ValidationError, ValidationResult};
 use crate::provider_vault_access::{ProviderVaultAccess, ProviderVaultKeyholding};
-use crate::{IdentityId, IdentityWords, ListedIdentityLog, ProviderIdentityLog, StoreId};
+use crate::{
+    IdentityId, IdentityWords, ListedIdentityLog, ProviderIdentityLog, ProviderKeyringDetails,
+    ProviderListedIdentity, StoreId,
+};
 use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
 use tsify::Tsify;
@@ -130,7 +133,7 @@ impl ProviderVaultName {
         }
     }
 
-    fn of(store_id: &StoreId, names: &[KnownVaultName]) -> Self {
+    pub(crate) fn of(store_id: &StoreId, names: &[KnownVaultName]) -> Self {
         names
             .iter()
             .find(|known| &known.store_id == store_id)
@@ -316,7 +319,7 @@ pub struct ProviderVaultListing {
     pub vaults: Vec<ProviderVaultSummary>,
     /// Every identity whose control log the provider holds, in the order
     /// the logs were listed, each with what its log tells.
-    pub identities: Vec<FilingIdentity>,
+    pub identities: Vec<ProviderListedIdentity>,
 }
 
 /// The transport's observations and the keys this device holds.
@@ -348,14 +351,15 @@ impl ProviderVaultListingRequest<'_> {
         vaults.sort_by(ProviderVaultSummary::listing_order);
         let identities = identity_logs
             .iter()
-            .map(|listed| {
-                FilingIdentity::of(
+            .map(|listed| ProviderListedIdentity {
+                identity: FilingIdentity::of(
                     listed.identity_id.clone(),
                     KnownIdentity {
                         names: names.identities,
                         logs: identity_logs,
                     },
-                )
+                ),
+                details: ProviderKeyringDetails::from_log(listed, names.vaults),
             })
             .collect();
         ProviderVaultListing { vaults, identities }
@@ -376,7 +380,7 @@ pub enum ProviderKeyringDiscovery {
     /// them for each card's vault count.
     Listed {
         vaults: Vec<ProviderVaultSummary>,
-        identities: Vec<FilingIdentity>,
+        identities: Vec<ProviderListedIdentity>,
     },
 }
 
@@ -396,7 +400,7 @@ impl ProviderVaultListing {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ProviderIdentityJoin, ProviderLogCount};
+    use crate::{ProviderIdentityJoin, ProviderKeyringDevices, ProviderLogCount};
     use std::slice;
 
     fn at(raw: &str) -> anyhow::Result<ProviderVaultTime> {
@@ -666,6 +670,10 @@ mod tests {
         let theirs_log = [ListedIdentityLog {
             identity_id: theirs.clone(),
             log: theirs_facts,
+            devices: ProviderKeyringDevices::Listed {
+                devices: Vec::new(),
+            },
+            registered_vaults: vec![store("store_othervault1")?],
         }];
         let observation = |identity: &IdentityId, token: &str| -> anyhow::Result<_> {
             Ok(ProviderVaultObservation {
@@ -718,7 +726,14 @@ mod tests {
         assert_eq!(identity_of("store_othervault1"), Some(stranger.clone()));
         // The listing names every identity whose log was read, with its
         // log's vault count, whether or not one of its vaults is listed.
-        assert_eq!(listing.identities, vec![stranger]);
+        let [entry] = listing.identities.as_slice() else {
+            anyhow::bail!("only the stranger has a control log");
+        };
+        let [vault] = entry.details.vaults.as_slice() else {
+            anyhow::bail!("the stranger registered a single vault");
+        };
+        assert_eq!(entry.identity, stranger);
+        assert_eq!(vault.store_id, store("store_othervault1")?);
         Ok(())
     }
 
@@ -792,18 +807,25 @@ mod tests {
     }
 
     /// A keyring's control log as a provider lists it, owning `vaults`.
-    fn keyring_log(identity_id: &IdentityId, vaults: u32) -> ListedIdentityLog {
-        ListedIdentityLog {
+    fn keyring_log(
+        identity_id: &IdentityId,
+        vaults: &[StoreId],
+    ) -> anyhow::Result<ListedIdentityLog> {
+        Ok(ListedIdentityLog {
             identity_id: identity_id.clone(),
+            devices: ProviderKeyringDevices::Listed {
+                devices: Vec::new(),
+            },
+            registered_vaults: vaults.to_vec(),
             log: ProviderIdentityLog::Read {
                 devices: ProviderLogCount::from(1),
                 newest_device: ProviderVaultTime::Unreported,
-                vaults: ProviderLogCount::from(vaults),
+                vaults: ProviderLogCount::from(u32::try_from(vaults.len())?),
                 recovery_passphrases: ProviderLogCount::from(0),
                 this_browser: false,
                 join: ProviderIdentityJoin::NotAsked,
             },
-        }
+        })
     }
 
     fn filed_vault(token: &str) -> anyhow::Result<ProviderVaultObservation> {
@@ -817,7 +839,7 @@ mod tests {
 
     #[test]
     fn a_provider_holding_one_vault_lists_its_keyring() -> anyhow::Result<()> {
-        let logs = [keyring_log(&filer()?, 1)];
+        let logs = [keyring_log(&filer()?, &[store("store_onlyvault01")?])?];
         let discovery = ProviderVaultListingRequest {
             observations: vec![filed_vault("store_onlyvault01")?],
             keys: ProviderVaultKeyholding::NONE,
@@ -832,7 +854,7 @@ mod tests {
         assert_eq!(
             identities
                 .iter()
-                .map(|keyring| keyring.identity_id.clone())
+                .map(|keyring| keyring.identity.identity_id.clone())
                 .collect::<Vec<_>>(),
             vec![filer()?]
         );
@@ -847,8 +869,43 @@ mod tests {
     }
 
     #[test]
+    fn linked_vaults_include_registered_namespaces_unavailable_here() -> anyhow::Result<()> {
+        let visible = filed_vault("store_onlyvault01")?;
+        let absent = store("store_localvault1")?;
+        let logs = [keyring_log(
+            &filer()?,
+            &[visible.store_id.clone(), absent.clone()],
+        )?];
+        let names = [KnownVaultName {
+            store_id: absent.clone(),
+            name: " Local ".to_owned(),
+        }];
+        let listed = ProviderVaultListingRequest {
+            observations: vec![visible],
+            keys: ProviderVaultKeyholding::NONE,
+            names: BrowserNames {
+                vaults: &names,
+                identities: &[],
+            },
+            identity_logs: &logs,
+        }
+        .listing();
+        assert_eq!(listed.vaults.len(), 1);
+        let [entry] = listed.identities.as_slice() else {
+            anyhow::bail!("the provider lists one keyring");
+        };
+        let [observed, unavailable] = entry.details.vaults.as_slice() else {
+            anyhow::bail!("that keyring links two registered vaults");
+        };
+        assert_eq!(observed.name, ProviderVaultName::Unknown);
+        assert_eq!(unavailable.store_id, absent);
+        assert_eq!(unavailable.name, ProviderVaultName::named("Local"));
+        Ok(())
+    }
+
+    #[test]
     fn a_keyring_that_owns_no_vault_is_listed() -> anyhow::Result<()> {
-        let logs = [keyring_log(&filer()?, 0)];
+        let logs = [keyring_log(&filer()?, &[])?];
         let discovery = ProviderVaultListingRequest {
             observations: Vec::new(),
             keys: ProviderVaultKeyholding::NONE,
@@ -864,7 +921,7 @@ mod tests {
         assert_eq!(
             identities
                 .iter()
-                .map(|keyring| keyring.identity_id.clone())
+                .map(|keyring| keyring.identity.identity_id.clone())
                 .collect::<Vec<_>>(),
             vec![filer()?]
         );

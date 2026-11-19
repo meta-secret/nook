@@ -6,8 +6,8 @@
 use super::wasm_bindgen;
 use crate::{TypedInput, TypedOutput};
 use nook_core::{
-    CredentialCheckReport, FilingIdentity, IdentitySession, ProviderIdentityChoice,
-    ProviderIdentityChoices, ProviderVaultSummary,
+    CredentialCheckReport, IdentitySession, ProviderIdentityChoice, ProviderIdentityChoices,
+    ProviderListedIdentity, ProviderVaultSummary,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -20,7 +20,7 @@ pub struct NookProviderIdentityChoicesRequest {
     pub vaults: Vec<ProviderVaultSummary>,
     /// The listing's `identities`: every identity the provider holds, a
     /// vaultless one included.
-    pub identities: Vec<FilingIdentity>,
+    pub identities: Vec<ProviderListedIdentity>,
     pub checks: Vec<CredentialCheckReport>,
     pub session: IdentitySession,
 }
@@ -53,6 +53,11 @@ pub struct NookProviderIdentityChoices {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use nook_core::{
+        AppKey, FilingIdentity, IdentityId, IdentityWords, ProviderIdentityJoin,
+        ProviderIdentityLog, ProviderKeyringDetails, ProviderKeyringDevice, ProviderKeyringDevices,
+        ProviderKeyringVault, ProviderLogCount, ProviderVaultName, ProviderVaultTime, StoreId,
+    };
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -79,6 +84,62 @@ mod browser_tests {
                 .decode()?;
             assert!(choices.identities.is_empty());
         }
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    fn the_listed_keyring_roster_survives_the_wasm_boundary() -> anyhow::Result<()> {
+        let identity_id = IdentityId::parse("idn_exampleabcd")?;
+        let devices = ProviderKeyringDevices::Listed {
+            devices: vec![ProviderKeyringDevice {
+                app_id: AppKey::generate()?.app_id().clone(),
+                label: nook_auth2::MemberLabel::from_trusted("Laptop".to_owned()),
+            }],
+        };
+        let details = ProviderKeyringDetails {
+            devices,
+            vaults: vec![ProviderKeyringVault {
+                store_id: StoreId::parse("store_vaultabcd01")?,
+                name: ProviderVaultName::Unknown,
+            }],
+        };
+        let request = NookProviderIdentityChoicesRequest {
+            vaults: Vec::new(),
+            identities: vec![ProviderListedIdentity {
+                identity: FilingIdentity {
+                    words: IdentityWords::of(&identity_id),
+                    identity_id,
+                    short_id: "examplea".to_owned(),
+                    name: ProviderVaultName::Unknown,
+                    log: ProviderIdentityLog::Read {
+                        devices: ProviderLogCount::from(1),
+                        newest_device: ProviderVaultTime::Unreported,
+                        vaults: ProviderLogCount::from(1),
+                        recovery_passphrases: ProviderLogCount::from(0),
+                        this_browser: false,
+                        join: ProviderIdentityJoin::NotAsked,
+                    },
+                },
+                details: details.clone(),
+            }],
+            checks: Vec::new(),
+            session: IdentitySession::NoIdentity,
+        }
+        .encode()?;
+        let choices = provider_identity_choices(&request)
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?
+            .decode()?;
+        let [choice] = choices.identities.as_slice() else {
+            anyhow::bail!("one named keyring is listed");
+        };
+        assert_eq!(choice.details, details);
         Ok(())
     }
 }

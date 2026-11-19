@@ -51,9 +51,10 @@ pub(crate) use secrets::{
 pub(crate) use sync::{
     authorized_accounts, drive_vault_folder, key_in_use_addition, passkey_identity_addition,
     provider_identity_choice, provider_identity_join, provider_identity_log,
-    provider_identity_recovery, provider_vault_access, provider_vault_join, provider_vault_listing,
-    s3_protocol, sync_provider_credentials, sync_provider_store, validation, vault_access_check,
-    vault_sync, vault_sync_session, vault_sync_state, vault_sync_store,
+    provider_identity_recovery, provider_keyring_details, provider_vault_access,
+    provider_vault_join, provider_vault_listing, s3_protocol, sync_provider_credentials,
+    sync_provider_store, validation, vault_access_check, vault_sync, vault_sync_session,
+    vault_sync_state, vault_sync_store,
 };
 pub use vault::domain_numbers::*;
 pub use vault::passkey_detail_read::{
@@ -348,8 +349,8 @@ pub use passkey_identity_addition::{
     AddedIdentitySelection, PasskeyIdentityAdded, PasskeyIdentityAddition,
 };
 pub use provider_identity_choice::{
-    IdentityDecision, IdentitySession, IdentitySetup, IdentityStanding, ProviderIdentityChoice,
-    ProviderIdentityChoices,
+    IdentityDecision, IdentityPasskeyCheck, IdentitySession, IdentitySetup, IdentityStanding,
+    ProviderIdentityChoice, ProviderIdentityChoices,
 };
 pub use provider_identity_join::{
     IdentityJoinRequestPlan, IdentityJoinRequestWrite, ProviderIdentityJoinRequest,
@@ -359,6 +360,10 @@ pub use provider_identity_log::{
     ProviderIdentityLog, ProviderIdentityLogEvents, ProviderLogCount,
 };
 pub use provider_identity_recovery::IdentityRecoveryOffer;
+pub use provider_keyring_details::{
+    ProviderKeyringDetails, ProviderKeyringDevice, ProviderKeyringDevices, ProviderKeyringVault,
+    ProviderListedIdentity,
+};
 pub use provider_vault_access::{
     BrowserIdentityVault, BrowserVaultKeys, ProviderVaultAccess, ProviderVaultEvents,
     ProviderVaultInspection, ProviderVaultKeyholding, ProviderVaultStanding,
