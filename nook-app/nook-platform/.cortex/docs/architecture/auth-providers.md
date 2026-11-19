@@ -397,7 +397,8 @@ Each Drive keyring card shows these details.
 
 Names can come from the matching local identity directory or vault registry.
 The **Reveal name and vault details with a passkey** action calls
-`check_passkey_access_from`. A keyring name requires a matching member key.
+`check_passkey_access` with the signed-in Drive source. A keyring name
+requires a matching member key.
 A vault name requires access to its encrypted metadata. The check is
 read-only. Its results stay in memory for the current Drive listing. A vault
 with an unavailable name still shows its ID. Its name may be sealed, its
