@@ -1,4 +1,4 @@
-import { fireEvent, render } from '@testing-library/svelte'
+import { fireEvent, render, within } from '@testing-library/svelte'
 import type { ComponentProps } from 'svelte'
 import { err, ok } from 'neverthrow'
 import { DeviceProtectionStatus, NookDriveRootOrigin } from '$app-wasm'
@@ -294,6 +294,7 @@ describe('Google Drive provider setup', () => {
     // saves it here.
     expect(own?.dataset.setup).toBe('inUse')
     expect(own?.textContent).toContain('Personal')
+    expect(own?.contains(view.getByText('amber-falcon-tide'))).toBe(true)
     expect(
       own
         ?.querySelector('[data-testid="provider-identity-standing"]')
@@ -302,12 +303,9 @@ describe('Google Drive provider setup', () => {
     // Cards are about identities: no vault is listed or acted on.
     expect(own?.textContent).not.toContain('Family')
     expect(own?.querySelectorAll('button')).toHaveLength(0)
-    // The stranger is named by its three words; its log tells its facts.
+    // The stranger shows only its three-word ID; its log tells its facts.
     expect(other.dataset.setup).toBe('requestToJoin')
-    expect(
-      other.querySelector('[data-testid="provider-vault-identity"]')
-        ?.textContent,
-    ).toContain('ripple-canvas-orbit')
+    expect(within(other).getAllByText('ripple-canvas-orbit')).toHaveLength(1)
     expect(
       other
         .querySelector('[data-testid="provider-identity-standing"]')
@@ -604,7 +602,10 @@ describe('Google Drive provider setup', () => {
     const { view, vault, onConnect } = renderWizard(signedInDrive())
 
     const identity = await view.findByTestId('provider-identity')
+    const card = within(identity)
     expect(identity.dataset.standing).toBe('unchecked')
+    expect(card.getAllByText('ripple-canvas-orbit')).toHaveLength(1)
+    expect(card.queryAllByText('Personal')).toHaveLength(0)
     expect(identity.textContent).not.toContain('Family')
     // The check sits on the identity, not on each vault.
     expect(view.getAllByTestId('provider-identity-find-passkey')).toHaveLength(
@@ -620,11 +621,10 @@ describe('Google Drive provider setup', () => {
       kind: AccessCheckTargetKind.Source,
       source: DRIVE_SOURCE,
     })
-    expect(
-      identity
-        .querySelector('[data-testid="provider-vault-identity"]')
-        ?.textContent?.trim(),
-    ).toBe('Personal')
+    const heading = card.getByTestId('provider-vault-identity')
+    expect(heading.textContent?.trim()).toBe('Personal')
+    expect(heading.getAttribute('title')).toBe('idn_strangerabc')
+    expect(card.getAllByText('ripple-canvas-orbit')).toHaveLength(1)
     expect(
       view.getByTestId('provider-identity-standing').textContent?.trim(),
     ).toBe(

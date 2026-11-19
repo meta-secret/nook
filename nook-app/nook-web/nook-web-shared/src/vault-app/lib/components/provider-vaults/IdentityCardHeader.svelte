@@ -1,8 +1,8 @@
 <!--
 The head of one identity a provider holds: a tile that shows whether it opens
-here, its name or three words, one standing tag, and what its public log
-tells. The plan list and setup's list both open their cards with it; setup's
-tag says what this browser's passkey is to the identity instead.
+here, its three-word ID and any known name, one standing tag, and what its
+public log tells. The plan list and setup's list both open their cards with
+it; setup's tag says what this browser's passkey is to the identity instead.
 -->
 <script lang="ts">
   import { Lock, UserRound } from '@lucide/svelte'
@@ -152,6 +152,9 @@ tag says what this browser's passkey is to the identity instead.
       </span>
     </div>
     <p class="nk-spec" data-testid="provider-identity-facts">
+      {#if choice.identity.name.state === 'named'}
+        <span>{choice.identity.words.join('-')}</span>
+      {/if}
       {#each facts(choice.identity.log) as line (line)}
         <span data-testid="provider-vault-identity-log">{line}</span>
       {/each}
