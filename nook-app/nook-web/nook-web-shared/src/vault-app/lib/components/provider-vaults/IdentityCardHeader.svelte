@@ -6,6 +6,7 @@ it; setup's tag says what this browser's passkey is to the identity instead.
 -->
 <script lang="ts">
   import { Lock, UserRound } from '@lucide/svelte'
+  import type { Snippet } from 'svelte'
   import type {
     IdentitySetup,
     IdentityStanding,
@@ -21,14 +22,18 @@ it; setup's tag says what this browser's passkey is to the identity instead.
     vault,
     choice,
     tag = IdentityCardTag.Standing,
+    details,
   }: {
     vault: VaultState
     choice: ProviderIdentityChoice
     tag?: IdentityCardTag
+    details?: Snippet<[ProviderIdentityChoice]>
   } = $props()
 
   const text = $derived(new IdentityDecisionText(vault))
   const standing = $derived(choice.standing)
+  const name = $derived(text.name(choice))
+  const words = $derived(choice.identity.words.join('-'))
 
   function standingLine(standing: IdentityStanding): string {
     switch (standing.kind) {
@@ -142,7 +147,7 @@ it; setup's tag says what this browser's passkey is to the identity instead.
         data-testid="provider-vault-identity"
         title={choice.identity.identityId}
       >
-        {text.name(choice)}
+        {name}
       </p>
       <span
         class={opens(standing) ? 'nk-tag nk-tag-success' : 'nk-tag'}
@@ -152,12 +157,15 @@ it; setup's tag says what this browser's passkey is to the identity instead.
       </span>
     </div>
     <p class="nk-spec" data-testid="provider-identity-facts">
-      {#if choice.identity.name.state === 'named'}
-        <span>{choice.identity.words.join('-')}</span>
+      {#if name !== words}
+        <span>{words}</span>
       {/if}
-      {#each facts(choice.identity.log) as line (line)}
-        <span data-testid="provider-vault-identity-log">{line}</span>
-      {/each}
+      {#if !details}
+        {#each facts(choice.identity.log) as line (line)}
+          <span data-testid="provider-vault-identity-log">{line}</span>
+        {/each}
+      {/if}
     </p>
   </div>
 </header>
+{@render details?.(choice)}

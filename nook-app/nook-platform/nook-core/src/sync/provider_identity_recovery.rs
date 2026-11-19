@@ -50,8 +50,8 @@ mod tests {
     use super::*;
     use crate::{
         FilingIdentity, IdentityDecision, IdentityId, IdentitySession, IdentityWords,
-        ProviderIdentityChoice, ProviderIdentityChoices, ProviderIdentityJoin, ProviderVaultName,
-        ProviderVaultTime,
+        ProviderIdentityChoice, ProviderIdentityChoices, ProviderIdentityJoin,
+        ProviderKeyringDetails, ProviderListedIdentity, ProviderVaultName, ProviderVaultTime,
     };
 
     const MINE: &str = "idn_mineabcdefg";
@@ -69,14 +69,17 @@ mod tests {
                 .ok_or_else(|| anyhow::anyhow!("no identity at {index}"))
         }
 
-        fn identity(raw: &str, log: ProviderIdentityLog) -> anyhow::Result<FilingIdentity> {
+        fn identity(raw: &str, log: ProviderIdentityLog) -> anyhow::Result<ProviderListedIdentity> {
             let identity_id = IdentityId::parse(raw)?;
-            Ok(FilingIdentity {
-                short_id: raw.to_owned(),
-                name: ProviderVaultName::Unknown,
-                words: IdentityWords::of(&identity_id),
-                identity_id,
-                log,
+            Ok(ProviderListedIdentity {
+                identity: FilingIdentity {
+                    short_id: raw.to_owned(),
+                    name: ProviderVaultName::Unknown,
+                    words: IdentityWords::of(&identity_id),
+                    identity_id,
+                    log,
+                },
+                details: ProviderKeyringDetails::default(),
             })
         }
     }

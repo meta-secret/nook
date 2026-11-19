@@ -4,18 +4,18 @@ import { I18N_KEYS } from "../../../../generated/i18n-keys";
 import {
   provider_identity_choices,
   type CredentialCheckReport,
-  type FilingIdentity,
   type IdentityDecision,
   type IdentitySession,
   type NookProviderIdentityChoicesRequest,
   type ProviderIdentityChoice,
+  type ProviderListedIdentity,
   type ProviderVaultSummary,
 } from "$app-wasm";
 
 /** A listing and the checks run on its page, for one session. */
 export type IdentityChoicesRequest = {
   readonly vaults: readonly ProviderVaultSummary[];
-  readonly identities: readonly FilingIdentity[];
+  readonly identities: readonly ProviderListedIdentity[];
   readonly checks: readonly CredentialCheckReport[];
   readonly authenticated: boolean;
 };

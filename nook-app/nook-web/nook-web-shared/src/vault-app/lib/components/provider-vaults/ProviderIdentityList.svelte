@@ -15,11 +15,8 @@ tells, nothing more.
     RefreshCw,
     ScrollText,
   } from '@lucide/svelte'
-  import type {
-    IdentityDecision,
-    IdentityStanding,
-    ProviderIdentityChoice,
-  } from '$app-wasm'
+  import type { Snippet } from 'svelte'
+  import type { IdentityDecision, ProviderIdentityChoice } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
   import IdentityCardHeader from '$lib/components/provider-vaults/IdentityCardHeader.svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
@@ -40,6 +37,7 @@ tells, nothing more.
     checking,
     onDecide,
     onFindPasskey,
+    details,
   }: {
     vault: VaultState
     choices: readonly ProviderIdentityChoice[]
@@ -52,27 +50,11 @@ tells, nothing more.
     /** Run one way in for its identity, at once. */
     onDecide: (entry: PlannedDecision) => void | Promise<void>
     /** Check which listed identity a passkey opens; changes nothing. */
-    onFindPasskey: () => void | Promise<void>
+    onFindPasskey: (choice: ProviderIdentityChoice) => void | Promise<void>
+    details?: Snippet<[ProviderIdentityChoice]>
   } = $props()
 
   const text = $derived(new IdentityDecisionText(vault))
-
-  /** Whether a passkey check could still open the identity. */
-  function findable(standing: IdentityStanding): boolean {
-    switch (standing.kind) {
-      case 'notOpened':
-      case 'unchecked':
-      case 'joinDenied':
-        return true
-      case 'thisBrowser':
-      case 'otherIdentityHere':
-      case 'openedByPasskey':
-      case 'joinRequested':
-      case 'joinApproved':
-      case 'passkeyInUse':
-        return false
-    }
-  }
 
   function decisionsLabel(choice: ProviderIdentityChoice): string {
     const request: Parameters<typeof vault.t>[0] = {
@@ -116,7 +98,7 @@ tells, nothing more.
       data-store-ids={choice.vaults.map((summary) => summary.storeId).join(' ')}
       data-standing={standing.kind}
     >
-      <IdentityCardHeader {vault} {choice} />
+      <IdentityCardHeader {vault} {choice} {details} />
       {#if choice.decisions.length > 0}
         <div
           class="flex flex-wrap items-center gap-2"
@@ -151,13 +133,13 @@ tells, nothing more.
           {/each}
         </div>
       {/if}
-      {#if findable(standing)}
+      {#if !details && choice.passkey_check === 'Available'}
         <button
           type="button"
           class="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground disabled:opacity-60"
           data-testid="provider-identity-find-passkey"
           disabled={disabled || checking}
-          onclick={() => void onFindPasskey()}
+          onclick={() => void onFindPasskey(choice)}
         >
           {checking
             ? vault.t(I18N_KEYS.AccessCheckChecking)

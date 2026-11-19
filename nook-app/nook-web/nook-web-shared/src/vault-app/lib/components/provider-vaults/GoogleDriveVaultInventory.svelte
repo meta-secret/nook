@@ -21,16 +21,17 @@ nothing.
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte'
   import { ok, type Result } from 'neverthrow'
-  import { RefreshCw } from '@lucide/svelte'
+  import { Fingerprint, RefreshCw } from '@lucide/svelte'
   import type {
-    CredentialCheckReport,
     IdentityDecision,
     NookProviderSource,
     ProviderIdentityChoice,
   } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { Button } from '$lib/components/ui/button'
   import ProviderIdentityList from '$lib/components/provider-vaults/ProviderIdentityList.svelte'
   import SetupIdentityList from '$lib/components/provider-vaults/SetupIdentityList.svelte'
+  import DriveKeyringDetails from '$lib/components/provider-vaults/DriveKeyringDetails.svelte'
   import OptionDivider from '$lib/components/provider-vaults/OptionDivider.svelte'
   import { SetupRecoveryKind } from '$lib/components/provider-vaults/setup-identity-offer'
   import {
@@ -65,12 +66,13 @@ nothing.
   import {
     AccessCheckActions,
     AccessCheckTargetKind,
+    identityOpens,
     type AccessCheckTarget,
   } from '$lib/vault/access-check'
   import {
     ConnectButtonLook,
+    DrivePasskeyCheckKind,
     DriveVaultInventoryKind,
-    DriveVaultInventoryReader,
     listedVaults,
     type ConnectPlanButton,
     type DriveVaultInventory,
@@ -93,12 +95,14 @@ nothing.
     connectButton: Snippet<[ConnectPlanButton]>
   } = $props()
 
-  let inventory = $state<DriveVaultInventory>({
+  let inventory = $state.raw<DriveVaultInventory>({
     kind: DriveVaultInventoryKind.Loading,
+    token: '',
   })
-  // Passkey checks of this listing, newest last; they live with the page.
-  let checks = $state<CredentialCheckReport[]>([])
-  let checking = $state(false)
+  const checking = $derived(
+    inventory.kind === DriveVaultInventoryKind.Loaded &&
+      inventory.passkeyCheck.kind === DrivePasskeyCheckKind.Checking,
+  )
   // The recovery decision that runs now: one at a time.
   let running = $state<IdentityRun>({ kind: IdentityRunKind.Idle })
   const working = $derived(running.kind === IdentityRunKind.Running)
@@ -106,16 +110,20 @@ nothing.
   const joinIdle = $derived(
     vault.identityJoin.kind === IdentityJoinWaitKind.Idle,
   )
-  const disabled = $derived(busy || working || !joinIdle)
+  const disabled = $derived(busy || working || checking || !joinIdle)
 
   const choices = $derived.by(
     (): Result<readonly ProviderIdentityChoice[], IdentityChoicesFailure> => {
-      if (inventory.kind !== DriveVaultInventoryKind.Loaded) return ok([])
+      if (
+        inventory.token !== accessToken ||
+        inventory.kind !== DriveVaultInventoryKind.Loaded
+      )
+        return ok([])
       const listed = listedVaults(inventory.listing)
       const request: IdentityChoicesRequest = {
         vaults: listed.vaults,
         identities: listed.identities,
-        checks,
+        checks: inventory.checks,
         authenticated: vault.identityInUse,
       }
       return identityChoices(request)
@@ -125,40 +133,83 @@ nothing.
   const listedIdentities = $derived(choices.isOk() ? choices.value.length : 0)
 
   async function load(token: string): Promise<void> {
-    inventory = { kind: DriveVaultInventoryKind.Loading }
-    checks = []
-    const read = await new DriveVaultInventoryReader(vault).read()
-    if (token !== accessToken) return
-    inventory = read
+    const pending: DriveVaultInventory = {
+      kind: DriveVaultInventoryKind.Loading,
+      token,
+    }
+    inventory = pending
+    const read = await new VaultOAuthActions(vault).listGoogleDriveVaults()
+    if (inventory !== pending || token !== accessToken) return
+    if (read.isErr()) {
+      inventory = { kind: DriveVaultInventoryKind.Failed, token }
+      vault.errorMsg = vault.t(read.error.translationKey)
+      return
+    }
+    inventory = {
+      kind: DriveVaultInventoryKind.Loaded,
+      token,
+      listing: read.value,
+      checks: [],
+      passkeyCheck: { kind: DrivePasskeyCheckKind.Idle },
+    }
   }
 
   $effect(() => {
     const token = accessToken
     // Only a new sign-in lists again, not the state the listing reads.
     untrack(() => void load(token))
+    return () => {
+      // Invalidate a read or passkey check when this sign-in leaves the page.
+      inventory = { kind: DriveVaultInventoryKind.Loading, token: '' }
+    }
   })
 
-  function driveTarget(): AccessCheckTarget {
+  function driveTarget(token: string): AccessCheckTarget {
     return {
       kind: AccessCheckTargetKind.Source,
-      source: { kind: 'remote', source: { kind: 'googleDrive', accessToken } },
+      source: {
+        kind: 'remote',
+        source: { kind: 'googleDrive', accessToken: token },
+      },
     }
   }
 
   /** One passkey tap: which listed identity it opens, decrypted in memory. */
-  async function checkPasskey(): Promise<void> {
-    checking = true
-    try {
-      const checked = await new AccessCheckActions(vault).checkPasskey(
-        driveTarget(),
-      )
-      if (checked.isErr()) {
-        vault.errorMsg = vault.t(checked.error.translationKey)
-        return
+  async function checkPasskey(choice: ProviderIdentityChoice): Promise<void> {
+    if (
+      inventory.kind !== DriveVaultInventoryKind.Loaded ||
+      inventory.token !== accessToken ||
+      checking
+    )
+      return
+    const identityId = choice.identity.identityId
+    const pending: DriveVaultInventory = {
+      ...inventory,
+      passkeyCheck: { kind: DrivePasskeyCheckKind.Checking, identityId },
+    }
+    inventory = pending
+    const checked = await new AccessCheckActions(vault).checkPasskey(
+      driveTarget(pending.token),
+    )
+    if (inventory !== pending || pending.token !== accessToken) return
+    if (checked.isErr()) {
+      inventory = {
+        ...pending,
+        passkeyCheck: { kind: DrivePasskeyCheckKind.Idle },
       }
-      checks = [...checks, checked.value]
-    } finally {
-      checking = false
+      vault.errorMsg = vault.t(checked.error.translationKey)
+      return
+    }
+    const opened = checked.value.identities.some(
+      (identity) =>
+        identity.identityId === identityId && identityOpens(identity),
+    )
+    inventory = {
+      ...pending,
+      checks: [...pending.checks, checked.value],
+      passkeyCheck: opened
+        ? { kind: DrivePasskeyCheckKind.Idle }
+        : { kind: DrivePasskeyCheckKind.NoMatch, identityId },
     }
   }
 
@@ -267,7 +318,9 @@ nothing.
         else if (ran.value.kind === IdentityPlanOutcomeKind.AddedBeside) {
           // The added keyring syncs in this account's Nook folder: the
           // sign-in is bound to it, then saved for that keyring.
-          const folder = await new VaultOAuthActions(vault).connectGoogleVaultFolder()
+          const folder = await new VaultOAuthActions(
+            vault,
+          ).connectGoogleVaultFolder()
           if (folder.isErr()) {
             vault.errorMsg = vault.t(folder.error.translationKey)
             return
@@ -307,6 +360,7 @@ nothing.
 
   const button = $derived.by((): ConnectPlanButton => {
     const busy =
+      inventory.token !== accessToken ||
       inventory.kind === DriveVaultInventoryKind.Loading ||
       working ||
       checking ||
@@ -336,13 +390,44 @@ nothing.
   })
 </script>
 
+{#snippet details(choice: ProviderIdentityChoice)}
+  {#if inventory.kind === DriveVaultInventoryKind.Loaded}
+    {@const check = inventory.passkeyCheck}
+    {#if choice.passkey_check === 'Available'}
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        class="h-auto min-h-8 max-w-full whitespace-normal text-left"
+        data-testid="provider-identity-find-passkey"
+        disabled={disabled || workingOn !== ''}
+        onclick={() => void checkPasskey(choice)}
+      >
+        {#if check.kind === DrivePasskeyCheckKind.Checking && check.identityId === choice.identity.identityId}
+          <RefreshCw class="size-4 animate-spin" aria-hidden="true" />
+          {vault.t(I18N_KEYS.AccessCheckChecking)}
+        {:else}
+          <Fingerprint class="size-4" aria-hidden="true" />
+          {vault.t(I18N_KEYS.ProviderVaultsRevealDetails)}
+        {/if}
+      </Button>
+    {/if}
+    {#if check.kind === DrivePasskeyCheckKind.NoMatch && check.identityId === choice.identity.identityId}
+      <p class="text-xs text-muted-foreground" role="status">
+        {vault.t(I18N_KEYS.ProviderVaultsRevealNoMatch)}
+      </p>
+    {/if}
+  {/if}
+  <DriveKeyringDetails {vault} details={choice.details} />
+{/snippet}
+
 {#if vault.keyringRecovery.kind === KeyringRecoveryKind.Words}
   <KeyringRecoveryWords
     {vault}
     join={vault.keyringRecovery.join}
     connect={connectRecovered}
   />
-{:else if inventory.kind === DriveVaultInventoryKind.Loading}
+{:else if inventory.token !== accessToken || inventory.kind === DriveVaultInventoryKind.Loading}
   <p
     class="flex items-center gap-2 text-[11px] text-muted-foreground"
     role="status"
@@ -380,7 +465,8 @@ nothing.
           {vault}
           choices={choices.value}
           working={workingOn}
-          disabled={busy || !joinIdle}
+          {disabled}
+          {details}
           onContinue={act(FirstRunIdentityAction.Continue)}
           onAskToJoin={act(FirstRunIdentityAction.AskToJoin)}
           onCheck={act(FirstRunIdentityAction.CheckJoin)}
@@ -393,6 +479,7 @@ nothing.
           run={running}
           {disabled}
           {checking}
+          {details}
           onDecide={runDecision}
           onFindPasskey={checkPasskey}
         />

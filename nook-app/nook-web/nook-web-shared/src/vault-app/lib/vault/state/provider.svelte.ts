@@ -5,7 +5,7 @@ import {
   LocalVaultPresence,
   provider_draft_kind,
   type NookLocalVaultEntry,
-  type FilingIdentity,
+  type ProviderListedIdentity,
   type ProviderVaultSummary,
   type StoreId,
 } from "$app-wasm";
@@ -80,7 +80,7 @@ export type LocalVaultCatalog =
  * with the vaults filed under them. */
 export type RemoteVaultChoiceList = {
   readonly vaults: readonly ProviderVaultSummary[];
-  readonly identities: readonly FilingIdentity[];
+  readonly identities: readonly ProviderListedIdentity[];
 };
 
 const NO_REMOTE_VAULT_CHOICES: RemoteVaultChoiceList = {
@@ -91,7 +91,7 @@ const NO_REMOTE_VAULT_CHOICES: RemoteVaultChoiceList = {
 export class RemoteVaultChoices {
   static readonly NONE = new RemoteVaultChoices(NO_REMOTE_VAULT_CHOICES);
   readonly vaults: readonly ProviderVaultSummary[];
-  readonly identities: readonly FilingIdentity[];
+  readonly identities: readonly ProviderListedIdentity[];
   constructor({ vaults, identities }: RemoteVaultChoiceList) {
     this.vaults = vaults;
     this.identities = identities;
