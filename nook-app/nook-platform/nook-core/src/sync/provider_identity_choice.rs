@@ -152,7 +152,6 @@ pub enum IdentitySetup {
 
 /// Whether to offer the read-only passkey check on this keyring card.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
 pub enum IdentityPasskeyCheck {
     Available,
     Unavailable,
@@ -162,7 +161,6 @@ pub enum IdentityPasskeyCheck {
 /// the one action setup offers, and its vaults, named once a check
 /// decrypted them.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
 pub struct ProviderIdentityChoice {
     pub identity: FilingIdentity,
     pub standing: IdentityStanding,

@@ -53,11 +53,13 @@ pub struct NookProviderIdentityChoices {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use nook_auth2::MemberLabel;
     use nook_core::{
         AppKey, FilingIdentity, IdentityId, IdentityWords, ProviderIdentityJoin,
         ProviderIdentityLog, ProviderKeyringDetails, ProviderKeyringDevice, ProviderKeyringDevices,
         ProviderKeyringVault, ProviderLogCount, ProviderVaultName, ProviderVaultTime, StoreId,
     };
+    use serde_json::Value;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -100,7 +102,7 @@ mod browser_tests {
         let devices = ProviderKeyringDevices::Listed {
             devices: vec![ProviderKeyringDevice {
                 app_id: AppKey::generate()?.app_id().clone(),
-                label: nook_auth2::MemberLabel::from_trusted("Laptop".to_owned()),
+                label: MemberLabel::from_trusted("Laptop".to_owned()),
             }],
         };
         let details = ProviderKeyringDetails {
@@ -140,6 +142,22 @@ mod browser_tests {
             anyhow::bail!("one named keyring is listed");
         };
         assert_eq!(choice.details, details);
+        let wire = serde_json::to_value(choice)?;
+        assert_eq!(
+            wire.pointer("/passkey_check").and_then(Value::as_str),
+            Some("Available")
+        );
+        assert_eq!(
+            wire.pointer("/details/devices/state")
+                .and_then(Value::as_str),
+            Some("Listed")
+        );
+        assert!(wire.pointer("/details/devices/devices/0/app_id").is_some());
+        assert_eq!(
+            wire.pointer("/details/vaults/0/store_id")
+                .and_then(Value::as_str),
+            Some("store_vaultabcd01")
+        );
         Ok(())
     }
 }

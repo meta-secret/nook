@@ -18,7 +18,6 @@ use crate::{
 /// A keyring discovered from its control log. Vault namespaces retain
 /// lightweight filing identities, rather than repeating each keyring's roster.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
 pub struct ProviderListedIdentity {
     pub identity: FilingIdentity,
     pub details: ProviderKeyringDetails,
@@ -27,7 +26,6 @@ pub struct ProviderListedIdentity {
 /// The verified device and vault links. A namespace without a control log
 /// can name a vault it files but cannot establish the device roster.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify, Default)]
-#[serde(rename_all = "camelCase")]
 pub struct ProviderKeyringDetails {
     pub devices: ProviderKeyringDevices,
     pub vaults: Vec<ProviderKeyringVault>,
@@ -58,7 +56,7 @@ impl ProviderKeyringDetails {
 
 /// The distinction between a verified roster and a missing control log.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify, Default)]
-#[serde(tag = "state", rename_all = "camelCase")]
+#[serde(tag = "state")]
 pub enum ProviderKeyringDevices {
     #[default]
     Unavailable,
@@ -70,7 +68,6 @@ pub enum ProviderKeyringDevices {
 /// An active device, represented by the app key that brought it to the
 /// keyring. Its id and label are read from the signed member record.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
 pub struct ProviderKeyringDevice {
     #[tsify(type = "string")]
     pub app_id: AppId,
@@ -89,7 +86,6 @@ impl From<&IdentityControlMember> for ProviderKeyringDevice {
 
 /// A vault link with a local or decrypted label, when known.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
 pub struct ProviderKeyringVault {
     pub store_id: StoreId,
     pub name: ProviderVaultName,
