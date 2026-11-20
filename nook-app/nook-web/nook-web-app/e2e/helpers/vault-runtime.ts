@@ -307,11 +307,14 @@ export async function waitForGoogleOAuthSignedIn(page: Page) {
         if (errorText.kind === GoogleOAuthErrorStateKind.Visible) {
           throw new Error(`Google OAuth failed: ${errorText.message}`)
         }
-        // Signing in collapses the connection step and opens Connect & sync,
-        // so its button is the signed-in marker during setup.
+        // The second Google step can open only after sign-in, whether it
+        // offers card actions for recovery or a setup action for syncing.
+        const signedInStep = page
+          .getByTestId('google-setup-sync-step')
+          .locator(':scope > button[aria-expanded="true"]')
         return (
           (await page.getByTestId('google-account-status').isVisible()) ||
-          (await page.getByTestId('connect-provider-btn').isVisible())
+          (await signedInStep.isVisible())
         )
       },
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },

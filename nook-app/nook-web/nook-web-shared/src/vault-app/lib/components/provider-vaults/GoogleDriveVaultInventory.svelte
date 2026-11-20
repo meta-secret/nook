@@ -1,6 +1,6 @@
 <!--
-What the signed-in Google account's Nook folder already holds, shown in
-Connect & sync before anything is written, one card per identity.
+What the signed-in Google account's Nook folder already holds, shown before
+anything is written, one card per identity.
 
 With an identity in use (adding a sync provider to it), each card carries
 the one action Rust decided from this browser's key, and it runs at once: a
@@ -14,9 +14,8 @@ once. A keyring it brings here keeps Drive, and the page lands on the
 keyrings page with it, its vaults on its card; otherwise the folder is read
 again. A keyring recovered with a passphrase asks for its words, typed in
 place of the list; once they let this browser in, it keeps Drive the same
-way. The step's own button stays Connect & sync, for a keyring of its own.
-Checking which passkey opens an identity decrypts in memory and changes
-nothing.
+way. An empty Drive can start protected creation on a fresh browser.
+Checking which passkey opens an identity decrypts in memory.
 -->
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte'
@@ -39,7 +38,6 @@ nothing.
     FirstRunIdentityAction,
     ProviderFolderBinding,
   } from '$lib/vault/first-run'
-  import { IdentityDirectoryLoadKind } from '$lib/components/devices-access/identity-directory-view'
   import { IdentityControlViewKind } from '$lib/vault/identity-control.svelte'
   import {
     IdentityDecisionText,
@@ -85,6 +83,7 @@ nothing.
     busy,
     onConnect,
     onCreateEmptyDrive,
+    driveRecovery,
     connectButton,
   }: {
     vault: VaultState
@@ -94,6 +93,7 @@ nothing.
     /** Connect & sync. */
     onConnect: () => Promise<void>
     onCreateEmptyDrive: ((token: string) => Promise<void>) | false
+    driveRecovery: boolean
     /** The step's one action button. */
     connectButton: Snippet<[ConnectPlanButton]>
   } = $props()
@@ -142,15 +142,10 @@ nothing.
         (choices.isOk() && listedIdentities === 0)),
   )
   const canCreate = $derived(
-    onCreateEmptyDrive !== false &&
+    driveRecovery &&
+      onCreateEmptyDrive !== false &&
       verifiedEmpty &&
       firstRun.canCreateFromEmptyDrive(),
-  )
-  const checkingBrowser = $derived(
-    onCreateEmptyDrive !== false &&
-      vault.keyringRecoveryOpen &&
-      verifiedEmpty &&
-      vault.identityDirectory.kind === IdentityDirectoryLoadKind.Loading,
   )
 
   function createOnEmptyDrive(): void {
@@ -391,7 +386,6 @@ nothing.
       inventory.kind === DriveVaultInventoryKind.Loading ||
       working ||
       checking ||
-      checkingBrowser ||
       workingOn !== ''
     if (setupMode) {
       const detail: Parameters<typeof vault.t>[0] = {
@@ -465,19 +459,25 @@ nothing.
     <RefreshCw class="size-3.5 animate-spin" aria-hidden="true" />
     {vault.t(I18N_KEYS.ProviderVaultsLoading)}
   </p>
-{:else if canCreate}
-  <p class="text-sm text-muted-foreground" role="status">
+{:else if driveRecovery && verifiedEmpty}
+  <p
+    class="text-sm text-muted-foreground"
+    role="status"
+    data-testid="google-drive-vaults-empty"
+  >
     {vault.t(I18N_KEYS.FirstRunSyncEmpty)}
   </p>
-  <Button
-    type="button"
-    data-testid="google-drive-create-keyring"
-    {disabled}
-    onclick={createOnEmptyDrive}
-  >
-    <Plus class="size-4" aria-hidden="true" />
-    {vault.t(I18N_KEYS.ProviderVaultsCreateKeyring)}
-  </Button>
+  {#if canCreate}
+    <Button
+      type="button"
+      data-testid="google-drive-create-keyring"
+      {disabled}
+      onclick={createOnEmptyDrive}
+    >
+      <Plus class="size-4" aria-hidden="true" />
+      {vault.t(I18N_KEYS.ProviderVaultsCreateKeyring)}
+    </Button>
+  {/if}
 {:else if inventory.kind === DriveVaultInventoryKind.Loaded && inventory.listing.root === 'absent'}
   <p
     class="text-[11px] text-pretty text-muted-foreground"
@@ -534,6 +534,6 @@ nothing.
 {#if setupMode && listedIdentities > 0}
   <OptionDivider {vault} />
 {/if}
-{#if vault.keyringRecovery.kind === KeyringRecoveryKind.None && !canCreate}
+{#if vault.keyringRecovery.kind === KeyringRecoveryKind.None && !driveRecovery}
   {@render connectButton(button)}
 {/if}

@@ -4,6 +4,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 import {
   NookIdentityLocalAccessKind,
   type NookGoogleDriveVaultListing,
+  type ProviderDraft,
   type ProviderVaultSummary,
 } from '$app-wasm'
 import { OAuthFailure, OAuthFailureKind } from '$lib/auth/oauth-failure'
@@ -12,6 +13,12 @@ import {
   IdentityDirectorySelectionKind,
 } from '$lib/components/devices-access/identity-directory-view'
 import { VaultOAuthActions } from '$lib/vault/oauth'
+import { FirstRunActions, ProviderFolderBinding } from '$lib/vault/first-run'
+import {
+  IdentityPlanActions,
+  IdentityPlanOutcomeKind,
+  type IdentityPlanOutcome,
+} from '$lib/vault/identity-plan-actions'
 import {
   ProviderDraftFixture,
   ProviderFixtureCredentials,
@@ -28,7 +35,9 @@ const EMPTY_ROOTS: NookGoogleDriveVaultListing[] = [
 
 afterEach(() => vi.restoreAllMocks())
 
-function renderRecovery() {
+function renderRecovery(
+  draft: ProviderDraft = ProviderDraftFixture.googleDriveSignedIn(),
+) {
   const vault = VaultStateTestFixture.create()
   vault.translations = JSON.stringify(enLocale)
   vault.identityDirectory = {
@@ -40,7 +49,6 @@ function renderRecovery() {
   }
   vault.keyringRecoveryOpen = true
   vault.beginKeyringRecovery()
-  const draft = ProviderDraftFixture.googleDriveSignedIn()
   if (draft.type !== 'oauth-file')
     throw new Error('Expected Google Drive draft')
   vault.stageProviderDraft(draft)
@@ -51,12 +59,26 @@ function renderRecovery() {
     draft,
     isVerifying: false,
     isInitializing: false,
+    driveRecovery: true,
     onCancelSetup: vi.fn(),
     onConnect,
     onCreateEmptyDrive,
   })
   return { view, vault, onConnect, onCreateEmptyDrive }
 }
+
+test('before sign-in, shows the recovery step without a connect action', () => {
+  const list = vi.spyOn(VaultOAuthActions.prototype, 'listGoogleDriveVaults')
+  const { view } = renderRecovery(
+    ProviderDraftFixture.googleDriveAwaitingSignIn(),
+  )
+
+  expect(view.getByTestId('google-setup-sync-step').textContent).toContain(
+    enLocale.first_run.restore_choose_vault,
+  )
+  expect(view.queryAllByTestId('connect-provider-btn')).toHaveLength(0)
+  expect(list).not.toHaveBeenCalled()
+})
 
 test.each(EMPTY_ROOTS)(
   'offers explicit creation when Drive root is $root and has no keyrings',
@@ -100,10 +122,12 @@ test('does not offer creation while the Drive read is pending or has failed', as
 
   await view.findByTestId('google-drive-vaults-loading')
   expect(view.queryAllByTestId(CREATE)).toHaveLength(0)
+  expect(view.queryAllByTestId('connect-provider-btn')).toHaveLength(0)
   finishRead(err(new OAuthFailure(OAuthFailureKind.GoogleVaultListing)))
 
   await view.findByTestId('google-oauth-error')
   expect(view.queryAllByTestId(CREATE)).toHaveLength(0)
+  expect(view.queryAllByTestId('connect-provider-btn')).toHaveLength(0)
 })
 
 test('keeps recovery when an older keyring is represented by its vault listing', async () => {
@@ -129,10 +153,27 @@ test('keeps recovery when an older keyring is represented by its vault listing',
   ).mockResolvedValue(
     ok({ root: 'found', listing: { identities: [], vaults: [vault] } }),
   )
-  const { view } = renderRecovery()
+  const applied: IdentityPlanOutcome = { kind: IdentityPlanOutcomeKind.Applied }
+  const run = vi
+    .spyOn(IdentityPlanActions.prototype, 'run')
+    .mockResolvedValue(ok(applied))
+  const finish = vi
+    .spyOn(FirstRunActions.prototype, 'connectRecoveredKeyring')
+    .mockResolvedValue(true)
+  const { view, onConnect } = renderRecovery()
 
-  await view.findByTestId('provider-identity')
+  const card = await view.findByTestId('provider-identity')
   expect(view.queryAllByTestId(CREATE)).toHaveLength(0)
+  expect(view.queryAllByTestId('connect-provider-btn')).toHaveLength(0)
+  const open = card.querySelector('[data-decision="addToBrowser"]')
+  if (!open) throw new Error('Missing recovery action')
+  await fireEvent.click(open)
+
+  expect(run).toHaveBeenCalledOnce()
+  expect(finish).toHaveBeenCalledExactlyOnceWith(
+    ProviderFolderBinding.DriveFolder,
+  )
+  expect(onConnect).not.toHaveBeenCalled()
 })
 
 test('recovery beside a local identity does not offer first-run creation', async () => {
@@ -160,6 +201,8 @@ test('recovery beside a local identity does not offer first-run creation', async
       },
     },
   }
-  await view.findByTestId('google-folder-on-connect')
+  const empty = await view.findByTestId('google-drive-vaults-empty')
+  expect(empty.textContent).toContain(enLocale.first_run.sync_empty)
   expect(view.queryAllByTestId(CREATE)).toHaveLength(0)
+  expect(view.queryAllByTestId('connect-provider-btn')).toHaveLength(0)
 })

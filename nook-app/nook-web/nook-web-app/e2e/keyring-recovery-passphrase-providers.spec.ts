@@ -119,6 +119,7 @@ test.describe('recovering a keyring with its passphrase on every sync provider',
       await device.getByTestId('provider-option-oauth-file').click()
       await device.getByTestId('google-sign-in-btn').click()
       await waitForGoogleOAuthSignedIn(device)
+      await expect(device.getByTestId('connect-provider-btn')).toHaveCount(0)
       await recoverListedKeyringWithWords(
         device,
         kept,

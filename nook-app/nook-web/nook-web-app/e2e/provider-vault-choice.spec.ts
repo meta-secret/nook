@@ -122,7 +122,12 @@ test.describe('an identity another browser keeps in the Nook folder', () => {
       await reader.getByTestId('google-sign-in-btn').click()
       await waitForGoogleOAuthSignedIn(reader)
       const card = reader.getByTestId('provider-identity')
+      await expect(reader.getByTestId('google-setup-sync-step')).toContainText(
+        enLocale.first_run.restore_choose_vault,
+      )
+      await expect(reader.getByTestId('connect-provider-btn')).toHaveCount(0)
       await expect(card).toHaveAttribute('data-standing', 'unchecked')
+      await expect(card.locator('[data-decision="addToBrowser"]')).toBeVisible()
       await expect(card.getByTestId('provider-vault-identity')).toHaveText(
         createdName,
       )
