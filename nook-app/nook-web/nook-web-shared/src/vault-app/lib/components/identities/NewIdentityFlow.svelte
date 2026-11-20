@@ -32,7 +32,6 @@ adopting the new identity ends the current identity's session midway.
 
   let nameInput = $state("");
   let vaultInput = $state("");
-  let adoption = $state<"protecting" | "working" | "retry">("protecting");
   let confirmedName = "";
   /** Rust holds a prepared identity until its passkey commits it. A join to
    * another identity that waits for this identity's key arrives prepared:
@@ -161,13 +160,8 @@ adopting the new identity ends the current identity's session midway.
 
   /** The passkey committed the identity: adopt it as this browser's own. */
   async function adopt(): Promise<void> {
-    if (adoption === "working") return;
-    if (adoption === "protecting") {
-      creationPending = false;
-      new IdentitySessionTransition(vault).clearPriorIdentity();
-    }
-    adoption = "working";
-    vault.dismissError();
+    creationPending = false;
+    new IdentitySessionTransition(vault).clearPriorIdentity();
     const providerLoad: Parameters<typeof vault.loadProviders>[0] = {
       ensureLocalRow: true,
     };
@@ -176,16 +170,20 @@ adopting the new identity ends the current identity's session midway.
     if (name) {
       const named = await new FirstRunActions(vault).nameIdentity(name);
       if (named.isErr()) {
-        adoption = "retry";
         vault.errorMsg = vault.t(named.error.translationKey);
+        vault.identityTransitionPending = false;
+        close();
         return;
       }
     }
     const loaded = await vault.loadProviders(providerLoad);
     if (loaded.isErr()) {
       vault.identityJoin = { kind: IdentityJoinWaitKind.Idle };
-      adoption = name ? "retry" : "protecting";
       vault.errorMsg = vault.t(loaded.error.translationKey);
+      if (name) {
+        vault.identityTransitionPending = false;
+        close();
+      }
       return;
     }
     vault.applyActiveProviderCredentials();
@@ -270,7 +268,7 @@ adopting the new identity ends the current identity's session midway.
       <FirstRunBackLink
         {vault}
         testId="new-identity-back"
-        disabled={vault.isVerifying || adoption !== "protecting"}
+        disabled={vault.isVerifying}
         onBack={() => void backToName()}
       />
       <StepProgress {steps} current={stepIndex} />
@@ -286,27 +284,16 @@ adopting the new identity ends the current identity's session midway.
       </p>
     </div>
     <FirstRunDiagram diagram={keyDiagram} />
-    {#if adoption === "protecting"}
-      <DeviceProtectionGate
-        {vault}
-        frame={DeviceProtectionGateFrame.Embedded}
-        creationOnly={true}
-        initializeSession={false}
-        recoveryAppId=""
-        onBeforeProtectionAction={protectionStarted}
-        onProtectionActionSettled={protectionSettled}
-        onProtectionReady={() => void adopt()}
-      />
-    {:else if adoption === "retry"}
-      <Button
-        type="button"
-        class="justify-self-center"
-        data-testid="new-identity-retry-publication"
-        onclick={() => void adopt()}
-      >
-        {vault.t(I18N_KEYS.FirstRunConnectRetry)}
-      </Button>
-    {/if}
+    <DeviceProtectionGate
+      {vault}
+      frame={DeviceProtectionGateFrame.Embedded}
+      creationOnly={true}
+      initializeSession={false}
+      recoveryAppId=""
+      onBeforeProtectionAction={protectionStarted}
+      onProtectionActionSettled={protectionSettled}
+      onProtectionReady={() => void adopt()}
+    />
   </section>
 {:else if vault.newIdentity === NewIdentityStage.Ready}
   <section
