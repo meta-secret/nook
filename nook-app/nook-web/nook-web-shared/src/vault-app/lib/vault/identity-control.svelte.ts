@@ -10,10 +10,10 @@ import {
   NookBrowserExtensionMembership,
   type AuthProvidersSnapshot,
   type IdentityControlSnapshot,
+  type NookIdentityLogSyncOutcome,
   type IdentityVaultView,
   type NookEnrollmentIssueInput,
   type NookSecretPage,
-  type NookStorageConnection,
   type NookVaultManager,
   type PasswordGenerationOptions,
   type ProviderVaultName,
@@ -35,6 +35,7 @@ type MountVaultDeletion = {
   readonly provider: StorageProvider;
 };
 import { IdentityStandingPresentation } from "$lib/components/identity-control/identity-standing";
+import { IdentityDirectoryLoader } from "$lib/components/identities/identity-directory-loader.svelte";
 import { browserLogRuntime } from "$lib/runtime/log";
 import type { VaultState } from "$lib/vault.svelte";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
@@ -76,6 +77,21 @@ export enum IdentityActionOutcome {
 
 type IdentityManagerOperation<T> = (manager: NookVaultManager) => Promise<T>;
 
+type IdentitySelection = string | false;
+
+type ScopedIdentityOperation<T> = {
+  readonly operation: IdentityManagerOperation<T>;
+  readonly expectedIdentityId: IdentitySelection;
+};
+
+type IdentityManagerRequest<T> =
+  IdentityManagerOperation<T> | ScopedIdentityOperation<T>;
+
+type IdentityMountSync = {
+  readonly provider: StorageProvider;
+  readonly expectedIdentityId: IdentitySelection;
+};
+
 /** Named values required by `IdentityControlModel.issueInvite`. */
 export type IdentityInviteIssue = {
   readonly input: NookEnrollmentIssueInput;
@@ -84,6 +100,11 @@ export type IdentityInviteIssue = {
 
 export type IdentityMemberRename = {
   readonly appId: string;
+  readonly label: string;
+};
+
+export type KeyringRename = {
+  readonly identityId: string;
   readonly label: string;
 };
 
@@ -186,14 +207,28 @@ export class IdentityControlModel {
   }
 
   private async withManager<T>(
-    operation: IdentityManagerOperation<T>,
+    request: IdentityManagerRequest<T>,
   ): Promise<Result<T, VaultStorageFailure>> {
+    const scoped: ScopedIdentityOperation<T> =
+      typeof request === "function"
+        ? { operation: request, expectedIdentityId: false }
+        : request;
+    const { operation, expectedIdentityId } = scoped;
     const vault = this.vault;
     return vault.enqueueStorage(async () => {
       const admitted = vault.admitManager();
       if (admitted.isErr()) return err(admitted.error);
       try {
-        return ok(await operation(admitted.value));
+        const manager = admitted.value;
+        if (expectedIdentityId !== false) {
+          const snapshot = await manager.identity_control_snapshot(
+            this.providersSnapshot(),
+          );
+          if (snapshot.identityId !== expectedIdentityId) {
+            throw new Error("Selected keyring changed during rename");
+          }
+        }
+        return ok(await operation(manager));
       } catch (failure) {
         return err(new NativeVaultStorageFailure(failure));
       }
@@ -277,20 +312,29 @@ export class IdentityControlModel {
   }
 
   /** Project the identity log this app already holds, without creating one. */
-  async loadSnapshot(): Promise<
-    Result<IdentityActionOutcome, VaultStorageFailure>
-  > {
+  async loadSnapshot(
+    expectedIdentityId: IdentitySelection = false,
+  ): Promise<Result<IdentityActionOutcome, VaultStorageFailure>> {
     const providers = this.providersSnapshot();
-    const loaded = await this.withManager(async (manager) => {
-      const snapshot = await manager.identity_control_snapshot(providers);
-      const mounts = await manager.identity_replication_providers(providers);
-      return { snapshot, mounts: mounts.providers };
-    });
+    const request: ScopedIdentityOperation<{
+      snapshot: IdentityControlSnapshot;
+      mounts: StorageProvider[];
+    }> = {
+      expectedIdentityId,
+      operation: async (manager) => {
+        const snapshot = await manager.identity_control_snapshot(providers);
+        const mounts = await manager.identity_replication_providers(providers);
+        return { snapshot, mounts: mounts.providers };
+      },
+    };
+    const loaded = await this.withManager(request);
     if (loaded.isErr()) {
-      this.view = {
-        kind: IdentityControlViewKind.Unavailable,
-        failure: loaded.error,
-      };
+      if (expectedIdentityId === false) {
+        this.view = {
+          kind: IdentityControlViewKind.Unavailable,
+          failure: loaded.error,
+        };
+      }
       return err(loaded.error);
     }
     this.view = {
@@ -302,25 +346,30 @@ export class IdentityControlModel {
   }
 
   /** Record new mounts, then union the identity log with every mount. */
-  async syncWithMounts(): Promise<
-    Result<IdentityActionOutcome, VaultStorageFailure>
-  > {
+  async syncWithMounts(
+    expectedIdentityId: IdentitySelection = false,
+  ): Promise<Result<IdentityActionOutcome, VaultStorageFailure>> {
     const providers = this.providersSnapshot();
-    const mounted = await this.withManager(async (manager) => {
-      const snapshot = await manager.identity_control_snapshot(providers);
-      if (new IdentityStandingPresentation(snapshot).isMember()) {
-        await manager.record_identity_provider_mounts(providers);
-      }
-      return (await manager.identity_replication_providers(providers))
-        .providers;
-    });
+    const request: ScopedIdentityOperation<StorageProvider[]> = {
+      expectedIdentityId,
+      operation: async (manager) => {
+        const snapshot = await manager.identity_control_snapshot(providers);
+        if (new IdentityStandingPresentation(snapshot).isMember()) {
+          await manager.record_identity_provider_mounts(providers);
+        }
+        return (await manager.identity_replication_providers(providers))
+          .providers;
+      },
+    };
+    const mounted = await this.withManager(request);
     if (mounted.isErr()) return err(mounted.error);
     for (const provider of mounted.value) {
-      const synced = await this.syncOneMount(provider);
+      const mount: IdentityMountSync = { provider, expectedIdentityId };
+      const synced = await this.syncOneMount(mount);
       if (synced.isErr()) return err(synced.error);
     }
     log.info("identity log synchronized with mounts");
-    return this.loadSnapshot();
+    return this.loadSnapshot(expectedIdentityId);
   }
 
   /** Delete a removed vault's files at one identity mount: a local folder
@@ -355,41 +404,42 @@ export class IdentityControlModel {
 
   /** Union the identity log with one mount: a local folder through its own
    * handle, any other provider through the prepared storage. */
-  private async syncOneMount(
-    provider: StorageProvider,
-  ): Promise<Result<IdentityActionOutcome, VaultStorageFailure>> {
+  private async syncOneMount({
+    provider,
+    expectedIdentityId,
+  }: IdentityMountSync): Promise<
+    Result<IdentityActionOutcome, VaultStorageFailure>
+  > {
     const stored = provider.provider;
-    if (stored.type === "local-folder") {
-      const synced = await this.withManager((manager) =>
-        manager.sync_identity_log_with_local_folder(stored.handleId),
-      );
-      return synced.map(() => IdentityActionOutcome.Completed);
-    }
-    let args: NookStorageConnection;
-    try {
-      args = this.vault.providerWasmArgs(provider);
-    } catch (failure) {
-      return err(new NativeVaultStorageFailure(failure));
-    }
-    const synced = await this.withManager((manager) =>
-      manager.sync_identity_log_with_provider(args),
-    );
+    const request: ScopedIdentityOperation<NookIdentityLogSyncOutcome> = {
+      expectedIdentityId,
+      operation: (manager) => {
+        if (stored.type === "local-folder") {
+          return manager.sync_identity_log_with_local_folder(stored.handleId);
+        }
+        const args = this.vault.providerWasmArgs(provider);
+        return manager.sync_identity_log_with_provider(args);
+      },
+    };
+    const synced = await this.withManager(request);
     return synced.map(() => IdentityActionOutcome.Completed);
   }
 
   private async act<T>(
-    operation: IdentityManagerOperation<T>,
+    request: IdentityManagerRequest<T>,
   ): Promise<Result<IdentityActionOutcome, VaultStorageFailure>> {
     if (this.busy) return ok(IdentityActionOutcome.Completed);
     this.busy = true;
     this.vault.errorMsg = "";
     try {
-      const done = await this.withManager(operation);
+      const done = await this.withManager(request);
       if (done.isErr()) {
         this.report(done.error);
         return err(done.error);
       }
-      const synced = await this.syncWithMounts();
+      const expectedIdentityId =
+        typeof request === "function" ? false : request.expectedIdentityId;
+      const synced = await this.syncWithMounts(expectedIdentityId);
       if (synced.isErr()) this.report(synced.error);
       return synced;
     } finally {
@@ -456,6 +506,28 @@ export class IdentityControlModel {
 
   rename({ appId, label }: IdentityMemberRename) {
     return this.act((manager) => manager.rename_identity_member(appId, label));
+  }
+
+  async renameKeyring({
+    identityId,
+    label,
+  }: KeyringRename): Promise<
+    Result<IdentityActionOutcome, VaultStorageFailure>
+  > {
+    if (this.busy) {
+      return err(
+        new NativeVaultStorageFailure("Another keyring action is in progress"),
+      );
+    }
+    // Each storage operation checks the selected keyring after it enters the
+    // queue, since activation can run between the local append and remote sync.
+    const request: ScopedIdentityOperation<void> = {
+      expectedIdentityId: identityId,
+      operation: (manager) => manager.rename_identity(label),
+    };
+    const renamed = await this.act(request);
+    await new IdentityDirectoryLoader(this.vault).reload();
+    return renamed;
   }
 
   /**

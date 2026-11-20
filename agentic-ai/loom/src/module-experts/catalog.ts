@@ -362,6 +362,7 @@ const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/login/login-create-vault-chooser-contract.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/login/sentinel-card-stack-contract.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/login/sentinel-dashboard-surface-contract.ts',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/provider-vaults/DriveKeyringDetails.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/provider-vaults/GoogleDriveVaultInventory.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/provider-vaults/IdentityCardHeader.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/provider-vaults/ProviderIdentityList.svelte',

@@ -37,6 +37,8 @@ function choice({ id, standing, setup }: Listed): ProviderIdentityChoice {
     decisions: [],
     setup,
     recovery: 'notOffered',
+    details: { devices: { state: 'Unavailable' }, vaults: [] },
+    passkey_check: 'Available',
     vaults: [],
   }
 }

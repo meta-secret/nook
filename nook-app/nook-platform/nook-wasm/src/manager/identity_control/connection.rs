@@ -86,7 +86,7 @@ impl NookVaultManager {
         let start = match self.connection_key().await? {
             IdentityConnectionKey::CurrentAppKey => NookIdentityConnectionStart::CurrentKey,
             IdentityConnectionKey::NewAppKey => {
-                self.begin_local_identity_creation(label).await?;
+                self.stage_local_identity_creation(label).await?;
                 NookIdentityConnectionStart::NewKeyStaged
             }
         };

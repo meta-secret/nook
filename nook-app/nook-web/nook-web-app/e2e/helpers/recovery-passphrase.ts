@@ -163,36 +163,70 @@ export async function readSecretOfVault(
   }
 }
 
-/** On the recovery screen, the keyring filing the kept vault offers its
- * passkey, its words, and its devices, one button each, the passkey
- * leading. A button runs at once: recovering with its words makes this
- * browser's key first, then the words let it in. */
+export enum RecoveryCardLayout {
+  Inline = 'inline',
+  Compact = 'compact',
+}
+
+/** On the recovery screen, the keyring offers its passkey, words, and
+ * devices. Recovering with its words makes this browser's key first. */
 export async function recoverListedKeyringWithWords(
   device: Page,
-  ...[kept, words]: readonly [KeptVault, string]
+  ...[kept, words, layout = RecoveryCardLayout.Inline]: readonly [
+    KeptVault,
+    string,
+    RecoveryCardLayout?,
+  ]
 ): Promise<void> {
   try {
     const card = device.locator(
       `[data-testid="provider-identity"][data-store-ids~="${kept.storeId}"]`,
     )
     await expect(card).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    const decisions = card.getByTestId('provider-identity-decision')
-    await expect(decisions).toHaveCount(3)
-    expect(
-      await decisions.evaluateAll((buttons) =>
-        buttons.map((button) => button.getAttribute('data-decision')),
-      ),
-    ).toEqual(['addToBrowser', 'recoverWithPassphrase', 'askToJoin'])
     await expect(card.locator('[data-lead="true"]')).toHaveAttribute(
       'data-decision',
       'addToBrowser',
     )
-
-    await card
-      .locator(
-        '[data-testid="provider-identity-decision"][data-decision="recoverWithPassphrase"]',
-      )
-      .click()
+    const decisions = card.getByTestId('provider-identity-decision')
+    switch (layout) {
+      case RecoveryCardLayout.Inline:
+        await expect(decisions).toHaveCount(3)
+        expect(
+          await decisions.evaluateAll((buttons) =>
+            buttons.map((button) => button.getAttribute('data-decision')),
+          ),
+        ).toEqual(['addToBrowser', 'recoverWithPassphrase', 'askToJoin'])
+        await card
+          .locator(
+            '[data-testid="provider-identity-decision"][data-decision="recoverWithPassphrase"]',
+          )
+          .click()
+        break
+      case RecoveryCardLayout.Compact: {
+        await expect(decisions).toHaveCount(1)
+        const more = card.getByTestId('provider-identity-more-actions')
+        const menu = device.getByTestId('provider-identity-action-menu')
+        await more.press('ArrowDown')
+        const items = menu.getByRole('menuitem')
+        await expect(items).toHaveCount(2)
+        expect(
+          await items.evaluateAll((entries) =>
+            entries.map((entry) => entry.getAttribute('data-decision')),
+          ),
+        ).toEqual(['recoverWithPassphrase', 'askToJoin'])
+        const passphrase = menu.locator(
+          '[data-decision="recoverWithPassphrase"]',
+        )
+        await expect(passphrase).toBeFocused()
+        await device.keyboard.press('Escape')
+        await expect(menu).toBeHidden()
+        await expect(more).toBeFocused()
+        await more.press('ArrowDown')
+        await expect(passphrase).toBeFocused()
+        await device.keyboard.press('Enter')
+        break
+      }
+    }
     const recovery = device.getByTestId('keyring-recovery-words')
     await answerPasskeyPromptBeforeJoin(device, recovery)
     await expect(recovery).toBeVisible({

@@ -1448,13 +1448,24 @@
     "google_vaults_list_failed": "Could not read the vaults in your Google Drive “meta-secret-nook” folder."
   },
   "provider_vaults": {
+    "create_keyring": "Create a keyring",
     "list_title": "Keyrings in your Nook folder",
     "loading": "Looking for keyrings in your Nook folder…",
     "loading_s3": "Looking for keyrings in this storage…",
     "root_absent": "Connect & sync creates a folder named “meta-secret-nook” in your Google Drive, with a folder for each keyring.",
     "root_empty": "Your “meta-secret-nook” folder holds no keyrings yet. Connect & sync adds yours to it.",
     "devices": "Devices: {count}",
-    "identity_vaults": "Vaults of this keyring: {count}"
+    "identity_vaults": "Vaults of this keyring: {count}",
+    "devices_disclosure": "Devices ({count})",
+    "vaults_disclosure": "Vaults ({count})",
+    "devices_unavailable": "The device list is unavailable.",
+    "no_linked_devices": "No linked devices.",
+    "no_linked_vaults": "No linked vaults.",
+    "vault_name_unavailable": "Vault name unavailable",
+    "reveal_details": "Reveal names",
+    "open_with_passkey": "Open with passkey",
+    "more_actions": "More actions for {identity}",
+    "reveal_no_match": "This passkey did not open this keyring."
   },
   "access_check": {
     "title": "Check access",
@@ -2121,6 +2132,7 @@
     "nav_group_parts": "Keyring"
   },
   "identity_control": {
+    "rename_keyring": "Rename keyring",
     "members_description": "Every app here can open this keyring's vaults. Removing an app rotates each vault's keys before its next change.",
     "current_app": "This app",
     "unnamed_app": "Unnamed app",
@@ -2184,6 +2196,7 @@
     "not_member_browser": "This browser hasn't joined {identity} yet. Only a member of {identity} can invite a new device."
   },
   "first_run": {
+    "drive_sign_in_changed": "Google Drive sign-in is no longer current. Reopen Google Drive recovery to continue.",
     "title": "Create your keyring",
     "name_label": "Keyring name",
     "name_placeholder": "Personal",
@@ -2223,7 +2236,7 @@
     "identity_member": "Member",
     "identity_not_member": "Not a member",
     "name_title": "Name your keyring",
-    "name_body": "Only its members see the name.",
+    "name_body": "Anyone with access to this keyring’s sync folder can see its current and previous names.",
     "name_create": "Create keyring",
     "name_on_provider": "Kept in Google Drive",
     "name_on_s3": "Kept in {location}",

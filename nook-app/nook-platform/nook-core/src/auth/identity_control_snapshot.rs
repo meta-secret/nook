@@ -303,7 +303,7 @@ impl IdentityControlSnapshot {
         };
         Self {
             identity_id: state.identity_id.as_str().to_owned(),
-            identity_label: (*identity_label).to_owned(),
+            identity_label: state.public_name.display_or(identity_label).to_owned(),
             standing,
             members: state
                 .app_members()

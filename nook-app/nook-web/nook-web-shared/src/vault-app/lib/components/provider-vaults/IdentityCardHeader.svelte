@@ -5,7 +5,7 @@ public log tells. The plan list and setup's list both open their cards with
 it; setup's tag says what this browser's passkey is to the identity instead.
 -->
 <script lang="ts">
-  import { Lock, UserRound } from '@lucide/svelte'
+  import { KeyRound, Lock, UserRound } from '@lucide/svelte'
   import type {
     IdentitySetup,
     IdentityStanding,
@@ -14,21 +14,28 @@ it; setup's tag says what this browser's passkey is to the identity instead.
   } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
-  import { IdentityDecisionText } from '$lib/components/provider-vaults/identity-plan.svelte'
+  import {
+    IdentityDecisionText,
+    type CompactIdentityCard,
+  } from '$lib/components/provider-vaults/identity-plan.svelte'
   import { IdentityCardTag } from '$lib/components/provider-vaults/identity-card-tag'
 
   let {
     vault,
     choice,
     tag = IdentityCardTag.Standing,
+    compact,
   }: {
     vault: VaultState
     choice: ProviderIdentityChoice
     tag?: IdentityCardTag
+    compact?: CompactIdentityCard
   } = $props()
 
   const text = $derived(new IdentityDecisionText(vault))
   const standing = $derived(choice.standing)
+  const name = $derived(text.name(choice))
+  const words = $derived(choice.identity.words.join('-'))
 
   function standingLine(standing: IdentityStanding): string {
     switch (standing.kind) {
@@ -129,7 +136,9 @@ it; setup's tag says what this browser's passkey is to the identity instead.
 
 <header class="flex items-start gap-3">
   <span class="nk-tile nk-tile-sm" aria-hidden="true">
-    {#if opens(standing)}
+    {#if compact}
+      <KeyRound class="size-4" />
+    {:else if opens(standing)}
       <UserRound class="size-4" />
     {:else}
       <Lock class="size-4" />
@@ -142,7 +151,7 @@ it; setup's tag says what this browser's passkey is to the identity instead.
         data-testid="provider-vault-identity"
         title={choice.identity.identityId}
       >
-        {text.name(choice)}
+        {name}
       </p>
       <span
         class={opens(standing) ? 'nk-tag nk-tag-success' : 'nk-tag'}
@@ -151,13 +160,19 @@ it; setup's tag says what this browser's passkey is to the identity instead.
         {tagLine()}
       </span>
     </div>
-    <p class="nk-spec" data-testid="provider-identity-facts">
-      {#if choice.identity.name.state === 'named'}
-        <span>{choice.identity.words.join('-')}</span>
-      {/if}
-      {#each facts(choice.identity.log) as line (line)}
-        <span data-testid="provider-vault-identity-log">{line}</span>
-      {/each}
-    </p>
+    {#if !compact || name !== words}
+      <p class="nk-spec" data-testid="provider-identity-facts">
+        {#if name !== words}
+          <span>{words}</span>
+        {/if}
+        {#if !compact}
+          {#each facts(choice.identity.log) as line (line)}
+            <span data-testid="provider-vault-identity-log">{line}</span>
+          {/each}
+        {/if}
+      </p>
+    {/if}
+    {@render compact?.reveal(choice)}
   </div>
 </header>
+{@render compact?.details(choice)}

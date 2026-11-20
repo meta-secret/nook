@@ -16,10 +16,13 @@
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
+use crate::provider_keyring_details::ProviderVaultNameLookup;
+
 use crate::{
     CredentialCheckReport, FilingIdentity, IdentityCheck, IdentityCheckOutcome,
-    IdentityRecoveryOffer, ProviderIdentityJoin, ProviderIdentityLog, ProviderVaultAccess,
-    ProviderVaultName, ProviderVaultSummary, VaultCheckOutcome,
+    IdentityRecoveryOffer, ProviderIdentityJoin, ProviderIdentityLog, ProviderKeyringDetails,
+    ProviderKeyringDevices, ProviderListedIdentity, ProviderVaultAccess, ProviderVaultName,
+    ProviderVaultSummary,
 };
 
 /// Whether an identity is in use on this browser, which merging needs.
@@ -65,6 +68,18 @@ pub enum IdentityStanding {
 }
 
 impl IdentityStanding {
+    fn passkey_check(&self) -> IdentityPasskeyCheck {
+        match self {
+            Self::NotOpened | Self::Unchecked | Self::JoinDenied => IdentityPasskeyCheck::Available,
+            Self::ThisBrowser
+            | Self::OtherIdentityHere { .. }
+            | Self::OpenedByPasskey { .. }
+            | Self::JoinRequested
+            | Self::JoinApproved
+            | Self::PasskeyInUse => IdentityPasskeyCheck::Unavailable,
+        }
+    }
+
     /// The one setup action this standing allows. A member continues; anyone
     /// else asks to join, never adds by another passkey: setup already used
     /// the passkey that made this browser's key. With an identity in use,
@@ -135,11 +150,17 @@ pub enum IdentitySetup {
     Unavailable,
 }
 
+/// Whether to offer the read-only passkey check on this keyring card.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+pub enum IdentityPasskeyCheck {
+    Available,
+    Unavailable,
+}
+
 /// One identity a provider holds: its standing, what the user may decide,
 /// the one action setup offers, and its vaults, named once a check
 /// decrypted them.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
 pub struct ProviderIdentityChoice {
     pub identity: FilingIdentity,
     pub standing: IdentityStanding,
@@ -148,6 +169,8 @@ pub struct ProviderIdentityChoice {
     pub setup: IdentitySetup,
     /// Whether setup also offers recovering it with a recovery passphrase.
     pub recovery: IdentityRecoveryOffer,
+    pub passkey_check: IdentityPasskeyCheck,
+    pub details: ProviderKeyringDetails,
     pub vaults: Vec<ProviderVaultSummary>,
 }
 
@@ -156,7 +179,7 @@ pub struct ProviderIdentityChoice {
 pub struct ProviderIdentityChoices<'a> {
     pub vaults: &'a [ProviderVaultSummary],
     /// Every identity the listing names, a vaultless one included.
-    pub identities: &'a [FilingIdentity],
+    pub identities: &'a [ProviderListedIdentity],
     pub checks: &'a [CredentialCheckReport],
     pub session: IdentitySession,
 }
@@ -182,11 +205,14 @@ impl ProviderIdentityChoices<'_> {
                     decisions: Vec::new(),
                     setup: IdentitySetup::Unavailable,
                     recovery: IdentityRecoveryOffer::NotOffered,
+                    passkey_check: IdentityPasskeyCheck::Unavailable,
+                    details: ProviderKeyringDetails::default(),
                     vaults: vec![vault],
                 });
             }
         }
-        for identity in self.identities {
+        for listed in self.identities {
+            let identity = &listed.identity;
             if !choices
                 .iter()
                 .any(|choice| choice.identity.identity_id == identity.identity_id)
@@ -197,12 +223,16 @@ impl ProviderIdentityChoices<'_> {
                     decisions: Vec::new(),
                     setup: IdentitySetup::Unavailable,
                     recovery: IdentityRecoveryOffer::NotOffered,
+                    passkey_check: IdentityPasskeyCheck::Unavailable,
+                    details: ProviderKeyringDetails::default(),
                     vaults: Vec::new(),
                 });
             }
         }
         for choice in &mut choices {
+            choice.details = self.keyring_details(choice);
             choice.standing = self.standing(choice);
+            choice.passkey_check = choice.standing.passkey_check();
             choice.setup = choice.standing.setup(self.session);
             choice.recovery = IdentityRecoveryOffer::of(choice.setup, choice.identity.log);
             choice.decisions = self.decisions(&choice.standing, choice.recovery);
@@ -332,7 +362,10 @@ impl ProviderIdentityChoices<'_> {
         if named.name == ProviderVaultName::Unknown
             && let Some(name) = self
                 .checked_identities()
-                .filter(|checked| checked.identity_id == identity.identity_id)
+                .filter(|checked| {
+                    checked.identity_id == identity.identity_id
+                        && checked.outcome == IdentityCheckOutcome::Opens
+                })
                 .map(|checked| &checked.name)
                 .find(|name| **name != ProviderVaultName::Unknown)
         {
@@ -341,24 +374,49 @@ impl ProviderIdentityChoices<'_> {
         named
     }
 
+    /// Use the verified registry, even where Drive does not replicate every
+    /// member vault. A keyring with no log only knows its filed namespaces.
+    fn keyring_details(&self, choice: &ProviderIdentityChoice) -> ProviderKeyringDetails {
+        let listed = self
+            .identities
+            .iter()
+            .find(|listed| listed.identity.identity_id == choice.identity.identity_id)
+            .map(|listed| &listed.details);
+        match listed {
+            Some(
+                details @ ProviderKeyringDetails {
+                    devices: ProviderKeyringDevices::Listed { .. },
+                    ..
+                },
+            ) => {
+                let mut details = details.clone();
+                for vault in &mut details.vaults {
+                    vault.name = ProviderVaultNameLookup {
+                        store_id: &vault.store_id,
+                        name: &vault.name,
+                    }
+                    .after_checks(self.checks);
+                }
+                details
+            }
+            Some(ProviderKeyringDetails {
+                devices: ProviderKeyringDevices::Unavailable,
+                ..
+            })
+            | None => ProviderKeyringDetails::from_namespaces(&choice.vaults),
+        }
+    }
+
     /// The vault, named once a check decrypted it.
     fn named_vault(&self, summary: &ProviderVaultSummary) -> ProviderVaultSummary {
-        let mut named = summary.clone();
-        if named.name == ProviderVaultName::Unknown
-            && let Some(name) = self
-                .checked_identities()
-                .flat_map(|checked| &checked.vaults)
-                .filter(|vault| vault.store_id == summary.store_id)
-                .find_map(|vault| match &vault.outcome {
-                    VaultCheckOutcome::Opens { name } if *name != ProviderVaultName::Unknown => {
-                        Some(name)
-                    }
-                    VaultCheckOutcome::Opens { .. } | VaultCheckOutcome::DoesNotOpen => None,
-                })
-        {
-            named.name = name.clone();
+        ProviderVaultSummary {
+            name: ProviderVaultNameLookup {
+                store_id: &summary.store_id,
+                name: &summary.name,
+            }
+            .after_checks(self.checks),
+            ..summary.clone()
         }
-        named
     }
 }
 
@@ -381,8 +439,10 @@ impl PasskeyFingerprint<'_> {
 mod tests {
     use super::*;
     use crate::{
-        CheckedCredential, IdentityId, IdentityWords, ProviderVaultTime, StoreId, VaultCheck,
+        CheckedCredential, IdentityId, IdentityWords, ProviderKeyringVault, ProviderVaultTime,
+        StoreId, VaultCheck, VaultCheckOutcome,
     };
+    use std::slice;
 
     struct Fixture;
 
@@ -499,7 +559,10 @@ mod tests {
             &other,
             ProviderVaultAccess::Locked,
         )?];
-        let identities = [other.clone(), mine.clone()];
+        let identities = [&other, &mine].map(|identity| ProviderListedIdentity {
+            identity: identity.clone(),
+            details: ProviderKeyringDetails::default(),
+        });
         let choices = ProviderIdentityChoices {
             vaults: &vaults,
             identities: &identities,
@@ -596,11 +659,73 @@ mod tests {
             }
         );
         assert_eq!(choice.decisions, vec![IdentityDecision::AddToBrowser]);
+        assert_eq!(choice.passkey_check, IdentityPasskeyCheck::Unavailable);
         assert_eq!(choice.identity.name, ProviderVaultName::named("Personal"));
+        assert_eq!(choice.details.devices, ProviderKeyringDevices::Unavailable);
+        let [vault] = choice.details.vaults.as_slice() else {
+            anyhow::bail!("a legacy namespace supplies one vault link");
+        };
+        assert_eq!(vault.name, ProviderVaultName::named("Family"));
         assert_eq!(
             Fixture::first_vault_name(choice),
             Some(&ProviderVaultName::named("Family"))
         );
+        Ok(())
+    }
+
+    #[test]
+    fn linked_vaults_use_the_verified_registry_and_authorized_names() -> anyhow::Result<()> {
+        let identity = Fixture::identity(OTHER, Fixture::log_with(ProviderIdentityJoin::NotAsked))?;
+        let observed = Fixture::vault(OTHER_VAULT, &identity, ProviderVaultAccess::Locked)?;
+        let stale = Fixture::vault(MY_VAULT, &identity, ProviderVaultAccess::Locked)?;
+        let registered = [OTHER_VAULT, SECOND_VAULT].map(|store| -> anyhow::Result<_> {
+            Ok(ProviderKeyringVault {
+                store_id: StoreId::parse(store)?,
+                name: ProviderVaultName::Unknown,
+            })
+        });
+        let [first, missing] = registered;
+        let listed = ProviderListedIdentity {
+            identity: identity.clone(),
+            details: ProviderKeyringDetails {
+                devices: ProviderKeyringDevices::Listed {
+                    devices: Vec::new(),
+                },
+                vaults: vec![first?, missing?],
+            },
+        };
+        let mut unrelated = Fixture::passkey_opening(&identity, MY_VAULT)?;
+        let [report] = unrelated.identities.as_mut_slice() else {
+            anyhow::bail!("a check in this fixture reports one keyring");
+        };
+        report.outcome = IdentityCheckOutcome::VaultsOnly;
+        let choices = ProviderIdentityChoices {
+            vaults: &[observed.clone(), stale.clone()],
+            identities: slice::from_ref(&listed),
+            checks: &[unrelated],
+            session: IdentitySession::NoIdentity,
+        }
+        .choices();
+        let checked = Fixture::at(&choices, 0)?;
+        assert_eq!(checked.identity.name, ProviderVaultName::Unknown);
+        assert_eq!(checked.passkey_check, IdentityPasskeyCheck::Available);
+        assert_eq!(checked.details, listed.details);
+        let choices = ProviderIdentityChoices {
+            vaults: &[observed, stale],
+            identities: &[listed],
+            checks: &[Fixture::passkey_opening(&identity, OTHER_VAULT)?],
+            session: IdentitySession::NoIdentity,
+        }
+        .choices();
+        let checked = Fixture::at(&choices, 0)?;
+        assert_eq!(checked.vaults.len(), 2);
+        let [named, unavailable] = checked.details.vaults.as_slice() else {
+            anyhow::bail!("only the two registered vaults are linked");
+        };
+        assert_eq!(named.store_id, StoreId::parse(OTHER_VAULT)?);
+        assert_eq!(named.name, ProviderVaultName::named("Family"));
+        assert_eq!(unavailable.store_id, StoreId::parse(SECOND_VAULT)?);
+        assert_eq!(unavailable.name, ProviderVaultName::Unknown);
         Ok(())
     }
 

@@ -46,6 +46,8 @@
     isInitializing,
     onCancelSetup,
     onConnect,
+    driveRecovery = false,
+    onCreateEmptyDrive = false,
   }: {
     vault: VaultState;
     /** The staged Google Drive or iCloud draft. */
@@ -54,9 +56,12 @@
     isInitializing: boolean;
     onCancelSetup: () => void;
     onConnect: () => void | Promise<void>;
+    driveRecovery?: boolean;
+    onCreateEmptyDrive?: ((token: string) => Promise<void>) | false;
   } = $props();
 
   const isICloud = $derived(draft.preset === "icloud");
+  const recoveringDrive = $derived(driveRecovery && !isICloud);
   const icloudAccountText = $derived.by(() => {
     const request: OAuthAccountTextRequest = {
       draft,
@@ -146,9 +151,7 @@
             vault.errorMsg = vault.t(connection.error.translationKey);
             return;
           }
-          if (
-            connection.value.origin === NookDriveRootOrigin.Existing
-          ) {
+          if (connection.value.origin === NookDriveRootOrigin.Existing) {
             const noticeRequest: Parameters<typeof vault.t>[0] = {
               key: I18N_KEYS.ProviderSetupGoogleFolderExisting,
               replacements: { folder: connection.value.name },
@@ -394,17 +397,22 @@
                 })()}
           </p>
         {/if}
-
       </div>
     </SetupWizardStep>
 
     <SetupWizardStep
       stepNumber={2}
-      title={vault.t(I18N_KEYS.AuthStorageConnectAndSync)}
+      title={vault.t(
+        recoveringDrive
+          ? I18N_KEYS.FirstRunRestoreChooseVault
+          : I18N_KEYS.AuthStorageConnectAndSync,
+      )}
       subtitle={canConnect
-        ? isICloud
-          ? vault.t(I18N_KEYS.ProviderSetupIcloudSyncSubtitle)
-          : vault.t(I18N_KEYS.ProviderSetupGoogleSyncSubtitle)
+        ? recoveringDrive
+          ? vault.t(I18N_KEYS.FirstRunSyncChooseTitle)
+          : isICloud
+            ? vault.t(I18N_KEYS.ProviderSetupIcloudSyncSubtitle)
+            : vault.t(I18N_KEYS.ProviderSetupGoogleSyncSubtitle)
         : vault.t(I18N_KEYS.LoginWizardAvailableAfterConnect)}
       disabled={!canConnect}
       bind:open={syncStepOpen}
@@ -418,14 +426,15 @@
           {vault.t(I18N_KEYS.ProviderSetupIcloudSharedCreateDesc)}
         </p>
       {:else if driveSignIn.kind === DraftDriveSignInKind.SignedIn}
-        <!-- What the account's Nook folder already holds, before Connect &
-             sync. It owns the step's one action button: Connect & sync, or the
-             identity plan followed by it. -->
+        <!-- The listing offers recovery on each card, or setup for the
+             keyring adding this Drive account. -->
         <GoogleDriveVaultInventory
           {vault}
           accessToken={driveSignIn.access.authorization.accessToken}
           busy={isVerifying || isInitializing || preparingTarget}
           onConnect={connectWithVaultTarget}
+          {onCreateEmptyDrive}
+          driveRecovery={recoveringDrive}
           {connectButton}
         />
       {/if}
@@ -448,7 +457,7 @@
       {/if}
       {#if isICloud && !sharedTargetReady}
         {@render connectButton(directConnect)}
-      {:else if driveSignIn.kind === DraftDriveSignInKind.NotSignedIn}
+      {:else if !recoveringDrive && driveSignIn.kind === DraftDriveSignInKind.NotSignedIn}
         {@render connectButton(directConnect)}
       {/if}
     </SetupWizardStep>

@@ -18,9 +18,10 @@ use tsify::Tsify;
 use crate::errors::VaultResult;
 use crate::{
     AgeArmoredCiphertext, AppKey, EventGraph, IdentityControlLog, IdentityControlState, IdentityId,
-    IdentityVaultDekLookup, IdentityWords, LocalEventStore, LocalEventWrite, ProjectedVaultName,
-    ProviderIdentityLogEvents, ProviderVaultName, ProviderVaultSummary, StoreId, SymmetricKey,
-    VaultCrypto, VaultMetaGraphProjection, VaultMetaState, VaultProjection, VaultRecordView,
+    IdentityPublicName, IdentityVaultDekLookup, IdentityWords, LocalEventStore, LocalEventWrite,
+    ProjectedVaultName, ProviderIdentityLogEvents, ProviderVaultName, ProviderVaultSummary,
+    StoreId, SymmetricKey, VaultCrypto, VaultMetaGraphProjection, VaultMetaState, VaultProjection,
+    VaultRecordView,
 };
 
 /// One vault a check covers, with the identity whose folder files it and
@@ -166,9 +167,12 @@ impl PasskeyAccessCheck<'_> {
             if state.member(app_id).is_none() {
                 continue;
             }
-            let name = match state.sealed_name_for(app_id) {
-                Some(sealed) => ProviderVaultName::named(&self.app_key.open_utf8(sealed)?),
-                None => ProviderVaultName::Unknown,
+            let name = match &state.public_name {
+                IdentityPublicName::Published(name) => ProviderVaultName::named(name.as_str()),
+                IdentityPublicName::Unpublished => match state.sealed_name_for(app_id) {
+                    Some(sealed) => ProviderVaultName::named(&self.app_key.open_utf8(sealed)?),
+                    None => ProviderVaultName::Unknown,
+                },
             };
             let mut keys = Vec::new();
             for vault in &state.vaults {

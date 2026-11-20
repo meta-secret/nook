@@ -401,22 +401,22 @@ class GoogleOAuthSession {
     };
   }
 
+  isDriveAccessCurrent(access: GoogleDriveAccess): boolean {
+    const check: Parameters<typeof google_drive_authorization_freshness>[0] = {
+      authorization: access.authorization,
+      now: new Date().toISOString(),
+    };
+    return google_drive_authorization_freshness(check) === "current";
+  }
+
   /** The access itself while Rust says it is current; otherwise a silent
    * GIS request for a fresh token of the same account. */
   async ensureFreshDriveAccess(
     access: GoogleDriveAccess,
   ): Promise<Result<GoogleDriveAccess, OAuthFailure>> {
-    const check: Parameters<typeof google_drive_authorization_freshness>[0] = {
-      authorization: access.authorization,
-      now: new Date().toISOString(),
-    };
-    const freshness = google_drive_authorization_freshness(check);
-    switch (freshness) {
-      case "current":
-        return ok(access);
-      case "refreshDue":
-        return this.refreshDriveAccess(access);
-    }
+    return this.isDriveAccessCurrent(access)
+      ? ok(access)
+      : this.refreshDriveAccess(access);
   }
 
   private async refreshDriveAccess(

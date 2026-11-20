@@ -1,15 +1,9 @@
 <!--
-Setup creates a new identity: it is named here, on the sync provider signed
-in to or on this browser only. Only its members see the name. Kept on this
-browser, it asks next whether to create a first vault.
+Setup names the new keyring and explains who can read that name if it syncs.
+A keyring kept on this browser asks next whether to create a first vault.
 -->
 <script lang="ts">
-  import {
-    Archive,
-    Cloud,
-    MonitorSmartphone,
-    RefreshCw,
-  } from '@lucide/svelte'
+  import { Archive, Cloud, MonitorSmartphone, RefreshCw } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
   import FirstRunBackLink from './FirstRunBackLink.svelte'
@@ -79,11 +73,13 @@ browser, it asks next whether to create a first vault.
     >
       {vault.t(I18N_KEYS.FirstRunNameTitle)}
     </h1>
-    <p class="text-sm text-pretty text-muted-foreground">
+    <p
+      id="first-run-keyring-name-visibility"
+      class="text-sm text-pretty text-muted-foreground"
+    >
       {vault.t(I18N_KEYS.FirstRunNameBody)}
     </p>
   </div>
-
 
   <form
     class="flex flex-col gap-2 sm:flex-row"
@@ -102,6 +98,7 @@ browser, it asks next whether to create a first vault.
       placeholder={vault.t(I18N_KEYS.FirstRunNamePlaceholder)}
       maxlength="64"
       autocomplete="off"
+      aria-describedby="first-run-keyring-name-visibility"
       data-testid="first-run-identity-name-input"
       bind:value={name}
       disabled={vault.isVerifying}

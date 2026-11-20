@@ -12,12 +12,43 @@
 
 use std::collections::BTreeSet;
 
-use nook_core::{EventId, EventStorageBytes, IdentityControlLog, IdentityId};
+use nook_core::{
+    AppKey, EventId, EventStorageBytes, FreshIdentityNaming, IdentityControlLog, IdentityId,
+    LocalIdentityLog, PublicKeyringLabel,
+};
 use rexie::TransactionMode;
 
 use crate::{NookDatabase, NookError};
 
-const STORE_EVENTS: &str = "events";
+pub(super) const STORE_EVENTS: &str = "events";
+
+pub(crate) enum IdentityLogOrigin<'a> {
+    Unnamed,
+    ExplicitName {
+        app_key: &'a AppKey,
+        label: &'a PublicKeyringLabel,
+    },
+}
+
+enum IdentityLogAdmission<'a> {
+    Append,
+    Create(IdentityLogOrigin<'a>),
+}
+
+struct IdentityLogPersistence<'a> {
+    write: IdentityLogWrite<'a>,
+    admission: IdentityLogAdmission<'a>,
+}
+
+pub(crate) struct IdentityLogCreationWrite<'a> {
+    pub(crate) write: IdentityLogWrite<'a>,
+    pub(crate) origin: IdentityLogOrigin<'a>,
+}
+
+pub(super) struct IdentityLogRead<'a> {
+    pub(super) store: &'a rexie::Store,
+    pub(super) identity_id: &'a IdentityId,
+}
 
 /// Named values required by `NookDatabase::save_identity_events`.
 pub(crate) struct IdentityLogWrite<'a> {
@@ -48,7 +79,7 @@ impl NookDatabase {
         NookError::IndexedDb(format!("Identity log key error: {error:?}"))
     }
 
-    async fn read_identity_index(
+    pub(super) async fn read_identity_index(
         store: &rexie::Store,
         identity_id: &IdentityId,
     ) -> Result<Vec<String>, NookError> {
@@ -85,8 +116,24 @@ impl NookDatabase {
         let store = transaction
             .store(STORE_EVENTS)
             .map_err(|error| NookError::IndexedDb(format!("Store error: {error:?}")))?;
+        let log = Self::load_identity_log_from_store(IdentityLogRead {
+            store: &store,
+            identity_id,
+        })
+        .await?;
+        transaction
+            .done()
+            .await
+            .map_err(|error| NookError::IndexedDb(format!("Transaction done error: {error:?}")))?;
+        Ok(log)
+    }
+
+    pub(super) async fn load_identity_log_from_store(
+        request: IdentityLogRead<'_>,
+    ) -> Result<IdentityControlLog, NookError> {
+        let IdentityLogRead { store, identity_id } = request;
         let mut stored = Vec::new();
-        for raw_id in Self::read_identity_index(&store, identity_id).await? {
+        for raw_id in Self::read_identity_index(store, identity_id).await? {
             let key = Self::identity_event_key(IdentityEventKey {
                 identity_id,
                 event_id: &raw_id,
@@ -108,41 +155,84 @@ impl NookDatabase {
             })?;
             stored.push(EventStorageBytes::from(text.into_bytes()));
         }
-        transaction
-            .done()
-            .await
-            .map_err(|error| NookError::IndexedDb(format!("Transaction done error: {error:?}")))?;
         IdentityControlLog::new(identity_id.clone())
             .union_storage_bytes(&stored)
             .map_err(|rejection| NookError::from(rejection.cause))
     }
 
     /// Persist identity events and extend the identity index atomically.
-    pub(crate) async fn save_identity_events(
-        request: IdentityLogWrite<'_>,
+    pub(crate) async fn save_identity_events(write: IdentityLogWrite<'_>) -> Result<(), NookError> {
+        Self::persist_identity_events(IdentityLogPersistence {
+            write,
+            admission: IdentityLogAdmission::Append,
+        })
+        .await
+    }
+
+    /// Found a log only while its index is empty, in the same transaction
+    /// as the genesis writes.
+    pub(crate) async fn create_identity_events(
+        request: IdentityLogCreationWrite<'_>,
     ) -> Result<(), NookError> {
+        Self::persist_identity_events(IdentityLogPersistence {
+            write: request.write,
+            admission: IdentityLogAdmission::Create(request.origin),
+        })
+        .await
+    }
+
+    async fn persist_identity_events(request: IdentityLogPersistence<'_>) -> Result<(), NookError> {
+        let IdentityLogPersistence { write, admission } = request;
         let IdentityLogWrite {
             identity_id,
             events,
-        } = request;
+        } = write;
         if events.is_empty() {
             return Ok(());
         }
         let rexie = NookDatabase::open_nook_database().await?;
+        let stores: &[&str] = match &admission {
+            IdentityLogAdmission::Append
+            | IdentityLogAdmission::Create(IdentityLogOrigin::Unnamed) => &[STORE_EVENTS],
+            IdentityLogAdmission::Create(IdentityLogOrigin::ExplicitName { .. }) => {
+                &[STORE_EVENTS, "vault"]
+            }
+        };
         let transaction = rexie
-            .transaction(&[STORE_EVENTS], TransactionMode::ReadWrite)
+            .transaction(stores, TransactionMode::ReadWrite)
             .map_err(|error| NookError::IndexedDb(format!("Transaction error: {error:?}")))?;
         let store = transaction
             .store(STORE_EVENTS)
             .map_err(|error| NookError::IndexedDb(format!("Store error: {error:?}")))?;
-        Self::put_identity_events(
-            &store,
-            IdentityLogWrite {
-                identity_id,
-                events,
-            },
-        )
-        .await?;
+        if let IdentityLogAdmission::Create(origin) = admission {
+            if !Self::read_identity_index(&store, identity_id)
+                .await?
+                .is_empty()
+            {
+                return Err(NookError::Database(
+                    "This keyring already has a control log.".to_owned(),
+                ));
+            }
+            if let IdentityLogOrigin::ExplicitName { app_key, label } = origin {
+                let vault = transaction.store("vault").map_err(|error| {
+                    NookError::IndexedDb(format!("Identity directory store error: {error:?}"))
+                })?;
+                let directory = Self::load_directory_for_write(&vault).await?;
+                let fresh_id = directory
+                    .fresh_identity_for_naming(&FreshIdentityNaming {
+                        app_key,
+                        label: label.as_str(),
+                        local_log: LocalIdentityLog::Empty,
+                    })
+                    .map_err(Self::map_domain_error)?;
+                if fresh_id != identity_id {
+                    return Err(NookError::Database(
+                        "The fresh keyring changed while it was being named.".to_owned(),
+                    ));
+                }
+            }
+        }
+        Self::put_identity_events(&store, write).await?;
         transaction
             .done()
             .await

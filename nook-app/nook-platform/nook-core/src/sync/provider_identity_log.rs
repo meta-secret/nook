@@ -18,7 +18,8 @@ use tsify::Tsify;
 use crate::errors::VaultResult;
 use crate::{
     AppId, EventStorageBytes, IdentityControlLog, IdentityControlState, IdentityId,
-    IdentityJoinProgress, IdentitySession, ProviderInstant, ProviderVaultTime,
+    IdentityJoinProgress, IdentityPublicName, IdentitySession, ProviderInstant,
+    ProviderKeyringDevice, ProviderKeyringDevices, ProviderVaultTime, StoreId,
 };
 
 /// How many devices or vaults a control log lists.
@@ -161,6 +162,9 @@ pub struct ProviderIdentityLogEvents {
 pub struct ListedIdentityLog {
     pub identity_id: IdentityId,
     pub log: ProviderIdentityLog,
+    pub(crate) public_name: IdentityPublicName,
+    pub(crate) devices: ProviderKeyringDevices,
+    pub(crate) registered_vaults: Vec<StoreId>,
 }
 
 impl ProviderIdentityLogEvents {
@@ -175,12 +179,24 @@ impl ProviderIdentityLogEvents {
             return Ok(ListedIdentityLog {
                 identity_id,
                 log: ProviderIdentityLog::Absent,
+                public_name: IdentityPublicName::Unpublished,
+                devices: ProviderKeyringDevices::Unavailable,
+                registered_vaults: Vec::new(),
             });
         }
         let log = IdentityControlLog::new(identity_id.clone())
             .union_storage_bytes(&events)
             .map_err(|rejection| rejection.cause)?;
         let state = IdentityControlState::project(&log)?;
+        let devices = state
+            .device_members()
+            .map(ProviderKeyringDevice::from)
+            .collect::<Vec<_>>();
+        let registered_vaults = state
+            .vaults
+            .iter()
+            .map(|vault| vault.store_id.clone())
+            .collect::<Vec<_>>();
         let mut joining_time = Vec::with_capacity(state.members.len());
         for (member, _) in state.app_members() {
             if let Some(event) = log.event(&member.approved_in) {
@@ -196,30 +212,22 @@ impl ProviderIdentityLogEvents {
         Ok(ListedIdentityLog {
             identity_id,
             log: ProviderIdentityLog::Read {
-                devices: ProviderLogCount::of(state.device_members().count()),
+                devices: ProviderLogCount::of(devices.len()),
                 newest_device: joining_time
                     .into_iter()
                     .max()
                     .map_or(ProviderVaultTime::Unreported, |at| {
                         ProviderVaultTime::Reported { at }
                     }),
-                vaults: ProviderLogCount::of(state.vaults.len()),
+                vaults: ProviderLogCount::of(registered_vaults.len()),
                 recovery_passphrases: ProviderLogCount::of(state.recovery_members().count()),
                 this_browser: held_here,
                 join,
             },
+            devices: ProviderKeyringDevices::Listed { devices },
+            registered_vaults,
+            public_name: state.public_name,
         })
-    }
-}
-
-impl ListedIdentityLog {
-    /// The facts listed for one identity; an identity the listing read no log
-    /// for has none.
-    #[must_use]
-    pub fn of(identity_id: &IdentityId, logs: &[Self]) -> ProviderIdentityLog {
-        logs.iter()
-            .find(|listed| &listed.identity_id == identity_id)
-            .map_or(ProviderIdentityLog::Absent, |listed| listed.log)
     }
 }
 
@@ -228,11 +236,19 @@ mod tests {
     use super::*;
     use crate::{
         AppKey, IdentityApprovalRequest, IdentityControlOperation, IdentityEvent,
-        IdentityEventSigning, IdentityGenesisRequest, IdentityMemberKeys,
-        IdentityVaultRegistration, OpenedVaultDek, SigningIdentity, StoreId,
+        IdentityEventSigning, IdentityGenesisRequest, IdentityMemberAddition, IdentityMemberKeys,
+        IdentityRecoveryAddition, IdentityVaultRegistration, MemberDevice, OpenedVaultDek,
+        SigningIdentity,
     };
-    use nook_auth2::{IsoTimestamp, MemberLabel, VaultKeys};
-    use nook_event_log::EventId;
+    use crate::{
+        BrowserNames, KnownIdentityName, ProviderVaultKeyholding, ProviderVaultListingRequest,
+        ProviderVaultName, ProviderVaultObservation, PublicKeyringLabel,
+    };
+    use nook_auth2::{
+        IsoTimestamp, MemberLabel, RecoveryPhrase, RecoverySecret, RecoveryStrength, VaultKeys,
+    };
+    use nook_event_log::{EventId, IdentityNaming};
+    use std::slice;
 
     struct Device {
         app: AppKey,
@@ -258,7 +274,7 @@ mod tests {
     }
 
     /// A founder registers one vault on Oct 12; a second device joins on Oct 27.
-    fn two_device_log() -> anyhow::Result<(IdentityControlLog, AppId)> {
+    fn two_device_log() -> anyhow::Result<(IdentityControlLog, AppId, StoreId)> {
         let founder = Device::new()?;
         let joiner = Device::new()?;
         let founding_time = IsoTimestamp::from_trusted("2026-10-12T00:00:00Z".to_owned());
@@ -317,6 +333,7 @@ mod tests {
                 .insert(log.build_append(vec![approve], &at_joining)?)?
                 .log,
             founder_app,
+            store_id,
         ))
     }
 
@@ -333,7 +350,7 @@ mod tests {
 
     #[test]
     fn a_signed_log_tells_its_devices_their_newest_join_and_its_vaults() -> anyhow::Result<()> {
-        let (log, founder) = two_device_log()?;
+        let (log, founder, store_id) = two_device_log()?;
         let listed = provider_events(&log)?.read(&ListingIdentity::NoIdentityInUse)?;
 
         assert_eq!(
@@ -350,6 +367,7 @@ mod tests {
             }
         );
         assert_eq!(&listed.identity_id, log.identity_id());
+        assert_eq!(listed.registered_vaults, [store_id]);
         // A browser whose app key is one of the devices opens it.
         let key = ListingAppKey {
             app_id: founder,
@@ -530,6 +548,158 @@ mod tests {
     }
 
     #[test]
+    fn the_device_roster_lists_only_active_device_roots_with_their_labels() -> anyhow::Result<()> {
+        let mut fixture = AskedLog::founded()?;
+        let laptop = Device::new()?;
+        let extension = Device::new()?;
+        let revoked = Device::new()?;
+        let own_device = MemberDevice::Own;
+        let laptop_device = MemberDevice::SameAs {
+            app_id: laptop.app.app_id().clone(),
+        };
+        let member_rows = [
+            (laptop.keys(), &own_device, " Laptop "),
+            (extension.keys(), &laptop_device, "Browser extension"),
+            (revoked.keys(), &own_device, "Old phone"),
+        ];
+        for (keys, device, label) in member_rows {
+            let member = IdentityMemberKeys {
+                label: MemberLabel::from_trusted(label.to_owned()),
+                ..keys
+            };
+            let addition = fixture
+                .state()?
+                .addition_operation(&IdentityMemberAddition {
+                    member: &member,
+                    device,
+                    vaults: &[],
+                })?;
+            fixture.append(Signer::Founder, addition)?;
+        }
+        let revoke = fixture
+            .state()?
+            .revocation_operation(revoked.app.app_id())?;
+        fixture.append(Signer::Founder, revoke)?;
+        fixture.append(
+            Signer::Asking,
+            IdentityControlOperation::MemberJoinRequested {
+                member: fixture.asking.keys(),
+            },
+        )?;
+
+        let backup = RecoverySecret::generate()?;
+        let backup_signer = SigningIdentity::from_seed_hex_stored(backup.signing_seed().as_str())?;
+        let strength = RecoveryStrength::Standard;
+        let recovery_ops =
+            fixture
+                .state()?
+                .recovery_addition_operations(&IdentityRecoveryAddition {
+                    member: &IdentityMemberKeys {
+                        app_id: backup.app_key().app_id().clone(),
+                        encryption_public_key: backup.app_key().public_key(),
+                        signing_public_key: backup_signer.public_key(),
+                        label: MemberLabel::from_trusted("Paper backup".to_owned()),
+                    },
+                    sealed_secret: &backup.seal(&RecoveryPhrase::generate(strength)?)?,
+                    strength,
+                    vaults: &[],
+                })?;
+        for operation in recovery_ops {
+            fixture.append(Signer::Founder, operation)?;
+        }
+
+        let listed = provider_events(&fixture.log)?.read(&ListingIdentity::NoIdentityInUse)?;
+        let ProviderKeyringDevices::Listed { devices } = listed.devices else {
+            anyhow::bail!("a verified log lists its active devices");
+        };
+        assert_eq!(devices.len(), 2);
+        assert!(devices.contains(&ProviderKeyringDevice {
+            app_id: fixture.founder.app.app_id().clone(),
+            label: MemberLabel::from_trusted(String::new()),
+        }));
+        assert!(devices.contains(&ProviderKeyringDevice {
+            app_id: laptop.app.app_id().clone(),
+            label: MemberLabel::from_trusted("Laptop".to_owned()),
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn a_locked_listing_reads_only_the_explicitly_published_keyring_name() -> anyhow::Result<()> {
+        let mut fixture = AskedLog::founded()?;
+        let store_id = StoreId::generate()?;
+        let keys = VaultKeys::generate()?;
+        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
+        let registration =
+            fixture
+                .state()?
+                .vault_registration_operation(IdentityVaultRegistration {
+                    dek: OpenedVaultDek {
+                        store_id: &store_id,
+                        key_epoch: &epoch,
+                        keys: &keys,
+                    },
+                })?;
+        fixture.append(Signer::Founder, registration)?;
+        let sealed = fixture.state()?.naming_operation(&IdentityNaming {
+            name: "Legacy hidden name",
+            joining: None,
+        })?;
+        fixture.append(Signer::Founder, sealed)?;
+        let legacy = provider_events(&fixture.log)?.read(&ListingIdentity::NoIdentityInUse)?;
+        assert_eq!(legacy.public_name, IdentityPublicName::Unpublished);
+        assert_eq!(
+            legacy.registered_vaults.as_slice(),
+            slice::from_ref(&store_id)
+        );
+        let initial = PublicKeyringLabel::parse("Shared")?;
+        fixture.append(
+            Signer::Founder,
+            IdentityControlOperation::IdentityPublicNameSet { name: initial },
+        )?;
+        let current = PublicKeyringLabel::parse("Team")?;
+        fixture.append(
+            Signer::Founder,
+            IdentityControlOperation::IdentityPublicNameSet {
+                name: current.clone(),
+            },
+        )?;
+        let verified = provider_events(&fixture.log)?.read(&ListingIdentity::NoIdentityInUse)?;
+        let locals = [KnownIdentityName {
+            identity_id: verified.identity_id.clone(),
+            name: "Stale local name".to_owned(),
+        }];
+        let listing = ProviderVaultListingRequest {
+            observations: vec![ProviderVaultObservation {
+                store_id,
+                identity: verified.identity_id.clone(),
+                namespace_created: ProviderVaultTime::Unreported,
+                events: Vec::new(),
+            }],
+            keys: ProviderVaultKeyholding::NONE,
+            names: BrowserNames {
+                vaults: &[],
+                identities: &locals,
+            },
+            identity_logs: &[verified],
+        }
+        .listing();
+        let [entry] = listing.identities.as_slice() else {
+            anyhow::bail!("the signed keyring is listed");
+        };
+        let [vault] = listing.vaults.as_slice() else {
+            anyhow::bail!("the provider has one vault");
+        };
+        assert_eq!(
+            entry.identity.name,
+            ProviderVaultName::named(current.as_str())
+        );
+        assert_eq!(vault.identity, entry.identity);
+        assert_eq!(vault.name, ProviderVaultName::Unknown);
+        Ok(())
+    }
+
+    #[test]
     fn a_folder_without_log_events_has_no_facts_and_a_damaged_log_fails() -> anyhow::Result<()> {
         let identity_id = IdentityId::generate()?;
         let empty = ProviderIdentityLogEvents {
@@ -538,10 +708,7 @@ mod tests {
         }
         .read(&ListingIdentity::NoIdentityInUse)?;
         assert_eq!(empty.log, ProviderIdentityLog::Absent);
-        assert_eq!(
-            ListedIdentityLog::of(&identity_id, &[empty]),
-            ProviderIdentityLog::Absent
-        );
+        assert_eq!(empty.devices, ProviderKeyringDevices::Unavailable);
 
         // A log event that does not parse is reported, not skipped.
         let mut damaged = provider_events(&two_device_log()?.0)?;

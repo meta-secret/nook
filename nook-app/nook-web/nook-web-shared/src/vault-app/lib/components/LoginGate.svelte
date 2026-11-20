@@ -38,6 +38,7 @@
   import type { ProviderKind } from '$lib/auth/providers'
   import { WorkspaceRoute } from '$lib/app/workspace-route'
   import { WorkspaceSectionRoute } from '$lib/vault/ui'
+  import { FirstRunActions } from '$lib/vault/first-run'
   import { IdentityPages } from '$lib/vault/identity-pages'
   import { VaultWorkspaceActions } from '$lib/vault/ui'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
@@ -409,6 +410,15 @@
   /** Rust keeps the draft's kind equal to the setup's, so the draft picks
    * the wizard and each wizard gets exactly its own draft. */
   const setupView = $derived(SetupDraftViews.of(vault.providerDraft))
+  const driveRecovery = $derived(
+    showSetup &&
+      vault.keyringRecoveryOpen &&
+      vault.keyringRecoveryActive &&
+      !addProviderOpen &&
+      !vault.identityInUse &&
+      setupView.kind === SetupDraftForm.OAuth &&
+      setupView.draft.preset === 'google-drive',
+  )
   function setupIs(type: ProviderKind['type']): boolean {
     return (
       loginSetup.kind === LoginSetupKind.Active &&
@@ -510,6 +520,11 @@
     }
     return new ProviderSetupName(request).text()
   })
+  async function createFromEmptyDrive(token: string): Promise<void> {
+    if (!new FirstRunActions(vault).beginEmptyDriveCreation(token)) return
+    await onCreateDeviceVault(vault.t(I18N_KEYS.FirstRunNamePlaceholder))
+  }
+
   function handleFirstConnectSubmit(e: Event) {
     e.preventDefault()
     void onUnlock()
@@ -621,6 +636,8 @@
         <h2 class="text-lg font-semibold tracking-tight text-foreground">
           {#if showSentinelCeremony && !showSetup && !showProviderSetup}
             {vault.t(I18N_KEYS.LoginUnlockVault)}
+          {:else if driveRecovery}
+            {vault.t(I18N_KEYS.FirstRunRestoreTitle)}
           {:else if showSetup}
             {(() => {
               const tArgs: Parameters<typeof vault.t>[0] = {
@@ -646,9 +663,11 @@
             {vault.t(I18N_KEYS.OnboardingGithubDescription)}
           </p>
         {:else if showSetup && setupIs('oauth-file')}
-          <p class="text-sm text-pretty text-muted-foreground">
-            {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
-          </p>
+          {#if !driveRecovery}
+            <p class="text-sm text-pretty text-muted-foreground">
+              {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
+            </p>
+          {/if}
         {:else if showSetup && setupIs('s3')}
           <!-- The title names the task; the S3 form carries its one line. -->
         {:else if showSetup}
@@ -678,10 +697,16 @@
           <OAuthProviderSetupWizard
             {vault}
             draft={setupView.draft}
+            {driveRecovery}
             {isVerifying}
             {isInitializing}
             {onCancelSetup}
             onConnect={onUnlock}
+            onCreateEmptyDrive={appKind ===
+              VaultApplication.UnifiedDevelopment ||
+            appKind === VaultApplication.Simple
+              ? createFromEmptyDrive
+              : false}
           />
         {:else if setupView.kind === SetupDraftForm.Github}
           <GitHubProviderSetupWizard

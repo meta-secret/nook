@@ -36,6 +36,15 @@ import {
 import { LoginSetupKind } from '$lib/vault/state/provider.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
+import {
+  IdentityDirectoryLoadKind,
+  IdentityDirectorySelectionKind,
+} from '$lib/components/devices-access/identity-directory-view'
+import {
+  ProviderDraftFixture,
+  ProviderFixtureCredentials,
+} from '../provider-fixtures'
+import enLocale from '../../../../../nook-platform/nook-app-common/locales/en.json' with { type: 'json' }
 
 beforeAll(async () => {
   await initNookWasm()
@@ -70,6 +79,8 @@ function locked(): ProviderIdentityChoice {
     decisions: ['addToBrowser', 'askToJoin'],
     setup: { kind: 'requestToJoin' },
     recovery: 'notOffered',
+    details: { devices: { state: 'Unavailable' }, vaults: [] },
+    passkey_check: 'Available',
     vaults: [],
   }
 }
@@ -136,6 +147,26 @@ class Setup {
   }
 }
 
+function beginEmptyDriveCreation(vault: VaultState): FirstRunActions {
+  vault.translations = JSON.stringify(enLocale)
+  vault.identityDirectory = {
+    kind: IdentityDirectoryLoadKind.Ready,
+    view: {
+      identities: [],
+      selection: { kind: IdentityDirectorySelectionKind.Empty },
+    },
+  }
+  vault.keyringRecoveryOpen = true
+  vault.beginKeyringRecovery()
+  vault.beginProviderSetup(ProviderSetupKinds.GOOGLE_DRIVE)
+  vault.stageProviderDraft(ProviderDraftFixture.googleDriveSignedIn())
+  const actions = new FirstRunActions(vault)
+  expect(
+    actions.beginEmptyDriveCreation(ProviderFixtureCredentials.DRIVE_TOKEN),
+  ).toBe(true)
+  return actions
+}
+
 function ask(): FirstRunIdentityRun {
   return {
     choice: locked(),
@@ -153,6 +184,83 @@ describe('first-run setup settles the identity before any vault', () => {
     expect(setup.vault.firstRun).toBe(FirstRunStage.Sync)
     expect(setup.created).toEqual([])
   })
+
+  test('after protection on empty Drive, uses the staged sign-in for naming and connecting', async () => {
+    const setup = new Setup()
+    const { vault } = setup
+    const names = setup.names()
+    const actions = beginEmptyDriveCreation(vault)
+    const draft = vault.providerDraft
+
+    await actions.createWithDeviceKeys('Personal')
+
+    expect(vault.firstRun).toBe(FirstRunStage.Name)
+    expect(vault.firstRunPlace).toBe(FirstRunPlace.SyncProvider)
+    expect(vault.keyringRecoveryOpen).toBe(false)
+    expect(vault.providerDraft).toBe(draft)
+    expect(names).toEqual([])
+    expect(setup.created).toEqual([])
+
+    vi.spyOn(vault, 'createLocalVaultWithDeviceKeys').mockImplementationOnce(
+      async (name) => {
+        setup.created.push(name)
+        vault.isAuthenticated = true
+      },
+    )
+    await actions.createNamed('Travel')
+
+    expect(names).toEqual(['Travel'])
+    expect(setup.created).toEqual([
+      enLocale.workspace.first_identity.vault_label,
+    ])
+    expect(vault.firstRun).toBe(FirstRunStage.Connect)
+    expect(vault.firstRunEmptyDriveToken).toBe('')
+    expect(vault.providerDraft).toBe(draft)
+  })
+
+  test('leaving protection discards creation intent but keeps Drive recovery signed in', () => {
+    const { vault } = new Setup()
+    const actions = beginEmptyDriveCreation(vault)
+    const draft = vault.providerDraft
+
+    actions.leaveProtection()
+
+    expect(vault.firstRun).toBe(FirstRunStage.Off)
+    expect(vault.firstRunEmptyDriveToken).toBe('')
+    expect(vault.keyringRecoveryOpen).toBe(true)
+    expect(vault.providerDraft).toBe(draft)
+  })
+
+  test.each(['before submit', 'while queued'])(
+    'losing Drive sign-in %s does not sign a name or create a vault',
+    async (when) => {
+      const setup = new Setup()
+      const { vault } = setup
+      const names = setup.names()
+      const actions = beginEmptyDriveCreation(vault)
+      await actions.createWithDeviceKeys('Personal')
+      const replaceDraft = () =>
+        vault.stageProviderDraft(
+          ProviderDraftFixture.googleDriveAwaitingSignIn(),
+        )
+      if (when === 'before submit') {
+        replaceDraft()
+      } else {
+        const enqueue = vault.enqueueStorage.bind(vault)
+        vault.enqueueStorage = (operation) => {
+          replaceDraft()
+          return enqueue(operation)
+        }
+      }
+
+      await actions.createNamed('Travel')
+
+      expect(vault.firstRun).toBe(FirstRunStage.Off)
+      expect(vault.errorMsg).toBe(enLocale.first_run.drive_sign_in_changed)
+      expect(names).toEqual([])
+      expect(setup.created).toEqual([])
+    },
+  )
 
   test('a key ready a second time while setup is past it creates no vault', async () => {
     const setup = new Setup().at(FirstRunStage.Protect)
@@ -258,7 +366,9 @@ describe('first-run setup settles the identity before any vault', () => {
 
     await new FirstRunActions(setup.vault).createNamed('Family')
 
-    expect(setup.created).toEqual(['Family'])
+    expect(setup.created).toEqual([
+      setup.vault.t(I18N_KEYS.WorkspaceFirstIdentityVaultLabel),
+    ])
   })
 
   test('a new identity on the sync provider is created with no sign-in staged', async () => {

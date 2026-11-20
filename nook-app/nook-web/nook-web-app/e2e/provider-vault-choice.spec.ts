@@ -1,16 +1,20 @@
 import { test, expect, type BrowserContext, type Page } from './fixtures'
 import {
   addSecret,
+  answerPasskeyPrompt,
   beginAddSyncProvider,
   clearBrowserVault,
-  connectGoogleDriveGenesisDevice,
   createIsolatedContext,
   createLocalVaultOnLogin,
   disableVaultIdleLock,
   expandSettingsSection,
   installGoogleOAuthMock,
   listLocalVaultEntries,
+  openIdentityPanel,
+  openLoginProviderSetup,
   openStorageSettings,
+  openVaultPage,
+  openVaultRow,
   uniqueSecretKey,
   waitForGoogleOAuthSignedIn,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -63,15 +67,41 @@ test.describe('an identity another browser keeps in the Nook folder', () => {
     await contextB?.close()
   })
 
-  test('offers one action for it, and the step saves the identity in use', async () => {
-    // Browser A keeps a vault in the Nook folder.
-    await connectGoogleDriveGenesisDevice(
-      deviceA,
-      target.pat,
-      target.repoName,
-      target.stub,
+  test('creates on empty Drive recovery and lists the signed keyring by stable ID', async ({
+    browser,
+  }) => {
+    const createdName = 'Travel keyring'
+    const renamedName = 'Shared travel keyring'
+
+    // Browser A starts recovery and creates a keyring on the empty Drive.
+    await installSyncRemote(deviceA, target)
+    await installGoogleOAuthMock(deviceA, target.pat)
+    await deviceA.goto('/vault')
+    await clearBrowserVault(deviceA)
+    await deviceA.reload()
+    await openLoginProviderSetup(deviceA)
+    await deviceA.getByTestId('provider-option-oauth-file').click()
+    await deviceA.getByTestId('google-sign-in-btn').click()
+    const createOnDrive = deviceA.getByTestId('google-drive-create-keyring')
+    await expect(createOnDrive).toHaveText(
+      enLocale.provider_vaults.create_keyring,
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    await createOnDrive.click()
+    await expect(deviceA.getByTestId('first-run-protect-step')).toBeVisible()
+    await answerPasskeyPrompt(deviceA)
+    await expect(deviceA.getByTestId('first-run-name-step')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(deviceA.getByTestId('first-run-sync-step')).toHaveCount(0)
+    await deviceA.getByTestId('first-run-identity-name-input').fill(createdName)
+    await deviceA.getByTestId('first-run-identity-create-btn').click()
+    await expect(openVaultRow(deviceA)).toContainText(
+      enLocale.workspace.first_identity.vault_label,
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     await disableVaultIdleLock(deviceA)
+    await openVaultPage(deviceA)
     await addSecret(deviceA, uniqueSecretKey('identity-choice'), 'kept-by-a')
     await waitForSyncRemoteState(
       target,
@@ -80,6 +110,45 @@ test.describe('an identity another browser keeps in the Nook folder', () => {
     const [vaultA] = await listLocalVaultEntries(deviceA)
     if (!vaultA?.store_id) throw new Error('browser A lists no vault')
 
+    const freshContext = await createIsolatedContext(browser)
+    let keyringWords: string
+    try {
+      const reader = await freshContext.newPage()
+      await installSyncRemote(reader, target)
+      await installGoogleOAuthMock(reader, target.pat)
+      await reader.goto('/vault')
+      await openLoginProviderSetup(reader)
+      await reader.getByTestId('provider-option-oauth-file').click()
+      await reader.getByTestId('google-sign-in-btn').click()
+      await waitForGoogleOAuthSignedIn(reader)
+      const card = reader.getByTestId('provider-identity')
+      await expect(reader.getByTestId('google-setup-sync-step')).toContainText(
+        enLocale.first_run.restore_choose_vault,
+      )
+      await expect(reader.getByTestId('connect-provider-btn')).toHaveCount(0)
+      await expect(card).toHaveAttribute('data-standing', 'unchecked')
+      await expect(card.locator('[data-decision="addToBrowser"]')).toBeVisible()
+      await expect(card.getByTestId('provider-vault-identity')).toHaveText(
+        createdName,
+      )
+      const words = card
+        .getByTestId('provider-identity-facts')
+        .locator(':scope > span')
+      await expect(words).toHaveText(/^[a-z]+-[a-z]+-[a-z]+$/)
+      keyringWords = await words.innerText()
+    } finally {
+      await freshContext.close()
+    }
+
+    await openIdentityPanel(deviceA)
+    await deviceA.getByTestId('identity-overview-rename').click()
+    await deviceA.getByTestId('identity-rename-input').fill(renamedName)
+    await deviceA.getByTestId('identity-rename-save').click()
+    await expect(deviceA.getByTestId('identity-rename-input')).toHaveCount(0)
+    await expect(deviceA.getByTestId('identity-card-label')).toHaveText(
+      renamedName,
+    )
+
     // Browser B has its own identity and lists the same Nook folder.
     await installSyncRemote(deviceB, target)
     await deviceB.goto('/app/')
@@ -87,19 +156,56 @@ test.describe('an identity another browser keeps in the Nook folder', () => {
     await deviceB.reload()
     await createLocalVaultOnLogin(deviceB, 'Mine')
     await disableVaultIdleLock(deviceB)
+    await deviceB.setViewportSize({ width: 1440, height: 900 })
     await openDriveVaultList(deviceB, target)
 
     // A's identity is listed once; B's passkey is not a member of it, so
     // its one action asks to join. Nothing is planned or decided.
     const identityA = deviceB.getByTestId('setup-identity')
     await expect(identityA).toHaveCount(1)
+    const cardWidth = await identityA.evaluate(
+      (card) => card.getBoundingClientRect().width,
+    )
+    expect(cardWidth).toBeLessThanOrEqual(512)
     await expect(identityA).toHaveAttribute('data-setup', 'requestToJoin')
     await expect(identityA.getByTestId('provider-vault-identity')).toHaveText(
-      /^[a-z]+-[a-z]+-[a-z]+$/,
+      renamedName,
     )
+    await expect(
+      identityA.getByTestId('provider-identity-facts').locator(':scope > span'),
+    ).toHaveText(keyringWords)
     await expect(
       identityA.getByTestId('provider-identity-standing'),
     ).toHaveText(enLocale.first_run.identity_not_member)
+    const devices = identityA.getByTestId('provider-keyring-devices')
+    const deviceSummary = devices.locator(':scope > summary')
+    await expect(deviceSummary).toHaveText(
+      enLocale.provider_vaults.devices_disclosure.replace('{count}', '1'),
+    )
+    await expect(devices).not.toHaveAttribute('open', '')
+    await deviceSummary.press('Enter')
+    await expect(devices.getByRole('listitem')).toHaveCount(1)
+    const device = devices.getByRole('listitem')
+    await expect(device).toContainText(/[0-9a-f]{16}$/)
+    await expect(device.getByRole('button')).toHaveCount(0)
+    const vaults = identityA.getByTestId('provider-keyring-vaults')
+    const vaultSummary = vaults.locator(':scope > summary')
+    await expect(vaultSummary).toHaveText(
+      enLocale.provider_vaults.vaults_disclosure.replace('{count}', '1'),
+    )
+    await expect(vaults).not.toHaveAttribute('open', '')
+    await vaultSummary.press('Space')
+    await expect(vaults.getByRole('listitem')).toHaveCount(1)
+    await expect(
+      vaults.getByText(vaultA.store_id, { exact: true }),
+    ).toBeVisible()
+    await expect(vaults).toContainText(
+      enLocale.provider_vaults.vault_name_unavailable,
+    )
+    await expect(vaults.getByRole('list').getByRole('button')).toHaveCount(0)
+    await expect(
+      identityA.getByTestId('provider-identity-find-passkey'),
+    ).toHaveText(enLocale.provider_vaults.reveal_details)
     await expect(identityA.getByTestId('setup-identity-join')).toHaveCount(1)
     await expect(deviceB.getByTestId('provider-identity-decision')).toHaveCount(
       0,

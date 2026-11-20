@@ -4,11 +4,15 @@ pub(crate) use nook_core::AppKeyIdentityMembership;
 pub(crate) use nook_core::LocalIdentityProtection;
 pub(crate) use nook_core::MemberLabelState;
 
+use super::identity_log::IdentityLogRead;
 #[cfg(test)]
 pub(crate) use crate::IdbPutStringRequest;
 pub(crate) use crate::NookDatabase;
 use crate::NookError;
-use nook_core::{AppId, IdentityDirectory, IdentitySelection, MultiDeviceError};
+use nook_core::{
+    AppId, AppKey, IdentityControlState, IdentityDirectory, IdentityId, IdentitySelection,
+    MultiDeviceError, ReplicatedIdentityMembership, ReplicatedMembershipProjection,
+};
 use nook_core::{
     DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, IdentityCreation,
     IdentityMemberSigningUpdate, IdentityVaultKeyOpening,
@@ -38,6 +42,13 @@ pub(crate) use keyring::{
 pub(crate) struct IdentityDbLocalKeyringEntryForAppIdFromStore<'a> {
     pub(crate) store: &'a rexie::Store,
     pub(crate) app_id: &'a AppId,
+}
+
+/// Verified replicated membership to apply to the local directory.
+pub(crate) struct ReplicatedIdentityDirectoryWrite<'a> {
+    pub(crate) identity_id: &'a IdentityId,
+    pub(crate) app_key: &'a AppKey,
+    pub(crate) membership: ReplicatedMembershipProjection,
 }
 
 /// Named values required by `NookDatabase::write_identity_directory`.
@@ -157,7 +168,7 @@ impl NookDatabase {
 }
 
 impl NookDatabase {
-    async fn load_directory_for_write(
+    pub(super) async fn load_directory_for_write(
         store: &rexie::Store,
     ) -> Result<IdentityDirectory, NookError> {
         let current_id = serde_wasm_bindgen::to_value(IDENTITY_DIRECTORY_KEY).map_err(|error| {
@@ -222,6 +233,57 @@ impl NookDatabase {
             .map_err(|error| {
                 NookError::IndexedDb(format!("Identity directory write error: {error:?}"))
             })?;
+        Ok(())
+    }
+}
+
+impl NookDatabase {
+    /// Serialize the directory's published label with concurrent log writes.
+    /// Membership, revocation and grant handling retain their caller projection.
+    pub(crate) async fn apply_replicated_identity_directory(
+        request: ReplicatedIdentityDirectoryWrite<'_>,
+    ) -> Result<(), NookError> {
+        let ReplicatedIdentityDirectoryWrite {
+            identity_id,
+            app_key,
+            membership,
+        } = request;
+        let rexie = Self::open_nook_database().await?;
+        let transaction = rexie
+            .transaction(&["vault", "events"], TransactionMode::ReadWrite)
+            .map_err(|error| NookError::IndexedDb(format!("Identity mirror error: {error:?}")))?;
+        let vault = transaction.store("vault").map_err(|error| {
+            NookError::IndexedDb(format!("Identity mirror directory store error: {error:?}"))
+        })?;
+        let events = transaction.store("events").map_err(|error| {
+            NookError::IndexedDb(format!("Identity mirror event store error: {error:?}"))
+        })?;
+        let log = Self::load_identity_log_from_store(IdentityLogRead {
+            store: &events,
+            identity_id,
+        })
+        .await?;
+        let latest = IdentityControlState::project(&log)?;
+        let directory = Self::load_directory_for_write(&vault)
+            .await?
+            .apply_replicated_membership(&ReplicatedIdentityMembership {
+                identity_id,
+                app_key,
+                members: membership.members,
+                revoked: membership.revoked,
+                own_grants: membership.own_grants,
+                public_name: &latest.public_name,
+                removed_vaults: membership.removed_vaults,
+            })
+            .map_err(|rejected| Self::map_domain_error(rejected.into_cause()))?;
+        Self::write_identity_directory(IdentityDbWriteIdentityDirectory {
+            store: &vault,
+            directory: &directory,
+        })
+        .await?;
+        transaction.done().await.map_err(|error| {
+            NookError::IndexedDb(format!("Identity mirror completion error: {error:?}"))
+        })?;
         Ok(())
     }
 }

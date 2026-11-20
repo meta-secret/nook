@@ -10,8 +10,8 @@ use std::{fmt, str};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use nook_auth2::{
     AgeArmoredCiphertext, AppId, AuthKeyId, CompactToken, DevicePublicKey, DeviceSigningPublicKey,
-    IdentityId, IdentityInviteId, IsoTimestamp, MemberLabel, RecoverySealedSecret,
-    RecoveryStrength, S3KeyPrefix, StoreId,
+    IdentityId, IdentityInviteId, IsoTimestamp, MemberLabel, PublicKeyringLabel,
+    RecoverySealedSecret, RecoveryStrength, S3KeyPrefix, StoreId,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -341,6 +341,10 @@ pub enum IdentityControlOperation {
     IdentityNamed {
         recipients: Vec<MemberSealedName>,
     },
+    /// A display name an active app member explicitly publishes to the keyring log.
+    IdentityPublicNameSet {
+        name: PublicKeyringLabel,
+    },
 }
 
 /// Signed identity control body (everything except the signature).
@@ -575,6 +579,7 @@ impl IdentityEvent {
                 | IdentityControlOperation::MemberJoinDenied { .. }
                 | IdentityControlOperation::MemberRevoked { .. }
                 | IdentityControlOperation::MemberRenamed { .. }
+                | IdentityControlOperation::IdentityPublicNameSet { .. }
                 | IdentityControlOperation::VaultRemoved { .. }
                 | IdentityControlOperation::ProviderMounted { .. }
                 | IdentityControlOperation::ProviderUnmounted { .. } => {}

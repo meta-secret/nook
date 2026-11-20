@@ -8,8 +8,8 @@
 
 use crate::errors::VaultResult;
 use nook_auth2::{
-    AppId, AppKey, AuthKeyId, IdentityMember, MemberLabelState, MultiDeviceResult,
-    ReplicatedVaultGrant, StoreId,
+    AppId, AppKey, AuthKeyId, IdentityMember, IdentityPublicName, MemberLabelState,
+    MultiDeviceResult, ReplicatedVaultGrant, StoreId,
 };
 use nook_event_log::{
     IdentityControlOperation, IdentityControlState, IdentityMemberKeys, IdentityNaming,
@@ -210,7 +210,9 @@ impl IdentityNameStatus<'_> {
     /// the log's name leaves it to a member that can, so devices never
     /// overwrite each other's name.
     pub fn naming(&self) -> VaultResult<Option<IdentityControlOperation>> {
-        if self.state.member(self.app_key.app_id()).is_none() {
+        if matches!(self.state.public_name, IdentityPublicName::Published(_))
+            || self.state.member(self.app_key.app_id()).is_none()
+        {
             return Ok(None);
         }
         let everyone_holds_it = self

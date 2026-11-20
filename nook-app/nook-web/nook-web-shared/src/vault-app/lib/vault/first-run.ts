@@ -11,6 +11,7 @@ import {
   type ProviderIdentityChoice,
 } from "$app-wasm";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
+import { googleOAuthSession } from "$lib/auth/google/oauth";
 import {
   listedVaults,
   type ListedVaults,
@@ -40,6 +41,7 @@ import { VaultOAuthActions } from "$lib/vault/oauth";
 import { DeviceProtectionActions } from "$lib/vault/device-protection.svelte";
 import { IdentityPages } from "$lib/vault/identity-pages";
 import { IdentityDirectoryLoader } from "$lib/components/identities/identity-directory-loader.svelte";
+import { IdentityDirectoryLoadKind } from "$lib/components/devices-access/identity-directory-view";
 import {
   FirstRunPlace,
   FirstRunStage,
@@ -175,6 +177,60 @@ export enum ProviderFolderBinding {
 export class FirstRunActions {
   constructor(private readonly vault: VaultState) {}
 
+  /** Only a browser without a local keyring can use the first-run creation path. */
+  canCreateFromEmptyDrive(): boolean {
+    const vault = this.vault;
+    const directory = vault.identityDirectory;
+    return (
+      vault.firstRun === FirstRunStage.Off &&
+      vault.keyringRecoveryOpen &&
+      vault.keyringRecoveryActive &&
+      !vault.identityInUse &&
+      !vault.localVaultPresent &&
+      vault.localVaults.length === 0 &&
+      directory.kind === IdentityDirectoryLoadKind.Ready &&
+      directory.view.identities.length === 0
+    );
+  }
+
+  /** Protect a fresh keyring with the sign-in already staged by recovery. */
+  beginEmptyDriveCreation(token: string): boolean {
+    if (!this.canCreateFromEmptyDrive()) return false;
+    if (!this.isDriveSignIn(token)) {
+      this.vault.errorMsg = this.vault.t(I18N_KEYS.FirstRunDriveSignInChanged);
+      return false;
+    }
+    this.vault.dismissError();
+    this.vault.firstRunEmptyDriveToken = token;
+    this.vault.firstRun = FirstRunStage.Protect;
+    return true;
+  }
+
+  leaveProtection(): void {
+    this.vault.firstRunEmptyDriveToken = "";
+    this.vault.firstRun = FirstRunStage.Off;
+  }
+
+  private isDriveSignIn(token: string): boolean {
+    const signIn = ProviderDraftReads.driveSignIn(this.vault.providerDraft);
+    if (
+      !token ||
+      signIn.kind !== DraftDriveSignInKind.SignedIn ||
+      signIn.access.authorization.accessToken !== token
+    )
+      return false;
+    try {
+      return googleOAuthSession.isDriveAccessCurrent(signIn.access);
+    } catch {
+      return false;
+    }
+  }
+
+  private driveSignInChanged(): void {
+    this.leaveProtection();
+    this.vault.errorMsg = this.vault.t(I18N_KEYS.FirstRunDriveSignInChanged);
+  }
+
   /** The device key is ready. During first run it only makes the identity's
    * key, and setup moves on to the sync provider; outside setup it creates
    * the vault as before. A key that becomes ready again while setup is past
@@ -194,10 +250,31 @@ export class FirstRunActions {
       case FirstRunStage.Protect:
         break;
     }
+    const driveToken = vault.firstRunEmptyDriveToken;
+    if (driveToken && !this.isDriveSignIn(driveToken)) {
+      this.driveSignInChanged();
+      return;
+    }
     const initialized = await vault.initDeviceIdentity();
+    if (
+      vault.firstRun !== FirstRunStage.Protect ||
+      vault.firstRunEmptyDriveToken !== driveToken
+    )
+      return;
     if (initialized.isErr()) {
+      this.leaveProtection();
       vault.errorMsg = vault.t(initialized.error.translationKey);
-      vault.firstRun = FirstRunStage.Off;
+      return;
+    }
+    if (driveToken) {
+      if (!this.isDriveSignIn(driveToken)) {
+        this.driveSignInChanged();
+        return;
+      }
+      vault.cancelKeyringRecovery();
+      vault.keyringRecoveryOpen = false;
+      vault.firstRunSyncSource = FirstRunSyncSource.GoogleDrive;
+      this.nameNew(FirstRunPlace.SyncProvider);
       return;
     }
     vault.firstRun = FirstRunStage.Sync;
@@ -349,6 +426,7 @@ export class FirstRunActions {
   /** Back from naming or a join to the sync provider's identities. */
   backToSync(): void {
     const vault = this.vault;
+    vault.firstRunEmptyDriveToken = "";
     vault.firstRunJoin = { kind: FirstRunJoinKind.None };
     vault.firstRun = FirstRunStage.Sync;
   }
@@ -361,7 +439,17 @@ export class FirstRunActions {
     const vault = this.vault;
     const label = name.trim();
     if (!label) return;
+    const driveToken = vault.firstRunEmptyDriveToken;
+    if (driveToken && !this.isDriveSignIn(driveToken)) {
+      this.driveSignInChanged();
+      return;
+    }
     const named = await this.nameIdentity(label);
+    if (driveToken && vault.firstRunEmptyDriveToken !== driveToken) return;
+    if (driveToken && !this.isDriveSignIn(driveToken)) {
+      this.driveSignInChanged();
+      return;
+    }
     if (named.isErr()) {
       vault.errorMsg = vault.t(named.error.translationKey);
       return;
@@ -374,12 +462,14 @@ export class FirstRunActions {
       source: this.syncSource(),
       draft: vault.providerDraft,
     };
-    vault.firstRunVaultName = label;
+    const vaultName = vault.t(I18N_KEYS.WorkspaceFirstIdentityVaultLabel);
+    vault.firstRunEmptyDriveToken = "";
+    vault.firstRunVaultName = vaultName;
     // The vault is made on this browser first. A sign-in still staged would
     // be saved with it as a Google Drive provider without its Nook folder,
     // which no sync can use; it is staged again below to connect with one.
     vault.cancelProviderSetup();
-    await vault.createLocalVaultWithDeviceKeys(label);
+    await vault.createLocalVaultWithDeviceKeys(vaultName);
     if (!vault.isAuthenticated) return;
     if (
       vault.firstRunPlace === FirstRunPlace.SyncProvider &&
@@ -631,16 +721,22 @@ export class FirstRunActions {
     };
   }
 
-  /** Give this browser's still-fresh identity its name, before its log
-   * exists to seal it. */
-  private async nameIdentity(
+  /** Sign the explicitly chosen name for this browser's fresh keyring. */
+  async nameIdentity(
     label: string,
   ): Promise<Result<FirstRunNamingOutcome, FirstRunNamingFailure>> {
     const vault = this.vault;
+    const driveToken = vault.firstRunEmptyDriveToken;
     const ran = await vault.enqueueStorage<
       FirstRunNamingOutcome,
       FirstRunNamingFailure
     >(async () => {
+      if (
+        driveToken &&
+        (vault.firstRunEmptyDriveToken !== driveToken ||
+          !this.isDriveSignIn(driveToken))
+      )
+        return err(new FirstRunNamingFailure());
       const admitted = vault.admitManager();
       if (admitted.isErr()) return err(new FirstRunNamingFailure());
       try {

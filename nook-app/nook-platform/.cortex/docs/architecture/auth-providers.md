@@ -366,64 +366,79 @@ After sign-in, step 2 shows what the account's Nook root holds before
 anything is written. `list_google_drive_vaults` looks the root up without
 creating it. Rust lists its vault namespaces from Drive metadata, as
 [the vault event log](../../../nook-event-log/.cortex/docs/architecture/vault-event-log.md#provider-vault-listing)
-describes. No vault is downloaded or decrypted. A vault this browser
-registered is named from its vault registry; every other vault's name is
-encrypted under its own key, so its row shows the short id instead.
+describes. Rust verifies each signed control log before reading its keyring
+name, devices, and registered vaults. Vault names stay encrypted at the
+provider.
 
-Vaults are grouped by the identity that files them, and the identity is the
-only thing the user decides about. Rust `provider_identity_choices` turns
-the listing and the checks run on the page into one choice per identity
-(`ProviderIdentityChoice`): its standing, the decisions it allows, and its
-vaults. The [identity decisions](provider-identity-decisions.md) record owns
-the rules and the operations behind each decision.
+Rust `provider_identity_choices` combines the listing with passkey checks
+from the page. Each `ProviderIdentityChoice` carries the keyring's standing,
+allowed decisions, and read-only details. The
+[identity decisions](provider-identity-decisions.md) record owns the rules
+and operations behind each decision.
 
-Each identity card shows, without any key:
+Each Drive keyring card shows these details.
 
-- **Name:** its name when this browser holds it or a passkey opened it,
-  else three BIP39 words derived from its id (`IdentityWords`).
-- **Tag:** with no identity in use, its standing: opens here, opens from
-  another identity here, opens with a checked passkey, join requested, join
-  denied, join approved, not opened by the checked passkeys, or not on this
-  browser. With an identity in use, what this browser's passkey is to it:
-  in use here, member, not a member, join requested, or join request denied.
-- **Public log facts:** from its signed, unencrypted control log, its device
-  and vault counts (`ProviderIdentityLog`). The log also tells whether this
-  browser's key is a member and where its join request stands.
-- **No vault rows:** vaults are neither listed nor acted on; the step's
-  heading, loading and empty copy all speak of identities.
+- **Keyring name and ID.** Three BIP39 words derived from its ID
+  (`IdentityWords`) identify the keyring. A readable name from the verified
+  log appears alongside those words before a passkey check in both
+  recovery and setup. The words identify an unfamiliar keyring whose log
+  has only a sealed name or no name.
+- **Standing.** On the recovery screen, the tag reports how the keyring can
+  open or where its join request stands. In setup, it reports this
+  browser's membership or join status.
+- **Devices.** The verified log supplies one row per active device. Apps
+  sharing a device contribute one row. The row shows the installation's full
+  app ID with its signed label when present. It can wrap on narrow
+  screens. An absent control log leaves device information unavailable.
+  A verified empty roster has a known count of zero.
+- **Vaults.** The verified log supplies one row per currently registered
+  vault, including a vault whose namespace has yet to replicate to this
+  provider. If the control log is absent, the card can show the namespaces
+  observed under that keyring. Each row shows the vault's full store ID
+  alongside its name when available.
 
-With an identity in use, as when the Sync page adds Google Drive, each card
-carries its one [setup action](provider-identity-decisions.md#setup-action),
-which runs at once: **Continue** for a member, **Request to join** for
-anyone else, **Check again** for a join already asked. The identity in use
-has none. Below the list, after an "or", **Create a new identity** saves the
-identity in use on the provider as a new one and connects.
-Identities are never merged: a passkey that opens one completes it here.
+The local identity directory and vault registry can supply names this
+browser already knows. **Reveal names** calls `check_passkey_access` with
+the signed-in Drive source for names that require authenticated access.
+A historical sealed keyring name requires its member key. A vault name
+requires access to its encrypted metadata. The read-only check keeps its
+results in memory for the current Drive listing.
 
-With no identity in use, the decision is one segmented control, **Leave as
-is** first:
+The picker receives typed Rust/WASM details from the verified records.
+Mounted replication carries the
+[signed keyring name](../../../nook-event-log/.cortex/docs/architecture/identity-control-log.md#readable-keyring-names-in-the-signed-log).
+Anyone with access to a sync folder can read the keyring's current signed
+name and previous readable names in its event history.
 
-- **Add to this browser** (**Recover it** on a browser with no identity):
-  one passkey tap re-derives the member's app key and signer.
-- **Ask to join** and **Finish joining:** a membership request from a fresh
-  protected key, and its completion once a device approves.
+The Drive wizard runs each keyring action when pressed.
 
-The step keeps one action button:
+- **Identity in use.** The card carries the
+  [setup action](provider-identity-decisions.md#setup-action) Rust allows.
+  A member can continue, a nonmember can request to join, or a pending
+  request can be checked again. **Create a new identity** below the list
+  saves the identity in use on the provider as a new one and connects.
+- **No identity in use.** The card offers the permitted ways to open,
+  recover, or join the keyring. The passkey check inspects names without
+  adding the keyring.
 
-- **Drive wizard with no identity in use:** **Connect and sync**, or
-  **Connect and apply** once a decision is picked. It runs the plan, one
-  identity at a time, then connects; a failing decision stops the plan
-  before connecting.
-- **Recovery screen:** **Apply** runs the plan, then unlocks what it
-  recovered. The list reads the provider staged for the recovery.
-- **Plan summary:** "What will happen" lists every picked decision; picking
-  runs nothing.
-- **Passkey check:** "Which passkey opens it?" runs `check_passkey_access`
-  in memory and changes nothing; an identity it opens offers adding it.
+### Create a keyring from an empty Drive listing
 
-**Prohibited:** list a provider's vaults or offer an action on one vault.
+Initial recovery offers **Create a keyring** after the local identity
+directory has loaded and the browser has no local keyring or vault. The
+current signed-in Drive listing must succeed. It must find either no Nook
+root or a Nook root with no keyrings or vaults.
 
-**Required:** list identities, each with one decision.
+1. Choose **Create a keyring** to enter first-run setup. Carry the same
+   signed-in Drive draft in memory. The listing is read-only, and the
+   button only switches workflows.
+2. Complete the website's usual device authorization with passkey or PIN.
+   Continue to naming and first-vault creation through the regular setup.
+3. Use the signed-in draft to connect Drive and save it as the keyring's
+   sync provider. The normal connection step owns any Drive folder or
+   log writes.
+
+A failed listing or an open failure reports its error. A nonempty listing
+offers the applicable recovery actions for the keyrings it found.
 
 ### Check access
 
