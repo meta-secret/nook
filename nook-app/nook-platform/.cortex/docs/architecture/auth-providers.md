@@ -421,6 +421,25 @@ The Drive wizard runs each keyring action when pressed.
   recover, or join the keyring. The passkey check inspects names without
   adding the keyring.
 
+### Create a keyring from an empty Drive listing
+
+Initial recovery offers **Create a keyring** after the local identity
+directory has loaded and the browser has no local keyring or vault. The
+current signed-in Drive listing must succeed. It must find either no Nook
+root or a Nook root with no keyrings or vaults.
+
+1. Choose **Create a keyring** to enter first-run setup. Carry the same
+   signed-in Drive draft in memory. The listing is read-only, and the
+   button only switches workflows.
+2. Complete the website's usual device authorization with passkey or PIN.
+   Continue to naming and first-vault creation through the regular setup.
+3. Use the signed-in draft to connect Drive and save it as the keyring's
+   sync provider. The normal connection step owns any Drive folder or
+   log writes.
+
+A failed listing or an open failure reports its error. A nonempty listing
+offers the applicable recovery actions for the keyrings it found.
+
 ### Check access
 
 The Check access page answers the same question outside any setup flow, and

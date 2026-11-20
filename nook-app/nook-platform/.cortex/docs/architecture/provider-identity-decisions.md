@@ -21,7 +21,9 @@ On the recovery screen:
   - An identity is listed whether it owns several vaults, one, or none.
   - No vault opens on its own, not even a location's only one.
 - A location that lists no keyring says none was found there. The user can
-  pick another provider.
+  pick another provider. An eligible empty Google Drive location also
+  offers [Create a keyring](auth-providers.md#create-a-keyring-from-an-empty-drive-listing)
+  to enter first-run setup using the current Drive sign-in.
 - An identity recovered or joined there keeps that provider.
   - The provider is saved for it, and its log syncs.
   - The page lands on the identities page with that identity.
