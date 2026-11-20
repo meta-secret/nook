@@ -3,9 +3,9 @@
 
 use crate::TypedOutput;
 use nook_core::{
-    FreshIdentityNaming, IdentityControlLog, IdentityControlOperation, IdentityControlState,
-    IdentityEvent, IdentityEventInsertStatus, IdentityEventSigning, IdentityGenesisRequest,
-    IdentityId, IdentityInvitationBinding, IdentityInvitationBindingRequest, IdentityMemberKind,
+    IdentityControlLog, IdentityControlOperation, IdentityControlState, IdentityEvent,
+    IdentityEventInsertStatus, IdentityEventSigning, IdentityGenesisRequest, IdentityId,
+    IdentityInvitationBinding, IdentityInvitationBindingRequest, IdentityMemberKind,
     IdentityPublicName, LocalIdentityLog, MultiDeviceError, PublicKeyringLabel,
 };
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,7 @@ use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 use crate::manager::NookVaultManager;
-use crate::storage::identity_log::IdentityLogWrite;
+use crate::storage::identity_log::{IdentityLogCreationWrite, IdentityLogOrigin, IdentityLogWrite};
 use crate::storage::identity_record::KeyringDbRebindLocalIdentity;
 use crate::{NookDatabase, NookError};
 
@@ -72,9 +72,9 @@ impl NookVaultManager {
             .insert(genesis)
             .map_err(|rejection| rejection.cause)?
             .log;
-        if let IdentityPublicName::Published(name) = public_name {
+        if let IdentityPublicName::Published(name) = &public_name {
             let event = log.build_append(
-                vec![IdentityControlOperation::IdentityPublicNameSet { name }],
+                vec![IdentityControlOperation::IdentityPublicNameSet { name: name.clone() }],
                 &sign(),
             )?;
             let inserted = log.insert(event).map_err(|rejection| rejection.cause)?;
@@ -86,9 +86,19 @@ impl NookVaultManager {
             log = inserted.log;
         }
         let state = IdentityControlState::project(&log)?;
-        NookDatabase::create_identity_events(IdentityLogWrite {
-            identity_id,
-            events: &log.storage_bytes()?,
+        let origin = match &public_name {
+            IdentityPublicName::Unpublished => IdentityLogOrigin::Unnamed,
+            IdentityPublicName::Published(label) => IdentityLogOrigin::ExplicitName {
+                app_key: &app_key,
+                label,
+            },
+        };
+        NookDatabase::create_identity_events(IdentityLogCreationWrite {
+            origin,
+            write: IdentityLogWrite {
+                identity_id,
+                events: &log.storage_bytes()?,
+            },
         })
         .await?;
         Self::apply_identity_state_locally(&app_key, &state).await
@@ -163,14 +173,6 @@ impl NookVaultManager {
         let identity_id = Self::current_identity_id(&app_key).await?;
         let log = NookDatabase::load_identity_log(&identity_id).await?;
         if log.is_empty() {
-            NookDatabase::load_identity_directory()
-                .await?
-                .fresh_identity_for_naming(&FreshIdentityNaming {
-                    app_key: &app_key,
-                    label: label.as_str(),
-                    local_log: LocalIdentityLog::Empty,
-                })
-                .map_err(NookDatabase::map_domain_error)?;
             self.create_identity_log(IdentityLogCreation {
                 identity_id: &identity_id,
                 public_name: IdentityPublicName::Published(label),
@@ -277,7 +279,9 @@ mod browser_tests {
                 .is_err()
         );
         assert_eq!(identity_label().await?, "Solo");
+        let stale = IdentityControlState::project(&named)?;
         js(manager.rename_identity(" Team ".to_owned()).await)?;
+        NookVaultManager::apply_identity_state_locally(&app_key, &stale).await?;
         assert_eq!(identity_label().await?, "Team");
         let log = NookDatabase::load_identity_log(&identity_id).await?;
         assert_eq!(
@@ -312,6 +316,33 @@ mod browser_tests {
             IdentityControlState::project(&log)?.public_name,
             IdentityPublicName::Unpublished
         );
+        js(manager.delete_local_browser_data().await)?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn explicit_naming_cannot_found_a_different_identity_namespace() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        js(manager.delete_local_browser_data().await)?;
+        js(manager
+            .finish_pin_device_protection("naming pin".to_owned())
+            .await)?;
+        let wrong_id = IdentityId::generate()?;
+        let refused = manager
+            .create_identity_log(IdentityLogCreation {
+                identity_id: &wrong_id,
+                public_name: IdentityPublicName::Published(PublicKeyringLabel::parse("Team")?),
+            })
+            .await;
+        assert!(refused.is_err());
+        assert!(NookDatabase::load_identity_log(&wrong_id).await?.is_empty());
         js(manager.delete_local_browser_data().await)?;
         Ok(())
     }

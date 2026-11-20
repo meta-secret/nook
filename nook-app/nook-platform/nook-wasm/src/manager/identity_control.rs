@@ -26,8 +26,8 @@ use nook_core::{
     AppKey, AppKeyIdentityMembership, AuthProvidersSnapshot, EventLogLocation, IdentityControlLog,
     IdentityControlOperation, IdentityControlSnapshot, IdentityControlSnapshotRequest,
     IdentityControlState, IdentityEventInsertStatus, IdentityEventSigning, IdentityId,
-    IdentityMemberKeys, IsoTimestamp, MemberLabel, MemberLabelState, ReplicatedIdentityMembership,
-    ReplicatedIdentityStanding, ReplicatedMembershipRequest, StorageConnection, StorageMode,
+    IdentityMemberKeys, IsoTimestamp, MemberLabel, MemberLabelState, ReplicatedIdentityStanding,
+    ReplicatedMembershipRequest, StorageConnection, StorageMode,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -36,7 +36,7 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use super::{NookVaultManager, PreparedProvider};
 use crate::storage::checked_event_write::{CheckedEventWrite, CheckedEventWriteRequest};
 use crate::storage::identity_log::IdentityLogWrite;
-use crate::storage::identity_record::IdentityDirectoryWrite;
+use crate::storage::identity_record::ReplicatedIdentityDirectoryWrite;
 use crate::storage::remote_event::RemoteEventRead;
 use crate::{NookDatabase, NookError};
 
@@ -159,21 +159,10 @@ impl NookVaultManager {
         let projection = ReplicatedMembershipRequest { state, app_key }
             .project()
             .map_err(NookDatabase::map_domain_error)?;
-        let identity_id = state.identity_id.clone();
-        let app_key = app_key.clone();
-        NookDatabase::update_identity_directory(move |directory| {
-            let directory = directory
-                .apply_replicated_membership(&ReplicatedIdentityMembership {
-                    public_name: &state.public_name,
-                    identity_id: &identity_id,
-                    app_key: &app_key,
-                    members: projection.members,
-                    revoked: projection.revoked,
-                    own_grants: projection.own_grants,
-                    removed_vaults: projection.removed_vaults,
-                })
-                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
-            Ok(IdentityDirectoryWrite::from(directory))
+        NookDatabase::apply_replicated_identity_directory(ReplicatedIdentityDirectoryWrite {
+            identity_id: &state.identity_id,
+            app_key,
+            membership: projection,
         })
         .await?;
         // A vault deleted from the identity everywhere leaves this browser too.
