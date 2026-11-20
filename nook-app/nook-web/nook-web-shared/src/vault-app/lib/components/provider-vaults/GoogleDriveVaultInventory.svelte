@@ -458,7 +458,7 @@ nothing.
     </p>
   {:else}
     {@const compact = { reveal, details }}
-    <div class="space-y-2" data-testid="google-drive-vaults">
+    <div class="w-full max-w-lg space-y-2" data-testid="google-drive-vaults">
       <p class="nk-subpanel-head">
         {vault.t(I18N_KEYS.ProviderVaultsListTitle)}
       </p>

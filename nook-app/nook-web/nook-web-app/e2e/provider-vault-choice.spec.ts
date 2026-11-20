@@ -87,12 +87,17 @@ test.describe('an identity another browser keeps in the Nook folder', () => {
     await deviceB.reload()
     await createLocalVaultOnLogin(deviceB, 'Mine')
     await disableVaultIdleLock(deviceB)
+    await deviceB.setViewportSize({ width: 1440, height: 900 })
     await openDriveVaultList(deviceB, target)
 
     // A's identity is listed once; B's passkey is not a member of it, so
     // its one action asks to join. Nothing is planned or decided.
     const identityA = deviceB.getByTestId('setup-identity')
     await expect(identityA).toHaveCount(1)
+    const cardWidth = await identityA.evaluate(
+      (card) => card.getBoundingClientRect().width,
+    )
+    expect(cardWidth).toBeLessThanOrEqual(512)
     await expect(identityA).toHaveAttribute('data-setup', 'requestToJoin')
     await expect(identityA.getByTestId('provider-vault-identity')).toHaveText(
       /^[a-z]+-[a-z]+-[a-z]+$/,
