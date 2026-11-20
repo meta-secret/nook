@@ -1455,8 +1455,8 @@
     "root_empty": "Your “meta-secret-nook” folder holds no keyrings yet. Connect & sync adds yours to it.",
     "devices": "Devices: {count}",
     "identity_vaults": "Vaults of this keyring: {count}",
-    "linked_devices": "Linked devices",
-    "linked_vaults": "Linked vaults",
+    "devices_disclosure": "Devices ({count})",
+    "vaults_disclosure": "Vaults ({count})",
     "devices_unavailable": "The device list is unavailable.",
     "no_linked_devices": "No linked devices.",
     "no_linked_vaults": "No linked vaults.",
@@ -1464,7 +1464,9 @@
     "vault_name_unavailable": "Vault name unavailable",
     "advanced": "Advanced",
     "app_id": "App ID",
-    "reveal_details": "Reveal name and vault details with a passkey",
+    "reveal_details": "Reveal names",
+    "open_with_passkey": "Open with passkey",
+    "more_actions": "More actions for {identity}",
     "reveal_no_match": "This passkey did not open this keyring."
   },
   "access_check": {

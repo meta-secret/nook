@@ -101,18 +101,33 @@ test.describe('an identity another browser keeps in the Nook folder', () => {
       identityA.getByTestId('provider-identity-standing'),
     ).toHaveText(enLocale.first_run.identity_not_member)
     const devices = identityA.getByTestId('provider-keyring-devices')
+    const deviceSummary = devices.locator(':scope > summary')
+    await expect(deviceSummary).toHaveText(
+      enLocale.provider_vaults.devices_disclosure.replace('{count}', '1'),
+    )
+    await expect(devices).not.toHaveAttribute('open', '')
+    await deviceSummary.press('Enter')
     await expect(devices.getByRole('listitem')).toHaveCount(1)
     const advanced = devices.getByTestId('provider-keyring-device-advanced')
     await expect(advanced.locator('dd')).toBeHidden()
     await advanced.locator('summary').click()
     await expect(advanced.locator('dd')).toBeVisible()
+    await expect(advanced.locator('dd')).toHaveText(/^[0-9a-f]{16}$/)
     const vaults = identityA.getByTestId('provider-keyring-vaults')
+    const vaultSummary = vaults.locator(':scope > summary')
+    await expect(vaultSummary).toHaveText(
+      enLocale.provider_vaults.vaults_disclosure.replace('{count}', '1'),
+    )
+    await expect(vaults).not.toHaveAttribute('open', '')
+    await vaultSummary.press('Space')
     await expect(vaults.getByRole('listitem')).toHaveCount(1)
-    await expect(vaults).toContainText(vaultA.store_id)
+    await expect(
+      vaults.getByText(vaultA.store_id, { exact: true }),
+    ).toBeVisible()
     await expect(vaults).toContainText(
       enLocale.provider_vaults.vault_name_unavailable,
     )
-    await expect(vaults.getByRole('button')).toHaveCount(0)
+    await expect(vaults.getByRole('list').getByRole('button')).toHaveCount(0)
     await expect(
       identityA.getByTestId('provider-identity-find-passkey'),
     ).toHaveText(enLocale.provider_vaults.reveal_details)

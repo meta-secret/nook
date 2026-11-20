@@ -9,12 +9,12 @@ once: there is no plan to apply.
 -->
 <script lang="ts">
   import { ArrowRight, KeyRound, RefreshCw, Send } from '@lucide/svelte'
-  import type { Snippet } from 'svelte'
   import type { ProviderIdentityChoice } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
   import IdentityCardHeader from '$lib/components/provider-vaults/IdentityCardHeader.svelte'
   import { IdentityCardTag } from '$lib/components/provider-vaults/identity-card-tag'
+  import type { CompactIdentityCard } from '$lib/components/provider-vaults/identity-plan.svelte'
   import {
     SetupIdentityOffer,
     SetupRecoveryKind,
@@ -32,7 +32,7 @@ once: there is no plan to apply.
     onAskToJoin,
     onCheck,
     recovery,
-    details,
+    compact,
   }: {
     vault: VaultState
     choices: readonly ProviderIdentityChoice[]
@@ -47,7 +47,7 @@ once: there is no plan to apply.
     onAskToJoin: (choice: ProviderIdentityChoice) => void | Promise<void>
     /** Read a join this browser already asked for again. */
     onCheck: (choice: ProviderIdentityChoice) => void | Promise<void>
-    details?: Snippet<[ProviderIdentityChoice]>
+    compact?: CompactIdentityCard
   } = $props()
 
   const busy = $derived(disabled || working !== '' || vault.isVerifying)
@@ -79,12 +79,12 @@ once: there is no plan to apply.
       data-identity-id={choice.identity.identityId}
       data-setup={choice.setup.kind}
     >
-      {#if details}
+      {#if compact}
         <IdentityCardHeader
           {vault}
           {choice}
           tag={IdentityCardTag.Setup}
-          {details}
+          {compact}
         />
       {:else}
         <IdentityCardHeader {vault} {choice} tag={IdentityCardTag.Setup} />
@@ -93,6 +93,7 @@ once: there is no plan to apply.
         <Button
           type="button"
           size="sm"
+          class={compact ? 'w-full' : ''}
           data-testid="setup-identity-continue"
           disabled={busy}
           onclick={() => void onContinue(choice)}
@@ -109,6 +110,7 @@ once: there is no plan to apply.
           type="button"
           size="sm"
           variant="outline"
+          class={compact ? 'w-full' : ''}
           data-testid="setup-identity-join"
           disabled={busy}
           onclick={() => void onAskToJoin(choice)}
@@ -125,6 +127,7 @@ once: there is no plan to apply.
           type="button"
           size="sm"
           variant="outline"
+          class={compact ? 'w-full' : ''}
           data-testid="setup-identity-check"
           disabled={busy}
           onclick={() => void onCheck(choice)}

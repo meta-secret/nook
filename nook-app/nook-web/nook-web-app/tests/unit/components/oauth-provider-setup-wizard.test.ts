@@ -45,6 +45,7 @@ import type { VaultState } from '$lib/vault.svelte'
 import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import OAuthProviderSetupWizard from '../../../../nook-web-shared/src/vault-app/lib/components/OAuthProviderSetupWizard.svelte'
+import enLocale from '../../../../../nook-platform/nook-app-common/locales/en.json' with { type: 'json' }
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -187,6 +188,7 @@ function listVaults(listing: NookGoogleDriveVaultListing) {
 
 function renderWizard(draft: OAuthProviderDraft) {
   const vault = VaultStateTestFixture.create()
+  vault.translations = JSON.stringify(enLocale)
   vault.activateLoginSetup(ProviderSetupKinds.GOOGLE_DRIVE)
   vault.stageProviderDraft(draft)
   const onConnect = vi.fn()
@@ -316,9 +318,13 @@ describe('Google Drive provider setup', () => {
         .querySelector('[data-testid="provider-identity-standing"]')
         ?.textContent?.trim(),
     ).toBe(vault.t(I18N_KEYS.FirstRunIdentityNotMember))
-    expect(
-      within(other).getByTestId('provider-keyring-devices').textContent,
-    ).toContain(vault.t(I18N_KEYS.ProviderVaultsDevicesUnavailable))
+    const devices = within(other).getByTestId('provider-keyring-devices')
+    expect(devices.querySelector('summary')?.textContent?.trim()).toBe(
+      enLocale.workspace.section_devices,
+    )
+    expect(devices.textContent).toContain(
+      vault.t(I18N_KEYS.ProviderVaultsDevicesUnavailable),
+    )
     expect(
       within(other).getByTestId('provider-keyring-vaults').textContent,
     ).toContain('store_othervault1')
@@ -471,20 +477,28 @@ describe('Google Drive provider setup', () => {
       .mockResolvedValue(ok(applied))
     const { view, vault, onConnect } = renderWizard(signedInDrive())
 
-    const join = await DecisionButtons.of(view, 'askToJoin')
-    // Each way in says what it needs, as its hint.
+    const primary = await DecisionButtons.of(view, 'addToBrowser')
+    expect(primary.textContent?.trim()).toBe(
+      enLocale.provider_vaults.open_with_passkey,
+    )
+    expect(view.getAllByTestId('provider-identity-decision')).toHaveLength(1)
+    const more = view.getByTestId('provider-identity-more-actions')
+    expect(more.getAttribute('aria-haspopup')).toBe('menu')
+    expect(more.getAttribute('aria-label')).toBe(
+      enLocale.provider_vaults.more_actions.replace(
+        '{identity}',
+        'ripple-canvas-orbit',
+      ),
+    )
+    await fireEvent.keyDown(more, { key: 'ArrowDown' })
+    const menu = within(
+      await view.findByTestId('provider-identity-action-menu'),
+    )
+    const join = menu.getByRole('menuitem')
+    expect(join.dataset.decision).toBe('askToJoin')
     expect(join.getAttribute('title')).toBe(
       vault.t(I18N_KEYS.ProviderIdentitiesAskToJoinDetail),
     )
-    // The most direct way in leads; the others stay quieter beside it.
-    expect(
-      view
-        .getAllByTestId('provider-identity-decision')
-        .map((button) => [button.dataset.decision, button.dataset.lead]),
-    ).toEqual([
-      ['addToBrowser', 'true'],
-      ['askToJoin', 'false'],
-    ])
     // The step's own button is Connect & sync, whatever is clicked above.
     expect(view.getByTestId('connect-provider-btn').textContent).toContain(
       vault.t(I18N_KEYS.AuthStorageConnectAndSync),
@@ -623,7 +637,12 @@ describe('Google Drive provider setup', () => {
     expect(card.getAllByText('ripple-canvas-orbit')).toHaveLength(1)
     expect(card.queryAllByText('Personal')).toHaveLength(0)
     expect(identity.textContent).not.toContain('Family')
-    const devices = within(card.getByTestId('provider-keyring-devices'))
+    const deviceDisclosure = card.getByTestId('provider-keyring-devices')
+    expect(deviceDisclosure.hasAttribute('open')).toBe(false)
+    expect(deviceDisclosure.querySelector('summary')?.textContent?.trim()).toBe(
+      enLocale.provider_vaults.devices_disclosure.replace('{count}', '2'),
+    )
+    const devices = within(deviceDisclosure)
     expect(devices.getByText('Office laptop').textContent).toBe('Office laptop')
     expect(
       devices.getByText(vault.t(I18N_KEYS.ProviderVaultsUnnamedDevice))
@@ -631,7 +650,12 @@ describe('Google Drive provider setup', () => {
     ).toBe(vault.t(I18N_KEYS.ProviderVaultsUnnamedDevice))
     const laptopId = devices.getByText('0011223344556677')
     expect(laptopId.closest('details')?.hasAttribute('open')).toBe(false)
-    const vaults = within(card.getByTestId('provider-keyring-vaults'))
+    const vaultDisclosure = card.getByTestId('provider-keyring-vaults')
+    expect(vaultDisclosure.hasAttribute('open')).toBe(false)
+    expect(vaultDisclosure.querySelector('summary')?.textContent?.trim()).toBe(
+      enLocale.provider_vaults.vaults_disclosure.replace('{count}', '2'),
+    )
+    const vaults = within(vaultDisclosure)
     expect(
       vaults.getAllByText(
         vault.t(I18N_KEYS.ProviderVaultsVaultNameUnavailable),
@@ -647,7 +671,7 @@ describe('Google Drive provider setup', () => {
     expect(view.getAllByTestId('connect-provider-btn')).toHaveLength(1)
     expect(
       view.getByTestId('provider-identity-find-passkey').textContent,
-    ).toContain(vault.t(I18N_KEYS.ProviderVaultsRevealDetails))
+    ).toContain(enLocale.provider_vaults.reveal_details)
     await fireEvent.click(view.getByTestId('provider-identity-find-passkey'))
 
     await vi.waitFor(() =>
@@ -676,6 +700,9 @@ describe('Google Drive provider setup', () => {
     )
     expect(
       view.queryAllByTestId('provider-identity-find-passkey'),
+    ).toHaveLength(0)
+    expect(
+      view.queryAllByTestId('provider-identity-more-actions'),
     ).toHaveLength(0)
     // With no identity in use, one the passkey opens is added to this
     // browser as a whole.

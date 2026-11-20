@@ -21,14 +21,13 @@ nothing.
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte'
   import { ok, type Result } from 'neverthrow'
-  import { Fingerprint, RefreshCw } from '@lucide/svelte'
+  import { Lock, RefreshCw } from '@lucide/svelte'
   import type {
     IdentityDecision,
     NookProviderSource,
     ProviderIdentityChoice,
   } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import { Button } from '$lib/components/ui/button'
   import ProviderIdentityList from '$lib/components/provider-vaults/ProviderIdentityList.svelte'
   import SetupIdentityList from '$lib/components/provider-vaults/SetupIdentityList.svelte'
   import DriveKeyringDetails from '$lib/components/provider-vaults/DriveKeyringDetails.svelte'
@@ -391,15 +390,13 @@ nothing.
   })
 </script>
 
-{#snippet details(choice: ProviderIdentityChoice)}
+{#snippet reveal(choice: ProviderIdentityChoice)}
   {#if inventory.kind === DriveVaultInventoryKind.Loaded}
     {@const check = inventory.passkeyCheck}
     {#if choice.passkey_check === 'Available'}
-      <Button
+      <button
         type="button"
-        size="sm"
-        variant="outline"
-        class="h-auto min-h-8 max-w-full whitespace-normal text-left"
+        class="inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-sm text-left text-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60"
         data-testid="provider-identity-find-passkey"
         disabled={disabled || workingOn !== ''}
         onclick={() => void checkPasskey(choice)}
@@ -408,10 +405,10 @@ nothing.
           <RefreshCw class="size-4 animate-spin" aria-hidden="true" />
           {vault.t(I18N_KEYS.AccessCheckChecking)}
         {:else}
-          <Fingerprint class="size-4" aria-hidden="true" />
+          <Lock class="size-3.5 shrink-0" aria-hidden="true" />
           {vault.t(I18N_KEYS.ProviderVaultsRevealDetails)}
         {/if}
-      </Button>
+      </button>
     {/if}
     {#if check.kind === DrivePasskeyCheckKind.NoMatch && check.identityId === choice.identity.identityId}
       <p class="text-xs text-muted-foreground" role="status">
@@ -419,6 +416,9 @@ nothing.
       </p>
     {/if}
   {/if}
+{/snippet}
+
+{#snippet details(choice: ProviderIdentityChoice)}
   <DriveKeyringDetails {vault} details={choice.details} />
 {/snippet}
 
@@ -457,6 +457,7 @@ nothing.
       {vault.t(I18N_KEYS.ProviderVaultsRootEmpty)}
     </p>
   {:else}
+    {@const compact = { reveal, details }}
     <div class="space-y-2" data-testid="google-drive-vaults">
       <p class="nk-subpanel-head">
         {vault.t(I18N_KEYS.ProviderVaultsListTitle)}
@@ -467,7 +468,7 @@ nothing.
           choices={choices.value}
           working={workingOn}
           {disabled}
-          {details}
+          {compact}
           onContinue={act(FirstRunIdentityAction.Continue)}
           onAskToJoin={act(FirstRunIdentityAction.AskToJoin)}
           onCheck={act(FirstRunIdentityAction.CheckJoin)}
@@ -480,7 +481,7 @@ nothing.
           run={running}
           {disabled}
           {checking}
-          {details}
+          {compact}
           onDecide={runDecision}
           onFindPasskey={checkPasskey}
         />
