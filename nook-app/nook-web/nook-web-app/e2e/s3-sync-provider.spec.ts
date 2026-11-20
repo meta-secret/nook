@@ -239,10 +239,13 @@ test.describe('S3-compatible storage as the sync provider', () => {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
       await approve.click()
-      await expect(page.getByTestId('app-success')).toHaveText(
-        enLocale.identity_control.join_request_approved,
-        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-      )
+      await expect(
+        page
+          .getByTestId('app-success')
+          .getByText(enLocale.identity_control.join_request_approved, {
+            exact: true,
+          }),
+      ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
       await expect(request).toHaveCount(0, {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
