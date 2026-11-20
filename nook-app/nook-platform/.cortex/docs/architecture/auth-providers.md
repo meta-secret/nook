@@ -387,10 +387,10 @@ Each Drive keyring card shows these details.
   open or where its join request stands. In setup, it reports this
   browser's membership or join status.
 - **Devices.** The verified log supplies one row per active device. Apps
-  sharing a device contribute one row. The installation's full app ID
-  appears on one line with its signed label when present. The row fits
-  within the card on narrow screens. An absent control log leaves device
-  information unavailable. A verified empty roster has a known count of zero.
+  sharing a device contribute one row. The row shows the installation's full
+  app ID with its signed label when present. It can wrap on narrow
+  screens. An absent control log leaves device information unavailable.
+  A verified empty roster has a known count of zero.
 - **Vaults.** The verified log supplies one row per currently registered
   vault, including a vault whose namespace has yet to replicate to this
   provider. If the control log is absent, the card can show the namespaces

@@ -165,8 +165,9 @@ remain in the signed history.
 - Use event schema `1`. Preserve the original canonical bytes and signature
   verification of sealed `identity-named` events. Authorized recovery can
   still read the historical sealed name with its member key.
-- Read existing logs in place. This operation needs no migration or name
-  backfill.
+- Pre-change readers reject `identity-public-name-set` after fresh naming
+  or a rename appends it, even under schema `1`. Updated readers verify
+  both event forms in place. This change needs no migration or name backfill.
 
 ### Authorize actors from causal history
 

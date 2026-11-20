@@ -264,8 +264,8 @@ accent, no pills.
   device and vault counts in the header.
 - **Drive details.** The **Vaults** and **Devices** rows start collapsed.
   Show counts where known. Each row expands to show its linked items or
-  its empty or unavailable state. Keep each device's full app ID on one
-  line with its signed label when present. See
+  its empty or unavailable state. Each device row shows its full app ID
+  with its signed label when present. The row can wrap on narrow screens. See
   [the Drive listing](auth-providers.md#what-the-provider-already-holds)
   for the source of these details.
 - **Drive recovery actions.** The first decision Rust allows is the
