@@ -140,6 +140,8 @@ export class VaultUiState {
   /** The access check page is open, unlocked or not. */
   accessCheckOpen = $state(false);
   firstRun = $state<FirstRunStage>(FirstRunStage.Off);
+  /** Sign-in that the recovery picker verified before starting protection. */
+  firstRunEmptyDriveToken = $state("");
   /** The name given to a new identity during setup; its first vault takes
    * it too. */
   firstRunVaultName = $state("");

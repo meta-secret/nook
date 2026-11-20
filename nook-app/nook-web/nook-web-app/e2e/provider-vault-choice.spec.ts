@@ -1,9 +1,9 @@
 import { test, expect, type BrowserContext, type Page } from './fixtures'
 import {
   addSecret,
+  answerPasskeyPrompt,
   beginAddSyncProvider,
   clearBrowserVault,
-  createFirstRunKey,
   createIsolatedContext,
   createLocalVaultOnLogin,
   disableVaultIdleLock,
@@ -67,21 +67,33 @@ test.describe('an identity another browser keeps in the Nook folder', () => {
     await contextB?.close()
   })
 
-  test('lists the signed name and offers the action for the current keyring', async ({
+  test('creates on empty Drive recovery and lists the signed keyring by stable ID', async ({
     browser,
   }) => {
     const createdName = 'Travel keyring'
     const renamedName = 'Shared travel keyring'
 
-    // Browser A names its fresh keyring directly on Drive.
+    // Browser A starts recovery and creates a keyring on the empty Drive.
     await installSyncRemote(deviceA, target)
     await installGoogleOAuthMock(deviceA, target.pat)
     await deviceA.goto('/vault')
     await clearBrowserVault(deviceA)
     await deviceA.reload()
-    await createFirstRunKey(deviceA)
-    await deviceA.getByTestId('first-run-google-sign-in').click()
-    await deviceA.getByTestId('first-run-create-new-identity').click()
+    await openLoginProviderSetup(deviceA)
+    await deviceA.getByTestId('provider-option-oauth-file').click()
+    await deviceA.getByTestId('google-sign-in-btn').click()
+    const createOnDrive = deviceA.getByTestId('google-drive-create-keyring')
+    await expect(createOnDrive).toHaveText(
+      enLocale.provider_vaults.create_keyring,
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    await createOnDrive.click()
+    await expect(deviceA.getByTestId('first-run-protect-step')).toBeVisible()
+    await answerPasskeyPrompt(deviceA)
+    await expect(deviceA.getByTestId('first-run-name-step')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(deviceA.getByTestId('first-run-sync-step')).toHaveCount(0)
     await deviceA.getByTestId('first-run-identity-name-input').fill(createdName)
     await deviceA.getByTestId('first-run-identity-create-btn').click()
     await expect(openVaultRow(deviceA)).toContainText(

@@ -1448,6 +1448,7 @@
     "google_vaults_list_failed": "Could not read the vaults in your Google Drive “meta-secret-nook” folder."
   },
   "provider_vaults": {
+    "create_keyring": "Create a keyring",
     "list_title": "Keyrings in your Nook folder",
     "loading": "Looking for keyrings in your Nook folder…",
     "loading_s3": "Looking for keyrings in this storage…",
@@ -2195,6 +2196,7 @@
     "not_member_browser": "This browser hasn't joined {identity} yet. Only a member of {identity} can invite a new device."
   },
   "first_run": {
+    "drive_sign_in_changed": "Google Drive sign-in is no longer current. Reopen Google Drive recovery to continue.",
     "title": "Create your keyring",
     "name_label": "Keyring name",
     "name_placeholder": "Personal",

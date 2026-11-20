@@ -1383,6 +1383,7 @@
     "google_vaults_list_failed": "Не удалось прочитать сейфы в папке «meta-secret-nook» вашего Google Диска."
   },
   "provider_vaults": {
+    "create_keyring": "Создать связку ключей",
     "list_title": "Связки ключей в вашей папке Nook",
     "loading": "Ищем связки ключей в вашей папке Nook…",
     "loading_s3": "Ищем связки ключей в этом хранилище…",
@@ -2195,6 +2196,7 @@
     "not_member_browser": "Этот браузер ещё не вошёл в {identity}. Пригласить новое устройство может только участник {identity}."
   },
   "first_run": {
+    "drive_sign_in_changed": "Вход в Google Диск больше не действует. Откройте восстановление через Google Диск снова.",
     "title": "Создайте свою связку ключей",
     "name_label": "Название связки ключей",
     "name_placeholder": "Личное",
