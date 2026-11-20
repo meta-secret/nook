@@ -96,8 +96,10 @@ owns:
   each active member's public key, per vault key epoch;
 - zero or more credential-free sync-provider mounts.
 
-Passkey credential records, the identity name, and vault names stay in local
-storage. The log is signed, not encrypted.
+Passkey credential records stay in local storage. Vault names live in the
+local vault registry and encrypted vault metadata. An explicitly named
+keyring can publish its name in the
+[signed identity log](../../../nook-event-log/.cortex/docs/architecture/identity-control-log.md#readable-keyring-names-in-the-signed-log).
 
 Private app keys never enter the replicated identity record. A recovery
 passphrase's keys enter it only sealed under its words; see
@@ -318,11 +320,12 @@ mounts therefore act on the identity, never on one vault.
    - the app key is a member of a listed identity: finish joining it, as for
      an approved join request; it brings its own vaults.
    - it is not: ask to join one, or keep the fresh identity as a new one.
-3. Name a new identity while it is fresh (`name_fresh_identity`); its log
-   seals that name. Naming requires the app key's local identity.
+3. Explicitly name a new identity while it is fresh (`name_fresh_identity`).
+   Its log carries the readable name signed by its app member.
 4. A named identity kept on this browser may stay without a vault: setup
    asks, and the identity's card offers New vault later. Otherwise the first
-   vault follows at once.
+   vault follows at once. When provider setup creates it automatically, it
+   uses the **First vault** title independently of the keyring name.
 5. Generate the vault DEK and wrap it to the identity's current app keys.
 6. Create the vault bound to that identity.
 7. Register the vault in the identity control log with `vault-registered`.
@@ -398,7 +401,9 @@ none of their own.
 2. A person who lost every device connects a sync provider and signs in, as a
    shared-grant invite holder does, and lists the keyrings there.
 3. They pick a keyring, **Recover with passphrase**, and one of its labelled
-   passphrases. The labels come from the log; the keyring's name stays sealed.
+   passphrases. The labels come from the log. A Drive card can show the
+   keyring's signed readable name before recovery. A historical sealed name
+   remains available through authorized recovery.
 4. The device's key is chosen and protected as for a join request
    (`begin_identity_join`, then passkey or PIN).
 5. WASM checks the typed words against the list, unseals the recovery

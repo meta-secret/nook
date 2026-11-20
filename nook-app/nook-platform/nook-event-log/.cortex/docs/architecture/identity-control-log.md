@@ -127,9 +127,12 @@ The operation set is closed. Every operation is kebab-case tagged on the wire.
     released versions, so this change adds no migration and no compatibility
     branch.
 - **`identity-named`**
-  - Holds the identity's name sealed to each active member's X25519
-    encryption key, one recipient per member.
-  - The latest naming replaces any earlier one.
+  - Holds a sealed name with one recipient per active member's X25519
+    encryption key. It remains readable in authorized recovery.
+- **`identity-public-name-set`**
+  - Holds a readable `name` string. Require trimmed, nonblank text with
+    at most 80 Unicode characters and no control characters.
+  - An active app member signs the operation for this identity.
 
 A member tuple carries `app_id`, the X25519 encryption public key, the Ed25519
 signing public key, and a label. Validation derives `app_id` from the
@@ -143,30 +146,27 @@ local folder name, or S3 location. Each installation supplies and seals its own
 credential locally, as [auth-providers.md](../../../../.cortex/docs/architecture/auth-providers.md)
 requires.
 
-### Keep names sealed in the signed log
+### Readable keyring names in the signed log
 
-The identity log is signed, not encrypted. Every mount's operator can read it.
+Readers of a sync folder can read the signed identity log. The log exposes
+device labels, public keys, wrapped DEKs, registered vault IDs, and
+credential-free mount targets. Vault names live in the local vault registry
+and encrypted vault metadata.
 
-- It carries public keys, device labels, wrapped DEKs, vault `store_id`s, and
-  credential-free mount targets.
-- Device labels follow the vault log's `join-approved` precedent.
-- The identity name appears only inside `identity-named`, sealed to each
-  active member's encryption key. The local directory and the encrypted
-  enrollment code also carry it.
-- Vault names stay in the local vault registry and encrypted vault metadata.
-- A provider listing may show what the log already exposes: device count,
-  when the newest device joined, and how many vaults the identity keeps.
+Use `identity-public-name-set` for explicit fresh naming or an explicit
+rename by an unlocked active app member. The signed operation travels
+through the keyring's normal mounts. The projected readable name comes from
+the latest applicable public naming operation. Earlier readable names
+remain in the signed history.
 
-The name in the log wins. A device seals its local name only into a log no
-member has named. Otherwise it re-seals the log's own name for members that
-cannot read it, so devices never overwrite each other's name.
-
-**Prohibited:** write the identity name, or a vault name, into the log in
-plaintext, or seal it to anything other than member encryption keys.
-
-**Required:** seal the name to every active member. A provider operator must
-not learn that the identity is called "Work" or that a vault is called
-"Taxes".
+- Publish only the name the user explicitly chose in a naming action.
+  Loading, syncing, joining, and recovery never publish a stored local
+  or sealed name.
+- Use event schema `1`. Preserve the original canonical bytes and signature
+  verification of sealed `identity-named` events. Authorized recovery can
+  still read the historical sealed name with its member key.
+- Read existing logs in place. This operation needs no migration or name
+  backfill.
 
 ### Authorize actors from causal history
 
@@ -382,8 +382,7 @@ Behavior-focused Rust tests cover the log in
 - **Remote namespaces**
   - `vault_and_identity_namespaces_never_overlap`
   - `namespace_ids_are_read_back_from_paths_and_tags`
-- **Sealed identity name: every member reads it, strangers cannot rename it,
-  the log's name wins**
+- **Historical sealed identity name and authorized recovery**
   - `the_identity_name_is_sealed_to_every_member_including_one_joining`
   - `the_log_name_wins_and_reaches_every_member` (nook-core)
 - **Provider listing facts and access checks** (nook-core)
