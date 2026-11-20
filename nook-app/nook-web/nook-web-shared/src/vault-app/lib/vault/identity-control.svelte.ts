@@ -35,6 +35,7 @@ type MountVaultDeletion = {
   readonly provider: StorageProvider;
 };
 import { IdentityStandingPresentation } from "$lib/components/identity-control/identity-standing";
+import { IdentityDirectoryLoader } from "$lib/components/identities/identity-directory-loader.svelte";
 import { browserLogRuntime } from "$lib/runtime/log";
 import type { VaultState } from "$lib/vault.svelte";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
@@ -84,6 +85,11 @@ export type IdentityInviteIssue = {
 
 export type IdentityMemberRename = {
   readonly appId: string;
+  readonly label: string;
+};
+
+export type KeyringRename = {
+  readonly identityId: string;
   readonly label: string;
 };
 
@@ -456,6 +462,24 @@ export class IdentityControlModel {
 
   rename({ appId, label }: IdentityMemberRename) {
     return this.act((manager) => manager.rename_identity_member(appId, label));
+  }
+
+  async renameKeyring({
+    identityId,
+    label,
+  }: KeyringRename): Promise<
+    Result<IdentityActionOutcome, VaultStorageFailure>
+  > {
+    const providers = this.providersSnapshot();
+    const renamed = await this.act(async (manager) => {
+      const current = await manager.identity_control_snapshot(providers);
+      if (current.identityId !== identityId) {
+        throw new Error("Selected keyring changed before rename");
+      }
+      await manager.rename_identity(label);
+    });
+    await new IdentityDirectoryLoader(this.vault).reload();
+    return renamed;
   }
 
   /**

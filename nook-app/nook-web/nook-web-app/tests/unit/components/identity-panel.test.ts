@@ -19,6 +19,8 @@ import type { VaultState } from '$lib/vault.svelte'
 import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import IdentityPanel from '../../../../nook-web-shared/src/vault-app/lib/components/identity-control/IdentityPanel.svelte'
+import IdentityOverviewPanel from '../../../../nook-web-shared/src/vault-app/lib/components/identity-control/IdentityOverviewPanel.svelte'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 
 beforeAll(async () => {
   await initNookWasm()
@@ -110,6 +112,60 @@ describe('identity panel', () => {
     await fireEvent.click(view.getByTestId('identity-action-add-sync'))
 
     expect(onAddSyncProvider).toHaveBeenCalledOnce()
+  })
+
+  test('renames the active member keyring from its overview', async () => {
+    const vault = VaultStateTestFixture.create()
+    vault.identityControl.view = {
+      kind: IdentityControlViewKind.Ready,
+      snapshot: {
+        identityId: 'idn_travel',
+        identityLabel: 'Travel',
+        standing: 'member',
+        members: [],
+        devices: [],
+        deviceCount: 1,
+        extensionOnThisDevice: 'notJoined',
+        joinRequests: [],
+        vaults: [],
+        mounts: [],
+        recoveryPassphrases: [],
+      },
+    }
+    const rename = vi
+      .spyOn(vault.identityControl, 'renameKeyring')
+      .mockResolvedValue(ok(IdentityActionOutcome.Completed))
+    const view = render(IdentityOverviewPanel, {
+      vault,
+      health: assess_identity_health(
+        0,
+        1,
+        1,
+        0,
+        NookBrowserExtensionInstallation.NotOffered,
+        NookBrowserExtensionMembership.NotJoined,
+      ),
+      onOpen: vi.fn(),
+      onAddSyncProvider: vi.fn(),
+      onClose: vi.fn(),
+    })
+
+    await fireEvent.click(view.getByTestId('identity-overview-rename'))
+    const input = view.getByLabelText(vault.t(I18N_KEYS.NewIdentityNameLabel))
+    expect(input).toHaveProperty('value', 'Travel')
+    expect(view.getByText(vault.t(I18N_KEYS.FirstRunNameBody)).id).toBe(
+      input.getAttribute('aria-describedby'),
+    )
+    await fireEvent.input(input, { target: { value: 'Shared travel' } })
+    const form = view.getByTestId('identity-rename-save').closest('form')
+    if (!form) throw new Error('Rename requires a form')
+    await fireEvent.submit(form)
+
+    expect(rename).toHaveBeenCalledExactlyOnceWith({
+      identityId: 'idn_travel',
+      label: 'Shared travel',
+    })
+    expect(view.queryAllByTestId('identity-rename-input')).toHaveLength(0)
   })
 
   test('each action and detail opens its page', async () => {

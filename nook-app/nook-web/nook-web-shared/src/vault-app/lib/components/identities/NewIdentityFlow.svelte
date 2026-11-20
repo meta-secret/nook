@@ -26,6 +26,7 @@ adopting the new identity ends the current identity's session midway.
   import { untrack } from "svelte";
   import { IdentityJoinWaitKind } from "$lib/vault/identity-join-wait";
   import { IdentityJoinActions } from "$lib/vault/identity-plan-actions";
+  import { FirstRunActions } from "$lib/vault/first-run";
 
   let { vault }: { vault: VaultState } = $props();
 
@@ -41,6 +42,9 @@ adopting the new identity ends the current identity's session midway.
 
   const placeholderName = $derived(
     vault.t(I18N_KEYS.NewIdentityNamePlaceholder),
+  );
+  const firstVaultName = $derived(
+    vault.t(I18N_KEYS.WorkspaceFirstIdentityVaultLabel),
   );
   const identityName = $derived(
     vault.newIdentityName || nameInput.trim() || placeholderName,
@@ -159,6 +163,15 @@ adopting the new identity ends the current identity's session midway.
       ensureLocalRow: true,
     };
     const wait = vault.identityJoin;
+    if (wait.kind === IdentityJoinWaitKind.Idle && vault.newIdentityName) {
+      const named = await new FirstRunActions(vault).nameIdentity(
+        vault.newIdentityName,
+      );
+      if (named.isErr()) {
+        vault.errorMsg = vault.t(named.error.translationKey);
+        return;
+      }
+    }
     const loaded = await vault.loadProviders(providerLoad);
     if (loaded.isErr()) {
       vault.identityJoin = { kind: IdentityJoinWaitKind.Idle };
@@ -184,7 +197,7 @@ adopting the new identity ends the current identity's session midway.
   async function createVault(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     await vault.createLocalVaultWithDeviceKeys(
-      vaultInput.trim() || identityName,
+      vaultInput.trim() || firstVaultName,
     );
     if (!vault.errorMsg) close();
   }
@@ -206,6 +219,12 @@ adopting the new identity ends the current identity's session midway.
       <p class="text-sm text-pretty text-muted-foreground">
         {vault.t(I18N_KEYS.NewIdentitySubtitle)}
       </p>
+      <p
+        id="new-keyring-name-visibility"
+        class="text-sm text-pretty text-muted-foreground"
+      >
+        {vault.t(I18N_KEYS.FirstRunNameBody)}
+      </p>
     </header>
     <form class="flex flex-col gap-2 sm:flex-row" onsubmit={prepare}>
       <label class="sr-only" for="new-identity-name-input">
@@ -218,6 +237,7 @@ adopting the new identity ends the current identity's session midway.
         placeholder={placeholderName}
         maxlength="64"
         autocomplete="off"
+        aria-describedby="new-keyring-name-visibility"
         bind:value={nameInput}
         data-testid="new-identity-name-input"
       />
@@ -291,7 +311,7 @@ adopting the new identity ends the current identity's session midway.
         id="new-identity-vault-input"
         type="text"
         class="h-11 min-w-0 border border-border bg-card px-3 text-sm text-foreground sm:h-10 sm:flex-1 outline-none placeholder:text-muted-foreground focus-visible:border-foreground/50 focus-visible:ring-2 focus-visible:ring-ring"
-        placeholder={identityName}
+        placeholder={firstVaultName}
         maxlength="64"
         autocomplete="off"
         bind:value={vaultInput}

@@ -1460,10 +1460,7 @@
     "devices_unavailable": "The device list is unavailable.",
     "no_linked_devices": "No linked devices.",
     "no_linked_vaults": "No linked vaults.",
-    "unnamed_device": "Unnamed device",
     "vault_name_unavailable": "Vault name unavailable",
-    "advanced": "Advanced",
-    "app_id": "App ID",
     "reveal_details": "Reveal names",
     "open_with_passkey": "Open with passkey",
     "more_actions": "More actions for {identity}",
@@ -2134,6 +2131,7 @@
     "nav_group_parts": "Keyring"
   },
   "identity_control": {
+    "rename_keyring": "Rename keyring",
     "members_description": "Every app here can open this keyring's vaults. Removing an app rotates each vault's keys before its next change.",
     "current_app": "This app",
     "unnamed_app": "Unnamed app",
@@ -2236,7 +2234,7 @@
     "identity_member": "Member",
     "identity_not_member": "Not a member",
     "name_title": "Name your keyring",
-    "name_body": "Only its members see the name.",
+    "name_body": "Anyone with access to this keyring’s sync folder can see its current and previous names.",
     "name_create": "Create keyring",
     "name_on_provider": "Kept in Google Drive",
     "name_on_s3": "Kept in {location}",

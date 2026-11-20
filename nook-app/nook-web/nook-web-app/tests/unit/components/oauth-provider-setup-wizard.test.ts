@@ -566,7 +566,10 @@ describe('Google Drive provider setup', () => {
     const first = summary('store_othervault1', { state: 'unchecked' })
     const second = summary('store_othervault2', { state: 'unchecked' })
     const listed: ProviderListedIdentity = {
-      identity: first.identity,
+      identity: {
+        ...first.identity,
+        name: { state: 'named', name: 'Signed keyring' },
+      },
       details: {
         devices: {
           state: 'Listed',
@@ -584,7 +587,10 @@ describe('Google Drive provider setup', () => {
     listVaults({
       root: 'found',
       listing: {
-        vaults: [first, second],
+        vaults: [first, second].map((entry) => ({
+          ...entry,
+          identity: listed.identity,
+        })),
         identities: [listed],
       },
     })
@@ -634,6 +640,8 @@ describe('Google Drive provider setup', () => {
     const identity = await view.findByTestId('provider-identity')
     const card = within(identity)
     expect(identity.dataset.standing).toBe('unchecked')
+    const heading = card.getByTestId('provider-vault-identity')
+    expect(heading.textContent?.trim()).toBe('Signed keyring')
     expect(card.getAllByText('ripple-canvas-orbit')).toHaveLength(1)
     expect(card.queryAllByText('Personal')).toHaveLength(0)
     expect(identity.textContent).not.toContain('Family')
@@ -644,12 +652,11 @@ describe('Google Drive provider setup', () => {
     )
     const devices = within(deviceDisclosure)
     expect(devices.getByText('Office laptop').textContent).toBe('Office laptop')
-    expect(
-      devices.getByText(vault.t(I18N_KEYS.ProviderVaultsUnnamedDevice))
-        .textContent,
-    ).toBe(vault.t(I18N_KEYS.ProviderVaultsUnnamedDevice))
     const laptopId = devices.getByText('0011223344556677')
-    expect(laptopId.closest('details')?.hasAttribute('open')).toBe(false)
+    expect(laptopId.closest('li')?.textContent).toContain('Office laptop')
+    const phoneId = devices.getByText('8899aabbccddeeff')
+    expect(phoneId.closest('li')?.textContent?.trim()).toBe('8899aabbccddeeff')
+    expect(deviceDisclosure.querySelectorAll('details')).toHaveLength(0)
     const vaultDisclosure = card.getByTestId('provider-keyring-vaults')
     expect(vaultDisclosure.hasAttribute('open')).toBe(false)
     expect(vaultDisclosure.querySelector('summary')?.textContent?.trim()).toBe(
@@ -681,8 +688,7 @@ describe('Google Drive provider setup', () => {
       kind: AccessCheckTargetKind.Source,
       source: DRIVE_SOURCE,
     })
-    const heading = card.getByTestId('provider-vault-identity')
-    expect(heading.textContent?.trim()).toBe('Personal')
+    expect(heading.textContent?.trim()).toBe('Signed keyring')
     expect(heading.getAttribute('title')).toBe('idn_strangerabc')
     expect(card.getAllByText('ripple-canvas-orbit')).toHaveLength(1)
     expect(vaults.getByText('Family').textContent).toBe('Family')
