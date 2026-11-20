@@ -366,9 +366,9 @@ After sign-in, step 2 shows what the account's Nook root holds before
 anything is written. `list_google_drive_vaults` looks the root up without
 creating it. Rust lists its vault namespaces from Drive metadata, as
 [the vault event log](../../../nook-event-log/.cortex/docs/architecture/vault-event-log.md#provider-vault-listing)
-describes. Rust verifies each signed control log before using it to list the
-keyring's devices and registered vaults. Keyring and vault names are sealed
-at the provider.
+describes. Rust verifies each signed control log before reading its keyring
+name, devices, and registered vaults. Vault names stay encrypted at the
+provider.
 
 Rust `provider_identity_choices` combines the listing with passkey checks
 from the page. Each `ProviderIdentityChoice` carries the keyring's standing,
@@ -379,35 +379,36 @@ and operations behind each decision.
 Each Drive keyring card shows these details.
 
 - **Keyring name and ID.** Three BIP39 words derived from its ID
-  (`IdentityWords`) identify the keyring. Its available name appears
-  alongside those words.
+  (`IdentityWords`) identify the keyring. A readable name from the verified
+  log appears alongside those words before a passkey check in both
+  recovery and setup. The words identify an unfamiliar keyring whose log
+  has only a sealed name or no name.
 - **Standing.** On the recovery screen, the tag reports how the keyring can
   open or where its join request stands. In setup, it reports this
   browser's membership or join status.
 - **Devices.** The verified log supplies one row per active device. Apps
-  sharing a device contribute one row. A device with a signed label shows
-  its name. An active device with a blank label appears as **Unnamed device**.
-  The installation's app ID appears under **Advanced**. An absent
-  control log leaves device information unavailable. A verified empty
-  roster has a known count of zero.
+  sharing a device contribute one row. The row shows the installation's full
+  app ID with its signed label when present. It can wrap on narrow
+  screens. An absent control log leaves device information unavailable.
+  A verified empty roster has a known count of zero.
 - **Vaults.** The verified log supplies one row per currently registered
   vault, including a vault whose namespace has yet to replicate to this
   provider. If the control log is absent, the card can show the namespaces
   observed under that keyring. Each row shows the vault's full store ID
   alongside its name when available.
 
-Names can come from the matching local identity directory or vault registry.
-The **Reveal names** action calls
-`check_passkey_access` with the signed-in Drive source. A keyring name
-requires a matching member key.
-A vault name requires access to its encrypted metadata. The check is
-read-only. Its results stay in memory for the current Drive listing. A vault
-name may be sealed, its metadata may not have replicated, or the vault may
-have no name.
+The local identity directory and vault registry can supply names this
+browser already knows. **Reveal names** calls `check_passkey_access` with
+the signed-in Drive source for names that require authenticated access.
+A historical sealed keyring name requires its member key. A vault name
+requires access to its encrypted metadata. The read-only check keeps its
+results in memory for the current Drive listing.
 
-The linked details are exchanged as typed Rust/WASM values in one app
-build. The existing control events and vault records supply the details, so
-the new projection requires no stored-data migration.
+The picker receives typed Rust/WASM details from the verified records.
+Mounted replication carries the
+[signed keyring name](../../../nook-event-log/.cortex/docs/architecture/identity-control-log.md#readable-keyring-names-in-the-signed-log).
+Anyone with access to a sync folder can read the keyring's current signed
+name and previous readable names in its event history.
 
 The Drive wizard runs each keyring action when pressed.
 

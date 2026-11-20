@@ -80,26 +80,17 @@
     {:else}
       <ul class="divide-y divide-border/60 px-1 pb-1">
         {#each details.devices.devices as device (device.app_id)}
-          <li class="min-w-0 space-y-1 py-1.5 text-sm">
-            <p class="break-words">
-              {#if device.label === ''}
-                {vault.t(I18N_KEYS.ProviderVaultsUnnamedDevice)}
-              {:else}
-                {device.label}
-              {/if}
-            </p>
-            <details
-              class="text-xs text-muted-foreground"
-              data-testid="provider-keyring-device-advanced"
+          <li
+            class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1.5 text-sm"
+          >
+            {#if device.label}
+              <span class="max-w-full min-w-0 break-words">{device.label}</span>
+            {/if}
+            <span
+              class="min-w-0 break-all font-mono text-xs text-muted-foreground"
             >
-              <summary class="w-fit cursor-pointer">
-                {vault.t(I18N_KEYS.ProviderVaultsAdvanced)}
-              </summary>
-              <dl class="mt-1 space-y-0.5">
-                <dt>{vault.t(I18N_KEYS.ProviderVaultsAppId)}</dt>
-                <dd class="break-all font-mono">{device.app_id}</dd>
-              </dl>
-            </details>
+              {device.app_id}
+            </span>
           </li>
         {/each}
       </ul>

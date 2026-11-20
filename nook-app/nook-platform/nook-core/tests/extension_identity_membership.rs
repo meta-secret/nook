@@ -17,10 +17,11 @@ use nook_core::{
     IdentityGenesisRequest, IdentityHealth, IdentityHealthAssessment, IdentityHealthStage,
     IdentityId, IdentityInvitationBinding, IdentityJoinCompletion, IdentityJoinCompletionPlan,
     IdentityMemberAdd, IdentityMemberKeys, IdentityNextStep, IdentityProtectionTaskState,
-    IdentityVaultKeyOpening, IdentityVaultPairingRequest, IdentityVaultRegistration, IsoTimestamp,
-    LocalIdentityLog, MemberLabel, MemberLabelState, MultiDeviceError, OpenedVaultDek,
-    ReplicatedIdentityAdoption, ReplicatedIdentityMembership, ReplicatedIdentityStanding,
-    ReplicatedMembershipRequest, SigningIdentity, StoreId, VaultError, VaultKeys,
+    IdentityPublicName, IdentityVaultKeyOpening, IdentityVaultPairingRequest,
+    IdentityVaultRegistration, IsoTimestamp, LocalIdentityLog, MemberLabel, MemberLabelState,
+    MultiDeviceError, OpenedVaultDek, ReplicatedIdentityAdoption, ReplicatedIdentityMembership,
+    ReplicatedIdentityStanding, ReplicatedMembershipRequest, SigningIdentity, StoreId, VaultError,
+    VaultKeys,
 };
 
 fn at() -> IsoTimestamp {
@@ -272,6 +273,7 @@ impl Extension {
             self.directory
                 .clone()
                 .apply_replicated_membership(&ReplicatedIdentityMembership {
+                    public_name: &IdentityPublicName::Unpublished,
                     identity_id: &identity.identity_id,
                     app_key: &member.app,
                     members: projection.members,

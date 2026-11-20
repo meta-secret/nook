@@ -20,10 +20,10 @@ use tsify::Tsify;
 use crate::errors::VaultResult;
 use crate::{
     AppKey, IdentityControlLog, IdentityControlState, IdentityDirectory,
-    IdentityDirectoryRejection, IdentityId, IdentitySelection, IdentityWords, MultiDeviceError,
-    ProviderIdentityLogEvents, ReplicatedIdentityAddition, ReplicatedIdentityMembership,
-    ReplicatedIdentityStanding, ReplicatedMembershipRequest, SigningIdentity, SigningSeedHex,
-    StoreId,
+    IdentityDirectoryRejection, IdentityId, IdentityPublicName, IdentitySelection, IdentityWords,
+    MultiDeviceError, ProviderIdentityLogEvents, ReplicatedIdentityAddition,
+    ReplicatedIdentityMembership, ReplicatedIdentityStanding, ReplicatedMembershipRequest,
+    SigningIdentity, SigningSeedHex, StoreId,
 };
 
 /// A checked passkey's app key and signer, one identity a source holds, and
@@ -100,9 +100,12 @@ impl PasskeyIdentityAddition<'_> {
             }
             .into());
         }
-        let name = match state.sealed_name_for(app_id) {
-            Some(sealed) => self.app_key.open_utf8(sealed)?.trim().to_owned(),
-            None => String::new(),
+        let name = match &state.public_name {
+            IdentityPublicName::Published(name) => name.as_str().to_owned(),
+            IdentityPublicName::Unpublished => match state.sealed_name_for(app_id) {
+                Some(sealed) => self.app_key.open_utf8(sealed)?.trim().to_owned(),
+                None => String::new(),
+            },
         };
         let label = if name.is_empty() {
             IdentityWords::of(self.identity_id).words().join(" ")
@@ -125,6 +128,7 @@ impl PasskeyIdentityAddition<'_> {
             .add_replicated_identity(&ReplicatedIdentityAddition {
                 label: &label,
                 membership: ReplicatedIdentityMembership {
+                    public_name: &state.public_name,
                     identity_id: self.identity_id,
                     app_key: self.app_key,
                     members: projection.members,

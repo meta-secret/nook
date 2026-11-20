@@ -283,12 +283,13 @@ pub use nook_auth2::{
     IdentityDirectoryRejection, IdentityDirectoryResolution, IdentityDirectoryVaultKeys,
     IdentityId, IdentityInvitationBinding, IdentityInvitationBindingRequest, IdentityInviteId,
     IdentityLegacyVaultImport, IdentityLegacyVaultReconciliation, IdentityMember,
-    IdentityMemberSigningUpdate, IdentityMemberVaultGrant, IdentityRecord, IdentityRecordRejection,
-    IdentitySelection, IdentityVaultBinding, IdentityVaultDek, IdentityVaultDekEpoch,
-    IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation, IdentityVaultEventId,
-    IdentityVaultKeyOpening, IdentityVaultKeys, LocalIdentityKeyRetirement, LocalIdentityLog,
-    MemberDekEnvelope, RecoveryRetirement, ReplicatedIdentityAddition, ReplicatedIdentityAdoption,
-    ReplicatedIdentityMembership, ReplicatedVaultGrant, SentinelShareEnvelope, VaultMember,
+    IdentityMemberSigningUpdate, IdentityMemberVaultGrant, IdentityPublicName, IdentityRecord,
+    IdentityRecordRejection, IdentitySelection, IdentityVaultBinding, IdentityVaultDek,
+    IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation,
+    IdentityVaultEventId, IdentityVaultKeyOpening, IdentityVaultKeys, LocalIdentityKeyRetirement,
+    LocalIdentityLog, MemberDekEnvelope, PublicKeyringLabel, RecoveryRetirement,
+    ReplicatedIdentityAddition, ReplicatedIdentityAdoption, ReplicatedIdentityMembership,
+    ReplicatedVaultGrant, SentinelShareEnvelope, VaultMember,
 };
 
 pub use multi_device::{

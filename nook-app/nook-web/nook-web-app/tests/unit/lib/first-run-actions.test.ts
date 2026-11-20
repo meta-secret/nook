@@ -260,7 +260,9 @@ describe('first-run setup settles the identity before any vault', () => {
 
     await new FirstRunActions(setup.vault).createNamed('Family')
 
-    expect(setup.created).toEqual(['Family'])
+    expect(setup.created).toEqual([
+      setup.vault.t(I18N_KEYS.WorkspaceFirstIdentityVaultLabel),
+    ])
   })
 
   test('a new identity on the sync provider is created with no sign-in staged', async () => {

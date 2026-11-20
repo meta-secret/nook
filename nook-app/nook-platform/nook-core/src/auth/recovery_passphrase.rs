@@ -14,8 +14,8 @@
 )]
 
 use nook_auth2::{
-    AdoptedIdentityLabel, AppId, AppKey, IsoTimestamp, MemberLabel, RecoveryPassphraseError,
-    RecoveryPhrase, RecoverySecret, RecoveryStrength, TypedRecoveryWords,
+    AdoptedIdentityLabel, AppId, AppKey, IdentityPublicName, IsoTimestamp, MemberLabel,
+    RecoveryPassphraseError, RecoveryPhrase, RecoverySecret, RecoveryStrength, TypedRecoveryWords,
 };
 use nook_event_log::{
     EventError, IdentityControlLog, IdentityControlOperation, IdentityControlState, IdentityEvent,
@@ -148,7 +148,7 @@ impl RecoveredKeyringName {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecoveredKeyringLabel {
     Named(RecoveredKeyringName),
-    /// No member named the keyring.
+    /// No sealed name needs to be carried to the new device.
     Unnamed,
 }
 
@@ -319,6 +319,9 @@ struct RecoveryNameOpening<'a> {
 
 impl RecoveryNameOpening<'_> {
     fn label(&self) -> VaultResult<RecoveredKeyringLabel> {
+        if let IdentityPublicName::Published(_) = self.state.public_name {
+            return Ok(RecoveredKeyringLabel::Unnamed);
+        }
         let Some(sealed) = self.state.sealed_name_for(self.recovery) else {
             return Ok(RecoveredKeyringLabel::Unnamed);
         };

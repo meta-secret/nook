@@ -155,11 +155,12 @@ passkey can also make **Continue** available.
 - A refusal from Rust reaches the user with its reason after the failed
   action, not as a bare "could not" sentence.
 - A new passkey is a member of nothing: every identity asks to join.
-- Setup may instead create a new identity. It is still fresh, so
-  `name_fresh_identity` names it before its log exists; an identity with a
-  log, a vault, or another member keeps its name (`IdentityAlreadyInUse`).
-  Naming requires the app key's local identity: the website names only its
-  own app key's identity.
+- Setup may instead create a new identity. `name_fresh_identity` accepts
+  the explicit name while the identity is still fresh. An unlocked active
+  app member can rename an established keyring from its **Overview**.
+  Both actions publish a
+  [signed name](../../../nook-event-log/.cortex/docs/architecture/identity-control-log.md#readable-keyring-names-in-the-signed-log)
+  for the actor's own keyring through its mounts.
 
 ## Operations
 
@@ -184,7 +185,9 @@ passkey can also make **Continue** available.
   - An active member whose listed signer the passkey derives adds the
     identity under its original id, with the members the log lists and the
     key's grant for each vault at its current key epoch.
-  - An identity without a sealed name is named by its identity words.
+  - The directory can use the verified readable name. A member can still
+    open a historical sealed name during authorized recovery. The directory
+    uses the identity words when neither name is available.
   - The identity log, the directory entry, and the keyring entry are written
     in one transaction.
   - A key that is not a member, was revoked, or already belongs to an
@@ -208,8 +211,8 @@ passkey can also make **Continue** available.
     device protection gate protects this browser's first key, then asks.
   - **A fresh key is unlocked:** it asks at once.
   - **The key in use belongs to an identity** (Drive setup): Rust stages a
-    new local identity named after the one asked. Its key ceremony runs as
-    for Add identity, the new identity is adopted, and its key asks.
+    new local identity for the request. Its key ceremony runs as for Add
+    identity, the new identity is adopted, and its key asks.
   - One join waits at a time; the page's other actions stay disabled.
     Leaving the gate or the ceremony leaves the join and asks nothing.
 - Effect:
@@ -217,7 +220,8 @@ passkey can also make **Continue** available.
     identity's log at the provider. It carries public keys only.
   - A device of the identity lists the request on its Devices page.
     - **Approve** appends `MemberApproved` with every vault's current DEK
-      wrapped to the joiner, and re-seals the identity's name to it. A vault
+      wrapped to the joiner. Approval for a keyring with a historical
+      sealed name retains its authorized delivery to the joiner. A vault
       the approver cannot open refuses the approval.
     - **Deny** appends `MemberJoinDenied`.
   - The listing reads each identity's log against the identity in use and
@@ -260,9 +264,10 @@ accent, no pills.
   device and vault counts in the header.
 - **Drive details.** The **Vaults** and **Devices** rows start collapsed.
   Show counts where known. Each row expands to show its linked items or
-  its empty or unavailable state. See
+  its empty or unavailable state. Each device row shows its full app ID
+  with its signed label when present. The row can wrap on narrow screens. See
   [the Drive listing](auth-providers.md#what-the-provider-already-holds)
-  for vault IDs and the device fields under **Advanced**.
+  for the source of these details.
 - **Drive recovery actions.** The first decision Rust allows is the
   primary button. The passkey option leads when available. Put the
   remaining allowed decisions in the overflow menu.
@@ -271,8 +276,8 @@ accent, no pills.
   icon indicates the way in. The active action shows a spinner while it
   runs.
 - **Checks.** Show **Reveal names** beneath the heading on eligible Drive
-  cards. The action checks a passkey to inspect names. Opening, recovering,
-  or joining the keyring requires its own action.
+  cards. The action checks a passkey for names that require authenticated
+  access. Opening, recovering, or joining the keyring requires its own action.
 
 ## Invariants
 

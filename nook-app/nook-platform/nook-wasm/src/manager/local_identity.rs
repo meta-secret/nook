@@ -10,7 +10,7 @@ use crate::storage::identity_record::StoredIdentityProtection;
 use crate::storage::indexed_db::SentinelFinalizationJournal;
 use crate::{NookDatabase, NookError};
 use identity_record::{LocalIdentityRecovery, PendingSimpleGenesis};
-use nook_core::{AppId, IdentityId};
+use nook_core::{AppId, IdentityId, PublicKeyringLabel};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
@@ -123,6 +123,18 @@ impl NookVaultManager {
 }
 
 impl NookVaultManager {
+    /// Stage an internal join or connection label without publishing it.
+    pub(in crate::manager) async fn stage_local_identity_creation(
+        &mut self,
+        label: &str,
+    ) -> Result<(), NookError> {
+        let label = Self::local_identity_label(label)
+            .map_err(|error| NookError::Database(error.to_owned()))?;
+        Self::ensure_no_pending_vault_creation().await?;
+        self.device.pending_local_identity_label = LocalIdentityCreation::Creating(label);
+        Ok(())
+    }
+
     async fn ensure_no_pending_vault_creation() -> Result<(), NookError> {
         let simple_pending = matches!(
             PendingSimpleGenesis::load().await?,
@@ -149,9 +161,9 @@ impl NookVaultManager {
     /// written until its browser-protection ceremony succeeds.
     #[wasm_bindgen]
     pub async fn begin_local_identity_creation(&mut self, label: &str) -> Result<(), JsError> {
-        let label = NookVaultManager::local_identity_label(label).map_err(JsError::new)?;
-        NookVaultManager::ensure_no_pending_vault_creation().await?;
-        self.device.pending_local_identity_label = LocalIdentityCreation::Creating(label);
+        let label =
+            PublicKeyringLabel::parse(label).map_err(|error| JsError::new(&error.to_string()))?;
+        self.stage_local_identity_creation(label.as_str()).await?;
         Ok(())
     }
 
@@ -224,6 +236,15 @@ mod tests {
 
         assert!(!manager.local_identity_creation_pending());
         Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn explicit_public_names_are_validated_before_staging() {
+        let mut manager = NookVaultManager::new();
+        let invalid = "x".repeat(81);
+        let refused = manager.begin_local_identity_creation(&invalid).await;
+        assert!(refused.is_err());
+        assert!(!manager.local_identity_creation_pending());
     }
 
     #[wasm_bindgen_test]

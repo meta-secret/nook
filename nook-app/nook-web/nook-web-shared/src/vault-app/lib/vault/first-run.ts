@@ -374,12 +374,13 @@ export class FirstRunActions {
       source: this.syncSource(),
       draft: vault.providerDraft,
     };
-    vault.firstRunVaultName = label;
+    const vaultName = vault.t(I18N_KEYS.WorkspaceFirstIdentityVaultLabel);
+    vault.firstRunVaultName = vaultName;
     // The vault is made on this browser first. A sign-in still staged would
     // be saved with it as a Google Drive provider without its Nook folder,
     // which no sync can use; it is staged again below to connect with one.
     vault.cancelProviderSetup();
-    await vault.createLocalVaultWithDeviceKeys(label);
+    await vault.createLocalVaultWithDeviceKeys(vaultName);
     if (!vault.isAuthenticated) return;
     if (
       vault.firstRunPlace === FirstRunPlace.SyncProvider &&
@@ -631,9 +632,8 @@ export class FirstRunActions {
     };
   }
 
-  /** Give this browser's still-fresh identity its name, before its log
-   * exists to seal it. */
-  private async nameIdentity(
+  /** Sign the explicitly chosen name for this browser's fresh keyring. */
+  async nameIdentity(
     label: string,
   ): Promise<Result<FirstRunNamingOutcome, FirstRunNamingFailure>> {
     const vault = this.vault;

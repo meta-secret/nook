@@ -16,7 +16,7 @@
 
 use nook_auth2::{
     AppId, AppKey, IdentityConnectionKey, IdentityDirectory, IdentityId, IdentityInvitationBinding,
-    IdentityInvitationBindingRequest, LocalIdentityLog, MultiDeviceError,
+    IdentityInvitationBindingRequest, IdentityPublicName, LocalIdentityLog, MultiDeviceError,
 };
 use nook_event_log::{
     EventError, IdentityApprovalRequest, IdentityControlOperation, IdentityControlState,
@@ -57,7 +57,9 @@ impl IdentityJoinAnswer<'_> {
             app_id: self.app_id,
             vaults: &vaults,
         })?];
-        if let Some(sealed) = self.state.sealed_name_for(self.approver.app_id()) {
+        if let IdentityPublicName::Unpublished = self.state.public_name
+            && let Some(sealed) = self.state.sealed_name_for(self.approver.app_id())
+        {
             let name = self.approver.open_utf8(sealed)?;
             let joining = self
                 .state
@@ -108,7 +110,9 @@ impl IdentityMemberAdd<'_> {
                 app_id: self.approver.app_id().clone(),
             },
         })?];
-        if let Some(sealed) = self.state.sealed_name_for(self.approver.app_id()) {
+        if let IdentityPublicName::Unpublished = self.state.public_name
+            && let Some(sealed) = self.state.sealed_name_for(self.approver.app_id())
+        {
             let name = self.approver.open_utf8(sealed)?;
             operations.push(self.state.naming_operation(&IdentityNaming {
                 name: &name,
@@ -422,6 +426,7 @@ mod tests {
                 created
                     .directory
                     .apply_replicated_membership(&ReplicatedIdentityMembership {
+                        public_name: &IdentityPublicName::Unpublished,
                         identity_id: &in_use,
                         app_key: &in_use_key,
                         members: vec![nook_auth2::IdentityMember {
@@ -496,6 +501,7 @@ mod tests {
             self.directory =
                 self.directory
                     .apply_replicated_membership(&ReplicatedIdentityMembership {
+                        public_name: &IdentityPublicName::Unpublished,
                         identity_id: &state.identity_id,
                         app_key: &asking.app,
                         members: projection.members,

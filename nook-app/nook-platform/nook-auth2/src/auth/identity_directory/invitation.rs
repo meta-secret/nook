@@ -124,13 +124,28 @@ impl IdentityDirectory {
     }
 
     /// Name the app key's local identity while nothing ties it to an identity
-    /// yet, so its log seals that name when it is created. An identity with a
+    /// yet. An identity with a
     /// log, a vault, or another member keeps the name it has. A key with no
     /// local identity has nothing to name.
     pub fn name_fresh_identity(
         self,
         request: &FreshIdentityNaming<'_>,
     ) -> MultiDeviceResult<IdentityDirectory> {
+        let identity_id = self.fresh_identity_for_naming(request)?.clone();
+        let mut named = self;
+        for record in &mut named.identities {
+            if record.identity_id == identity_id {
+                request.label.clone_into(&mut record.label);
+            }
+        }
+        Ok(named)
+    }
+
+    /// Check that explicit naming may found the app key's fresh identity.
+    pub fn fresh_identity_for_naming(
+        &self,
+        request: &FreshIdentityNaming<'_>,
+    ) -> MultiDeviceResult<&IdentityId> {
         if request.label.trim().is_empty() {
             return Err(MultiDeviceError::IdentityLabelEmpty);
         }
@@ -140,14 +155,7 @@ impl IdentityDirectory {
                 identity_id: local.identity_id.to_string(),
             });
         }
-        let identity_id = local.identity_id.clone();
-        let mut named = self;
-        for record in &mut named.identities {
-            if record.identity_id == identity_id {
-                request.label.clone_into(&mut record.label);
-            }
-        }
-        Ok(named)
+        Ok(&local.identity_id)
     }
 
     /// Choose the app key that connects this installation to one more
@@ -170,8 +178,8 @@ impl IdentityDirectory {
 mod tests {
     use super::*;
     use crate::{
-        DeviceSigningPublicKey, IdentityCreation, IdentityMember, MemberLabelState,
-        ReplicatedIdentityMembership, ReplicatedVaultGrant, StoreId, VaultKeys,
+        DeviceSigningPublicKey, IdentityCreation, IdentityMember, IdentityPublicName,
+        MemberLabelState, ReplicatedIdentityMembership, ReplicatedVaultGrant, StoreId, VaultKeys,
     };
 
     /// A browser with one local identity per app key it protects.
@@ -216,6 +224,7 @@ mod tests {
             self.directory =
                 self.directory
                     .apply_replicated_membership(&ReplicatedIdentityMembership {
+                        public_name: &IdentityPublicName::Unpublished,
                         identity_id,
                         app_key,
                         members: vec![Self::member(app_key), Self::member(&other)],

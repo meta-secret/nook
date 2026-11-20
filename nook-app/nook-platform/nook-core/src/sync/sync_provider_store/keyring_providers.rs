@@ -164,6 +164,7 @@ mod tests {
             removed_vaults: Vec::new(),
             mounts: Vec::new(),
             sealed_name: Vec::new(),
+            public_name: nook_auth2::IdentityPublicName::Unpublished,
             heads: Vec::new(),
         })
     }

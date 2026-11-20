@@ -8,8 +8,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use nook_auth2::{
-    AgeArmoredCiphertext, AppId, AuthKeyId, IdentityId, IsoTimestamp, MemberLabel,
-    RecoverySealedSecret, RecoveryStrength, StoreId,
+    AgeArmoredCiphertext, AppId, AuthKeyId, IdentityId, IdentityPublicName, IsoTimestamp,
+    MemberLabel, RecoverySealedSecret, RecoveryStrength, StoreId,
 };
 
 use super::graph::{EffectiveMember, IdentityControlLog};
@@ -138,6 +138,8 @@ pub struct IdentityControlState {
     /// The identity's latest name, sealed to each member that still holds
     /// keys; empty when no member named it.
     pub sealed_name: Vec<MemberSealedName>,
+    /// The latest explicitly published name in canonical causal order.
+    pub public_name: IdentityPublicName,
     pub heads: Vec<EventId>,
 }
 
@@ -214,6 +216,7 @@ struct ProjectionAccumulator {
     removed_vaults: BTreeSet<StoreId>,
     mounts: BTreeMap<ProviderMountId, IdentityProviderMount>,
     sealed_name: Vec<MemberSealedName>,
+    public_name: IdentityPublicName,
 }
 
 #[derive(Clone, Copy)]
@@ -379,6 +382,9 @@ impl ProjectionAccumulator {
             IdentityControlOperation::IdentityNamed { recipients } => {
                 self.sealed_name.clone_from(recipients);
             }
+            IdentityControlOperation::IdentityPublicNameSet { name } => {
+                self.public_name = IdentityPublicName::Published(name.clone());
+            }
         }
         Ok(())
     }
@@ -423,7 +429,8 @@ impl ProjectionAccumulator {
             | IdentityControlOperation::MemberRenamed { .. }
             | IdentityControlOperation::ProviderMounted { .. }
             | IdentityControlOperation::ProviderUnmounted { .. }
-            | IdentityControlOperation::IdentityNamed { .. } => {}
+            | IdentityControlOperation::IdentityNamed { .. }
+            | IdentityControlOperation::IdentityPublicNameSet { .. } => {}
         }
     }
 
@@ -568,6 +575,7 @@ impl IdentityControlState {
                 .into_iter()
                 .filter(|sealed| active.contains_key(&sealed.app_id))
                 .collect(),
+            public_name: accumulator.public_name,
             heads: log.applicable_heads(),
         })
     }
