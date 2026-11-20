@@ -5,6 +5,7 @@ import initNookWasm, {
   assess_identity_health,
   NookBrowserExtensionInstallation,
   NookBrowserExtensionMembership,
+  NookVaultManager,
 } from '$app-wasm'
 import { type StorageProvider } from '$lib/auth/providers'
 import { ProviderRowFixture } from '../provider-fixtures'
@@ -13,6 +14,7 @@ import {
   IdentityActionOutcome,
   IdentityControlViewKind,
   type IdentityControlView,
+  type KeyringRename,
 } from '$lib/vault/identity-control.svelte'
 import type { IdentityControlSnapshot, IdentityMemberView } from '$app-wasm'
 import type { VaultState } from '$lib/vault.svelte'
@@ -20,6 +22,7 @@ import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import IdentityPanel from '../../../../nook-web-shared/src/vault-app/lib/components/identity-control/IdentityPanel.svelte'
 import IdentityOverviewPanel from '../../../../nook-web-shared/src/vault-app/lib/components/identity-control/IdentityOverviewPanel.svelte'
+import { IdentityDirectoryLoader } from '$lib/components/identities/identity-directory-loader.svelte'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 
 beforeAll(async () => {
@@ -166,6 +169,59 @@ describe('identity panel', () => {
       label: 'Shared travel',
     })
     expect(view.queryAllByTestId('identity-rename-input')).toHaveLength(0)
+  })
+
+  test('reports an interrupted rename without syncing the newly selected keyring', async () => {
+    const vault = VaultStateTestFixture.create()
+    const manager = new NookVaultManager()
+    const originalId = 'idn_travel'
+    const nextId = 'idn_home'
+    let selectedId = originalId
+    vi.spyOn(vault, 'admitManager').mockReturnValue(ok(manager))
+    vi.spyOn(IdentityDirectoryLoader.prototype, 'reload').mockResolvedValue()
+    const snapshot: IdentityControlSnapshot = {
+      identityId: originalId,
+      identityLabel: 'Travel',
+      standing: 'member',
+      members: [],
+      devices: [],
+      deviceCount: 1,
+      extensionOnThisDevice: 'notJoined',
+      joinRequests: [],
+      vaults: [],
+      mounts: [],
+      recoveryPassphrases: [],
+    }
+    vi.spyOn(manager, 'identity_control_snapshot').mockImplementation(
+      async () => ({
+        ...snapshot,
+        identityId: selectedId,
+      }),
+    )
+    const appendedOn: string[] = []
+    const append = vi
+      .spyOn(manager, 'rename_identity')
+      .mockImplementation(async () => {
+        appendedOn.push(selectedId)
+      })
+    const record = vi.spyOn(manager, 'record_identity_provider_mounts')
+    const replicate = vi.spyOn(manager, 'sync_identity_log_with_provider')
+    const request: KeyringRename = {
+      identityId: originalId,
+      label: 'Shared travel',
+    }
+    const rename = vault.identityControl.renameKeyring(request)
+    const select = await vault.enqueueStorage(() => {
+      selectedId = nextId
+      return ok(nextId)
+    })
+    expect(select.isOk()).toBe(true)
+    expect((await rename).isErr()).toBe(true)
+    expect(append).toHaveBeenCalledExactlyOnceWith(request.label)
+    expect(appendedOn).toEqual([originalId])
+    expect(record).not.toHaveBeenCalled()
+    expect(replicate).not.toHaveBeenCalled()
+    expect(selectedId).toBe(nextId)
   })
 
   test('each action and detail opens its page', async () => {

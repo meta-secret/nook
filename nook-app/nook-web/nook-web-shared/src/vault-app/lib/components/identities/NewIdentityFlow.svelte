@@ -32,6 +32,8 @@ adopting the new identity ends the current identity's session midway.
 
   let nameInput = $state("");
   let vaultInput = $state("");
+  let adoption = $state<"protecting" | "working" | "retry">("protecting");
+  let confirmedName = "";
   /** Rust holds a prepared identity until its passkey commits it. A join to
    * another identity that waits for this identity's key arrives prepared:
    * Rust staged it, and the key asks to join once it exists. */
@@ -102,6 +104,7 @@ adopting the new identity ends the current identity's session midway.
     vault.dismissError();
     creationPending = true;
     cancelRequested = false;
+    confirmedName = label;
     vault.newIdentityName = label;
     vault.newIdentity = NewIdentityStage.Key;
   }
@@ -142,6 +145,7 @@ adopting the new identity ends the current identity's session midway.
       return;
     }
     nameInput = vault.newIdentityName;
+    confirmedName = "";
     vault.newIdentityName = "";
     vault.newIdentity = NewIdentityStage.Name;
   }
@@ -157,17 +161,22 @@ adopting the new identity ends the current identity's session midway.
 
   /** The passkey committed the identity: adopt it as this browser's own. */
   async function adopt(): Promise<void> {
-    creationPending = false;
-    new IdentitySessionTransition(vault).clearPriorIdentity();
+    if (adoption === "working") return;
+    if (adoption === "protecting") {
+      creationPending = false;
+      new IdentitySessionTransition(vault).clearPriorIdentity();
+    }
+    adoption = "working";
+    vault.dismissError();
     const providerLoad: Parameters<typeof vault.loadProviders>[0] = {
       ensureLocalRow: true,
     };
     const wait = vault.identityJoin;
-    if (wait.kind === IdentityJoinWaitKind.Idle && vault.newIdentityName) {
-      const named = await new FirstRunActions(vault).nameIdentity(
-        vault.newIdentityName,
-      );
+    const name = wait.kind === IdentityJoinWaitKind.Idle ? confirmedName : "";
+    if (name) {
+      const named = await new FirstRunActions(vault).nameIdentity(name);
       if (named.isErr()) {
+        adoption = "retry";
         vault.errorMsg = vault.t(named.error.translationKey);
         return;
       }
@@ -175,6 +184,7 @@ adopting the new identity ends the current identity's session midway.
     const loaded = await vault.loadProviders(providerLoad);
     if (loaded.isErr()) {
       vault.identityJoin = { kind: IdentityJoinWaitKind.Idle };
+      adoption = name ? "retry" : "protecting";
       vault.errorMsg = vault.t(loaded.error.translationKey);
       return;
     }
@@ -260,7 +270,7 @@ adopting the new identity ends the current identity's session midway.
       <FirstRunBackLink
         {vault}
         testId="new-identity-back"
-        disabled={vault.isVerifying}
+        disabled={vault.isVerifying || adoption !== "protecting"}
         onBack={() => void backToName()}
       />
       <StepProgress {steps} current={stepIndex} />
@@ -276,16 +286,27 @@ adopting the new identity ends the current identity's session midway.
       </p>
     </div>
     <FirstRunDiagram diagram={keyDiagram} />
-    <DeviceProtectionGate
-      {vault}
-      frame={DeviceProtectionGateFrame.Embedded}
-      creationOnly={true}
-      initializeSession={false}
-      recoveryAppId=""
-      onBeforeProtectionAction={protectionStarted}
-      onProtectionActionSettled={protectionSettled}
-      onProtectionReady={() => void adopt()}
-    />
+    {#if adoption === "protecting"}
+      <DeviceProtectionGate
+        {vault}
+        frame={DeviceProtectionGateFrame.Embedded}
+        creationOnly={true}
+        initializeSession={false}
+        recoveryAppId=""
+        onBeforeProtectionAction={protectionStarted}
+        onProtectionActionSettled={protectionSettled}
+        onProtectionReady={() => void adopt()}
+      />
+    {:else if adoption === "retry"}
+      <Button
+        type="button"
+        class="justify-self-center"
+        data-testid="new-identity-retry-publication"
+        onclick={() => void adopt()}
+      >
+        {vault.t(I18N_KEYS.FirstRunConnectRetry)}
+      </Button>
+    {/if}
   </section>
 {:else if vault.newIdentity === NewIdentityStage.Ready}
   <section

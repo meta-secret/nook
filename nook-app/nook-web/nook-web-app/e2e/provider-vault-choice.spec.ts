@@ -13,6 +13,7 @@ import {
   openIdentityPanel,
   openLoginProviderSetup,
   openStorageSettings,
+  openVaultPage,
   openVaultRow,
   uniqueSecretKey,
   waitForGoogleOAuthSignedIn,
@@ -88,6 +89,7 @@ test.describe('an identity another browser keeps in the Nook folder', () => {
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     await disableVaultIdleLock(deviceA)
+    await openVaultPage(deviceA)
     await addSecret(deviceA, uniqueSecretKey('identity-choice'), 'kept-by-a')
     await waitForSyncRemoteState(
       target,
