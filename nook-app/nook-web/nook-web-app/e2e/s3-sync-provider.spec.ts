@@ -222,8 +222,8 @@ test.describe('S3-compatible storage as the sync provider', () => {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
 
-      // The member reads the request from S3 and approves it. The request
-      // leaves its list once the approval is synchronized to S3.
+      // The member reads and approves the request. Its success message
+      // appears after the approval has reached every mount.
       await openManagePage(page, ManagePage.Devices)
       const syncNow = page.getByTestId('identity-sync-now-btn')
       await expect(syncNow).toBeEnabled({
@@ -239,6 +239,10 @@ test.describe('S3-compatible storage as the sync provider', () => {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
       await approve.click()
+      await expect(page.getByTestId('app-success')).toHaveText(
+        enLocale.identity_control.join_request_approved,
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+      )
       await expect(request).toHaveCount(0, {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })

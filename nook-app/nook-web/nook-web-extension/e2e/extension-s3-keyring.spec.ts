@@ -80,6 +80,10 @@ test('the extension joins a keyring on S3 and reads its vault through the local 
       identity: LocalS3Identity.DeviceA,
     })
     await createKeyringOnS3(vaultPage, KEYRING_NAME)
+    await expect(vaultPage.getByTestId('identity-card-label')).toHaveText(
+      KEYRING_NAME,
+      { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
+    )
     await disableVaultIdleLock(vaultPage)
     await openVaultPage(vaultPage)
     await addSecret(
@@ -130,7 +134,7 @@ test('the extension joins a keyring on S3 and reads its vault through the local 
       `${PAIRING_GRANT_PREFIX}${storeId}`
     ]
     expect(grant).toMatchObject({
-      vaultName: KEYRING_NAME,
+      vaultName: enLocale.workspace.first_identity.vault_label,
       syncProviderCount: 1,
     })
     if (
