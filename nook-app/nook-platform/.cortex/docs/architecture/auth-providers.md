@@ -393,8 +393,8 @@ Each Drive keyring card shows these details.
 - **Vaults.** The verified log supplies one row per currently registered
   vault, including a vault whose namespace has yet to replicate to this
   provider. If the control log is absent, the card can show the namespaces
-  observed under that keyring. The rows are informational. An available
-  name labels the vault. Its full store ID appears under **Advanced**.
+  observed under that keyring. Each row shows the vault's full store ID
+  alongside its name when available.
 
 Names can come from the matching local identity directory or vault registry.
 The **Reveal names** action calls

@@ -251,8 +251,9 @@ passkey can also make **Continue** available.
 The card follows Nook's matte-steel visual language: tone over borders, one
 accent, no pills.
 
-- **Card:** one `nk-frame` per identity. A tile shows a person when the
-  identity opens here and a lock when it does not.
+- **Card.** Use one `nk-frame` per identity. The compact Drive card uses a
+  key icon. On other providers, the tile shows a person when the identity
+  opens here or a lock when it is locked.
 - **Header.** Show the identity's words with any available name. Keep the
   standing tag on the recovery screen and the setup tag in setup. Use the
   success tone when the identity opens. On other providers, show available
@@ -261,7 +262,7 @@ accent, no pills.
   Show counts where known. Each row expands to show its linked items or
   its empty or unavailable state. See
   [the Drive listing](auth-providers.md#what-the-provider-already-holds)
-  for which fields appear under **Advanced**.
+  for vault IDs and the device fields under **Advanced**.
 - **Drive recovery actions.** The first decision Rust allows is the
   primary button. The passkey option leads when available. Put the
   remaining allowed decisions in the overflow menu.
