@@ -99,6 +99,7 @@ test.describe('an identity another browser keeps in the Nook folder', () => {
     if (!vaultA?.store_id) throw new Error('browser A lists no vault')
 
     const freshContext = await createIsolatedContext(browser)
+    let keyringWords: string
     try {
       const reader = await freshContext.newPage()
       await installSyncRemote(reader, target)
@@ -113,9 +114,11 @@ test.describe('an identity another browser keeps in the Nook folder', () => {
       await expect(card.getByTestId('provider-vault-identity')).toHaveText(
         createdName,
       )
-      await expect(card.getByTestId('provider-identity-facts')).toHaveText(
-        /^[a-z]+-[a-z]+-[a-z]+$/,
-      )
+      const words = card
+        .getByTestId('provider-identity-facts')
+        .locator(':scope > span')
+      await expect(words).toHaveText(/^[a-z]+-[a-z]+-[a-z]+$/)
+      keyringWords = await words.innerText()
     } finally {
       await freshContext.close()
     }
@@ -151,9 +154,9 @@ test.describe('an identity another browser keeps in the Nook folder', () => {
     await expect(identityA.getByTestId('provider-vault-identity')).toHaveText(
       renamedName,
     )
-    await expect(identityA.getByTestId('provider-identity-facts')).toHaveText(
-      /^[a-z]+-[a-z]+-[a-z]+$/,
-    )
+    await expect(
+      identityA.getByTestId('provider-identity-facts').locator(':scope > span'),
+    ).toHaveText(keyringWords)
     await expect(
       identityA.getByTestId('provider-identity-standing'),
     ).toHaveText(enLocale.first_run.identity_not_member)

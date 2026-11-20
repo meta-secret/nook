@@ -9,7 +9,7 @@ import initNookWasm, {
 } from '$app-wasm'
 import { type StorageProvider } from '$lib/auth/providers'
 import { ProviderRowFixture } from '../provider-fixtures'
-import { ok } from 'neverthrow'
+import { ok, type Result } from 'neverthrow'
 import {
   IdentityActionOutcome,
   IdentityControlViewKind,
@@ -23,6 +23,7 @@ import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import IdentityPanel from '../../../../nook-web-shared/src/vault-app/lib/components/identity-control/IdentityPanel.svelte'
 import IdentityOverviewPanel from '../../../../nook-web-shared/src/vault-app/lib/components/identity-control/IdentityOverviewPanel.svelte'
 import { IdentityDirectoryLoader } from '$lib/components/identities/identity-directory-loader.svelte'
+import { SerialOperationQueue } from '$lib/runtime/serial-operation-queue'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 
 beforeAll(async () => {
@@ -135,6 +136,9 @@ describe('identity panel', () => {
         recoveryPassphrases: [],
       },
     }
+    vi.spyOn(vault.identityControl, 'followOpenVault').mockResolvedValue(
+      ok(IdentityActionOutcome.Completed),
+    )
     const rename = vi
       .spyOn(vault.identityControl, 'renameKeyring')
       .mockResolvedValue(ok(IdentityActionOutcome.Completed))
@@ -174,6 +178,10 @@ describe('identity panel', () => {
   test('reports an interrupted rename without syncing the newly selected keyring', async () => {
     const vault = VaultStateTestFixture.create()
     const manager = new NookVaultManager()
+    const queue = new SerialOperationQueue()
+    vault.enqueueStorage = <Value, Failure>(
+      operation: () => Result<Value, Failure> | Promise<Result<Value, Failure>>,
+    ) => queue.enqueue(operation)
     const originalId = 'idn_travel'
     const nextId = 'idn_home'
     let selectedId = originalId
