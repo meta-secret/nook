@@ -20,7 +20,7 @@ use rexie::TransactionMode;
 
 use crate::{NookDatabase, NookError};
 
-const STORE_EVENTS: &str = "events";
+pub(super) const STORE_EVENTS: &str = "events";
 
 pub(crate) enum IdentityLogOrigin<'a> {
     Unnamed,
@@ -79,7 +79,7 @@ impl NookDatabase {
         NookError::IndexedDb(format!("Identity log key error: {error:?}"))
     }
 
-    async fn read_identity_index(
+    pub(super) async fn read_identity_index(
         store: &rexie::Store,
         identity_id: &IdentityId,
     ) -> Result<Vec<String>, NookError> {

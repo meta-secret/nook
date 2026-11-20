@@ -7,7 +7,7 @@
 
 use std::iter;
 
-use nook_auth2::{AppId, IdentityId, IdentityPublicName, RecoveryStrength};
+use nook_auth2::{AppId, IdentityId, RecoveryStrength};
 use nook_event_log::{
     IdentityControlMember, IdentityControlState, IdentityMemberApprover, IdentityMountTarget,
     IdentityProviderMount, IdentityVaultDekLookup, MemberDevice,
@@ -303,10 +303,7 @@ impl IdentityControlSnapshot {
         };
         Self {
             identity_id: state.identity_id.as_str().to_owned(),
-            identity_label: match &state.public_name {
-                IdentityPublicName::Published(name) => name.as_str().to_owned(),
-                IdentityPublicName::Unpublished => (*identity_label).to_owned(),
-            },
+            identity_label: state.public_name.display_or(identity_label).to_owned(),
             standing,
             members: state
                 .app_members()

@@ -54,6 +54,17 @@ pub enum IdentityPublicName {
     Published(PublicKeyringLabel),
 }
 
+impl IdentityPublicName {
+    /// Prefer the verified public name to an existing display label.
+    #[must_use]
+    pub fn display_or<'a>(&'a self, label: &'a str) -> &'a str {
+        match self {
+            Self::Published(name) => name.as_str(),
+            Self::Unpublished => label,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

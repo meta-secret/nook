@@ -1,7 +1,7 @@
 //! Versioned persistence for independently protected local identity keys.
 
 use crate::IdentityDbWriteIdentityDirectory;
-use crate::storage::identity_log::IdentityLogWrite;
+use crate::storage::identity_log::{IdentityLogWrite, STORE_EVENTS};
 use crate::storage::identity_record::PreviousLocalSelection;
 use crate::storage::identity_record::StoredIdentityProtection;
 use crate::storage::indexed_db::StoredStringRecord;
@@ -9,7 +9,7 @@ use nook_core::LocalIdentityProtection;
 
 use crate::NookDatabase;
 use crate::NookError;
-use nook_core::{IdentitySelection, LocalIdentityKeyring};
+use nook_core::{IdentitySelection, LocalIdentityKeyring, MultiDeviceError};
 use rexie::TransactionMode;
 
 mod protection;
@@ -436,8 +436,8 @@ pub(crate) struct KeyringDbRebindLocalIdentity<'a> {
 }
 
 impl NookDatabase {
-    /// Rename a local identity to the replicated identity it belongs to. The
-    /// directory and keyring change in one transaction.
+    /// Rebind a fresh local identity to its replicated identity. Check the
+    /// old namespace's log alongside the directory and keyring update.
     pub(crate) async fn rebind_local_identity(
         request: KeyringDbRebindLocalIdentity<'_>,
     ) -> Result<(), NookError> {
@@ -446,9 +446,12 @@ impl NookDatabase {
             replicated_identity_id,
             label,
         } = request;
+        if local_identity_id == replicated_identity_id {
+            return Ok(());
+        }
         let rexie = NookDatabase::open_nook_database().await?;
         let transaction = rexie
-            .transaction(&["vault"], TransactionMode::ReadWrite)
+            .transaction(&["vault", STORE_EVENTS], TransactionMode::ReadWrite)
             .map_err(|error| NookError::IndexedDb(format!("Identity rebind error: {error:?}")))?;
         let store = transaction.store("vault").map_err(|error| {
             NookError::IndexedDb(format!("Identity rebind store error: {error:?}"))
@@ -456,6 +459,19 @@ impl NookDatabase {
         IdentityTransitionAdmission { store: &store }
             .check()
             .await?;
+        let events = transaction.store(STORE_EVENTS).map_err(|error| {
+            NookError::IndexedDb(format!("Identity rebind events store error: {error:?}"))
+        })?;
+        if !NookDatabase::read_identity_index(&events, local_identity_id)
+            .await?
+            .is_empty()
+        {
+            return Err(NookDatabase::map_domain_error(
+                MultiDeviceError::AppKeyBelongsToAnotherIdentity {
+                    identity_id: local_identity_id.to_string(),
+                },
+            ));
+        }
         let directory = NookDatabase::load_directory_for_write(&store).await?;
         let keyring = NookDatabase::load_keyring_for_store(KeyringDbLoadKeyringForStore {
             store: &store,

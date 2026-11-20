@@ -105,10 +105,9 @@ impl IdentityRecord {
             ));
         }
         let mut changed = false;
-        if let IdentityPublicName::Published(name) = request.public_name
-            && self.label != name.as_str()
-        {
-            name.as_str().clone_into(&mut self.label);
+        let label = request.public_name.display_or(&self.label);
+        if self.label != label {
+            self.label = label.to_owned();
             changed = true;
         }
         for replicated in request

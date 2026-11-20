@@ -346,4 +346,51 @@ mod browser_tests {
         js(manager.delete_local_browser_data().await)?;
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn an_admitted_join_cannot_move_a_newly_named_identity() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        js(manager.delete_local_browser_data().await)?;
+        js(manager
+            .finish_pin_device_protection("naming pin".to_owned())
+            .await)?;
+        let app_key = manager.unlocked_app_key()?;
+        let local = NookVaultManager::current_identity_id(&app_key).await?;
+        let invited = IdentityId::generate()?;
+        let join = KeyringDbRebindLocalIdentity {
+            local_identity_id: &local,
+            replicated_identity_id: &invited,
+            label: nook_core::AdoptedIdentityLabel::Invited("Invited"),
+        };
+        assert!(NookDatabase::load_identity_log(&local).await?.is_empty());
+
+        js(manager.name_fresh_identity("Team".to_owned()).await)?;
+        assert!(NookDatabase::rebind_local_identity(join).await.is_err());
+        NookDatabase::rebind_local_identity(KeyringDbRebindLocalIdentity {
+            local_identity_id: &local,
+            replicated_identity_id: &local,
+            label: nook_core::AdoptedIdentityLabel::Invited("Invited"),
+        })
+        .await?;
+        assert_eq!(
+            NookVaultManager::current_identity_id(&app_key).await?,
+            local
+        );
+        assert_eq!(identity_label().await?, "Team");
+        assert!(NookDatabase::load_identity_log(&invited).await?.is_empty());
+        assert_eq!(
+            IdentityControlState::project(&NookDatabase::load_identity_log(&local).await?)?
+                .public_name,
+            IdentityPublicName::Published(PublicKeyringLabel::parse("Team")?)
+        );
+        js(manager.delete_local_browser_data().await)?;
+        Ok(())
+    }
 }
