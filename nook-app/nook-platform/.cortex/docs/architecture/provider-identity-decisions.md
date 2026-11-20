@@ -255,16 +255,23 @@ accent, no pills.
   identity opens here and a lock when it does not.
 - **Header.** Show the identity's words with any available name. Keep the
   standing tag on the recovery screen and the setup tag in setup. Use the
-  success tone when the identity opens.
-- **Drive details.** Show the linked vault and device rows under the
-  keyring. Put the device's installation ID in **Advanced**. Other
-  provider cards can show device and vault counts.
-- **Decision buttons.** Each allowed decision has its own button. The
-  first uses the primary style. A passkey, recovery words, or device icon
-  indicates the way in. The active action shows a spinner while it runs.
-- **Checks.** Give an eligible Drive card a visible passkey action that
-  explains it can reveal names. Keep it separate from the ways to open,
-  recover, or join the keyring.
+  success tone when the identity opens. On other providers, show available
+  device and vault counts in the header.
+- **Drive details.** The **Vaults** and **Devices** rows start collapsed.
+  Show counts where known. Each row expands to show its linked items or
+  its empty or unavailable state. See
+  [the Drive listing](auth-providers.md#what-the-provider-already-holds)
+  for which fields appear under **Advanced**.
+- **Drive recovery actions.** The first decision Rust allows is the
+  primary button. The passkey option leads when available. Put the
+  remaining allowed decisions in the overflow menu.
+- **Other recovery providers.** Each allowed decision has its own button.
+  The first uses the primary style. A passkey, recovery words, or device
+  icon indicates the way in. The active action shows a spinner while it
+  runs.
+- **Checks.** Show **Reveal names** beneath the heading on eligible Drive
+  cards. The action checks a passkey to inspect names. Opening, recovering,
+  or joining the keyring requires its own action.
 
 ## Invariants
 
