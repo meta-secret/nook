@@ -181,8 +181,9 @@ It never deletes:
   keyrings it holds, read without any key. It never discovers or opens one
   vault on its own.
   - Treat discovery as a bounded busy operation.
-  - When no keyring is found, the user can pick another provider.
-    An eligible initial Drive recovery also offers the explicit
+  - An empty recovery listing ends discovery before device authorization.
+    The user can pick another provider. An eligible initial Drive recovery
+    also offers the explicit
     [Create a keyring](auth-providers.md#create-a-keyring-from-an-empty-drive-listing)
     action before device authorization.
   - Each keyring's way in asks for this browser's key when it needs one:
