@@ -388,21 +388,22 @@ Each Drive keyring card shows these details.
   sharing a device contribute one row. A device with a signed label shows
   its name. An active device with a blank label appears as **Unnamed device**.
   The installation's app ID appears under **Advanced**. An absent
-  control log leaves device information unavailable.
+  control log leaves device information unavailable. A verified empty
+  roster has a known count of zero.
 - **Vaults.** The verified log supplies one row per currently registered
   vault, including a vault whose namespace has yet to replicate to this
   provider. If the control log is absent, the card can show the namespaces
-  observed under that keyring. The rows are informational. An available name
-  identifies the vault alongside its store ID.
+  observed under that keyring. Each row shows the vault's full store ID
+  alongside its name when available.
 
 Names can come from the matching local identity directory or vault registry.
-The **Reveal name and vault details with a passkey** action calls
+The **Reveal names** action calls
 `check_passkey_access` with the signed-in Drive source. A keyring name
 requires a matching member key.
 A vault name requires access to its encrypted metadata. The check is
 read-only. Its results stay in memory for the current Drive listing. A vault
-with an unavailable name still shows its ID. Its name may be sealed, its
-metadata may not have replicated, or the vault may have no name.
+name may be sealed, its metadata may not have replicated, or the vault may
+have no name.
 
 The linked details are exchanged as typed Rust/WASM values in one app
 build. The existing control events and vault records supply the details, so

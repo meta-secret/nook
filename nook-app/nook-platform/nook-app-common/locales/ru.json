@@ -1390,8 +1390,8 @@
     "root_empty": "В вашей папке «meta-secret-nook» пока нет связок ключей. «Подключить и синхронизировать» добавит туда вашу.",
     "devices": "Устройств: {count}",
     "identity_vaults": "Сейфов у этой связки ключей: {count}",
-    "linked_devices": "Связанные устройства",
-    "linked_vaults": "Связанные сейфы",
+    "devices_disclosure": "Устройства ({count})",
+    "vaults_disclosure": "Сейфы ({count})",
     "devices_unavailable": "Список устройств недоступен.",
     "no_linked_devices": "Нет связанных устройств.",
     "no_linked_vaults": "Нет связанных сейфов.",
@@ -1399,7 +1399,9 @@
     "vault_name_unavailable": "Название сейфа недоступно",
     "advanced": "Дополнительно",
     "app_id": "ID приложения",
-    "reveal_details": "Показать имя связки и сведения о сейфах с ключом доступа",
+    "reveal_details": "Показать названия",
+    "open_with_passkey": "Открыть ключом доступа",
+    "more_actions": "Другие действия для связки {identity}",
     "reveal_no_match": "Этот ключ доступа не открыл связку ключей."
   },
   "access_check": {

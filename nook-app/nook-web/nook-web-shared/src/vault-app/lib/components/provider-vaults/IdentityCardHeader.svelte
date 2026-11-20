@@ -5,8 +5,7 @@ public log tells. The plan list and setup's list both open their cards with
 it; setup's tag says what this browser's passkey is to the identity instead.
 -->
 <script lang="ts">
-  import { Lock, UserRound } from '@lucide/svelte'
-  import type { Snippet } from 'svelte'
+  import { KeyRound, Lock, UserRound } from '@lucide/svelte'
   import type {
     IdentitySetup,
     IdentityStanding,
@@ -15,19 +14,22 @@ it; setup's tag says what this browser's passkey is to the identity instead.
   } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
-  import { IdentityDecisionText } from '$lib/components/provider-vaults/identity-plan.svelte'
+  import {
+    IdentityDecisionText,
+    type CompactIdentityCard,
+  } from '$lib/components/provider-vaults/identity-plan.svelte'
   import { IdentityCardTag } from '$lib/components/provider-vaults/identity-card-tag'
 
   let {
     vault,
     choice,
     tag = IdentityCardTag.Standing,
-    details,
+    compact,
   }: {
     vault: VaultState
     choice: ProviderIdentityChoice
     tag?: IdentityCardTag
-    details?: Snippet<[ProviderIdentityChoice]>
+    compact?: CompactIdentityCard
   } = $props()
 
   const text = $derived(new IdentityDecisionText(vault))
@@ -134,7 +136,9 @@ it; setup's tag says what this browser's passkey is to the identity instead.
 
 <header class="flex items-start gap-3">
   <span class="nk-tile nk-tile-sm" aria-hidden="true">
-    {#if opens(standing)}
+    {#if compact}
+      <KeyRound class="size-4" />
+    {:else if opens(standing)}
       <UserRound class="size-4" />
     {:else}
       <Lock class="size-4" />
@@ -156,16 +160,19 @@ it; setup's tag says what this browser's passkey is to the identity instead.
         {tagLine()}
       </span>
     </div>
-    <p class="nk-spec" data-testid="provider-identity-facts">
-      {#if name !== words}
-        <span>{words}</span>
-      {/if}
-      {#if !details}
-        {#each facts(choice.identity.log) as line (line)}
-          <span data-testid="provider-vault-identity-log">{line}</span>
-        {/each}
-      {/if}
-    </p>
+    {#if !compact || name !== words}
+      <p class="nk-spec" data-testid="provider-identity-facts">
+        {#if name !== words}
+          <span>{words}</span>
+        {/if}
+        {#if !compact}
+          {#each facts(choice.identity.log) as line (line)}
+            <span data-testid="provider-vault-identity-log">{line}</span>
+          {/each}
+        {/if}
+      </p>
+    {/if}
+    {@render compact?.reveal(choice)}
   </div>
 </header>
-{@render details?.(choice)}
+{@render compact?.details(choice)}

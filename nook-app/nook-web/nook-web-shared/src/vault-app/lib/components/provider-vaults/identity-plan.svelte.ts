@@ -1,4 +1,5 @@
 import { err, ok, type Result } from "neverthrow";
+import type { Snippet } from "svelte";
 import type { VaultState } from "$lib/vault.svelte";
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
 import {
@@ -58,6 +59,12 @@ export type IdentityPick = {
 export type PlannedDecision = {
   readonly choice: ProviderIdentityChoice;
   readonly decision: IdentityDecision;
+};
+
+/** Drive's read-only controls in the card's header and in its body. */
+export type CompactIdentityCard = {
+  readonly reveal: Snippet<[ProviderIdentityChoice]>;
+  readonly details: Snippet<[ProviderIdentityChoice]>;
 };
 
 export enum IdentityRunKind {
