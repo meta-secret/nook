@@ -110,7 +110,7 @@ mod tests {
     use super::*;
     use crate::identity_control::test_fixtures::*;
     use crate::{IdentityMemberApprover, IdentityMemberKind, SigningIdentity};
-    use nook_auth2::{RecoveryPhrase, RecoverySecret};
+    use nook_auth2::{PublicKeyringLabel, RecoveryPhrase, RecoverySecret};
 
     /// A recovery passphrase: its words, its unsealed keys, and its signer.
     struct Recovery {
@@ -378,6 +378,9 @@ mod tests {
         let other = Installation::new()?;
         for refused in [
             vec![rename(&founder_app, "Taken over")],
+            vec![IdentityControlOperation::IdentityPublicNameSet {
+                name: PublicKeyringLabel::parse("Taken over")?,
+            }],
             vec![IdentityControlOperation::MemberRevoked {
                 app_id: founder_app.clone(),
             }],

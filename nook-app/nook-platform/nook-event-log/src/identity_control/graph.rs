@@ -304,7 +304,8 @@ impl IdentityControlLog {
                     | IdentityControlOperation::VaultRemoved { .. }
                     | IdentityControlOperation::ProviderMounted { .. }
                     | IdentityControlOperation::ProviderUnmounted { .. }
-                    | IdentityControlOperation::IdentityNamed { .. } => continue,
+                    | IdentityControlOperation::IdentityNamed { .. }
+                    | IdentityControlOperation::IdentityPublicNameSet { .. } => continue,
                 };
                 approvals.push(MemberApproval {
                     event: id.clone(),
@@ -397,7 +398,8 @@ impl IdentityControlLog {
                     | IdentityControlOperation::VaultRemoved { .. }
                     | IdentityControlOperation::ProviderMounted { .. }
                     | IdentityControlOperation::ProviderUnmounted { .. }
-                    | IdentityControlOperation::IdentityNamed { .. } => false,
+                    | IdentityControlOperation::IdentityNamed { .. }
+                    | IdentityControlOperation::IdentityPublicNameSet { .. } => false,
                 })
                 .map(|_| "A recovery passphrase must be a new member of the identity".to_owned()),
         }
@@ -430,7 +432,8 @@ impl IdentityControlLog {
             | IdentityControlOperation::VaultRemoved { .. }
             | IdentityControlOperation::ProviderMounted { .. }
             | IdentityControlOperation::ProviderUnmounted { .. }
-            | IdentityControlOperation::IdentityNamed { .. } => true,
+            | IdentityControlOperation::IdentityNamed { .. }
+            | IdentityControlOperation::IdentityPublicNameSet { .. } => true,
         }
     }
 
@@ -611,6 +614,7 @@ mod tests {
     #![allow(clippy::too_many_lines)]
 
     use crate::identity_control::test_fixtures::*;
+    use nook_auth2::{IdentityPublicName, PublicKeyringLabel};
 
     #[test]
     fn outsiders_can_only_request_to_join() -> anyhow::Result<()> {
@@ -655,6 +659,108 @@ mod tests {
         assert_eq!(
             IdentityControlState::project(&inserted.log)?.members.len(),
             1
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_public_name_requires_a_causally_active_app_member() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let founder = fixture.founder();
+        let phone = Installation::new()?;
+        let name = PublicKeyringLabel::parse("Team")?;
+        let operation = IdentityControlOperation::IdentityPublicNameSet { name: name.clone() };
+        let (_, outsider) = fixture.append(&phone, vec![operation.clone()])?;
+        assert!(matches!(
+            outsider,
+            IdentityEventInsertStatus::Quarantined { .. }
+        ));
+
+        fixture.request_join(&phone)?;
+        let (_, pending) = fixture.append(&phone, vec![operation.clone()])?;
+        assert!(matches!(
+            pending,
+            IdentityEventInsertStatus::Quarantined { .. }
+        ));
+        let denied = fixture.state()?.denial_operation(phone.app.app_id())?;
+        fixture.append(&founder, vec![denied])?;
+        let (_, denied) = fixture.append(&phone, vec![operation.clone()])?;
+        assert!(matches!(
+            denied,
+            IdentityEventInsertStatus::Quarantined { .. }
+        ));
+        assert_eq!(
+            fixture.state()?.public_name,
+            IdentityPublicName::Unpublished
+        );
+
+        let approval = fixture
+            .state()?
+            .addition_operation(&IdentityMemberAddition {
+                member: &phone.keys("Phone"),
+                device: &MemberDevice::Own,
+                vaults: &[],
+            })?;
+        fixture.append(&founder, vec![approval])?;
+        let (_, active) = fixture.append(&phone, vec![operation])?;
+        assert_eq!(active, IdentityEventInsertStatus::Applied);
+
+        let revoke = fixture.state()?.revocation_operation(phone.app.app_id())?;
+        fixture.append(&founder, vec![revoke])?;
+        let (_, revoked) = fixture.append(
+            &phone,
+            vec![IdentityControlOperation::IdentityPublicNameSet {
+                name: PublicKeyringLabel::parse("Spoofed")?,
+            }],
+        )?;
+        assert!(matches!(
+            revoked,
+            IdentityEventInsertStatus::Quarantined { .. }
+        ));
+        assert_eq!(
+            fixture.state()?.public_name,
+            IdentityPublicName::Published(name)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn signed_public_names_converge_and_tampering_fails() -> anyhow::Result<()> {
+        let fixture = Fixture::new()?;
+        let sign = fixture.founder.signing(&fixture.at);
+        let operation = |label| {
+            Ok::<_, anyhow::Error>(IdentityControlOperation::IdentityPublicNameSet {
+                name: PublicKeyringLabel::parse(label)?,
+            })
+        };
+        let first = fixture.log.build_append(vec![operation("First")?], &sign)?;
+        let second = fixture
+            .log
+            .build_append(vec![operation("Second")?], &sign)?;
+        let mut forged = first.clone();
+        forged.body.operations = vec![operation("Forged")?];
+        assert!(fixture.log.clone().insert(forged).is_err());
+        let forward = fixture
+            .log
+            .clone()
+            .insert(first.clone())?
+            .log
+            .insert(second.clone())?
+            .log;
+        let backward = fixture.log.insert(second)?.log.insert(first)?.log;
+        assert_eq!(
+            IdentityControlState::project(&forward)?,
+            IdentityControlState::project(&backward)?
+        );
+        let name = PublicKeyringLabel::parse("Latest")?;
+        let latest = forward.build_append(
+            vec![IdentityControlOperation::IdentityPublicNameSet { name: name.clone() }],
+            &sign,
+        )?;
+        let final_log = forward.insert(latest)?.log;
+        assert_eq!(
+            IdentityControlState::project(&final_log)?.public_name,
+            IdentityPublicName::Published(name)
         );
         Ok(())
     }

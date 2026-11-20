@@ -16,13 +16,14 @@
 
 use crate::{TypedInput, TypedOutput};
 use nook_core::{
-    AppId, AppKey, EventStorageBytes, IdentityConnectionKey, IdentityControlLog,
-    IdentityControlState, IdentityId, IdentityInvitationBinding, IdentityInvitationBindingRequest,
-    IdentityJoinAnswer, IdentityJoinCompletion, IdentityJoinCompletionPlan, IdentityJoinKey,
-    IdentityJoinRequestPlan, IdentityMemberKeys, KeyInUseAddition, PasskeyDeviceProtectionMode,
-    PasskeyIdentityAddition, PasskeyRegistration, PasskeyRegistrationInput,
-    ProviderIdentityJoinRequest, ProviderIdentityKeyInUse, ProviderIdentityLogEvents,
-    SigningIdentity, WebAuthnPrfInput, WebAuthnPrfOutput,
+    AdoptedIdentityLabel, AppId, AppKey, EventStorageBytes, IdentityConnectionKey,
+    IdentityControlLog, IdentityControlState, IdentityId, IdentityInvitationBinding,
+    IdentityInvitationBindingRequest, IdentityJoinAnswer, IdentityJoinCompletion,
+    IdentityJoinCompletionPlan, IdentityJoinKey, IdentityJoinRequestPlan, IdentityMemberKeys,
+    IdentityPublicName, KeyInUseAddition, PasskeyDeviceProtectionMode, PasskeyIdentityAddition,
+    PasskeyRegistration, PasskeyRegistrationInput, ProviderIdentityJoinRequest,
+    ProviderIdentityKeyInUse, ProviderIdentityLogEvents, SigningIdentity, WebAuthnPrfInput,
+    WebAuthnPrfOutput,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -127,7 +128,12 @@ impl NookVaultManager {
                     NookDatabase::rebind_local_identity(KeyringDbRebindLocalIdentity {
                         local_identity_id: &local_identity_id,
                         replicated_identity_id: identity_id,
-                        label,
+                        label: match &state.public_name {
+                            IdentityPublicName::Published(name) => {
+                                AdoptedIdentityLabel::Published(name)
+                            }
+                            IdentityPublicName::Unpublished => label,
+                        },
                     })
                     .await?;
                 }

@@ -164,6 +164,7 @@ impl NookVaultManager {
         NookDatabase::update_identity_directory(move |directory| {
             let directory = directory
                 .apply_replicated_membership(&ReplicatedIdentityMembership {
+                    public_name: &state.public_name,
                     identity_id: &identity_id,
                     app_key: &app_key,
                     members: projection.members,

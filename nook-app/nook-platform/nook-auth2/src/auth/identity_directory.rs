@@ -1,5 +1,6 @@
 //! Portable identity collection and active-identity selection policy.
 mod invitation;
+mod public_name;
 mod recovery;
 mod replication;
 pub use crate::MemberLabelState;
@@ -7,6 +8,7 @@ pub use invitation::{
     FreshIdentityNaming, IdentityConnectionKey, IdentityConnectionKeyRequest,
     IdentityInvitationBinding, IdentityInvitationBindingRequest, LocalIdentityLog,
 };
+pub use public_name::{IdentityPublicName, PublicKeyringLabel, PublicKeyringLabelError};
 pub use recovery::RecoveryRetirement;
 pub use replication::{
     AdoptedIdentityLabel, ReplicatedIdentityAddition, ReplicatedIdentityAdoption,

@@ -84,8 +84,9 @@ pub use auth::identity_directory::{
     DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, FreshIdentityNaming,
     IdentityConnectionKey, IdentityConnectionKeyRequest, IdentityCreation, IdentityDirectory,
     IdentityDirectoryRejection, IdentityDirectoryResolution, IdentityDirectoryVaultKeys,
-    IdentityInvitationBinding, IdentityInvitationBindingRequest, IdentitySelection,
-    LocalIdentityKeyRetirement, LocalIdentityLog, RecoveryRetirement, ReplicatedIdentityAddition,
+    IdentityInvitationBinding, IdentityInvitationBindingRequest, IdentityPublicName,
+    IdentitySelection, LocalIdentityKeyRetirement, LocalIdentityLog, PublicKeyringLabel,
+    PublicKeyringLabelError, RecoveryRetirement, ReplicatedIdentityAddition,
     ReplicatedIdentityAdoption, ReplicatedIdentityMembership, ReplicatedVaultGrant,
 };
 

@@ -13,8 +13,8 @@ use super::{
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{
     AgeArmoredCiphertext, AppId, AppKey, IdentityId, IdentityMember, IdentityMemberKeyBinding,
-    IdentityRecord, IdentityVaultDek, IdentityVaultDekEpoch, MemberDekEnvelope, MemberLabelState,
-    StoreId,
+    IdentityPublicName, IdentityRecord, IdentityVaultDek, IdentityVaultDekEpoch, MemberDekEnvelope,
+    MemberLabelState, PublicKeyringLabel, StoreId,
 };
 
 /// This installation's envelopes for one vault at the vault's current epoch.
@@ -32,6 +32,7 @@ pub struct ReplicatedIdentityMembership<'a> {
     pub members: Vec<IdentityMember>,
     pub revoked: Vec<AppId>,
     pub own_grants: Vec<ReplicatedVaultGrant>,
+    pub public_name: &'a IdentityPublicName,
     /// Vaults deleted from the identity: their cached grants are dropped.
     pub removed_vaults: Vec<StoreId>,
 }
@@ -52,6 +53,8 @@ pub enum AdoptedIdentityLabel<'a> {
     /// The name an invite carried replaces the one the local identity got
     /// before it joined.
     Invited(&'a str),
+    /// The latest explicitly published name from the signed log.
+    Published(&'a PublicKeyringLabel),
 }
 
 /// A replicated identity whose log lists this installation's app key, added
@@ -102,6 +105,12 @@ impl IdentityRecord {
             ));
         }
         let mut changed = false;
+        if let IdentityPublicName::Published(name) = request.public_name
+            && self.label != name.as_str()
+        {
+            name.as_str().clone_into(&mut self.label);
+            changed = true;
+        }
         for replicated in request
             .members
             .iter()
@@ -283,6 +292,9 @@ impl IdentityDirectory {
             record.control_epoch = record.control_epoch.next();
             match request.label {
                 AdoptedIdentityLabel::Kept => {}
+                AdoptedIdentityLabel::Published(name) => {
+                    name.as_str().clone_into(&mut record.label);
+                }
                 AdoptedIdentityLabel::Invited(label) => {
                     let label = label.trim();
                     if label.is_empty() {
@@ -417,6 +429,7 @@ mod tests {
         let keys = VaultKeys::generate()?;
 
         let directory = directory.apply_replicated_membership(&ReplicatedIdentityMembership {
+            public_name: &IdentityPublicName::Unpublished,
             identity_id: &identity_id,
             app_key: &phone,
             members: vec![member(&laptop, "Laptop"), member(&tablet, "Tablet")],
@@ -435,6 +448,7 @@ mod tests {
         assert_eq!(record.members.len(), 3);
 
         let directory = directory.apply_replicated_membership(&ReplicatedIdentityMembership {
+            public_name: &IdentityPublicName::Unpublished,
             identity_id: &identity_id,
             app_key: &phone,
             members: vec![member(&laptop, "Work laptop")],
@@ -457,6 +471,7 @@ mod tests {
             directory
                 .clone()
                 .apply_replicated_membership(&ReplicatedIdentityMembership {
+                    public_name: &IdentityPublicName::Unpublished,
                     identity_id: &identity_id,
                     app_key: &phone,
                     members: Vec::new(),
@@ -467,6 +482,7 @@ mod tests {
         assert!(rejected.is_err());
 
         let revoked = directory.apply_replicated_membership(&ReplicatedIdentityMembership {
+            public_name: &IdentityPublicName::Unpublished,
             identity_id: &identity_id,
             app_key: &phone,
             members: Vec::new(),
@@ -497,6 +513,7 @@ mod tests {
             created
                 .directory
                 .apply_replicated_membership(&ReplicatedIdentityMembership {
+                    public_name: &IdentityPublicName::Unpublished,
                     identity_id: &identity_id,
                     app_key: &phone,
                     members: Vec::new(),
@@ -512,6 +529,7 @@ mod tests {
         // The removal drops the cached grant, and a stale grant for the same
         // vault in the same projection does not restore it.
         let directory = directory.apply_replicated_membership(&ReplicatedIdentityMembership {
+            public_name: &IdentityPublicName::Unpublished,
             identity_id: &identity_id,
             app_key: &phone,
             members: Vec::new(),
@@ -609,6 +627,7 @@ mod tests {
         Ok(ReplicatedIdentityAddition {
             label: "Family",
             membership: ReplicatedIdentityMembership {
+                public_name: &IdentityPublicName::Unpublished,
                 identity_id,
                 app_key: app,
                 members: vec![member(app, "Laptop"), member(phone, "Phone")],
@@ -685,6 +704,7 @@ mod tests {
             (&store_id, &keys),
         )?)?;
         let directory = directory.apply_replicated_membership(&ReplicatedIdentityMembership {
+            public_name: &IdentityPublicName::Unpublished,
             identity_id: &family,
             app_key: &family_key,
             members: vec![

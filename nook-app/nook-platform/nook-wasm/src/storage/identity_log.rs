@@ -19,6 +19,16 @@ use crate::{NookDatabase, NookError};
 
 const STORE_EVENTS: &str = "events";
 
+enum IdentityLogAdmission {
+    Append,
+    Create,
+}
+
+struct IdentityLogPersistence<'a> {
+    write: IdentityLogWrite<'a>,
+    admission: IdentityLogAdmission,
+}
+
 /// Named values required by `NookDatabase::save_identity_events`.
 pub(crate) struct IdentityLogWrite<'a> {
     pub(crate) identity_id: &'a IdentityId,
@@ -118,13 +128,32 @@ impl NookDatabase {
     }
 
     /// Persist identity events and extend the identity index atomically.
-    pub(crate) async fn save_identity_events(
-        request: IdentityLogWrite<'_>,
+    pub(crate) async fn save_identity_events(write: IdentityLogWrite<'_>) -> Result<(), NookError> {
+        Self::persist_identity_events(IdentityLogPersistence {
+            write,
+            admission: IdentityLogAdmission::Append,
+        })
+        .await
+    }
+
+    /// Found a log only while its index is empty, in the same transaction
+    /// as the genesis writes.
+    pub(crate) async fn create_identity_events(
+        write: IdentityLogWrite<'_>,
     ) -> Result<(), NookError> {
+        Self::persist_identity_events(IdentityLogPersistence {
+            write,
+            admission: IdentityLogAdmission::Create,
+        })
+        .await
+    }
+
+    async fn persist_identity_events(request: IdentityLogPersistence<'_>) -> Result<(), NookError> {
+        let IdentityLogPersistence { write, admission } = request;
         let IdentityLogWrite {
             identity_id,
             events,
-        } = request;
+        } = write;
         if events.is_empty() {
             return Ok(());
         }
@@ -135,14 +164,16 @@ impl NookDatabase {
         let store = transaction
             .store(STORE_EVENTS)
             .map_err(|error| NookError::IndexedDb(format!("Store error: {error:?}")))?;
-        Self::put_identity_events(
-            &store,
-            IdentityLogWrite {
-                identity_id,
-                events,
-            },
-        )
-        .await?;
+        if let IdentityLogAdmission::Create = admission
+            && !Self::read_identity_index(&store, identity_id)
+                .await?
+                .is_empty()
+        {
+            return Err(NookError::Database(
+                "This keyring already has a control log.".to_owned(),
+            ));
+        }
+        Self::put_identity_events(&store, write).await?;
         transaction
             .done()
             .await

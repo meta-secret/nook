@@ -19,8 +19,8 @@ use std::cmp::Ordering;
 use crate::errors::{ValidationError, ValidationResult};
 use crate::provider_vault_access::{ProviderVaultAccess, ProviderVaultKeyholding};
 use crate::{
-    IdentityId, IdentityWords, ListedIdentityLog, ProviderIdentityLog, ProviderKeyringDetails,
-    ProviderListedIdentity, StoreId,
+    IdentityId, IdentityPublicName, IdentityWords, ListedIdentityLog, ProviderIdentityLog,
+    ProviderKeyringDetails, ProviderListedIdentity, StoreId,
 };
 use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
@@ -201,20 +201,23 @@ impl FilingIdentity {
             .chars()
             .take(SHORT_ID_LENGTH)
             .collect();
-        let name = known
-            .names
+        let listed = known
+            .logs
             .iter()
-            .find(|known| known.identity_id == identity_id)
-            .map(|known| known.name.trim())
-            .filter(|name| !name.is_empty())
-            .map_or(ProviderVaultName::Unknown, |name| {
-                ProviderVaultName::Named {
-                    name: name.to_owned(),
-                }
-            });
+            .find(|listed| listed.identity_id == identity_id);
+        let name = match listed.map(|listed| &listed.public_name) {
+            Some(IdentityPublicName::Published(name)) => ProviderVaultName::named(name.as_str()),
+            Some(IdentityPublicName::Unpublished) | None => known
+                .names
+                .iter()
+                .find(|known| known.identity_id == identity_id)
+                .map_or(ProviderVaultName::Unknown, |known| {
+                    ProviderVaultName::named(&known.name)
+                }),
+        };
         Self {
             words: IdentityWords::of(&identity_id),
-            log: ListedIdentityLog::of(&identity_id, known.logs),
+            log: listed.map_or(ProviderIdentityLog::Absent, |listed| listed.log),
             identity_id,
             short_id,
             name,
@@ -668,6 +671,7 @@ mod tests {
             join: ProviderIdentityJoin::NotAsked,
         };
         let theirs_log = [ListedIdentityLog {
+            public_name: IdentityPublicName::Unpublished,
             identity_id: theirs.clone(),
             log: theirs_facts,
             devices: ProviderKeyringDevices::Listed {
@@ -812,6 +816,7 @@ mod tests {
         vaults: &[StoreId],
     ) -> anyhow::Result<ListedIdentityLog> {
         Ok(ListedIdentityLog {
+            public_name: IdentityPublicName::Unpublished,
             identity_id: identity_id.clone(),
             devices: ProviderKeyringDevices::Listed {
                 devices: Vec::new(),

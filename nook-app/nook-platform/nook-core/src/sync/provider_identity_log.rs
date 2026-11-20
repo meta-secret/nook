@@ -18,8 +18,8 @@ use tsify::Tsify;
 use crate::errors::VaultResult;
 use crate::{
     AppId, EventStorageBytes, IdentityControlLog, IdentityControlState, IdentityId,
-    IdentityJoinProgress, IdentitySession, ProviderInstant, ProviderKeyringDevice,
-    ProviderKeyringDevices, ProviderVaultTime, StoreId,
+    IdentityJoinProgress, IdentityPublicName, IdentitySession, ProviderInstant,
+    ProviderKeyringDevice, ProviderKeyringDevices, ProviderVaultTime, StoreId,
 };
 
 /// How many devices or vaults a control log lists.
@@ -162,6 +162,7 @@ pub struct ProviderIdentityLogEvents {
 pub struct ListedIdentityLog {
     pub identity_id: IdentityId,
     pub log: ProviderIdentityLog,
+    pub(crate) public_name: IdentityPublicName,
     pub(crate) devices: ProviderKeyringDevices,
     pub(crate) registered_vaults: Vec<StoreId>,
 }
@@ -178,6 +179,7 @@ impl ProviderIdentityLogEvents {
             return Ok(ListedIdentityLog {
                 identity_id,
                 log: ProviderIdentityLog::Absent,
+                public_name: IdentityPublicName::Unpublished,
                 devices: ProviderKeyringDevices::Unavailable,
                 registered_vaults: Vec::new(),
             });
@@ -224,18 +226,8 @@ impl ProviderIdentityLogEvents {
             },
             devices: ProviderKeyringDevices::Listed { devices },
             registered_vaults,
+            public_name: state.public_name,
         })
-    }
-}
-
-impl ListedIdentityLog {
-    /// The facts listed for one identity; an identity the listing read no log
-    /// for has none.
-    #[must_use]
-    pub fn of(identity_id: &IdentityId, logs: &[Self]) -> ProviderIdentityLog {
-        logs.iter()
-            .find(|listed| &listed.identity_id == identity_id)
-            .map_or(ProviderIdentityLog::Absent, |listed| listed.log)
     }
 }
 
@@ -248,10 +240,14 @@ mod tests {
         IdentityRecoveryAddition, IdentityVaultRegistration, MemberDevice, OpenedVaultDek,
         SigningIdentity,
     };
+    use crate::{
+        BrowserNames, KnownIdentityName, ProviderVaultKeyholding, ProviderVaultListingRequest,
+        ProviderVaultName, ProviderVaultObservation, PublicKeyringLabel,
+    };
     use nook_auth2::{
         IsoTimestamp, MemberLabel, RecoveryPhrase, RecoverySecret, RecoveryStrength, VaultKeys,
     };
-    use nook_event_log::EventId;
+    use nook_event_log::{EventId, IdentityNaming};
 
     struct Device {
         app: AppKey,
@@ -628,6 +624,78 @@ mod tests {
     }
 
     #[test]
+    fn a_locked_listing_reads_only_the_explicitly_published_keyring_name() -> anyhow::Result<()> {
+        let mut fixture = AskedLog::founded()?;
+        let store_id = StoreId::generate()?;
+        let keys = VaultKeys::generate()?;
+        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
+        let registration =
+            fixture
+                .state()?
+                .vault_registration_operation(IdentityVaultRegistration {
+                    dek: OpenedVaultDek {
+                        store_id: &store_id,
+                        key_epoch: &epoch,
+                        keys: &keys,
+                    },
+                })?;
+        fixture.append(Signer::Founder, registration)?;
+        let sealed = fixture.state()?.naming_operation(&IdentityNaming {
+            name: "Legacy hidden name",
+            joining: None,
+        })?;
+        fixture.append(Signer::Founder, sealed)?;
+        let legacy = provider_events(&fixture.log)?.read(&ListingIdentity::NoIdentityInUse)?;
+        assert_eq!(legacy.public_name, IdentityPublicName::Unpublished);
+        assert_eq!(legacy.registered_vaults, [store_id.clone()]);
+        let initial = PublicKeyringLabel::parse("Shared")?;
+        fixture.append(
+            Signer::Founder,
+            IdentityControlOperation::IdentityPublicNameSet { name: initial },
+        )?;
+        let current = PublicKeyringLabel::parse("Team")?;
+        fixture.append(
+            Signer::Founder,
+            IdentityControlOperation::IdentityPublicNameSet {
+                name: current.clone(),
+            },
+        )?;
+        let verified = provider_events(&fixture.log)?.read(&ListingIdentity::NoIdentityInUse)?;
+        let locals = [KnownIdentityName {
+            identity_id: verified.identity_id.clone(),
+            name: "Stale local name".to_owned(),
+        }];
+        let listing = ProviderVaultListingRequest {
+            observations: vec![ProviderVaultObservation {
+                store_id,
+                identity: verified.identity_id.clone(),
+                namespace_created: ProviderVaultTime::Unreported,
+                events: Vec::new(),
+            }],
+            keys: ProviderVaultKeyholding::NONE,
+            names: BrowserNames {
+                vaults: &[],
+                identities: &locals,
+            },
+            identity_logs: &[verified],
+        }
+        .listing();
+        let [entry] = listing.identities.as_slice() else {
+            anyhow::bail!("the signed keyring is listed");
+        };
+        let [vault] = listing.vaults.as_slice() else {
+            anyhow::bail!("the provider has one vault");
+        };
+        assert_eq!(
+            entry.identity.name,
+            ProviderVaultName::named(current.as_str())
+        );
+        assert_eq!(vault.identity, entry.identity);
+        assert_eq!(vault.name, ProviderVaultName::Unknown);
+        Ok(())
+    }
+
+    #[test]
     fn a_folder_without_log_events_has_no_facts_and_a_damaged_log_fails() -> anyhow::Result<()> {
         let identity_id = IdentityId::generate()?;
         let empty = ProviderIdentityLogEvents {
@@ -637,10 +705,6 @@ mod tests {
         .read(&ListingIdentity::NoIdentityInUse)?;
         assert_eq!(empty.log, ProviderIdentityLog::Absent);
         assert_eq!(empty.devices, ProviderKeyringDevices::Unavailable);
-        assert_eq!(
-            ListedIdentityLog::of(&identity_id, &[empty]),
-            ProviderIdentityLog::Absent
-        );
 
         // A log event that does not parse is reported, not skipped.
         let mut damaged = provider_events(&two_device_log()?.0)?;
