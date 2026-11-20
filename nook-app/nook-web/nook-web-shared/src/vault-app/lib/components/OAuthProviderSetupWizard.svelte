@@ -46,6 +46,7 @@
     isInitializing,
     onCancelSetup,
     onConnect,
+    onCreateEmptyDrive = false,
   }: {
     vault: VaultState;
     /** The staged Google Drive or iCloud draft. */
@@ -54,6 +55,7 @@
     isInitializing: boolean;
     onCancelSetup: () => void;
     onConnect: () => void | Promise<void>;
+    onCreateEmptyDrive?: ((token: string) => Promise<void>) | false;
   } = $props();
 
   const isICloud = $derived(draft.preset === "icloud");
@@ -146,9 +148,7 @@
             vault.errorMsg = vault.t(connection.error.translationKey);
             return;
           }
-          if (
-            connection.value.origin === NookDriveRootOrigin.Existing
-          ) {
+          if (connection.value.origin === NookDriveRootOrigin.Existing) {
             const noticeRequest: Parameters<typeof vault.t>[0] = {
               key: I18N_KEYS.ProviderSetupGoogleFolderExisting,
               replacements: { folder: connection.value.name },
@@ -394,7 +394,6 @@
                 })()}
           </p>
         {/if}
-
       </div>
     </SetupWizardStep>
 
@@ -426,6 +425,7 @@
           accessToken={driveSignIn.access.authorization.accessToken}
           busy={isVerifying || isInitializing || preparingTarget}
           onConnect={connectWithVaultTarget}
+          {onCreateEmptyDrive}
           {connectButton}
         />
       {/if}

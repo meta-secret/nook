@@ -38,6 +38,7 @@
   import type { ProviderKind } from '$lib/auth/providers'
   import { WorkspaceRoute } from '$lib/app/workspace-route'
   import { WorkspaceSectionRoute } from '$lib/vault/ui'
+  import { FirstRunActions } from '$lib/vault/first-run'
   import { IdentityPages } from '$lib/vault/identity-pages'
   import { VaultWorkspaceActions } from '$lib/vault/ui'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
@@ -510,6 +511,11 @@
     }
     return new ProviderSetupName(request).text()
   })
+  async function createFromEmptyDrive(token: string): Promise<void> {
+    if (!new FirstRunActions(vault).beginEmptyDriveCreation(token)) return
+    await onCreateDeviceVault(vault.t(I18N_KEYS.FirstRunNamePlaceholder))
+  }
+
   function handleFirstConnectSubmit(e: Event) {
     e.preventDefault()
     void onUnlock()
@@ -682,6 +688,11 @@
             {isInitializing}
             {onCancelSetup}
             onConnect={onUnlock}
+            onCreateEmptyDrive={appKind ===
+              VaultApplication.UnifiedDevelopment ||
+            appKind === VaultApplication.Simple
+              ? createFromEmptyDrive
+              : false}
           />
         {:else if setupView.kind === SetupDraftForm.Github}
           <GitHubProviderSetupWizard

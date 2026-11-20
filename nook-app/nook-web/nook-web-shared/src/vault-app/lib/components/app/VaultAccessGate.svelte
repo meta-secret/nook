@@ -22,6 +22,7 @@
   import { FirstRunJoinKind } from '$lib/vault/identity-join-wait'
   import UnlockedIdentityPages from '$lib/components/identity-control/UnlockedIdentityPages.svelte'
   import { IdentityPages } from '$lib/vault/identity-pages'
+  import { FirstRunActions } from '$lib/vault/first-run'
   import { FirstRunStage, WorkspaceSection } from '$lib/vault/state/ui.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import { VaultStatusBarVariant } from '$lib/components/vault-status-bar-state'
@@ -97,11 +98,12 @@
 
   /** A first vault waiting for its passkey shows the guided step in place. */
   const firstRunProtect = $derived(
-    showPasskeyOverlay && vault.firstRun === FirstRunStage.Protect,
+    vault.firstRun === FirstRunStage.Protect &&
+      (showPasskeyOverlay || Boolean(vault.firstRunEmptyDriveToken)),
   )
 
   function leaveFirstRunProtect(): void {
-    vault.firstRun = FirstRunStage.Off
+    new FirstRunActions(vault).leaveProtection()
     onDismissPasskey()
   }
 

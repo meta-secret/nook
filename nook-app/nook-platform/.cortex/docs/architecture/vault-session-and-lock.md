@@ -181,8 +181,11 @@ It never deletes:
   keyrings it holds, read without any key. It never discovers or opens one
   vault on its own.
   - Treat discovery as a bounded busy operation.
-  - Reject a provider that holds no keyring before device authorization;
-    another provider can be picked.
+  - An empty recovery listing ends discovery before device authorization.
+    The user can pick another provider. An eligible initial Drive recovery
+    also offers the explicit
+    [Create a keyring](auth-providers.md#create-a-keyring-from-an-empty-drive-listing)
+    action before device authorization.
   - Each keyring's way in asks for this browser's key when it needs one:
     its passkey, or the website's own passkey/PIN device gate. The website
     never asks the extension for its key.
@@ -191,8 +194,9 @@ It never deletes:
 - **Staged credential continuity:** Device authorization may reload sealed
   provider state.
   - Keep the exact staged credentials or local-folder handle in memory.
-  - Resume the staged recovery after successful authorization without asking
-    the user to choose the provider again.
+  - After successful authorization, resume the staged recovery or the
+    first-run setup chosen after an empty Drive listing. Reuse the staged
+    sign-in.
   - Never call provider connect first and expose internal
     `authorization_required` to the user.
 - **Login workflow choice:** Present **Open existing** and **New vault** as

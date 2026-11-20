@@ -21,7 +21,8 @@ nothing.
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte'
   import { ok, type Result } from 'neverthrow'
-  import { Lock, RefreshCw } from '@lucide/svelte'
+  import { Button } from '$lib/components/ui/button'
+  import { Lock, Plus, RefreshCw } from '@lucide/svelte'
   import type {
     IdentityDecision,
     NookProviderSource,
@@ -38,6 +39,7 @@ nothing.
     FirstRunIdentityAction,
     ProviderFolderBinding,
   } from '$lib/vault/first-run'
+  import { IdentityDirectoryLoadKind } from '$lib/components/devices-access/identity-directory-view'
   import { IdentityControlViewKind } from '$lib/vault/identity-control.svelte'
   import {
     IdentityDecisionText,
@@ -82,6 +84,7 @@ nothing.
     accessToken,
     busy,
     onConnect,
+    onCreateEmptyDrive,
     connectButton,
   }: {
     vault: VaultState
@@ -90,6 +93,7 @@ nothing.
     busy: boolean
     /** Connect & sync. */
     onConnect: () => Promise<void>
+    onCreateEmptyDrive: ((token: string) => Promise<void>) | false
     /** The step's one action button. */
     connectButton: Snippet<[ConnectPlanButton]>
   } = $props()
@@ -130,6 +134,29 @@ nothing.
   )
 
   const listedIdentities = $derived(choices.isOk() ? choices.value.length : 0)
+  const firstRun = $derived(new FirstRunActions(vault))
+  const verifiedEmpty = $derived(
+    inventory.kind === DriveVaultInventoryKind.Loaded &&
+      inventory.token === accessToken &&
+      (inventory.listing.root === 'absent' ||
+        (choices.isOk() && listedIdentities === 0)),
+  )
+  const canCreate = $derived(
+    onCreateEmptyDrive !== false &&
+      verifiedEmpty &&
+      firstRun.canCreateFromEmptyDrive(),
+  )
+  const checkingBrowser = $derived(
+    onCreateEmptyDrive !== false &&
+      vault.keyringRecoveryOpen &&
+      verifiedEmpty &&
+      vault.identityDirectory.kind === IdentityDirectoryLoadKind.Loading,
+  )
+
+  function createOnEmptyDrive(): void {
+    if (!canCreate || disabled || onCreateEmptyDrive === false) return
+    void onCreateEmptyDrive(accessToken)
+  }
 
   async function load(token: string): Promise<void> {
     const pending: DriveVaultInventory = {
@@ -364,6 +391,7 @@ nothing.
       inventory.kind === DriveVaultInventoryKind.Loading ||
       working ||
       checking ||
+      checkingBrowser ||
       workingOn !== ''
     if (setupMode) {
       const detail: Parameters<typeof vault.t>[0] = {
@@ -437,6 +465,19 @@ nothing.
     <RefreshCw class="size-3.5 animate-spin" aria-hidden="true" />
     {vault.t(I18N_KEYS.ProviderVaultsLoading)}
   </p>
+{:else if canCreate}
+  <p class="text-sm text-muted-foreground" role="status">
+    {vault.t(I18N_KEYS.FirstRunSyncEmpty)}
+  </p>
+  <Button
+    type="button"
+    data-testid="google-drive-create-keyring"
+    {disabled}
+    onclick={createOnEmptyDrive}
+  >
+    <Plus class="size-4" aria-hidden="true" />
+    {vault.t(I18N_KEYS.ProviderVaultsCreateKeyring)}
+  </Button>
 {:else if inventory.kind === DriveVaultInventoryKind.Loaded && inventory.listing.root === 'absent'}
   <p
     class="text-[11px] text-pretty text-muted-foreground"
@@ -493,6 +534,6 @@ nothing.
 {#if setupMode && listedIdentities > 0}
   <OptionDivider {vault} />
 {/if}
-{#if vault.keyringRecovery.kind === KeyringRecoveryKind.None}
+{#if vault.keyringRecovery.kind === KeyringRecoveryKind.None && !canCreate}
   {@render connectButton(button)}
 {/if}

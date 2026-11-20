@@ -44,6 +44,7 @@ const uiKeys = [
   "helpOpen",
   "accessCheckOpen",
   "firstRun",
+  "firstRunEmptyDriveToken",
   "firstRunVaultName",
   "joinICloudSignIn",
   "inviteKeyRequest",
@@ -191,6 +192,7 @@ class VaultStateSlicesImplementation {
   declare helpOpen: VaultUiState["helpOpen"];
   declare accessCheckOpen: VaultUiState["accessCheckOpen"];
   declare firstRun: VaultUiState["firstRun"];
+  declare firstRunEmptyDriveToken: VaultUiState["firstRunEmptyDriveToken"];
   declare firstRunVaultName: VaultUiState["firstRunVaultName"];
   declare joinICloudSignIn: VaultUiState["joinICloudSignIn"];
   declare inviteKeyRequest: VaultUiState["inviteKeyRequest"];
