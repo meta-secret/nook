@@ -248,6 +248,7 @@ mod tests {
         IsoTimestamp, MemberLabel, RecoveryPhrase, RecoverySecret, RecoveryStrength, VaultKeys,
     };
     use nook_event_log::{EventId, IdentityNaming};
+    use std::slice;
 
     struct Device {
         app: AppKey,
@@ -647,7 +648,10 @@ mod tests {
         fixture.append(Signer::Founder, sealed)?;
         let legacy = provider_events(&fixture.log)?.read(&ListingIdentity::NoIdentityInUse)?;
         assert_eq!(legacy.public_name, IdentityPublicName::Unpublished);
-        assert_eq!(legacy.registered_vaults, [store_id.clone()]);
+        assert_eq!(
+            legacy.registered_vaults.as_slice(),
+            slice::from_ref(&store_id)
+        );
         let initial = PublicKeyringLabel::parse("Shared")?;
         fixture.append(
             Signer::Founder,
