@@ -185,6 +185,19 @@ impl TryFrom<u64> for TotpPeriod {
 }
 
 impl TotpPeriod {
+    /// Time to wait before generating a code for delivery to a website.
+    #[must_use]
+    pub fn autofill_delay(self, since_epoch: Duration) -> Duration {
+        // Reserve the final second for transport and page revalidation.
+        let elapsed = Duration::new(since_epoch.as_secs() % self.0, since_epoch.subsec_nanos());
+        let remaining = self.duration().saturating_sub(elapsed);
+        if remaining <= Duration::from_secs(1) {
+            remaining
+        } else {
+            Duration::ZERO
+        }
+    }
+
     #[must_use]
     pub const fn duration(self) -> Duration {
         Duration::from_secs(self.0)
@@ -200,6 +213,28 @@ impl From<TotpPeriod> for u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn autofill_waits_for_rollover_in_the_final_second() -> Result<(), AuthenticatorDomainError> {
+        let period = TotpPeriod::try_from(45)?;
+        assert_eq!(
+            period.autofill_delay(Duration::from_millis(43_999)),
+            Duration::ZERO
+        );
+        assert_eq!(
+            period.autofill_delay(Duration::from_millis(44_000)),
+            Duration::from_secs(1)
+        );
+        assert_eq!(
+            period.autofill_delay(Duration::from_millis(89_994)),
+            Duration::from_millis(6)
+        );
+        assert_eq!(
+            period.autofill_delay(Duration::from_secs(90)),
+            Duration::ZERO
+        );
+        Ok(())
+    }
 
     #[test]
     fn parses_closed_authenticator_vocabularies() {
