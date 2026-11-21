@@ -229,6 +229,7 @@ impl NookVaultManager {
         self.pending_sentinel_genesis_request = CeremonyState::Inactive;
         self.sentinel_unlock = CeremonyState::Inactive;
         self.sync_outbox = SyncOutbox::Unbound;
+        self.clear_keyring_passkey_check();
         // A shown recovery passphrase dies with the session.
         self.recovery_passphrase = CeremonyState::Inactive;
     }
@@ -535,6 +536,7 @@ impl NookVaultManager {
             .cache_ref()
             .switch_to(&self.storage.provider.cache_ref())
         {
+            self.clear_keyring_passkey_check();
             self.vault.vault_name = VaultNameState::Unnamed;
         }
         if let PreparedProvider::Remote(remote) = &self.storage.provider {

@@ -182,7 +182,7 @@ describe('setup lists each identity with the one action Rust decided', () => {
     await fireEvent.click(action(continueOn))
     expect(listing.continued).toEqual([KEY_MEMBER.id])
     expect(standing(KEY_MEMBER.id)).toBe(
-      listing.vault.t(I18N_KEYS.FirstRunIdentityMember),
+      listing.vault.t(I18N_KEYS.AccessCheckIdentityThisBrowser),
     )
 
     expect(card(IN_USE.id).querySelectorAll('button')).toHaveLength(0)

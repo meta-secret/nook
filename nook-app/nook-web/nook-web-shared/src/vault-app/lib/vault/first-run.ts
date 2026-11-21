@@ -397,7 +397,10 @@ export class FirstRunActions {
       }
       case "s3":
         try {
-          const listing = await list_s3_vaults(source.configuration);
+          const listing = await list_s3_vaults(
+            source.configuration,
+            vault.deviceId,
+          );
           return { kind: FirstRunInventoryKind.Loaded, listing };
         } catch (cause) {
           const keyRequest: Parameters<

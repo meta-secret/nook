@@ -197,6 +197,7 @@ describe('Google Drive sign-in and its vault folder', () => {
     const state = signedInDriveSetup()
     const oauthActions = new VaultOAuthActions(state)
     await oauthActions.signInWithGoogle()
+    state.deviceId = '0011223344556677'
     wasm.listGoogleDriveVaults.mockResolvedValue({ root: 'absent' })
 
     await expect(oauthActions.listGoogleDriveVaults()).resolves.toEqual(
@@ -204,6 +205,7 @@ describe('Google Drive sign-in and its vault folder', () => {
     )
     expect(wasm.listGoogleDriveVaults).toHaveBeenCalledWith(
       GOOGLE_TOKENS.accessToken,
+      state.deviceId,
     )
 
     wasm.listGoogleDriveVaults.mockRejectedValue(

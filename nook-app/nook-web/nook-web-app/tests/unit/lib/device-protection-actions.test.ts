@@ -292,7 +292,13 @@ describe('locking the device identity', () => {
         throw new Error('recursive use of an object detected')
       }
     })
-    const settled = vi.spyOn(state, 'waitForStorageChain').mockResolvedValue()
+    const settled = vi
+      .spyOn(state, 'waitForStorageChain')
+      .mockImplementation(async () => {
+        state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
+        state.deviceId = 'opening-device'
+        state.devicePublicKey = 'opening-key'
+      })
 
     const locked = await new DeviceProtectionActions(
       state,
@@ -300,6 +306,11 @@ describe('locking the device identity', () => {
 
     expect(settled).toHaveBeenCalledOnce()
     expect(attempts).toBe(2)
+    expect(state.deviceProtectionStatus).toBe(
+      state.deviceProtectionLockedStatus,
+    )
+    expect(state.deviceId).toBe('')
+    expect(state.devicePublicKey).toBe('')
     expect(locked.isOk()).toBe(true)
   })
 

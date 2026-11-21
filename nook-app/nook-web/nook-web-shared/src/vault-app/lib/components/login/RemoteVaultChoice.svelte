@@ -12,10 +12,12 @@ Checking which passkey opens an identity decrypts in memory and changes
 nothing.
 -->
 <script lang="ts">
+  import { onDestroy } from 'svelte'
   import type { CredentialCheckReport } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import ProviderIdentityList from '$lib/components/provider-vaults/ProviderIdentityList.svelte'
   import {
+    IdentityDecisionText,
     IdentityRunKind,
     identityChoices,
     type IdentityChoicesRequest,
@@ -29,18 +31,15 @@ nothing.
     IdentityPlanOutcomeKind,
     type IdentityPlanRun,
   } from '$lib/vault/identity-plan-actions'
+  import { IdentityPages, type AddedKeyring } from '$lib/vault/identity-pages'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     IdentityJoinWaitKind,
     KeyringRecoveryKind,
   } from '$lib/vault/identity-join-wait'
-  import {
-    FirstRunActions,
-    ProviderFolderBinding,
-  } from '$lib/vault/first-run'
+  import { FirstRunActions, ProviderFolderBinding } from '$lib/vault/first-run'
   import {
     AccessCheckActions,
-    recoveryCheckTarget,
     recoveryProviderSource,
   } from '$lib/vault/access-check'
 
@@ -57,6 +56,12 @@ nothing.
   } = $props()
 
   let checks = $state<CredentialCheckReport[]>([])
+  const passkeys = $derived(new AccessCheckActions(vault))
+  let active = true
+  onDestroy(() => {
+    active = false
+    passkeys.clearKeyring()
+  })
   let checking = $state(false)
   // The decision that runs now: one at a time.
   let running = $state<IdentityRun>({ kind: IdentityRunKind.Idle })
@@ -80,15 +85,16 @@ nothing.
   /** One passkey tap: which listed identity it opens. */
   async function checkPasskey(): Promise<void> {
     checking = true
+    checks = []
+    const listing = vault.remoteVaultChoices
     try {
-      const result = await new AccessCheckActions(vault).checkPasskey(
-        recoveryCheckTarget(vault),
-      )
+      const result = await passkeys.checkKeyring(recoveryProviderSource(vault))
+      if (!active || vault.remoteVaultChoices !== listing) return
       if (result.isErr()) {
         vault.errorMsg = vault.t(result.error.translationKey)
         return
       }
-      checks = [...checks, result.value]
+      checks = [result.value]
     } finally {
       checking = false
     }
@@ -109,14 +115,26 @@ nothing.
         planned: [entry],
       }
       const ran = await new IdentityPlanActions(vault).run(run)
+      if (
+        entry.decision === 'addToBrowser' &&
+        entry.choice.standing.kind === 'openedByPasskey'
+      )
+        checks = []
       if (ran.isErr()) {
         vault.errorMsg = ran.error.message(vault)
         return
       }
       switch (ran.value.kind) {
         case IdentityPlanOutcomeKind.Applied:
-        case IdentityPlanOutcomeKind.AddedBeside:
           break
+        case IdentityPlanOutcomeKind.AddedBeside: {
+          const added: AddedKeyring = {
+            identityId: entry.choice.identity.identityId,
+            label: new IdentityDecisionText(vault).name(entry.choice),
+          }
+          await new IdentityPages(vault).keyringAddedBeside(added)
+          return
+        }
         // A join waits for a fresh key; its ceremony asks, then lists again.
         // Or a recovery passphrase's words are typed next; they open it.
         case IdentityPlanOutcomeKind.WaitsForKey:

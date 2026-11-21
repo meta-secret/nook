@@ -163,20 +163,12 @@ export async function readSecretOfVault(
   }
 }
 
-export enum RecoveryCardLayout {
-  Inline = 'inline',
-  Compact = 'compact',
-}
-
 /** On the recovery screen, the keyring offers its passkey, words, and
  * devices. Recovering with its words makes this browser's key first. */
 export async function recoverListedKeyringWithWords(
   device: Page,
-  ...[kept, words, layout = RecoveryCardLayout.Inline]: readonly [
-    KeptVault,
-    string,
-    RecoveryCardLayout?,
-  ]
+  kept: KeptVault,
+  words: string,
 ): Promise<void> {
   try {
     const card = device.locator(
@@ -188,45 +180,17 @@ export async function recoverListedKeyringWithWords(
       'addToBrowser',
     )
     const decisions = card.getByTestId('provider-identity-decision')
-    switch (layout) {
-      case RecoveryCardLayout.Inline:
-        await expect(decisions).toHaveCount(3)
-        expect(
-          await decisions.evaluateAll((buttons) =>
-            buttons.map((button) => button.getAttribute('data-decision')),
-          ),
-        ).toEqual(['addToBrowser', 'recoverWithPassphrase', 'askToJoin'])
-        await card
-          .locator(
-            '[data-testid="provider-identity-decision"][data-decision="recoverWithPassphrase"]',
-          )
-          .click()
-        break
-      case RecoveryCardLayout.Compact: {
-        await expect(decisions).toHaveCount(1)
-        const more = card.getByTestId('provider-identity-more-actions')
-        const menu = device.getByTestId('provider-identity-action-menu')
-        await more.press('ArrowDown')
-        const items = menu.getByRole('menuitem')
-        await expect(items).toHaveCount(2)
-        expect(
-          await items.evaluateAll((entries) =>
-            entries.map((entry) => entry.getAttribute('data-decision')),
-          ),
-        ).toEqual(['recoverWithPassphrase', 'askToJoin'])
-        const passphrase = menu.locator(
-          '[data-decision="recoverWithPassphrase"]',
-        )
-        await expect(passphrase).toBeFocused()
-        await device.keyboard.press('Escape')
-        await expect(menu).toBeHidden()
-        await expect(more).toBeFocused()
-        await more.press('ArrowDown')
-        await expect(passphrase).toBeFocused()
-        await device.keyboard.press('Enter')
-        break
-      }
-    }
+    await expect(decisions).toHaveCount(3)
+    expect(
+      await decisions.evaluateAll((buttons) =>
+        buttons.map((button) => button.getAttribute('data-decision')),
+      ),
+    ).toEqual(['addToBrowser', 'recoverWithPassphrase', 'askToJoin'])
+    const passphrase = card.locator(
+      '[data-testid="provider-identity-decision"][data-decision="recoverWithPassphrase"]',
+    )
+    await expect(passphrase).toBeVisible()
+    await passphrase.press('Enter')
     const recovery = device.getByTestId('keyring-recovery-words')
     await answerPasskeyPromptBeforeJoin(device, recovery)
     await expect(recovery).toBeVisible({

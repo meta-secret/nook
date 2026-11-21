@@ -5,7 +5,7 @@
 //! passkey-protected keyring entry are written in one transaction.
 
 use crate::{TypedInput, TypedOutput};
-use nook_core::{AddedIdentitySelection, IdentityId};
+use nook_core::{AddedIdentitySelection, IdentityId, ProviderIdentityLogEvents};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
@@ -13,7 +13,7 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use crate::NookDatabase;
 use crate::manager::NookVaultManager;
 use crate::manager::access_check::NookProviderSource;
-use crate::public_api::CheckedPasskey;
+use crate::public_api::{CheckedPasskey, DerivedPasskey};
 use crate::storage::identity_record::KeyringDbSaveAddedPasskeyIdentity;
 
 /// The identity added to this browser.
@@ -40,19 +40,56 @@ impl NookVaultManager {
         identity_id: String,
         rp_id: &str,
     ) -> Result<tsify::Ts<NookIdentityAdded>, JsError> {
+        self.clear_keyring_passkey_check();
         let source = source.decode()?;
         let identity_id = IdentityId::parse(&identity_id)?;
-        let contents = self.provider_source_contents(&source).await?;
         let passkey = CheckedPasskey { rp_id }.derive().await?;
+        self.add_passkey_member(&source, identity_id, passkey).await
+    }
+
+    /// Open with the passkey checked on the current recovery list. Re-read
+    /// membership on Open so a revoked key cannot be added from an old check.
+    pub async fn open_keyring_with_checked_passkey(
+        &mut self,
+        source: &tsify::Ts<NookProviderSource>,
+        identity_id: String,
+    ) -> Result<tsify::Ts<NookIdentityAdded>, JsError> {
+        let source = source.decode()?;
+        let identity_id = IdentityId::parse(&identity_id)?;
+        let passkey = self.take_checked_keyring(&source, &identity_id)?;
+        self.add_passkey_member(&source, identity_id, passkey).await
+    }
+}
+
+impl NookVaultManager {
+    async fn add_passkey_member(
+        &mut self,
+        source: &NookProviderSource,
+        identity_id: IdentityId,
+        passkey: DerivedPasskey,
+    ) -> Result<tsify::Ts<NookIdentityAdded>, JsError> {
+        let events = self
+            .identity_source(source)
+            .await?
+            .identity_events(&identity_id)
+            .await?;
+        let identity_logs = [ProviderIdentityLogEvents {
+            identity_id: identity_id.clone(),
+            events,
+        }];
         let selection =
             NookDatabase::save_added_passkey_identity(KeyringDbSaveAddedPasskeyIdentity {
                 app_key: &passkey.app_key,
                 record: &passkey.record,
                 signer: &passkey.signer,
                 identity_id: &identity_id,
-                identity_logs: &contents.identity_logs,
+                identity_logs: &identity_logs,
             })
             .await?;
+        if selection == AddedIdentitySelection::InUse {
+            self.reset_vault_session();
+            self.use_unlocked_app_key(&passkey.app_key, passkey.signer.into_inner());
+        }
         Ok(NookIdentityAdded {
             identity_id,
             selection,
@@ -64,11 +101,12 @@ impl NookVaultManager {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::public_api::NookRemoteSource;
+    use crate::storage::local_folder::LocalFolderHandles;
     use nook_core::{
         DeviceIdentity, DeviceKeyProtectionSetup, PasskeyDeviceIdentityMaterial,
-        PasskeyMemberSigner, PasskeyRecoveryInput, PasskeyRecoveryRequest,
-        ProviderIdentityLogEvents, SigningIdentity, WebAuthnCredentialId, WebAuthnPrfOutput,
-        WebAuthnUserHandle,
+        PasskeyMemberSigner, PasskeyRecoveryInput, PasskeyRecoveryRequest, SigningIdentity,
+        WebAuthnCredentialId, WebAuthnPrfOutput, WebAuthnUserHandle,
     };
     use wasm_bindgen_test::*;
 
@@ -92,6 +130,71 @@ mod browser_tests {
                 prf_output: &WebAuthnPrfOutput::try_from(PRF_OUTPUT.to_vec())?,
             })?,
         )
+    }
+
+    async fn check_member(
+        manager: &mut NookVaultManager,
+        source: &NookProviderSource,
+        material: &PasskeyDeviceIdentityMaterial,
+        family: &IdentityId,
+    ) -> anyhow::Result<()> {
+        let PasskeyMemberSigner::Derived(signer) = material.signer() else {
+            anyhow::bail!("missing passkey signer");
+        };
+        let key = DerivedPasskey {
+            fingerprint: nook_core::PasskeyAccessProfile::credential_identifier(&CREDENTIAL_ID),
+            app_key: DeviceIdentity::from_secret_str(material.identity_secret())?,
+            record: material.record().clone(),
+            signer: signer.clone(),
+        };
+        let contents = manager.provider_source_contents(source).await?;
+        let report = js(manager.check_keyring_with(source.clone(), contents, key))?.decode()?;
+        assert!(
+            report
+                .identities
+                .iter()
+                .any(|identity| &identity.identity_id == family
+                    && identity.outcome == nook_core::IdentityCheckOutcome::Opens)
+        );
+        Ok(())
+    }
+
+    async fn verify_checked_key_scope(
+        manager: &mut NookVaultManager,
+        source: &NookProviderSource,
+        material: &PasskeyDeviceIdentityMaterial,
+        family: &IdentityId,
+    ) -> anyhow::Result<()> {
+        check_member(manager, source, material, family).await?;
+        assert!(
+            NookDatabase::load_identity_directory()
+                .await?
+                .identities()
+                .is_empty()
+        );
+        manager.lock_device_identity();
+        assert!(
+            manager
+                .open_keyring_with_checked_passkey(&source.encode()?, family.to_string())
+                .await
+                .is_err()
+        );
+        for (other_source, other_id) in [
+            (NookProviderSource::CurrentProvider, family.clone()),
+            (source.clone(), IdentityId::generate()?),
+        ] {
+            check_member(manager, source, material, family).await?;
+            assert!(
+                manager
+                    .open_keyring_with_checked_passkey(
+                        &other_source.encode()?,
+                        other_id.to_string()
+                    )
+                    .await
+                    .is_err()
+            );
+        }
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -125,37 +228,59 @@ mod browser_tests {
             .clone();
         let events = NookDatabase::load_identity_log(&family)
             .await?
-            .storage_bytes()?
-            .into_iter()
-            .map(|(_, bytes)| bytes)
-            .collect();
-
-        // Another browser, with its own identity in use.
-        js(manager.delete_local_browser_data().await)?;
-        js(manager
-            .finish_pin_device_protection("other browser pin".to_owned())
-            .await)?;
-        let selection =
-            NookDatabase::save_added_passkey_identity(KeyringDbSaveAddedPasskeyIdentity {
-                app_key: &DeviceIdentity::from_secret_str(material.identity_secret())?,
-                record: material.record(),
-                signer: &signer,
-                identity_id: &family,
-                identity_logs: &[ProviderIdentityLogEvents {
-                    identity_id: family.clone(),
-                    events,
-                }],
-            })
+            .storage_bytes()?;
+        let folder = format!("checked-{}", family.as_str());
+        let handles = LocalFolderHandles::current();
+        handles.register_private_folder(&folder).await?;
+        handles
+            .write_identity_log(&folder, &family, &events)
             .await?;
+        let source = NookProviderSource::Remote(NookRemoteSource::LocalFolder {
+            handle_id: nook_core::LocalFolderHandleId::try_from(folder.clone())?,
+        });
+        for expected in [
+            AddedIdentitySelection::InUse,
+            AddedIdentitySelection::BesideIdentityInUse,
+        ] {
+            js(manager.delete_local_browser_data().await)?;
+            handles.register_private_folder(&folder).await?;
+            if expected == AddedIdentitySelection::BesideIdentityInUse {
+                js(manager
+                    .finish_pin_device_protection("other browser pin".to_owned())
+                    .await)?;
+            }
+            let current = manager.device_id();
 
-        assert_eq!(selection, AddedIdentitySelection::BesideIdentityInUse);
-        assert!(!NookDatabase::load_identity_log(&family).await?.is_empty());
-        js(manager.activate_local_identity(family.to_string()).await)?;
-        js(manager.unlock_device_identity(PRF_OUTPUT.to_vec()).await)?;
-        assert_eq!(
-            manager.ensure_signing_identity().await?.public_key(),
-            derived
-        );
+            if expected == AddedIdentitySelection::InUse {
+                verify_checked_key_scope(&mut manager, &source, &material, &family).await?;
+            }
+            check_member(&mut manager, &source, &material, &family).await?;
+            let added = js(manager
+                .open_keyring_with_checked_passkey(&source.encode()?, family.to_string())
+                .await)?
+            .decode()?;
+            assert_eq!(added.selection, expected);
+            assert!(!NookDatabase::load_identity_log(&family).await?.is_empty());
+            assert!(
+                manager
+                    .open_keyring_with_checked_passkey(&source.encode()?, family.to_string())
+                    .await
+                    .is_err()
+            );
+            if expected == AddedIdentitySelection::BesideIdentityInUse {
+                assert_eq!(manager.device_id(), current);
+                js(manager.activate_local_identity(family.to_string()).await)?;
+                js(manager.unlock_device_identity(PRF_OUTPUT.to_vec()).await)?;
+            }
+            assert_eq!(
+                manager.ensure_signing_identity().await?.public_key(),
+                derived
+            );
+            assert_eq!(
+                js(manager.device_protection_status().await)?,
+                nook_core::DeviceProtectionStatus::Unlocked
+            );
+        }
         js(manager.delete_local_browser_data().await)?;
         Ok(())
     }

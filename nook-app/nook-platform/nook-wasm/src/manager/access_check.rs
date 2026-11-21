@@ -9,16 +9,18 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use crate::TypedInput;
-use nook_core::CredentialCheckReport;
+use crate::{TypedInput, TypedOutput};
+use nook_core::i18n_keys;
+use nook_core::{CredentialCheckReport, IdentityId};
+use std::mem;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-use super::{NookVaultManager, PreparedProvider};
+use super::{CeremonyState, NookVaultManager, PreparedProvider};
 use crate::NookError;
-use crate::public_api::NookRemoteSource;
+use crate::public_api::{CheckedPasskey, DerivedPasskey, NookRemoteSource};
 use crate::storage::provider_vault_listing::SourceContents;
 
 /// Where an identity operation or a check reads identities and vaults from.
@@ -32,7 +34,48 @@ pub enum NookProviderSource {
     Remote(NookRemoteSource),
 }
 
+/// The latest user-selected passkey that proved keyring membership on the
+/// open provider list. Only the intended source and identity may consume it.
+pub(in crate::manager) struct CheckedKeyring {
+    source: NookProviderSource,
+    identity_id: IdentityId,
+    passkey: DerivedPasskey,
+}
+
 impl NookVaultManager {
+    pub(in crate::manager) fn take_checked_keyring(
+        &mut self,
+        source: &NookProviderSource,
+        identity_id: &IdentityId,
+    ) -> Result<DerivedPasskey, JsError> {
+        match mem::replace(&mut self.checked_keyring, CeremonyState::Inactive) {
+            CeremonyState::Active(checked)
+                if &checked.source == source && &checked.identity_id == identity_id =>
+            {
+                Ok(checked.passkey)
+            }
+            _ => Err(JsError::new(i18n_keys::PROVIDER_IDENTITIES_ADD_FAILED)),
+        }
+    }
+
+    pub(in crate::manager) fn check_keyring_with(
+        &mut self,
+        source: NookProviderSource,
+        contents: SourceContents,
+        passkey: DerivedPasskey,
+    ) -> Result<tsify::Ts<CredentialCheckReport>, JsError> {
+        let report = contents.report_for(&passkey)?;
+        let encoded = report.encode()?;
+        if let Some(identity_id) = report.opened_keyring() {
+            self.checked_keyring = CeremonyState::Active(CheckedKeyring {
+                source,
+                identity_id: identity_id.clone(),
+                passkey,
+            });
+        }
+        Ok(encoded)
+    }
+
     /// A source's identity logs and vaults, read without any key.
     pub(crate) async fn provider_source_contents(
         &self,
@@ -53,6 +96,25 @@ impl NookVaultManager {
 
 #[wasm_bindgen]
 impl NookVaultManager {
+    /// Check a passkey on a provider recovery list. The report is public
+    /// presentation data; the key stays on this manager only for a match.
+    pub async fn check_keyring_passkey(
+        &mut self,
+        source: &tsify::Ts<NookProviderSource>,
+        rp_id: &str,
+    ) -> Result<tsify::Ts<CredentialCheckReport>, JsError> {
+        self.clear_keyring_passkey_check();
+        let source = source.decode()?;
+        let contents = self.provider_source_contents(&source).await?;
+        let passkey = CheckedPasskey { rp_id }.derive().await?;
+        self.check_keyring_with(source, contents, passkey)
+    }
+
+    /// Closing or refreshing the recovery list discards its checked key.
+    pub fn clear_keyring_passkey_check(&mut self) {
+        self.checked_keyring = CeremonyState::Inactive;
+    }
+
     /// Ask for one passkey and report which of the source's identities and
     /// vaults it opens, each proven by decrypting its key and name.
     pub async fn check_passkey_access_from(
