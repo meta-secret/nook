@@ -74,6 +74,8 @@ pub enum ProviderIdentityLog {
 pub enum ProviderIdentityJoin {
     /// This browser did not ask, or already holds the identity.
     NotAsked,
+    /// The available app key is absent from the active members of the signed log.
+    DeviceKeyNotMember,
     /// This browser asked; no device of the identity answered yet.
     Requested,
     /// A device of the identity denied the request.
@@ -123,7 +125,7 @@ impl ListingAppKey {
             IdentityJoinProgress::Pending => (false, ProviderIdentityJoin::Requested),
             IdentityJoinProgress::Denied => (false, ProviderIdentityJoin::Denied),
             IdentityJoinProgress::Revoked | IdentityJoinProgress::NotRequested => {
-                (false, ProviderIdentityJoin::NotAsked)
+                (false, ProviderIdentityJoin::DeviceKeyNotMember)
             }
         }
     }
@@ -475,7 +477,7 @@ mod tests {
         };
         assert_eq!(
             join_of(&asked.log, &key)?,
-            (false, ProviderIdentityJoin::NotAsked)
+            (false, ProviderIdentityJoin::DeviceKeyNotMember)
         );
 
         let request = IdentityControlOperation::MemberJoinRequested {

@@ -451,7 +451,10 @@ export class VaultOAuthActions {
     if (access.isErr()) return err(access.error);
     try {
       return ok(
-        await list_google_drive_vaults(access.value.authorization.accessToken),
+        await list_google_drive_vaults(
+          access.value.authorization.accessToken,
+          this.state.deviceId,
+        ),
       );
     } catch (failure) {
       const report: DriveRootFailureReport = {

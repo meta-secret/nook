@@ -132,6 +132,69 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn a_signed_log_excluding_the_available_key_needs_no_passkey_check() -> anyhow::Result<()> {
+        for session in [IdentitySession::NoIdentity, IdentitySession::IdentityInUse] {
+            let log = ProviderIdentityLog::Read {
+                devices: 1.into(),
+                newest_device: ProviderVaultTime::Unreported,
+                vaults: 0.into(),
+                recovery_passphrases: 1.into(),
+                this_browser: false,
+                join: ProviderIdentityJoin::DeviceKeyNotMember,
+            };
+            let identities = [Fixture::identity(OTHER, log)?];
+            let choices = ProviderIdentityChoices {
+                vaults: &[],
+                identities: &identities,
+                checks: &[],
+                session,
+            }
+            .choices();
+            let choice = Fixture::at(&choices, 0)?;
+            assert_eq!(choice.standing, crate::IdentityStanding::DeviceKeyNotMember);
+            assert_eq!(
+                choice.passkey_check,
+                crate::IdentityPasskeyCheck::Unavailable
+            );
+            assert_eq!(
+                choice.decisions,
+                [
+                    IdentityDecision::RecoverWithPassphrase,
+                    IdentityDecision::AskToJoin
+                ]
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn a_signed_member_on_the_recovery_screen_opens_using_its_existing_key() -> anyhow::Result<()> {
+        let log = ProviderIdentityLog::Read {
+            devices: 1.into(),
+            newest_device: ProviderVaultTime::Unreported,
+            vaults: 0.into(),
+            recovery_passphrases: 0.into(),
+            this_browser: true,
+            join: ProviderIdentityJoin::NotAsked,
+        };
+        let identities = [Fixture::identity(OTHER, log)?];
+        let choices = ProviderIdentityChoices {
+            vaults: &[],
+            identities: &identities,
+            checks: &[],
+            session: IdentitySession::NoIdentity,
+        }
+        .choices();
+        let choice = Fixture::at(&choices, 0)?;
+        assert_eq!(choice.decisions, [IdentityDecision::FinishJoining]);
+        assert_eq!(
+            choice.passkey_check,
+            crate::IdentityPasskeyCheck::Unavailable
+        );
+        Ok(())
+    }
+
     /// A keyring whose log lists a recovery passphrase can be joined with its
     /// words wherever this browser may join it, before asking its devices;
     /// one without a passphrase, or one this browser finishes joining,

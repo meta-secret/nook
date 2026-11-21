@@ -273,8 +273,8 @@ pub(crate) trait ProviderLocation {
     /// What the location holds, related to this browser's keys. The vaults
     /// and the identity logs are read side by side; only the vaults no
     /// identity here holds are then inspected.
-    async fn listing(&self) -> Result<ProviderVaultListing, NookError> {
-        let held = BrowserHeldVaults::load().await?;
+    async fn listing(&self, session_app_id: &str) -> Result<ProviderVaultListing, NookError> {
+        let held = BrowserHeldVaults::load(session_app_id).await?;
         let (observations, identity_logs) =
             try_join(self.observations(), self.identity_logs(&held.identity)).await?;
         let unheld = held.unheld(&observations);
@@ -549,9 +549,26 @@ pub(crate) struct BrowserHeldVaults {
 }
 
 impl BrowserHeldVaults {
-    pub(crate) async fn load() -> Result<Self, NookError> {
-        let directory = NookDatabase::load_identity_directory().await?;
-        let keyring = NookDatabase::load_keyring().await?;
+    pub(crate) async fn load(session_app_id: &str) -> Result<Self, NookError> {
+        let projection = NookDatabase::load_local_identity_projection(session_app_id).await?;
+        let keyring = projection.keyring;
+        let directory = if session_app_id.is_empty() {
+            projection.directory
+        } else {
+            // Deriving or unlocking a local app key saves its protected entry.
+            // A different tab may since have changed the persisted selection.
+            match keyring
+                .entries()
+                .iter()
+                .find(|entry| entry.app_id().as_str() == session_app_id)
+            {
+                Some(entry) => projection
+                    .directory
+                    .select(entry.identity_id())
+                    .map_err(|error| error.into_cause())?,
+                None => projection.directory.clear_selection(),
+            }
+        };
         let names = NookDatabase::load_vault_registry()
             .await?
             .vaults

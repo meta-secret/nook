@@ -56,13 +56,16 @@ impl OpenedLocation<'_> {
     }
 
     /// What the location holds, related to this browser's keys.
-    pub(crate) async fn listing(&self) -> Result<ProviderVaultListing, NookError> {
+    pub(crate) async fn listing(
+        &self,
+        session_app_id: &str,
+    ) -> Result<ProviderVaultListing, NookError> {
         match self {
-            Self::Github(location) => location.listing().await,
-            Self::GoogleDrive(location) => location.listing().await,
-            Self::ICloud(location) => location.listing().await,
-            Self::S3(location) => location.listing().await,
-            Self::LocalFolder(location) => location.listing().await,
+            Self::Github(location) => location.listing(session_app_id).await,
+            Self::GoogleDrive(location) => location.listing(session_app_id).await,
+            Self::ICloud(location) => location.listing(session_app_id).await,
+            Self::S3(location) => location.listing(session_app_id).await,
+            Self::LocalFolder(location) => location.listing(session_app_id).await,
         }
     }
 

@@ -351,6 +351,14 @@ mod browser_tests {
             .ok_or_else(|| anyhow::anyhow!("work identity is missing"))?;
         NookDatabase::select_local_identity(work_identity_id).await?;
 
+        let listing = crate::storage::provider_vault_listing::BrowserHeldVaults::load(
+            &manager.device.public_app_id(),
+        )
+        .await?;
+        let nook_core::ListingIdentity::InUse(listed_key) = listing.identity else {
+            anyhow::bail!("provider listing lost the session's protected app key");
+        };
+        assert_eq!(listed_key.app_id.as_str(), personal_app_id);
         assert_eq!(manager.device.public_app_id(), personal_app_id);
         assert!(manager.device.identity_private_key.is_empty());
         manager

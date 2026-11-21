@@ -29,6 +29,7 @@ pub enum NookGoogleDriveVaultListing {
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn list_google_drive_vaults(
     access_token: &str,
+    session_app_id: &str,
 ) -> Result<tsify::Ts<NookGoogleDriveVaultListing>, JsError> {
     let token = DriveStorageClient::access_token(access_token)?;
     let listing = match DriveStorageClient::new(&token)
@@ -43,7 +44,7 @@ pub enum NookGoogleDriveVaultListing {
                     token: &token,
                     root,
                 }
-                .listing()
+                .listing(session_app_id)
                 .await?,
             }
         }

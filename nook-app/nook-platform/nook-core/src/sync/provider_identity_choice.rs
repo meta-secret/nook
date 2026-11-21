@@ -61,6 +61,8 @@ pub enum IdentityStanding {
     /// identity, so this one gets a new key here, protected by the same
     /// passkey, which the member key adds itself.
     PasskeyInUse,
+    /// The signed identity log excludes the available app key.
+    DeviceKeyNotMember,
     /// Passkeys were checked here, and none belongs to it.
     NotOpened,
     /// Nothing on this browser has opened it yet.
@@ -72,6 +74,7 @@ impl IdentityStanding {
         match self {
             Self::NotOpened | Self::Unchecked | Self::JoinDenied => IdentityPasskeyCheck::Available,
             Self::ThisBrowser
+            | Self::DeviceKeyNotMember
             | Self::OtherIdentityHere { .. }
             | Self::OpenedByPasskey { .. }
             | Self::JoinRequested
@@ -104,7 +107,9 @@ impl IdentityStanding {
                 decision: IdentityDecision::AddToBrowser,
             },
             Self::JoinRequested => IdentitySetup::Waiting,
-            Self::JoinDenied | Self::NotOpened | Self::Unchecked => IdentitySetup::RequestToJoin,
+            Self::JoinDenied | Self::DeviceKeyNotMember | Self::NotOpened | Self::Unchecked => {
+                IdentitySetup::RequestToJoin
+            }
             Self::PasskeyInUse => IdentitySetup::Continue {
                 decision: IdentityDecision::AddWithPasskeyInUse,
             },
@@ -235,7 +240,7 @@ impl ProviderIdentityChoices<'_> {
             choice.passkey_check = choice.standing.passkey_check();
             choice.setup = choice.standing.setup(self.session);
             choice.recovery = IdentityRecoveryOffer::of(choice.setup, choice.identity.log);
-            choice.decisions = self.decisions(&choice.standing, choice.recovery);
+            choice.decisions = self.decisions(choice);
         }
         choices
     }
@@ -248,10 +253,11 @@ impl ProviderIdentityChoices<'_> {
             ProviderIdentityLog::Absent => (false, ProviderIdentityJoin::NotAsked),
         };
         if held_here
-            || choice
-                .vaults
-                .iter()
-                .any(|vault| vault.access == ProviderVaultAccess::Syncs)
+            || (join == ProviderIdentityJoin::NotAsked
+                && choice
+                    .vaults
+                    .iter()
+                    .any(|vault| vault.access == ProviderVaultAccess::Syncs))
         {
             return IdentityStanding::ThisBrowser;
         }
@@ -268,12 +274,14 @@ impl ProviderIdentityChoices<'_> {
             ProviderIdentityJoin::KeyInUse => return IdentityStanding::PasskeyInUse,
             ProviderIdentityJoin::Requested => return IdentityStanding::JoinRequested,
             ProviderIdentityJoin::Denied => return IdentityStanding::JoinDenied,
-            ProviderIdentityJoin::NotAsked => {}
+            ProviderIdentityJoin::DeviceKeyNotMember | ProviderIdentityJoin::NotAsked => {}
         }
         if let Some(passkey) = self.opening_passkey(&choice.identity) {
             return IdentityStanding::OpenedByPasskey { passkey };
         }
-        if self.passkey_checked() {
+        if join == ProviderIdentityJoin::DeviceKeyNotMember {
+            IdentityStanding::DeviceKeyNotMember
+        } else if self.passkey_checked() {
             IdentityStanding::NotOpened
         } else {
             IdentityStanding::Unchecked
@@ -285,18 +293,18 @@ impl ProviderIdentityChoices<'_> {
     /// the passkey the user taps when the plan runs. An identity this
     /// browser may join whose log lists a recovery passphrase can also be
     /// joined with its words, before asking its devices.
-    fn decisions(
-        &self,
-        standing: &IdentityStanding,
-        recovery: IdentityRecoveryOffer,
-    ) -> Vec<IdentityDecision> {
-        let mut decisions = match (standing, self.session) {
+    fn decisions(&self, choice: &ProviderIdentityChoice) -> Vec<IdentityDecision> {
+        let mut decisions = match (&choice.standing, self.session) {
             (
-                IdentityStanding::ThisBrowser
-                | IdentityStanding::OtherIdentityHere { .. }
-                | IdentityStanding::JoinRequested,
+                IdentityStanding::OtherIdentityHere { .. } | IdentityStanding::JoinRequested,
                 _,
             ) => Vec::new(),
+            (IdentityStanding::ThisBrowser, IdentitySession::NoIdentity)
+                if matches!(choice.identity.log, ProviderIdentityLog::Read { this_browser: true, .. }) =>
+            {
+                vec![IdentityDecision::FinishJoining]
+            }
+            (IdentityStanding::ThisBrowser, _) => Vec::new(),
             (IdentityStanding::JoinApproved, _) => {
                 vec![IdentityDecision::FinishJoining]
             }
@@ -317,11 +325,11 @@ impl ProviderIdentityChoices<'_> {
             )
             | (IdentityStanding::NotOpened, IdentitySession::NoIdentity)
             // A denied request may be asked again.
-            | (IdentityStanding::JoinDenied, _) => {
+            | (IdentityStanding::DeviceKeyNotMember | IdentityStanding::JoinDenied, _) => {
                 vec![IdentityDecision::AskToJoin]
             }
         };
-        match recovery {
+        match choice.recovery {
             IdentityRecoveryOffer::Offered => {
                 let before_asking = decisions
                     .iter()
@@ -636,7 +644,10 @@ mod tests {
 
     #[test]
     fn a_checked_passkey_offers_adding_and_names_the_identity() -> anyhow::Result<()> {
-        let other = Fixture::identity(OTHER, ProviderIdentityLog::Absent)?;
+        let other = Fixture::identity(
+            OTHER,
+            Fixture::log_with(ProviderIdentityJoin::DeviceKeyNotMember),
+        )?;
         let vaults = [Fixture::vault(
             OTHER_VAULT,
             &other,
@@ -880,6 +891,7 @@ mod tests {
             session: IdentitySession::NoIdentity,
         }
         .choices();
+        assert!(Fixture::at(&held, 0)?.decisions.is_empty());
         assert_eq!(
             Fixture::at(&held, 0)?.setup,
             IdentitySetup::Continue {
