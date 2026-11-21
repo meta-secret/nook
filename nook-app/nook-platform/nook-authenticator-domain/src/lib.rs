@@ -222,7 +222,7 @@ mod tests {
             Duration::ZERO
         );
         assert_eq!(
-            period.autofill_delay(Duration::from_millis(44_000)),
+            period.autofill_delay(Duration::from_secs(44)),
             Duration::from_secs(1)
         );
         assert_eq!(
