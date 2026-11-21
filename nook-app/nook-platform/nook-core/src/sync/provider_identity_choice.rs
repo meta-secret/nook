@@ -295,16 +295,12 @@ impl ProviderIdentityChoices<'_> {
     /// joined with its words, before asking its devices.
     fn decisions(&self, choice: &ProviderIdentityChoice) -> Vec<IdentityDecision> {
         let mut decisions = match (&choice.standing, self.session) {
-            (
-                IdentityStanding::OtherIdentityHere { .. } | IdentityStanding::JoinRequested,
-                _,
-            ) => Vec::new(),
             (IdentityStanding::ThisBrowser, IdentitySession::NoIdentity)
                 if matches!(choice.identity.log, ProviderIdentityLog::Read { this_browser: true, .. }) =>
             {
                 vec![IdentityDecision::FinishJoining]
             }
-            (IdentityStanding::ThisBrowser, _) => Vec::new(),
+            (IdentityStanding::ThisBrowser | IdentityStanding::OtherIdentityHere { .. } | IdentityStanding::JoinRequested, _) => Vec::new(),
             (IdentityStanding::JoinApproved, _) => {
                 vec![IdentityDecision::FinishJoining]
             }

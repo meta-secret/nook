@@ -329,6 +329,7 @@ pub struct NookVaultManager {
         CeremonyState<nook_core::SentinelGenesisRequest>,
     pub(in crate::manager) sentinel_unlock: CeremonyState<nook_core::SentinelUnlockSession>,
     pub(in crate::manager) sync_outbox: SyncOutbox,
+    pub(in crate::manager) checked_keyring: CeremonyState<super::access_check::CheckedKeyring>,
     /// A recovery passphrase shown on this device and not yet confirmed.
     pub(in crate::manager) recovery_passphrase: CeremonyState<nook_core::PendingRecoveryPassphrase>,
 }
@@ -363,6 +364,7 @@ impl NookVaultManager {
             pending_sentinel_genesis_request: CeremonyState::Inactive,
             sentinel_unlock: CeremonyState::Inactive,
             sync_outbox: SyncOutbox::Unbound,
+            checked_keyring: CeremonyState::Inactive,
             recovery_passphrase: CeremonyState::Inactive,
         }
     }

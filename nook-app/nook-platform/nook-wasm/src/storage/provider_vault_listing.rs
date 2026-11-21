@@ -14,7 +14,6 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use nook_core::ProviderSecretText;
 use nook_core::{
     BrowserIdentityVault, BrowserNames, BrowserVaultKeys, CheckedVaultEvents, DriveEventParent,
     EventError, EventId, EventLogLocation, EventLogNamespaceKind, EventStorageBytes, IdentityId,
@@ -24,6 +23,7 @@ use nook_core::{
     ProviderVaultListingRequest, ProviderVaultObservation, ProviderVaultStanding,
     ProviderVaultTime, StoreId,
 };
+use nook_core::{IdentityDirectoryRejection, ProviderSecretText};
 
 use futures_util::future::try_join;
 use futures_util::{StreamExt, TryStreamExt, stream};
@@ -565,7 +565,7 @@ impl BrowserHeldVaults {
                 Some(entry) => projection
                     .directory
                     .select(entry.identity_id())
-                    .map_err(|error| error.into_cause())?,
+                    .map_err(IdentityDirectoryRejection::into_cause)?,
                 None => projection.directory.clear_selection(),
             }
         };
