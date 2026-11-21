@@ -115,9 +115,9 @@ export class IdentityDecisionText {
   }
 
   /** What one decision needs from the user, under its name. */
-  detail(decision: IdentityDecision): string {
+  detail(entry: PlannedDecision): string {
     const vault = this.vault;
-    switch (decision) {
+    switch (entry.decision) {
       case "addToBrowser":
         return vault.t(I18N_KEYS.ProviderIdentitiesPasskeyDetail);
       case "addWithPasskeyInUse":
@@ -127,7 +127,9 @@ export class IdentityDecisionText {
       case "askToJoin":
         return vault.t(I18N_KEYS.ProviderIdentitiesAskToJoinDetail);
       case "finishJoining":
-        return vault.t(I18N_KEYS.ProviderIdentitiesFinishJoiningDetail);
+        return entry.choice.standing.kind === "thisBrowser"
+          ? vault.t(I18N_KEYS.AccessCheckIdentityThisBrowser)
+          : vault.t(I18N_KEYS.ProviderIdentitiesFinishJoiningDetail);
     }
   }
 }

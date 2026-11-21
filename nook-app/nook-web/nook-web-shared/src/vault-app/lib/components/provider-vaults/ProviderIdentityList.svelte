@@ -115,7 +115,7 @@ it. Each available action has a button, in the order Rust supplies.
               class={compact
                 ? 'h-auto min-h-10 flex-auto whitespace-normal'
                 : ''}
-              title={text.detail(decision)}
+              title={text.detail(entry)}
               data-testid="provider-identity-decision"
               data-decision={decision}
               data-lead={index === 0}
