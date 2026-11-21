@@ -1399,7 +1399,6 @@
     "vault_name_unavailable": "Название сейфа недоступно",
     "try_passkey": "Попробовать ключ доступа",
     "open_keyring": "Открыть связку",
-    "open_with_passkey": "Открыть связку ключом доступа",
     "reveal_no_match": "Этот ключ доступа не открыл связку ключей."
   },
   "access_check": {

@@ -2202,7 +2202,6 @@ pub const PROVIDER_VAULTS_LOADING_S3: &str = "provider_vaults.loading_s3";
 pub const PROVIDER_VAULTS_NO_LINKED_DEVICES: &str = "provider_vaults.no_linked_devices";
 pub const PROVIDER_VAULTS_NO_LINKED_VAULTS: &str = "provider_vaults.no_linked_vaults";
 pub const PROVIDER_VAULTS_OPEN_KEYRING: &str = "provider_vaults.open_keyring";
-pub const PROVIDER_VAULTS_OPEN_WITH_PASSKEY: &str = "provider_vaults.open_with_passkey";
 pub const PROVIDER_VAULTS_REVEAL_NO_MATCH: &str = "provider_vaults.reveal_no_match";
 pub const PROVIDER_VAULTS_ROOT_ABSENT: &str = "provider_vaults.root_absent";
 pub const PROVIDER_VAULTS_ROOT_EMPTY: &str = "provider_vaults.root_empty";

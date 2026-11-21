@@ -100,7 +100,7 @@ export class IdentityDecisionText {
           return vault.t(I18N_KEYS.ProviderVaultsTryPasskey);
         return vault.identityInUse
           ? vault.t(I18N_KEYS.ProviderIdentitiesAdd)
-          : vault.t(I18N_KEYS.ProviderVaultsOpenWithPasskey);
+          : vault.t(I18N_KEYS.ProviderVaultsOpenKeyring);
       case "recoverWithPassphrase":
         return vault.t(I18N_KEYS.RecoveryPassphraseRecoverAction);
       case "addWithPasskeyInUse":

@@ -25,10 +25,7 @@ import { VaultOAuthActions } from '$lib/vault/oauth'
 import { FirstRunActions, ProviderFolderBinding } from '$lib/vault/first-run'
 import type { OAuthProviderDraft } from '$lib/vault/provider-draft-reads'
 import { ProviderSetupKinds } from '$lib/vault/provider-setup-kinds'
-import {
-  AccessCheckActions,
-  AccessCheckTargetKind,
-} from '$lib/vault/access-check'
+import { AccessCheckActions } from '$lib/vault/access-check'
 import {
   IdentityPlanActions,
   IdentityPlanFailure,
@@ -480,7 +477,7 @@ describe('Google Drive provider setup', () => {
         identities: [],
       },
     })
-    const check = vi.spyOn(AccessCheckActions.prototype, 'checkPasskey')
+    const check = vi.spyOn(AccessCheckActions.prototype, 'checkKeyring')
     const { view, vault } = renderWizard(signedInDrive())
 
     const identity = await view.findByTestId('provider-identity')
@@ -513,7 +510,7 @@ describe('Google Drive provider setup', () => {
         root: 'found',
         listing: { vaults: [target], identities: [] },
       })
-      const check = vi.spyOn(AccessCheckActions.prototype, 'checkPasskey')
+      const check = vi.spyOn(AccessCheckActions.prototype, 'checkKeyring')
       const { view } = renderWizard(signedInDrive())
       const card = within(await view.findByTestId('provider-identity'))
       expect(
@@ -593,7 +590,7 @@ describe('Google Drive provider setup', () => {
       ],
     }
     const check = vi
-      .spyOn(AccessCheckActions.prototype, 'checkPasskey')
+      .spyOn(AccessCheckActions.prototype, 'checkKeyring')
       .mockResolvedValue(ok(opens))
     const applied: IdentityPlanOutcome = {
       kind: IdentityPlanOutcomeKind.Applied,
@@ -653,10 +650,7 @@ describe('Google Drive provider setup', () => {
     await vi.waitFor(() =>
       expect(identity.dataset.standing).toBe('openedByPasskey'),
     )
-    expect(check).toHaveBeenCalledWith({
-      kind: AccessCheckTargetKind.Source,
-      source: DRIVE_SOURCE,
-    })
+    expect(check).toHaveBeenCalledWith(DRIVE_SOURCE)
     expect(heading.textContent?.trim()).toBe('Signed keyring')
     expect(heading.getAttribute('title')).toBe('idn_strangerabc')
     expect(card.getAllByText('ripple-canvas-orbit')).toHaveLength(1)
@@ -678,7 +672,7 @@ describe('Google Drive provider setup', () => {
     ).toHaveLength(0)
     expect(
       (await DecisionButtons.of(view, 'addToBrowser')).textContent?.trim(),
-    ).toBe(enLocale.provider_vaults.open_with_passkey)
+    ).toBe(enLocale.provider_vaults.open_keyring)
     // With no identity in use, one the passkey opens is added to this
     // browser as a whole.
     expect(
@@ -761,7 +755,7 @@ describe('Google Drive provider setup', () => {
           },
         ],
       }
-      vi.spyOn(AccessCheckActions.prototype, 'checkPasskey').mockResolvedValue(
+      vi.spyOn(AccessCheckActions.prototype, 'checkKeyring').mockResolvedValue(
         ok(none),
       )
       const { view, vault } = renderWizard(signedInDrive())
@@ -821,7 +815,7 @@ describe('Google Drive provider setup', () => {
     })
     const pending = report.then((checked) => ok(checked))
     const check = vi
-      .spyOn(AccessCheckActions.prototype, 'checkPasskey')
+      .spyOn(AccessCheckActions.prototype, 'checkKeyring')
       .mockReturnValue(pending)
     const { view, vault } = renderWizard(signedInDrive())
     useIdentity(vault)

@@ -1464,7 +1464,6 @@
     "vault_name_unavailable": "Vault name unavailable",
     "try_passkey": "Try a passkey",
     "open_keyring": "Open keyring",
-    "open_with_passkey": "Open keyring with passkey",
     "reveal_no_match": "This passkey did not open this keyring."
   },
   "access_check": {

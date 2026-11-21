@@ -1856,7 +1856,6 @@ export const I18N_KEYS = {
   ProviderVaultsNoLinkedDevices: 'provider_vaults.no_linked_devices',
   ProviderVaultsNoLinkedVaults: 'provider_vaults.no_linked_vaults',
   ProviderVaultsOpenKeyring: 'provider_vaults.open_keyring',
-  ProviderVaultsOpenWithPasskey: 'provider_vaults.open_with_passkey',
   ProviderVaultsRevealNoMatch: 'provider_vaults.reveal_no_match',
   ProviderVaultsRootAbsent: 'provider_vaults.root_absent',
   ProviderVaultsRootEmpty: 'provider_vaults.root_empty',
