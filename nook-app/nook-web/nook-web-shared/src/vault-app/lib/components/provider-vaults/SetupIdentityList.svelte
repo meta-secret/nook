@@ -79,16 +79,12 @@ once: there is no plan to apply.
       data-identity-id={choice.identity.identityId}
       data-setup={choice.setup.kind}
     >
-      {#if compact}
-        <IdentityCardHeader
-          {vault}
-          {choice}
-          tag={IdentityCardTag.Setup}
-          {compact}
-        />
-      {:else}
-        <IdentityCardHeader {vault} {choice} tag={IdentityCardTag.Setup} />
-      {/if}
+      <IdentityCardHeader
+        {vault}
+        {choice}
+        tag={IdentityCardTag.Setup}
+        compact={!!compact}
+      />
       {#if offered === SetupIdentityOffer.Continue}
         <Button
           type="button"
@@ -151,6 +147,8 @@ once: there is no plan to apply.
           {vault.t(I18N_KEYS.RecoveryPassphraseRecoverAction)}
         </button>
       {/if}
+      {@render compact?.reveal(choice)}
+      {@render compact?.details(choice)}
     </section>
   {/each}
 </div>

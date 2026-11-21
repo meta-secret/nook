@@ -1463,6 +1463,7 @@
     "no_linked_vaults": "No linked vaults.",
     "vault_name_unavailable": "Vault name unavailable",
     "try_passkey": "Try a passkey",
+    "open_keyring": "Open keyring",
     "open_with_passkey": "Open keyring with passkey",
     "reveal_no_match": "This passkey did not open this keyring."
   },
@@ -1493,7 +1494,7 @@
     "failed": "The check could not finish.",
     "passkey_failed": "The passkey check could not finish. Choose a passkey made by Nook on this site.",
     "source_current_provider": "Your connected sync provider",
-    "identity_this_browser": "Opens here",
+    "identity_this_browser": "This device can open this keyring",
     "identity_opened_by": "Opens with passkey {id}",
     "identity_not_opened": "No checked passkey opens it",
     "identity_unchecked": "No passkey checked yet",
@@ -1506,7 +1507,7 @@
     "identity_requested": "Join requested",
     "identity_join_denied": "Join request denied",
     "identity_join_approved": "Join approved",
-    "identity_passkey_in_use": "Its passkey is already in use here",
+    "identity_passkey_in_use": "Your current passkey opens this keyring",
     "which_passkey": "Which passkey opens it?"
   },
   "devices_card": {
@@ -2232,8 +2233,7 @@
     "identity_continue": "Continue",
     "identity_join": "Request to join",
     "identity_in_use": "In use here",
-    "identity_member": "Member",
-    "identity_not_member": "Not a member",
+    "identity_not_member": "This device needs access",
     "name_title": "Name your keyring",
     "name_body": "Anyone with access to this keyring’s sync folder can see its current and previous names.",
     "name_create": "Create keyring",

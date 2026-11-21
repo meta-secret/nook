@@ -108,7 +108,9 @@ export class IdentityDecisionText {
       case "askToJoin":
         return vault.t(I18N_KEYS.ProviderIdentitiesAskToJoin);
       case "finishJoining":
-        return vault.t(I18N_KEYS.ProviderIdentitiesFinishJoining);
+        return entry.choice.standing.kind === "thisBrowser"
+          ? vault.t(I18N_KEYS.ProviderVaultsOpenKeyring)
+          : vault.t(I18N_KEYS.ProviderIdentitiesFinishJoining);
     }
   }
 

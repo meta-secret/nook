@@ -94,11 +94,7 @@ it. Each available action has a button, in the order Rust supplies.
       data-store-ids={choice.vaults.map((summary) => summary.storeId).join(' ')}
       data-standing={standing.kind}
     >
-      {#if compact}
-        <IdentityCardHeader {vault} {choice} {compact} />
-      {:else}
-        <IdentityCardHeader {vault} {choice} />
-      {/if}
+      <IdentityCardHeader {vault} {choice} compact={!!compact} />
       {#if choice.decisions.length > 0}
         <div
           class="flex flex-wrap items-center gap-2"
@@ -149,6 +145,8 @@ it. Each available action has a button, in the order Rust supplies.
             : vault.t(I18N_KEYS.AccessCheckWhichPasskey)}
         </button>
       {/if}
+      {@render compact?.reveal(choice)}
+      {@render compact?.details(choice)}
     </section>
   {/each}
 </div>
