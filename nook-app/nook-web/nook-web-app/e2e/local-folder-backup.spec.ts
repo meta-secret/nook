@@ -77,7 +77,7 @@ test.describe('local folder backup provider', () => {
     await expectEmptyLocalFolderRejected(page)
   })
 
-  test('lists the keyring of a folder holding one vault, which then opens from its card', async ({
+  test('opens a folder keyring with the passkey just checked on its card', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -118,6 +118,11 @@ test.describe('local folder backup provider', () => {
     const card = page.locator(
       `[data-testid="provider-identity"][data-store-ids~="${kept.storeId}"]`,
     )
+    await card.getByTestId('provider-identity-find-passkey').click()
+    await expect(card).toHaveAttribute('data-standing', 'openedByPasskey')
+    await page.evaluate(() => {
+      localStorage.setItem('nook_e2e_passkey_mode', 'cancel')
+    })
     await card
       .locator(
         '[data-testid="provider-identity-decision"][data-decision="addToBrowser"]',
@@ -134,6 +139,9 @@ test.describe('local folder backup provider', () => {
     await expect(page.getByTestId('vault-panel')).toHaveCount(0)
     await expect(page.getByTestId('local-folder-setup')).toHaveCount(0)
     await expect.poll(() => localFolderPickerInvocationCount(page)).toBe(1)
+    await page.evaluate(() => {
+      localStorage.removeItem('nook_e2e_passkey_mode')
+    })
     expect(await readSecretOfVault(page, kept)).toBe(kept.value)
   })
 
