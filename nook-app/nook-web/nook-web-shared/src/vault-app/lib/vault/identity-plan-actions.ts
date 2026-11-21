@@ -1,9 +1,10 @@
 import { err, ok, type Result } from "neverthrow";
-import type {
-  AddedIdentitySelection,
-  NookIdentityJoinCompletion,
-  NookProviderSource,
-  NookVaultManager,
+import {
+  DeviceProtectionStatus,
+  type AddedIdentitySelection,
+  type NookIdentityJoinCompletion,
+  type NookProviderSource,
+  type NookVaultManager,
 } from "$app-wasm";
 import {
   IdentityDecisionText,
@@ -395,7 +396,7 @@ export class IdentityPlanActions {
         identityId: choice.identity.identityId,
         label: names.name(choice),
       };
-      const step: PlanStep = { decision, join };
+      const step: PlanStep = { decision, join, standing: choice.standing };
       const ran = await this.step(step);
       if (ran.isErr()) return err(ran.error);
       switch (ran.value.kind) {
@@ -416,6 +417,7 @@ export class IdentityPlanActions {
   private async step({
     decision,
     join,
+    standing,
   }: PlanStep): Promise<Result<IdentityPlanOutcome, IdentityPlanFailure>> {
     const applied: IdentityPlanOutcome = {
       kind: IdentityPlanOutcomeKind.Applied,
@@ -427,11 +429,26 @@ export class IdentityPlanActions {
         const add: ManagerCall<IdentityPlanOutcome> = {
           failure: new IdentityPlanFailure(IdentityPlanFailureKind.Add),
           run: async (manager) => {
-            const added = await manager.add_identity_with_passkey(
-              join.source,
-              join.identityId,
-              location.hostname,
-            );
+            const added =
+              standing.kind === "openedByPasskey"
+                ? await manager.open_keyring_with_checked_passkey(
+                    join.source,
+                    join.identityId,
+                  )
+                : await manager.add_identity_with_passkey(
+                    join.source,
+                    join.identityId,
+                    location.hostname,
+                  );
+            if (added.selection === "inUse") {
+              this.vault.deviceId = manager.device_id;
+              this.vault.devicePublicKey = manager.device_public_key;
+              this.vault.deviceProtectionLockedStatus =
+                DeviceProtectionStatus.Passkey;
+              this.vault.deviceProtectionStatus =
+                await manager.device_protection_status();
+              this.vault.sessionExpiredByIdle = false;
+            }
             return IdentityPlanActions.added(added.selection);
           },
         };
@@ -533,6 +550,7 @@ export class IdentityPlanActions {
 
 /** One decision of a plan, for the identity it names. */
 type PlanStep = {
+  readonly standing: PlannedDecision["choice"]["standing"];
   readonly decision: PlannedDecision["decision"];
   readonly join: IdentityJoinIntent;
 };

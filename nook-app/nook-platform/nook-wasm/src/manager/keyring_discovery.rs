@@ -34,9 +34,11 @@ impl NookVaultManager {
         self.reset_vault_session();
         self.prepare_storage(&connection).await?;
         let discovery = match &self.storage.provider {
-            PreparedProvider::Remote(remote) => {
-                remote.location().listing().await?.keyring_discovery()
-            }
+            PreparedProvider::Remote(remote) => remote
+                .location()
+                .listing(&self.device.public_app_id())
+                .await?
+                .keyring_discovery(),
             PreparedProvider::ThisBrowser => ProviderKeyringDiscovery::Empty,
         };
         Ok(discovery.encode()?)
@@ -53,7 +55,11 @@ impl NookVaultManager {
         let folder = OpenedLocation::LocalFolder(LocalFolderLocation {
             folder: LocalFolderHandles::current().open_folder(handle_id).await?,
         });
-        Ok(folder.listing().await?.keyring_discovery().encode()?)
+        Ok(folder
+            .listing(&self.device.public_app_id())
+            .await?
+            .keyring_discovery()
+            .encode()?)
     }
 }
 

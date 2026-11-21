@@ -692,7 +692,9 @@
         />
       {:else if showSetup}
         {#if vault.remoteVaultChoices.identities.length > 0}
-          <RemoteVaultChoice {vault} busy={isVerifying} onApplied={onUnlock} />
+          {#key vault.remoteVaultChoices}
+            <RemoteVaultChoice {vault} busy={isVerifying} onApplied={onUnlock} />
+          {/key}
         {:else if setupView.kind === SetupDraftForm.OAuth}
           <OAuthProviderSetupWizard
             {vault}

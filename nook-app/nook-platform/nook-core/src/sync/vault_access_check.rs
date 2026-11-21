@@ -94,6 +94,18 @@ pub struct CredentialCheckReport {
     pub identities: Vec<IdentityCheck>,
 }
 
+impl CredentialCheckReport {
+    /// The keyring this credential proved it belongs to. A grant on an
+    /// individual vault does not open its keyring.
+    #[must_use]
+    pub fn opened_keyring(&self) -> Option<&IdentityId> {
+        self.identities
+            .iter()
+            .find(|identity| identity.outcome == IdentityCheckOutcome::Opens)
+            .map(|identity| &identity.identity_id)
+    }
+}
+
 /// One passkey's re-derived app key against a source's identity logs and
 /// vaults.
 pub struct PasskeyAccessCheck<'a> {
@@ -499,6 +511,7 @@ mod tests {
         let identity_id = named.identity_id();
         let report = named.check(&named.app_key)?;
 
+        assert_eq!(report.opened_keyring(), Some(&identity_id));
         assert_eq!(
             report.credential,
             CheckedCredential {
@@ -528,6 +541,7 @@ mod tests {
     fn another_passkey_opens_no_identity_and_no_vault() -> anyhow::Result<()> {
         let named = NamedIdentity::new()?;
         let report = named.check(&AppKey::generate()?)?;
+        assert!(report.opened_keyring().is_none());
 
         let [identity] = report.identities.as_slice() else {
             anyhow::bail!("the source lists one identity");

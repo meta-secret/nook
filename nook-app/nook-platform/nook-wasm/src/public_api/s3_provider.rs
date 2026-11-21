@@ -81,6 +81,7 @@ use wasm_bindgen::JsError;
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn list_s3_vaults(
     configuration: &tsify::Ts<S3Connection>,
+    session_app_id: &str,
 ) -> Result<tsify::Ts<ProviderVaultListing>, JsError> {
     let configuration = configuration.decode()?;
     let listing = S3VaultListing {
@@ -88,7 +89,7 @@ use wasm_bindgen::JsError;
             connection: &configuration,
         },
     }
-    .listing()
+    .listing(session_app_id)
     .await?;
     Ok(listing.encode()?)
 }
@@ -232,7 +233,7 @@ mod browser_tests {
         let _stub = FetchStub::install(vec![FetchRoute::failing("GET", "127.0.0.1:8333", 403)])
             .map_err(|error| anyhow::anyhow!("{error}"))?;
         let configuration = WasmFixture::s3_connection()?;
-        let rejected = list_s3_vaults(&configuration.encode()?).await;
+        let rejected = list_s3_vaults(&configuration.encode()?, "").await;
         let Err(failure) = rejected else {
             anyhow::bail!("a refused key fails the listing");
         };

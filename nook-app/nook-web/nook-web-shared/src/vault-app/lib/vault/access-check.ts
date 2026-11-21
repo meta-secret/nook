@@ -80,6 +80,8 @@ function currentProvider(): NookProviderSource {
  * imported, or written to the source.
  */
 export class AccessCheckActions {
+  private keyringCheckStarted = false;
+
   constructor(private readonly vault: VaultState) {}
 
   async checkPasskey(target: AccessCheckTarget): Promise<CheckResult> {
@@ -105,6 +107,28 @@ export class AccessCheckActions {
         return this.atCurrentProvider(check);
       }
     }
+  }
+
+  /** Keep the checked credential in this listing's Rust manager for Open. */
+  checkKeyring(source: NookProviderSource): Promise<CheckResult> {
+    this.keyringCheckStarted = true;
+    return this.atCurrentProvider({
+      failure: new AccessCheckFailure(),
+      run: (manager) =>
+        manager.check_keyring_passkey(source, location.hostname),
+    });
+  }
+
+  /** Queue cleanup after any outstanding assertion, including a dismissed listing. */
+  clearKeyring(): void {
+    if (!this.keyringCheckStarted) return;
+    this.keyringCheckStarted = false;
+    void this.vault.enqueueStorage(async () => {
+      const manager = this.vault.admitManager();
+      if (manager.isErr()) return err(manager.error);
+      manager.value.clear_keyring_passkey_check();
+      return ok(true);
+    });
   }
 
   /** Run one check through the session's manager, after any queued storage
@@ -162,20 +186,6 @@ export function recoveryProviderSource(vault: VaultState): NookProviderSource {
       };
     case DraftS3ConnectionKind.NotReady:
       return currentProvider();
-  }
-}
-
-/** Where a recovery's checks read from: the same provider as its plan. */
-export function recoveryCheckTarget(vault: VaultState): AccessCheckTarget {
-  const source = recoveryProviderSource(vault);
-  switch (source.kind) {
-    case "currentProvider":
-      return { kind: AccessCheckTargetKind.CurrentProvider };
-    case "remote":
-      return {
-        kind: AccessCheckTargetKind.Source,
-        source: { kind: "remote", source: source.source },
-      };
   }
 }
 

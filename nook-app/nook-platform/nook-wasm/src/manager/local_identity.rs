@@ -74,10 +74,7 @@ impl NookVaultManager {
         }
 
         self.reset_local_identity_session();
-        self.device.id = app_key.app_id().to_string();
-        self.device.identity_private_key.zeroize();
-        self.device.identity_private_key = app_key.secret_string().into_inner();
-        self.event_log.signing_seed = saved.signing_seed;
+        self.use_unlocked_app_key(&app_key, saved.signing_seed);
         self.device.pending_local_identity_label = LocalIdentityCreation::ExistingIdentity;
         Ok(self.device.id.clone())
     }
@@ -104,11 +101,21 @@ impl NookVaultManager {
             .signing_seed
         };
         self.reset_local_identity_session();
+        self.use_unlocked_app_key(&app_key, signing_seed);
+        Ok(())
+    }
+
+    /// Install the key and its verified signer after resetting the previous
+    /// vault session. Provider recovery keeps its staged provider.
+    pub(in crate::manager) fn use_unlocked_app_key(
+        &mut self,
+        app_key: &nook_core::AppKey,
+        signing_seed: String,
+    ) {
         self.device.id = app_key.app_id().to_string();
         self.device.identity_private_key.zeroize();
         self.device.identity_private_key = app_key.secret_string().into_inner();
         self.event_log.signing_seed = signing_seed;
-        Ok(())
     }
 }
 
@@ -279,6 +286,7 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::storage::provider_vault_listing::BrowserHeldVaults;
 
     use wasm_bindgen_test::*;
 
@@ -351,6 +359,11 @@ mod browser_tests {
             .ok_or_else(|| anyhow::anyhow!("work identity is missing"))?;
         NookDatabase::select_local_identity(work_identity_id).await?;
 
+        let listing = BrowserHeldVaults::load(&manager.device.public_app_id()).await?;
+        let nook_core::ListingIdentity::InUse(listed_key) = listing.identity else {
+            anyhow::bail!("provider listing lost the session's protected app key");
+        };
+        assert_eq!(listed_key.app_id.as_str(), personal_app_id);
         assert_eq!(manager.device.public_app_id(), personal_app_id);
         assert!(manager.device.identity_private_key.is_empty());
         manager

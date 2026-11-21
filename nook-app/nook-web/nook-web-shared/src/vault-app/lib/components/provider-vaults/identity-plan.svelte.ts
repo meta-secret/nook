@@ -92,13 +92,15 @@ export class IdentityDecisionText {
   }
 
   /** What one decision does, said for the screen it is on. */
-  decision(decision: IdentityDecision): string {
+  decision(entry: PlannedDecision): string {
     const vault = this.vault;
-    switch (decision) {
+    switch (entry.decision) {
       case "addToBrowser":
+        if (entry.choice.standing.kind === "unchecked")
+          return vault.t(I18N_KEYS.ProviderVaultsTryPasskey);
         return vault.identityInUse
           ? vault.t(I18N_KEYS.ProviderIdentitiesAdd)
-          : vault.t(I18N_KEYS.ProviderIdentitiesRecover);
+          : vault.t(I18N_KEYS.ProviderVaultsOpenKeyring);
       case "recoverWithPassphrase":
         return vault.t(I18N_KEYS.RecoveryPassphraseRecoverAction);
       case "addWithPasskeyInUse":
@@ -106,14 +108,16 @@ export class IdentityDecisionText {
       case "askToJoin":
         return vault.t(I18N_KEYS.ProviderIdentitiesAskToJoin);
       case "finishJoining":
-        return vault.t(I18N_KEYS.ProviderIdentitiesFinishJoining);
+        return entry.choice.standing.kind === "thisBrowser"
+          ? vault.t(I18N_KEYS.ProviderVaultsOpenKeyring)
+          : vault.t(I18N_KEYS.ProviderIdentitiesFinishJoining);
     }
   }
 
   /** What one decision needs from the user, under its name. */
-  detail(decision: IdentityDecision): string {
+  detail(entry: PlannedDecision): string {
     const vault = this.vault;
-    switch (decision) {
+    switch (entry.decision) {
       case "addToBrowser":
         return vault.t(I18N_KEYS.ProviderIdentitiesPasskeyDetail);
       case "addWithPasskeyInUse":
@@ -123,7 +127,9 @@ export class IdentityDecisionText {
       case "askToJoin":
         return vault.t(I18N_KEYS.ProviderIdentitiesAskToJoinDetail);
       case "finishJoining":
-        return vault.t(I18N_KEYS.ProviderIdentitiesFinishJoiningDetail);
+        return entry.choice.standing.kind === "thisBrowser"
+          ? vault.t(I18N_KEYS.AccessCheckIdentityThisBrowser)
+          : vault.t(I18N_KEYS.ProviderIdentitiesFinishJoiningDetail);
     }
   }
 }

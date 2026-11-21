@@ -59,14 +59,20 @@ impl SourceContents {
         rp_id: &str,
     ) -> Result<tsify::Ts<CredentialCheckReport>, JsError> {
         let passkey = CheckedPasskey { rp_id }.derive().await?;
-        let report = PasskeyAccessCheck {
+        Ok(self.report_for(&passkey)?.encode()?)
+    }
+
+    pub(crate) fn report_for(
+        self,
+        passkey: &DerivedPasskey,
+    ) -> Result<CredentialCheckReport, NookError> {
+        Ok(PasskeyAccessCheck {
             app_key: &passkey.app_key,
-            fingerprint: passkey.fingerprint,
+            fingerprint: passkey.fingerprint.clone(),
             identity_logs: self.identity_logs,
             vaults: self.vaults,
         }
-        .report()?;
-        Ok(report.encode()?)
+        .report()?)
     }
 }
 

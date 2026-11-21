@@ -11,9 +11,7 @@ import type {
   ProviderDraft,
   IdentityControlSnapshot,
   NookGoogleDriveVaultListing,
-  ProviderIdentityJoin,
   ProviderListedIdentity,
-  ProviderVaultSummary,
 } from '$app-wasm'
 import { OAuthFailure, OAuthFailureKind } from '$lib/auth/oauth-failure'
 import { afterEach, describe, expect, test, vi } from 'vitest'
@@ -22,14 +20,12 @@ import {
   ProviderDraftFixture,
   ProviderFixtureCredentials,
 } from '../provider-fixtures'
+import { joinedSummary, summary } from '../provider-vault-summary-fixtures'
 import { VaultOAuthActions } from '$lib/vault/oauth'
 import { FirstRunActions, ProviderFolderBinding } from '$lib/vault/first-run'
 import type { OAuthProviderDraft } from '$lib/vault/provider-draft-reads'
 import { ProviderSetupKinds } from '$lib/vault/provider-setup-kinds'
-import {
-  AccessCheckActions,
-  AccessCheckTargetKind,
-} from '$lib/vault/access-check'
+import { AccessCheckActions } from '$lib/vault/access-check'
 import {
   IdentityPlanActions,
   IdentityPlanFailure,
@@ -92,62 +88,6 @@ const DRIVE_SOURCE = {
     accessToken: ProviderFixtureCredentials.DRIVE_TOKEN,
   },
 } as const
-
-function summary(
-  storeId: string,
-  access: ProviderVaultSummary['access'],
-): ProviderVaultSummary {
-  return {
-    storeId,
-    shortId: storeId.slice('store_'.length, 'store_'.length + 8),
-    name: { state: 'unknown' },
-    identity: {
-      identityId: 'idn_strangerabc',
-      shortId: 'stranger',
-      name: { state: 'unknown' },
-      words: ['ripple', 'canvas', 'orbit'],
-      log: {
-        state: 'read',
-        devices: 2,
-        newestDevice: { state: 'reported', at: Date.UTC(2026, 9, 27) },
-        vaults: 3,
-        recoveryPassphrases: 0,
-        thisBrowser: false,
-        join: 'notAsked',
-      },
-    },
-    created: { state: 'reported', at: Date.UTC(2024, 0, 2) },
-    lastActivity: { state: 'reported', at: Date.UTC(2024, 2, 1) },
-    eventCount: 4,
-    access,
-  }
-}
-
-/** One vault of an identity of its own, whose log tells a join's answer. */
-function joinedSummary(
-  identityId: string,
-  join: ProviderIdentityJoin,
-): ProviderVaultSummary {
-  const base = summary(`store_${identityId.slice('idn_'.length)}`, {
-    state: 'locked',
-  })
-  return {
-    ...base,
-    identity: {
-      ...base.identity,
-      identityId,
-      log: {
-        state: 'read',
-        devices: 1,
-        newestDevice: { state: 'unreported' },
-        vaults: 1,
-        recoveryPassphrases: 0,
-        thisBrowser: false,
-        join,
-      },
-    },
-  }
-}
 
 /** Adding a sync provider runs with an identity in use. */
 function useIdentity(vault: VaultState): void {
@@ -317,7 +257,7 @@ describe('Google Drive provider setup', () => {
       other
         .querySelector('[data-testid="provider-identity-standing"]')
         ?.textContent?.trim(),
-    ).toBe(vault.t(I18N_KEYS.FirstRunIdentityNotMember))
+    ).toBe(vault.t(I18N_KEYS.AccessCheckIdentityUnchecked))
     const devices = within(other).getByTestId('provider-keyring-devices')
     expect(devices.querySelector('summary')?.textContent?.trim()).toBe(
       enLocale.workspace.section_devices,
@@ -411,7 +351,7 @@ describe('Google Drive provider setup', () => {
       member
         ?.querySelector('[data-testid="provider-identity-standing"]')
         ?.textContent?.trim(),
-    ).toBe(vault.t(I18N_KEYS.FirstRunIdentityMember))
+    ).toBe(vault.t(I18N_KEYS.AccessCheckIdentityJoinApproved))
     expect(
       asked
         .querySelector('[data-testid="provider-identity-standing"]')
@@ -479,23 +419,14 @@ describe('Google Drive provider setup', () => {
 
     const primary = await DecisionButtons.of(view, 'addToBrowser')
     expect(primary.textContent?.trim()).toBe(
-      enLocale.provider_vaults.open_with_passkey,
+      enLocale.provider_vaults.try_passkey,
     )
-    expect(view.getAllByTestId('provider-identity-decision')).toHaveLength(1)
-    const more = view.getByTestId('provider-identity-more-actions')
-    expect(more.getAttribute('aria-haspopup')).toBe('menu')
-    expect(more.getAttribute('aria-label')).toBe(
-      enLocale.provider_vaults.more_actions.replace(
-        '{identity}',
-        'ripple-canvas-orbit',
-      ),
-    )
-    await fireEvent.keyDown(more, { key: 'ArrowDown' })
-    const menu = within(
-      await view.findByTestId('provider-identity-action-menu'),
-    )
-    const join = menu.getByRole('menuitem')
-    expect(join.dataset.decision).toBe('askToJoin')
+    expect(
+      view.getByTestId('provider-identity-standing').textContent?.trim(),
+    ).toBe(enLocale.access_check.identity_unchecked)
+    const join = view.getByRole('button', {
+      name: enLocale.provider_identities.ask_to_join,
+    })
     expect(join.getAttribute('title')).toBe(
       vault.t(I18N_KEYS.ProviderIdentitiesAskToJoinDetail),
     )
@@ -546,7 +477,7 @@ describe('Google Drive provider setup', () => {
         identities: [],
       },
     })
-    const check = vi.spyOn(AccessCheckActions.prototype, 'checkPasskey')
+    const check = vi.spyOn(AccessCheckActions.prototype, 'checkKeyring')
     const { view, vault } = renderWizard(signedInDrive())
 
     const identity = await view.findByTestId('provider-identity')
@@ -554,13 +485,48 @@ describe('Google Drive provider setup', () => {
     expect(
       view.getByTestId('provider-identity-standing').textContent?.trim(),
     ).toBe(vault.t(I18N_KEYS.AccessCheckIdentityThisBrowser))
-    // An identity that already opens needs no passkey hunt and no decision.
+    // Membership is already known before the user opens the keyring.
     expect(
       view.queryAllByTestId('provider-identity-find-passkey'),
     ).toHaveLength(0)
-    expect(view.queryAllByTestId('provider-identity-decision')).toHaveLength(0)
+    expect(
+      (await DecisionButtons.of(view, 'finishJoining')).textContent?.trim(),
+    ).toBe(enLocale.provider_vaults.open_keyring)
     expect(check).not.toHaveBeenCalled()
   })
+
+  test.each([
+    { passphrases: 0, decisions: ['askToJoin'] },
+    { passphrases: 1, decisions: ['recoverWithPassphrase', 'askToJoin'] },
+  ])(
+    'a known nonmember sees its available actions without a passkey prompt ($passphrases recovery passphrases)',
+    async ({ passphrases, decisions }) => {
+      const target = joinedSummary(
+        'idn_strangerabc',
+        'deviceKeyNotMember',
+        passphrases,
+      )
+      listVaults({
+        root: 'found',
+        listing: { vaults: [target], identities: [] },
+      })
+      const check = vi.spyOn(AccessCheckActions.prototype, 'checkKeyring')
+      const { view } = renderWizard(signedInDrive())
+      const card = within(await view.findByTestId('provider-identity'))
+      expect(
+        card.getByTestId('provider-identity-standing').textContent?.trim(),
+      ).toBe(enLocale.first_run.identity_not_member)
+      expect(
+        card.queryAllByTestId('provider-identity-find-passkey'),
+      ).toHaveLength(0)
+      expect(
+        card
+          .getAllByTestId('provider-identity-decision')
+          .map((action) => action.dataset.decision),
+      ).toEqual(decisions)
+      expect(check).not.toHaveBeenCalled()
+    },
+  )
 
   test('on the recovery screen, finding the passkey offers adding it, and the keyring it adds keeps Drive without opening a vault', async () => {
     const first = summary('store_othervault1', { state: 'unchecked' })
@@ -624,7 +590,7 @@ describe('Google Drive provider setup', () => {
       ],
     }
     const check = vi
-      .spyOn(AccessCheckActions.prototype, 'checkPasskey')
+      .spyOn(AccessCheckActions.prototype, 'checkKeyring')
       .mockResolvedValue(ok(opens))
     const applied: IdentityPlanOutcome = {
       kind: IdentityPlanOutcomeKind.Applied,
@@ -678,16 +644,13 @@ describe('Google Drive provider setup', () => {
     expect(view.getAllByTestId('connect-provider-btn')).toHaveLength(1)
     expect(
       view.getByTestId('provider-identity-find-passkey').textContent,
-    ).toContain(enLocale.provider_vaults.reveal_details)
+    ).toContain(enLocale.access_check.entry_link)
     await fireEvent.click(view.getByTestId('provider-identity-find-passkey'))
 
     await vi.waitFor(() =>
       expect(identity.dataset.standing).toBe('openedByPasskey'),
     )
-    expect(check).toHaveBeenCalledWith({
-      kind: AccessCheckTargetKind.Source,
-      source: DRIVE_SOURCE,
-    })
+    expect(check).toHaveBeenCalledWith(DRIVE_SOURCE)
     expect(heading.textContent?.trim()).toBe('Signed keyring')
     expect(heading.getAttribute('title')).toBe('idn_strangerabc')
     expect(card.getAllByText('ripple-canvas-orbit')).toHaveLength(1)
@@ -708,8 +671,8 @@ describe('Google Drive provider setup', () => {
       view.queryAllByTestId('provider-identity-find-passkey'),
     ).toHaveLength(0)
     expect(
-      view.queryAllByTestId('provider-identity-more-actions'),
-    ).toHaveLength(0)
+      (await DecisionButtons.of(view, 'addToBrowser')).textContent?.trim(),
+    ).toBe(enLocale.provider_vaults.open_keyring)
     // With no identity in use, one the passkey opens is added to this
     // browser as a whole.
     expect(
@@ -759,59 +722,68 @@ describe('Google Drive provider setup', () => {
     expect(onConnect).not.toHaveBeenCalled()
   })
 
-  test('an identity no passkey opens offers the checker again and a join request', async () => {
-    listVaults({
-      root: 'found',
-      listing: {
-        vaults: [summary('store_othervault1', { state: 'unchecked' })],
-        identities: [],
-      },
-    })
-    const none: CredentialCheckReport = {
-      credential: { fingerprint: 'passkey_ffffffffffffffff' },
-      identities: [
-        {
-          identityId: 'idn_strangerabc',
-          words: ['ripple', 'canvas', 'orbit'],
-          name: { state: 'unknown' },
-          outcome: 'doesNotOpen',
+  test.each([
+    { passphrases: 0, decisions: ['askToJoin'] },
+    { passphrases: 1, decisions: ['recoverWithPassphrase', 'askToJoin'] },
+  ])(
+    'after a passkey mismatch, shows the available ways in with $passphrases recovery passphrases',
+    async ({ passphrases, decisions }) => {
+      listVaults({
+        root: 'found',
+        listing: {
           vaults: [
-            {
-              storeId: 'store_othervault1',
-              shortId: 'othervau',
-              outcome: { state: 'doesNotOpen' },
-            },
+            summary('store_othervault1', { state: 'unchecked' }, passphrases),
           ],
+          identities: [],
         },
-      ],
-    }
-    vi.spyOn(AccessCheckActions.prototype, 'checkPasskey').mockResolvedValue(
-      ok(none),
-    )
-    const { view, vault } = renderWizard(signedInDrive())
+      })
+      const none: CredentialCheckReport = {
+        credential: { fingerprint: 'passkey_ffffffffffffffff' },
+        identities: [
+          {
+            identityId: 'idn_strangerabc',
+            words: ['ripple', 'canvas', 'orbit'],
+            name: { state: 'unknown' },
+            outcome: 'doesNotOpen',
+            vaults: [
+              {
+                storeId: 'store_othervault1',
+                shortId: 'othervau',
+                outcome: { state: 'doesNotOpen' },
+              },
+            ],
+          },
+        ],
+      }
+      vi.spyOn(AccessCheckActions.prototype, 'checkKeyring').mockResolvedValue(
+        ok(none),
+      )
+      const { view, vault } = renderWizard(signedInDrive())
 
-    await fireEvent.click(
-      await view.findByTestId('provider-identity-find-passkey'),
-    )
+      await fireEvent.click(
+        await view.findByTestId('provider-identity-find-passkey'),
+      )
 
-    const identity = view.getByTestId('provider-identity')
-    await vi.waitFor(() => expect(identity.dataset.standing).toBe('notOpened'))
-    expect(
-      view.getByTestId('provider-identity-standing').textContent?.trim(),
-    ).toBe(vault.t(I18N_KEYS.AccessCheckIdentityNotOpened))
-    expect(view.getAllByTestId('provider-identity-find-passkey')).toHaveLength(
-      1,
-    )
-    expect(within(identity).getByRole('status').textContent).toContain(
-      vault.t(I18N_KEYS.ProviderVaultsRevealNoMatch),
-    )
-    // Nothing here opens it: it can only be joined, by a device's approval.
-    expect(
-      view
-        .getAllByTestId('provider-identity-decision')
-        .map((button) => button.dataset.decision),
-    ).toEqual(['askToJoin'])
-  })
+      const identity = view.getByTestId('provider-identity')
+      await vi.waitFor(() =>
+        expect(identity.dataset.standing).toBe('notOpened'),
+      )
+      expect(
+        view.getByTestId('provider-identity-standing').textContent?.trim(),
+      ).toBe(vault.t(I18N_KEYS.AccessCheckIdentityNotOpened))
+      expect(
+        view.getAllByTestId('provider-identity-find-passkey'),
+      ).toHaveLength(1)
+      expect(within(identity).getByRole('status').textContent).toContain(
+        vault.t(I18N_KEYS.ProviderVaultsRevealNoMatch),
+      )
+      expect(
+        view
+          .getAllByTestId('provider-identity-decision')
+          .map((button) => button.dataset.decision),
+      ).toEqual(decisions)
+    },
+  )
 
   test('ignores a pending setup passkey check after a new Drive sign-in', async () => {
     const listed = listVaults({
@@ -843,7 +815,7 @@ describe('Google Drive provider setup', () => {
     })
     const pending = report.then((checked) => ok(checked))
     const check = vi
-      .spyOn(AccessCheckActions.prototype, 'checkPasskey')
+      .spyOn(AccessCheckActions.prototype, 'checkKeyring')
       .mockReturnValue(pending)
     const { view, vault } = renderWizard(signedInDrive())
     useIdentity(vault)

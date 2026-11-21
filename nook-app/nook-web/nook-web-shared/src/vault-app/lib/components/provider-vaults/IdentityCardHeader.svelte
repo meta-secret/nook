@@ -5,31 +5,27 @@ public log tells. The plan list and setup's list both open their cards with
 it; setup's tag says what this browser's passkey is to the identity instead.
 -->
 <script lang="ts">
-  import { KeyRound, Lock, UserRound } from '@lucide/svelte'
+  import { CircleCheck, KeyRound, Lock } from '@lucide/svelte'
   import type {
-    IdentitySetup,
     IdentityStanding,
     ProviderIdentityChoice,
     ProviderIdentityLog,
   } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
-  import {
-    IdentityDecisionText,
-    type CompactIdentityCard,
-  } from '$lib/components/provider-vaults/identity-plan.svelte'
+  import { IdentityDecisionText } from '$lib/components/provider-vaults/identity-plan.svelte'
   import { IdentityCardTag } from '$lib/components/provider-vaults/identity-card-tag'
 
   let {
     vault,
     choice,
     tag = IdentityCardTag.Standing,
-    compact,
+    compact = false,
   }: {
     vault: VaultState
     choice: ProviderIdentityChoice
     tag?: IdentityCardTag
-    compact?: CompactIdentityCard
+    compact?: boolean
   } = $props()
 
   const text = $derived(new IdentityDecisionText(vault))
@@ -63,6 +59,8 @@ it; setup's tag says what this browser's passkey is to the identity instead.
         return vault.t(I18N_KEYS.AccessCheckIdentityJoinApproved)
       case 'passkeyInUse':
         return vault.t(I18N_KEYS.AccessCheckIdentityPasskeyInUse)
+      case 'deviceKeyNotMember':
+        return vault.t(I18N_KEYS.FirstRunIdentityNotMember)
       case 'notOpened':
         return vault.t(I18N_KEYS.AccessCheckIdentityNotOpened)
       case 'unchecked':
@@ -70,32 +68,11 @@ it; setup's tag says what this browser's passkey is to the identity instead.
     }
   }
 
-  /** What this browser's passkey is to the identity, as setup says it. A
-   * setup with no words of its own keeps the standing line. */
-  function setupLine(setup: IdentitySetup): string {
-    switch (setup.kind) {
-      case 'continue':
-        return vault.t(I18N_KEYS.FirstRunIdentityMember)
-      case 'inUse':
-        return vault.t(I18N_KEYS.FirstRunIdentityInUse)
-      case 'requestToJoin':
-        return standing.kind === 'joinDenied'
-          ? standingLine(standing)
-          : vault.t(I18N_KEYS.FirstRunIdentityNotMember)
-      case 'waiting':
-      case 'unavailable':
-        return standingLine(standing)
-    }
-  }
-
-  function tagLine(): string {
-    switch (tag) {
-      case IdentityCardTag.Standing:
-        return standingLine(standing)
-      case IdentityCardTag.Setup:
-        return setupLine(choice.setup)
-    }
-  }
+  const tagLine = $derived(
+    tag === IdentityCardTag.Setup && choice.setup.kind === 'inUse'
+      ? vault.t(I18N_KEYS.FirstRunIdentityInUse)
+      : standingLine(standing),
+  )
 
   /** Whether the identity opens here, so its card reads as settled. */
   function opens(standing: IdentityStanding): boolean {
@@ -104,10 +81,11 @@ it; setup's tag says what this browser's passkey is to the identity instead.
       case 'otherIdentityHere':
       case 'openedByPasskey':
       case 'joinApproved':
+      case 'passkeyInUse':
         return true
       case 'joinRequested':
       case 'joinDenied':
-      case 'passkeyInUse':
+      case 'deviceKeyNotMember':
       case 'notOpened':
       case 'unchecked':
         return false
@@ -136,28 +114,28 @@ it; setup's tag says what this browser's passkey is to the identity instead.
 
 <header class="flex items-start gap-3">
   <span class="nk-tile nk-tile-sm" aria-hidden="true">
-    {#if compact}
+    {#if opens(standing)}
+      <CircleCheck class="size-4" />
+    {:else if standing.kind === 'unchecked'}
       <KeyRound class="size-4" />
-    {:else if opens(standing)}
-      <UserRound class="size-4" />
     {:else}
       <Lock class="size-4" />
     {/if}
   </span>
   <div class="min-w-0 flex-1 space-y-1">
-    <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+    <div class="flex flex-col items-start gap-1">
       <p
-        class="min-w-0 truncate text-sm font-semibold text-foreground"
+        class="max-w-full truncate text-sm font-semibold text-foreground"
         data-testid="provider-vault-identity"
         title={choice.identity.identityId}
       >
         {name}
       </p>
       <span
-        class={opens(standing) ? 'nk-tag nk-tag-success' : 'nk-tag'}
+        class={opens(standing) ? 'text-sm text-success' : 'text-sm text-muted-foreground'}
         data-testid="provider-identity-standing"
       >
-        {tagLine()}
+        {tagLine}
       </span>
     </div>
     {#if !compact || name !== words}
@@ -172,7 +150,5 @@ it; setup's tag says what this browser's passkey is to the identity instead.
         {/if}
       </p>
     {/if}
-    {@render compact?.reveal(choice)}
   </div>
 </header>
-{@render compact?.details(choice)}

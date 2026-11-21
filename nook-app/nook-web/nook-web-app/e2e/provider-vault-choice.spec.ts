@@ -205,7 +205,7 @@ test.describe('an identity another browser keeps in the Nook folder', () => {
     await expect(vaults.getByRole('list').getByRole('button')).toHaveCount(0)
     await expect(
       identityA.getByTestId('provider-identity-find-passkey'),
-    ).toHaveText(enLocale.provider_vaults.reveal_details)
+    ).toHaveCount(0)
     await expect(identityA.getByTestId('setup-identity-join')).toHaveCount(1)
     await expect(deviceB.getByTestId('provider-identity-decision')).toHaveCount(
       0,

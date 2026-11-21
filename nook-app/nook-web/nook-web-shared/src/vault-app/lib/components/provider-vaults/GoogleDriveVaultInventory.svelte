@@ -62,12 +62,7 @@ Checking which passkey opens an identity decrypts in memory.
     IdentityJoinWaitKind,
     KeyringRecoveryKind,
   } from '$lib/vault/identity-join-wait'
-  import {
-    AccessCheckActions,
-    AccessCheckTargetKind,
-    identityOpens,
-    type AccessCheckTarget,
-  } from '$lib/vault/access-check'
+  import { AccessCheckActions, identityOpens } from '$lib/vault/access-check'
   import {
     ConnectButtonLook,
     DrivePasskeyCheckKind,
@@ -153,7 +148,10 @@ Checking which passkey opens an identity decrypts in memory.
     void onCreateEmptyDrive(accessToken)
   }
 
+  const passkeys = $derived(new AccessCheckActions(vault))
+
   async function load(token: string): Promise<void> {
+    passkeys.clearKeyring()
     const pending: DriveVaultInventory = {
       kind: DriveVaultInventoryKind.Loading,
       token,
@@ -180,20 +178,11 @@ Checking which passkey opens an identity decrypts in memory.
     // Only a new sign-in lists again, not the state the listing reads.
     untrack(() => void load(token))
     return () => {
+      passkeys.clearKeyring()
       // Invalidate a read or passkey check when this sign-in leaves the page.
       inventory = { kind: DriveVaultInventoryKind.Loading, token: '' }
     }
   })
-
-  function driveTarget(token: string): AccessCheckTarget {
-    return {
-      kind: AccessCheckTargetKind.Source,
-      source: {
-        kind: 'remote',
-        source: { kind: 'googleDrive', accessToken: token },
-      },
-    }
-  }
 
   /** One passkey tap: which listed identity it opens, decrypted in memory. */
   async function checkPasskey(choice: ProviderIdentityChoice): Promise<void> {
@@ -207,12 +196,14 @@ Checking which passkey opens an identity decrypts in memory.
     const identityId = choice.identity.identityId
     const pending: DriveVaultInventory = {
       ...inventory,
+      checks: [],
       passkeyCheck: { kind: DrivePasskeyCheckKind.Checking, identityId },
     }
     inventory = pending
-    const checked = await new AccessCheckActions(vault).checkPasskey(
-      driveTarget(token),
-    )
+    const checked = await passkeys.checkKeyring({
+      kind: 'remote',
+      source: { kind: 'googleDrive', accessToken: token },
+    })
     if (inventory !== pending || token !== accessToken) return
     if (checked.isErr()) {
       inventory = {
@@ -228,11 +219,28 @@ Checking which passkey opens an identity decrypts in memory.
     )
     inventory = {
       ...pending,
-      checks: [...pending.checks, checked.value],
+      checks: [checked.value],
       passkeyCheck: opened
         ? { kind: DrivePasskeyCheckKind.Idle }
         : { kind: DrivePasskeyCheckKind.NoMatch, identityId },
     }
+  }
+
+  async function keepAddedBeside(
+    choice: ProviderIdentityChoice,
+  ): Promise<void> {
+    // The added keyring syncs in this account's Nook folder: the
+    // sign-in is bound to it, then saved for that keyring.
+    const folder = await new VaultOAuthActions(vault).connectGoogleVaultFolder()
+    if (folder.isErr()) {
+      vault.errorMsg = vault.t(folder.error.translationKey)
+      return
+    }
+    const added: AddedKeyring = {
+      identityId: choice.identity.identityId,
+      label: new IdentityDecisionText(vault).name(choice),
+    }
+    await new IdentityPages(vault).keyringAddedBeside(added)
   }
 
   /** Run one decision for its keyring, at once. A keyring it brings here
@@ -254,6 +262,12 @@ Checking which passkey opens an identity decrypts in memory.
       }
       const run: IdentityPlanRun = { source, planned: [entry] }
       const ran = await new IdentityPlanActions(vault).run(run)
+      if (
+        entry.choice.standing.kind === 'openedByPasskey' &&
+        entry.decision === 'addToBrowser' &&
+        inventory.kind === DriveVaultInventoryKind.Loaded
+      )
+        inventory = { ...inventory, checks: [] }
       if (ran.isErr()) {
         vault.errorMsg = ran.error.message(vault)
         await load(accessToken)
@@ -270,7 +284,8 @@ Checking which passkey opens an identity decrypts in memory.
           }
           break
         case IdentityPlanOutcomeKind.AddedBeside:
-          break
+          await keepAddedBeside(entry.choice)
+          return
         case IdentityPlanOutcomeKind.WaitsForKey:
         case IdentityPlanOutcomeKind.RecoveryWordsNext:
           return
@@ -331,6 +346,12 @@ Checking which passkey opens an identity decrypts in memory.
           planned: decide(choice),
         }
         const ran = await new IdentityPlanActions(vault).run(run)
+        if (
+          choice.standing.kind === 'openedByPasskey' &&
+          action === FirstRunIdentityAction.Continue &&
+          inventory.kind === DriveVaultInventoryKind.Loaded
+        )
+          inventory = { ...inventory, checks: [] }
         if (ran.isErr()) vault.errorMsg = ran.error.message(vault)
         else if (
           ran.value.kind === IdentityPlanOutcomeKind.WaitsForKey ||
@@ -338,20 +359,7 @@ Checking which passkey opens an identity decrypts in memory.
         )
           return
         else if (ran.value.kind === IdentityPlanOutcomeKind.AddedBeside) {
-          // The added keyring syncs in this account's Nook folder: the
-          // sign-in is bound to it, then saved for that keyring.
-          const folder = await new VaultOAuthActions(
-            vault,
-          ).connectGoogleVaultFolder()
-          if (folder.isErr()) {
-            vault.errorMsg = vault.t(folder.error.translationKey)
-            return
-          }
-          const added: AddedKeyring = {
-            identityId: choice.identity.identityId,
-            label: new IdentityDecisionText(vault).name(choice),
-          }
-          await new IdentityPages(vault).keyringAddedBeside(added)
+          await keepAddedBeside(choice)
           return
         } else if (action !== FirstRunIdentityAction.AskToJoin) {
           await onConnect()
@@ -428,7 +436,7 @@ Checking which passkey opens an identity decrypts in memory.
           {vault.t(I18N_KEYS.AccessCheckChecking)}
         {:else}
           <Lock class="size-3.5 shrink-0" aria-hidden="true" />
-          {vault.t(I18N_KEYS.ProviderVaultsRevealDetails)}
+          {vault.t(I18N_KEYS.AccessCheckEntryLink)}
         {/if}
       </button>
     {/if}

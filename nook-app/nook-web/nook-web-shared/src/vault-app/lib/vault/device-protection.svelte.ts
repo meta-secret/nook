@@ -153,13 +153,7 @@ export class DeviceProtectionActions {
     Result<DeviceProtectionLockOutcome, StorageOperationFailure>
   > {
     const state = this.state;
-    state.deviceProtectionStatus = state.deviceProtectionLockedStatus;
-    // A locked card folds down to its header and vaults: no vault panel stays
-    // open beside it, and Unlock starts again from the card.
-    state.vaultPanelStoreId = "";
-    state.deviceAuthorizationInProgress = false;
-    state.deviceId = "";
-    state.devicePublicKey = "";
+    this.publishLockedDevice();
     state.forgetDraftCredentials();
     if (state.localVaultPresent) state.useThisBrowser();
 
@@ -176,6 +170,7 @@ export class DeviceProtectionActions {
           // An engine call still in flight holds the identity; lock it as
           // soon as that call settles rather than leaving it unlocked.
           await state.waitForStorageChain();
+          this.publishLockedDevice();
           try {
             manager.value.lock_device_identity();
           } catch (failure) {
@@ -207,6 +202,17 @@ export class DeviceProtectionActions {
         : storageErr(new NativeVaultStorageFailure(failure));
     }
     return locked;
+  }
+
+  private publishLockedDevice(): void {
+    const state = this.state;
+    state.deviceProtectionStatus = state.deviceProtectionLockedStatus;
+    // A locked card folds down to its header and vaults: no vault panel stays
+    // open beside it, and Unlock starts again from the card.
+    state.vaultPanelStoreId = "";
+    state.deviceAuthorizationInProgress = false;
+    state.deviceId = "";
+    state.devicePublicKey = "";
   }
 
   private async finishAuthorizedInitialization({
