@@ -31,7 +31,7 @@ nothing.
     IdentityPlanOutcomeKind,
     type IdentityPlanRun,
   } from '$lib/vault/identity-plan-actions'
-  import { IdentityPages } from '$lib/vault/identity-pages'
+  import { IdentityPages, type AddedKeyring } from '$lib/vault/identity-pages'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     IdentityJoinWaitKind,
@@ -127,12 +127,14 @@ nothing.
       switch (ran.value.kind) {
         case IdentityPlanOutcomeKind.Applied:
           break
-        case IdentityPlanOutcomeKind.AddedBeside:
-          await new IdentityPages(vault).keyringAddedBeside({
+        case IdentityPlanOutcomeKind.AddedBeside: {
+          const added: AddedKeyring = {
             identityId: entry.choice.identity.identityId,
             label: new IdentityDecisionText(vault).name(entry.choice),
-          })
+          }
+          await new IdentityPages(vault).keyringAddedBeside(added)
           return
+        }
         // A join waits for a fresh key; its ceremony asks, then lists again.
         // Or a recovery passphrase's words are typed next; they open it.
         case IdentityPlanOutcomeKind.WaitsForKey:

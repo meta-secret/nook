@@ -112,11 +112,12 @@ export class AccessCheckActions {
   /** Keep the checked credential in this listing's Rust manager for Open. */
   checkKeyring(source: NookProviderSource): Promise<CheckResult> {
     this.keyringCheckStarted = true;
-    return this.atCurrentProvider({
+    const check: CurrentProviderCheck = {
       failure: new AccessCheckFailure(),
       run: (manager) =>
         manager.check_keyring_passkey(source, location.hostname),
-    });
+    };
+    return this.atCurrentProvider(check);
   }
 
   /** Queue cleanup after any outstanding assertion, including a dismissed listing. */

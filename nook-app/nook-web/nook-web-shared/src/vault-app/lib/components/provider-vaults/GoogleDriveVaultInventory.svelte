@@ -200,10 +200,11 @@ Checking which passkey opens an identity decrypts in memory.
       passkeyCheck: { kind: DrivePasskeyCheckKind.Checking, identityId },
     }
     inventory = pending
-    const checked = await passkeys.checkKeyring({
+    const source: NookProviderSource = {
       kind: 'remote',
       source: { kind: 'googleDrive', accessToken: token },
-    })
+    }
+    const checked = await passkeys.checkKeyring(source)
     if (inventory !== pending || token !== accessToken) return
     if (checked.isErr()) {
       inventory = {

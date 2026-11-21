@@ -340,7 +340,7 @@ describe('Recovery vault choice', () => {
     DeviceProtectionStatus.Unlocked,
     DeviceProtectionStatus.Pin,
     DeviceProtectionStatus.Passkey,
-  ])(
+  ] as const)(
     'a known member opens using its existing device protection (%s)',
     async (protection) => {
       const identity = strangerWhoseJoinIs('notAsked')

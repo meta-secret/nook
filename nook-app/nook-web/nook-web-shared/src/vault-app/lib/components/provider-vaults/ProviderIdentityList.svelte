@@ -54,13 +54,16 @@ it. Each available action has a button, in the order Rust supplies.
 
   const text = $derived(new IdentityDecisionText(vault))
 
-  let pendingOpen = $state.raw<PlannedDecision>()
-  onDestroy(() => { pendingOpen = undefined })
+  let pendingOpen = $state.raw<PlannedDecision | false>(false)
+  onDestroy(() => {
+    pendingOpen = false
+  })
 
   function decide(entry: PlannedDecision): void {
     if (
       !vault.deviceProtectionReady &&
-      (entry.decision === 'finishJoining' || entry.decision === 'addWithPasskeyInUse')
+      (entry.decision === 'finishJoining' ||
+        entry.decision === 'addWithPasskeyInUse')
     ) {
       pendingOpen = entry
       return
@@ -70,7 +73,7 @@ it. Each available action has a button, in the order Rust supplies.
 
   function openAfterUnlock(): void {
     const entry = pendingOpen
-    pendingOpen = undefined
+    pendingOpen = false
     if (entry && vault.deviceProtectionReady) void onDecide(entry)
   }
 
@@ -111,7 +114,9 @@ it. Each available action has a button, in the order Rust supplies.
     {vault}
     initializeSession={false}
     onProtectionReady={openAfterUnlock}
-    onDismiss={() => { pendingOpen = undefined }}
+    onDismiss={() => {
+      pendingOpen = false
+    }}
   />
 {/if}
 

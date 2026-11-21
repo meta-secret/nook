@@ -74,23 +74,23 @@ it; setup's tag says what this browser's passkey is to the identity instead.
       : standingLine(standing),
   )
 
-  /** Whether the identity opens here, so its card reads as settled. */
-  function opens(standing: IdentityStanding): boolean {
+  const StatusIcon = $derived.by(() => {
     switch (standing.kind) {
       case 'thisBrowser':
       case 'otherIdentityHere':
       case 'openedByPasskey':
       case 'joinApproved':
       case 'passkeyInUse':
-        return true
+        return CircleCheck
       case 'joinRequested':
       case 'joinDenied':
       case 'deviceKeyNotMember':
       case 'notOpened':
+        return Lock
       case 'unchecked':
-        return false
+        return KeyRound
     }
-  }
+  })
 
   /** What the identity's public control log tells, where it was read. */
   function facts(log: ProviderIdentityLog): readonly string[] {
@@ -114,13 +114,7 @@ it; setup's tag says what this browser's passkey is to the identity instead.
 
 <header class="flex items-start gap-3">
   <span class="nk-tile nk-tile-sm" aria-hidden="true">
-    {#if opens(standing)}
-      <CircleCheck class="size-4" />
-    {:else if standing.kind === 'unchecked'}
-      <KeyRound class="size-4" />
-    {:else}
-      <Lock class="size-4" />
-    {/if}
+    <StatusIcon class="size-4" />
   </span>
   <div class="min-w-0 flex-1 space-y-1">
     <div class="flex flex-col items-start gap-1">
@@ -132,7 +126,9 @@ it; setup's tag says what this browser's passkey is to the identity instead.
         {name}
       </p>
       <span
-        class={opens(standing) ? 'text-sm text-success' : 'text-sm text-muted-foreground'}
+        class={StatusIcon === CircleCheck
+          ? 'text-sm text-success'
+          : 'text-sm text-muted-foreground'}
         data-testid="provider-identity-standing"
       >
         {tagLine}
