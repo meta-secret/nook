@@ -92,13 +92,15 @@ export class IdentityDecisionText {
   }
 
   /** What one decision does, said for the screen it is on. */
-  decision(decision: IdentityDecision): string {
+  decision(entry: PlannedDecision): string {
     const vault = this.vault;
-    switch (decision) {
+    switch (entry.decision) {
       case "addToBrowser":
+        if (entry.choice.standing.kind === "unchecked")
+          return vault.t(I18N_KEYS.ProviderVaultsTryPasskey);
         return vault.identityInUse
           ? vault.t(I18N_KEYS.ProviderIdentitiesAdd)
-          : vault.t(I18N_KEYS.ProviderIdentitiesRecover);
+          : vault.t(I18N_KEYS.ProviderVaultsOpenWithPasskey);
       case "recoverWithPassphrase":
         return vault.t(I18N_KEYS.RecoveryPassphraseRecoverAction);
       case "addWithPasskeyInUse":

@@ -2,20 +2,17 @@
 The identities a provider holds, one card each. Passkeys and devices belong
 to identities, so the identity is the only thing the user decides about:
 its card says whether it opens here and offers what Rust allows doing with
-it. Rust lists the most direct way first. In Drive's compact card, the
-other ways appear in a menu. Picking an action runs it immediately.
+it. Each available action has a button, in the order Rust supplies.
 -->
 <script lang="ts">
   import {
-    Ellipsis,
     Fingerprint,
     MonitorSmartphone,
     RefreshCw,
     ScrollText,
   } from '@lucide/svelte'
-  import { DropdownMenu } from 'bits-ui'
   import type { IdentityDecision, ProviderIdentityChoice } from '$app-wasm'
-  import { Button, buttonVariants } from '$lib/components/ui/button'
+  import { Button } from '$lib/components/ui/button'
   import IdentityCardHeader from '$lib/components/provider-vaults/IdentityCardHeader.svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
@@ -54,23 +51,10 @@ other ways appear in a menu. Picking an action runs it immediately.
   } = $props()
 
   const text = $derived(new IdentityDecisionText(vault))
-  const overflowButton: Parameters<typeof buttonVariants>[0] = {
-    variant: 'outline',
-    size: 'icon',
-    class: 'shrink-0',
-  }
 
   function decisionsLabel(choice: ProviderIdentityChoice): string {
     const request: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.ProviderIdentitiesDecisionsLabel,
-      replacements: { identity: text.name(choice) },
-    }
-    return vault.t(request)
-  }
-
-  function moreActionsLabel(choice: ProviderIdentityChoice): string {
-    const request: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.ProviderVaultsMoreActions,
       replacements: { identity: text.name(choice) },
     }
     return vault.t(request)
@@ -117,14 +101,12 @@ other ways appear in a menu. Picking an action runs it immediately.
       {/if}
       {#if choice.decisions.length > 0}
         <div
-          class={compact
-            ? 'flex items-center gap-2'
-            : 'flex flex-wrap items-center gap-2'}
+          class="flex flex-wrap items-center gap-2"
           role="group"
           aria-label={decisionsLabel(choice)}
           data-testid="provider-identity-decisions"
         >
-          {#each compact ? choice.decisions.slice(0, 1) : choice.decisions as decision, index (decision)}
+          {#each choice.decisions as decision, index (decision)}
             {@const pick: IdentityPick = {
               identityId: choice.identity.identityId,
               decision,
@@ -135,7 +117,7 @@ other ways appear in a menu. Picking an action runs it immediately.
               size={compact ? 'default' : 'sm'}
               variant={index === 0 ? 'default' : 'outline'}
               class={compact
-                ? 'h-auto min-h-10 min-w-0 flex-1 whitespace-normal'
+                ? 'h-auto min-h-10 flex-auto whitespace-normal'
                 : ''}
               title={text.detail(decision)}
               data-testid="provider-identity-decision"
@@ -149,58 +131,9 @@ other ways appear in a menu. Picking an action runs it immediately.
               {:else}
                 {@render decisionIcon(decision)}
               {/if}
-              {#if compact && decision === 'addToBrowser'}
-                {vault.t(I18N_KEYS.ProviderVaultsOpenWithPasskey)}
-              {:else}
-                {text.decision(decision)}
-              {/if}
+              {text.decision(entry)}
             </Button>
           {/each}
-          {#if compact && choice.decisions.length > 1}
-            {@const moreRunning =
-              run.kind === IdentityRunKind.Running &&
-              run.pick.identityId === choice.identity.identityId &&
-              run.pick.decision !== choice.decisions[0]}
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger
-                type="button"
-                class={buttonVariants(overflowButton)}
-                aria-label={moreActionsLabel(choice)}
-                data-testid="provider-identity-more-actions"
-                {disabled}
-              >
-                {#if moreRunning}
-                  <RefreshCw class="animate-spin" aria-hidden="true" />
-                {:else}
-                  <Ellipsis aria-hidden="true" />
-                {/if}
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Portal>
-                <DropdownMenu.Content
-                  align="end"
-                  sideOffset={4}
-                  class="z-50 max-w-[calc(100vw-2rem)] min-w-48 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
-                  data-testid="provider-identity-action-menu"
-                >
-                  {#each choice.decisions.slice(1) as decision (decision)}
-                    {@const entry: PlannedDecision = { choice, decision }}
-                    <DropdownMenu.Item
-                      class="flex cursor-default items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none data-disabled:opacity-50 data-highlighted:bg-accent data-highlighted:text-accent-foreground"
-                      title={text.detail(decision)}
-                      data-testid="provider-identity-decision"
-                      data-decision={decision}
-                      data-lead="false"
-                      {disabled}
-                      onSelect={() => void onDecide(entry)}
-                    >
-                      {@render decisionIcon(decision)}
-                      {text.decision(decision)}
-                    </DropdownMenu.Item>
-                  {/each}
-                </DropdownMenu.Content>
-              </DropdownMenu.Portal>
-            </DropdownMenu.Root>
-          {/if}
         </div>
       {/if}
       {#if !compact && choice.passkey_check === 'Available'}

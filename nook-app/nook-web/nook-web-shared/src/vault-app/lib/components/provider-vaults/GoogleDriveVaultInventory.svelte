@@ -428,7 +428,7 @@ Checking which passkey opens an identity decrypts in memory.
           {vault.t(I18N_KEYS.AccessCheckChecking)}
         {:else}
           <Lock class="size-3.5 shrink-0" aria-hidden="true" />
-          {vault.t(I18N_KEYS.ProviderVaultsRevealDetails)}
+          {vault.t(I18N_KEYS.AccessCheckEntryLink)}
         {/if}
       </button>
     {/if}
