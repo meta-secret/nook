@@ -22,7 +22,6 @@ import {
   waitForGoogleOAuthSignedIn,
 } from './helpers'
 import type { KeptVault } from './helpers'
-import { RecoveryCardLayout } from './helpers/recovery-passphrase'
 import { LocalS3Identity } from '../../nook-web-extension/scripts/local-s3'
 import {
   installLocalFolderPickerMock,
@@ -120,12 +119,7 @@ test.describe('recovering a keyring with its passphrase on every sync provider',
       await device.getByTestId('google-sign-in-btn').click()
       await waitForGoogleOAuthSignedIn(device)
       await expect(device.getByTestId('connect-provider-btn')).toHaveCount(0)
-      await recoverListedKeyringWithWords(
-        device,
-        kept,
-        words,
-        RecoveryCardLayout.Compact,
-      )
+      await recoverListedKeyringWithWords(device, kept, words)
       expect(await readSecretOfVault(device, kept)).toBe(kept.value)
     } finally {
       await newContext.close()
