@@ -4,6 +4,7 @@ import { ok } from 'neverthrow'
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest'
 import initNookWasm, {
   NookVaultManager,
+  DeviceProtectionStatus,
   type CredentialCheckReport,
   type FilingIdentity,
   type NookIdentityAdded,
@@ -14,6 +15,14 @@ import {
   AccessCheckActions,
   AccessCheckTargetKind,
 } from '$lib/vault/access-check'
+import {
+  DeviceProtectionActions,
+  DeviceProtectionActionOutcome,
+} from '$lib/vault/device-protection.svelte'
+import {
+  IdentityPlanActions,
+  IdentityPlanOutcomeKind,
+} from '$lib/vault/identity-plan-actions'
 import { IdentityJoinWaitKind } from '$lib/vault/identity-join-wait'
 import { FirstRunActions, ProviderFolderBinding } from '$lib/vault/first-run'
 import {
@@ -272,6 +281,79 @@ describe('Recovery vault choice', () => {
     // Nothing is recovered yet: the join asks once a key exists.
     expect(onApplied).not.toHaveBeenCalled()
   })
+
+  test.each([
+    DeviceProtectionStatus.Unlocked,
+    DeviceProtectionStatus.Pin,
+    DeviceProtectionStatus.Passkey,
+  ])(
+    'a known member opens using its existing device protection (%s)',
+    async (protection) => {
+      const identity = strangerWhoseJoinIs('notAsked')
+      if (identity.log.state !== 'read') throw new Error('expected keyring log')
+      const member = {
+        ...identity,
+        log: { ...identity.log, thisBrowser: true },
+      }
+      const { view, vault } = renderChoice([], [member])
+      vault.deviceProtectionStatus = protection
+      const run = vi
+        .spyOn(IdentityPlanActions.prototype, 'run')
+        .mockResolvedValue(ok({ kind: IdentityPlanOutcomeKind.Applied }))
+      const keep = vi
+        .spyOn(FirstRunActions.prototype, 'connectRecoveredKeyring')
+        .mockResolvedValue(true)
+      const unlock = () => {
+        vault.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
+        return Promise.resolve(DeviceProtectionActionOutcome.Ready)
+      }
+      const pin = vi
+        .spyOn(DeviceProtectionActions.prototype, 'unlockPinDeviceProtection')
+        .mockImplementation(unlock)
+      const passkey = vi
+        .spyOn(DeviceProtectionActions.prototype, 'unlockDeviceProtection')
+        .mockImplementation(unlock)
+
+      const open = view.getByTestId('provider-identity-decision')
+      await fireEvent.click(open)
+      if (protection !== DeviceProtectionStatus.Unlocked) {
+        expect(run).not.toHaveBeenCalled()
+        await fireEvent.click(view.getByTestId('passkey-auth-overlay-dismiss'))
+        expect(run).not.toHaveBeenCalled()
+        await fireEvent.click(open)
+      }
+      switch (protection) {
+        case DeviceProtectionStatus.Pin:
+          await fireEvent.input(
+            view.getByTestId('device-protection-pin-unlock-input'),
+            { target: { value: '123456' } },
+          )
+          await fireEvent.click(
+            view.getByTestId('device-protection-pin-unlock-btn'),
+          )
+          expect(pin).toHaveBeenCalledWith({
+            pin: '123456',
+            initializeSession: false,
+          })
+          expect(passkey).not.toHaveBeenCalled()
+          break
+        case DeviceProtectionStatus.Passkey:
+          await fireEvent.click(
+            view.getByTestId('device-protection-unlock-btn'),
+          )
+          expect(passkey).toHaveBeenCalledWith({ initializeSession: false })
+          break
+        case DeviceProtectionStatus.Unlocked:
+          expect(view.queryAllByTestId('passkey-auth-overlay')).toHaveLength(0)
+          expect(passkey).not.toHaveBeenCalled()
+          expect(pin).not.toHaveBeenCalled()
+      }
+      await vi.waitFor(() =>
+        expect(keep).toHaveBeenCalledWith(ProviderFolderBinding.Named),
+      )
+      expect(run).toHaveBeenCalledOnce()
+    },
+  )
 
   test('the log tells a requested, denied, or approved join apart', () => {
     const { view } = renderChoice([

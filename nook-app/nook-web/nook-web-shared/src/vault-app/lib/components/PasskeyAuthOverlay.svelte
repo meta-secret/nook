@@ -8,12 +8,14 @@
   let {
     vault,
     onDismiss,
+    initializeSession = true,
+    onProtectionReady = () => {},
   }: {
     vault: VaultState
+    initializeSession?: boolean
+    onProtectionReady?: () => void
     onDismiss?: () => void
   } = $props()
-
-  function handleProtectionReady(): void {}
 
   function handleBeforeProtectionAction(): void {}
 
@@ -53,10 +55,10 @@
       {vault}
       frame={DeviceProtectionGateFrame.SetupStep}
       creationOnly={false}
-      initializeSession={true}
+      {initializeSession}
       recoveryAppId={vault.deviceId}
       onBeforeProtectionAction={handleBeforeProtectionAction}
-      onProtectionReady={handleProtectionReady}
+      {onProtectionReady}
     />
   </div>
 </div>

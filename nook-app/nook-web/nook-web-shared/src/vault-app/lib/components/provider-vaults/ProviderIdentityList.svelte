@@ -11,6 +11,8 @@ it. Each available action has a button, in the order Rust supplies.
     RefreshCw,
     ScrollText,
   } from '@lucide/svelte'
+  import { onDestroy } from 'svelte'
+  import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
   import type { IdentityDecision, ProviderIdentityChoice } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
   import IdentityCardHeader from '$lib/components/provider-vaults/IdentityCardHeader.svelte'
@@ -52,6 +54,26 @@ it. Each available action has a button, in the order Rust supplies.
 
   const text = $derived(new IdentityDecisionText(vault))
 
+  let pendingOpen = $state.raw<PlannedDecision>()
+  onDestroy(() => { pendingOpen = undefined })
+
+  function decide(entry: PlannedDecision): void {
+    if (
+      !vault.deviceProtectionReady &&
+      (entry.decision === 'finishJoining' || entry.decision === 'addWithPasskeyInUse')
+    ) {
+      pendingOpen = entry
+      return
+    }
+    void onDecide(entry)
+  }
+
+  function openAfterUnlock(): void {
+    const entry = pendingOpen
+    pendingOpen = undefined
+    if (entry && vault.deviceProtectionReady) void onDecide(entry)
+  }
+
   function decisionsLabel(choice: ProviderIdentityChoice): string {
     const request: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.ProviderIdentitiesDecisionsLabel,
@@ -83,6 +105,15 @@ it. Each available action has a button, in the order Rust supplies.
     <Fingerprint class="size-4" />
   {/if}
 {/snippet}
+
+{#if pendingOpen}
+  <PasskeyAuthOverlay
+    {vault}
+    initializeSession={false}
+    onProtectionReady={openAfterUnlock}
+    onDismiss={() => { pendingOpen = undefined }}
+  />
+{/if}
 
 <div class="space-y-3" data-testid="provider-identity-list">
   {#each choices as choice (choice.identity.identityId)}
@@ -119,8 +150,8 @@ it. Each available action has a button, in the order Rust supplies.
               data-testid="provider-identity-decision"
               data-decision={decision}
               data-lead={index === 0}
-              {disabled}
-              onclick={() => void onDecide(entry)}
+              disabled={disabled || !!pendingOpen}
+              onclick={() => decide(entry)}
             >
               {#if running(pick)}
                 <RefreshCw class="size-4 animate-spin" aria-hidden="true" />
@@ -137,7 +168,7 @@ it. Each available action has a button, in the order Rust supplies.
           type="button"
           class="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground disabled:opacity-60"
           data-testid="provider-identity-find-passkey"
-          disabled={disabled || checking}
+          disabled={disabled || checking || !!pendingOpen}
           onclick={() => void onFindPasskey(choice)}
         >
           {checking
