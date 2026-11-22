@@ -716,7 +716,6 @@ export async function handleSessionMessage({
         if (admission4.isErr()) return err(admission4.error)
         const code = await activeManager.current_authenticator_code_for_fill(
           payload.secretId,
-          Math.floor(Date.now() / 1000),
         )
         try {
           const response: AuthenticatorCodeResponse = {

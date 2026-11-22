@@ -3,8 +3,15 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::types::{NookAuthenticatorAccount, NookTotpCode};
+use gloo_timers::future;
 use nook_core::{SecretId, SecretType, SecretValue};
+use std::time::Duration;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
+
+enum AuthenticatorFill {
+    Ready(NookTotpCode),
+    Wait(Duration),
+}
 
 impl NookVaultManager {
     fn list_authenticator_accounts(
@@ -35,17 +42,27 @@ impl NookVaultManager {
     fn authenticator_code_for_fill(
         &self,
         secret_id: &str,
-        unix_seconds: u32,
-    ) -> Result<NookTotpCode, NookError> {
+        since_epoch: Duration,
+    ) -> Result<AuthenticatorFill, NookError> {
         let id = SecretId::parse(secret_id)?;
         let crypto = self.vault.crypto.get()?;
         let mut record =
             nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(&id)?;
         let result = match &record.data {
-            SecretValue::Authenticator(authenticator) => authenticator
-                .current_code(u64::from(unix_seconds).into())
-                .map(|code| NookTotpCode::from_core(code, u64::from(unix_seconds)))
-                .map_err(NookError::from),
+            SecretValue::Authenticator(authenticator) => {
+                let delay = authenticator.period.autofill_delay(since_epoch);
+                if delay.is_zero() {
+                    let seconds = since_epoch.as_secs();
+                    authenticator
+                        .current_code(seconds.into())
+                        .map(|code| {
+                            AuthenticatorFill::Ready(NookTotpCode::from_core(code, seconds))
+                        })
+                        .map_err(NookError::from)
+                } else {
+                    Ok(AuthenticatorFill::Wait(delay))
+                }
+            }
             _ => Err(NookError::Decryption(
                 "Selected secret is not an authenticator item.".to_owned(),
             )),
@@ -157,17 +174,33 @@ mod wasm_tests {
         )?;
         manager.vault.crypto = VaultCryptoState::Unlocked(crypto);
 
-        let code = manager.authenticator_code_for_fill("secret_SMypl8K0w9a", 1_700_000_000)?;
+        let AuthenticatorFill::Ready(code) = manager.authenticator_code_for_fill(
+            "secret_SMypl8K0w9a",
+            Duration::from_secs(1_700_000_000),
+        )?
+        else {
+            anyhow::bail!("expected a code");
+        };
+        assert!(matches!(
+            manager.authenticator_code_for_fill("secret_SMypl8K0w9a", Duration::from_millis(29_994))?,
+            AuthenticatorFill::Wait(delay) if delay == Duration::from_millis(6)
+        ));
         assert_eq!(code.code().len(), 6);
         assert!(code.expires_at_unix_seconds() > 1_700_000_000.0);
         assert!(
             manager
-                .authenticator_code_for_fill("secret_SMypl8K0w9b", 1_700_000_000)
+                .authenticator_code_for_fill(
+                    "secret_SMypl8K0w9b",
+                    Duration::from_secs(1_700_000_000)
+                )
                 .is_err()
         );
         assert!(
             manager
-                .authenticator_code_for_fill("secret_SMypl8K0w9c", 1_700_000_000)
+                .authenticator_code_for_fill(
+                    "secret_SMypl8K0w9c",
+                    Duration::from_secs(1_700_000_000)
+                )
                 .is_err()
         );
         Ok(())
@@ -187,21 +220,19 @@ impl NookVaultManager {
     }
 
     #[wasm_bindgen]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "FFI boundary: projects the `current_authenticator_code_for_fill` timestamp or duration through a JavaScript Number scalar"
-        )
-    )]
     pub async fn current_authenticator_code_for_fill(
         &mut self,
         secret_id: &str,
-        unix_seconds: u32,
     ) -> Result<NookTotpCode, JsError> {
         self.ensure_passkey_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
-        self.authenticator_code_for_fill(secret_id, unix_seconds)
-            .map_err(Into::into)
+        loop {
+            let since_epoch = Duration::try_from_secs_f64(js_sys::Date::now() / 1000.0)
+                .map_err(|_| JsError::new("Invalid system time."))?;
+            match self.authenticator_code_for_fill(secret_id, since_epoch)? {
+                AuthenticatorFill::Ready(code) => return Ok(code),
+                AuthenticatorFill::Wait(delay) => future::sleep(delay).await,
+            }
+        }
     }
 }
