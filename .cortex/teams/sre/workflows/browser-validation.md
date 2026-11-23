@@ -13,7 +13,7 @@ The projects are defined in
 
 Full PR runs include `stable` and `unstable` on ready product PRs and on
 explicit `ci:full-e2e` requests. See the
-[pre-merge scope table](ci-pipeline.md#browser-validation-before-merge).
+[pre-merge scope rules](ci-pipeline.md#browser-validation-before-merge).
 
 - **`stable`**
   - Specs: IndexedDB-only specs.

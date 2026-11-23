@@ -465,7 +465,7 @@ draft. Marking a product PR ready for review runs the full web and extension
 E2E suites. They also run when a product PR opens ready and on every later
 push while ready. Use `ci:full-e2e` for early feedback on a draft.
 Documentation-only PRs receive the lighter policy checks. See the
-[pre-merge scope table](.cortex/teams/sre/workflows/ci-pipeline.md#browser-validation-before-merge).
+[pre-merge scope rules](.cortex/teams/sre/workflows/ci-pipeline.md#browser-validation-before-merge).
 
 Project-scoped module experts use stable semantic role names defined by the
 [Cortex registry](.cortex/teams/ai/docs/architecture/module-experts.md). Universal

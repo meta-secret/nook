@@ -473,11 +473,11 @@ timeout. Later build vertices and genuine S3 health failures fail closed.
 
 ### Browser validation before merge
 
-| PR contents | Draft | Ready for review |
-| --- | --- | --- |
-| Product changes | Product verification and preview, plus focused extension tests for authentication-sensitive changes | Product verification, full web E2E and all three extension shards |
-| Research only | Research verification and browser tests | Same research checks |
-| Documentation or policy only | Repository policy checks | Same policy checks |
+- Product drafts run product verification and preview. Authentication-sensitive
+  changes also run focused extension tests. Ready product PRs run product
+  verification, full web E2E and all three extension shards.
+- Research-only PRs run research verification and browser tests in both states.
+- Documentation-only and policy-only PRs run repository policy checks in both states.
 
 Marking a product PR ready starts full browser validation on its current head.
 Opening it ready and pushing a new commit while ready also run the full suites.
