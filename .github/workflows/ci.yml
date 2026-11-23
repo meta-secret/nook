@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, edited, closed]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft, labeled, edited, closed]
   push:
     branches: [main]
   schedule:
@@ -97,7 +97,7 @@ jobs:
     name: PR validation
     if: >-
       github.event_name == 'pull_request' &&
-      (contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) ||
+      (contains(fromJSON('["opened","synchronize","reopened","ready_for_review","converted_to_draft"]'), github.event.action) ||
       (github.event.action == 'edited' && github.event.changes.base.ref.from != '') ||
       github.event.label.name == 'ci:validate' || github.event.label.name == 'ci:full-e2e')
     permissions:
