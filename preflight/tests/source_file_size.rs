@@ -58,13 +58,16 @@ impl SourceArchitectureScenario {
             .map(|(trigger, _)| trigger)
             .ok_or_else(|| anyhow::anyhow!("central CI must define PR before push triggers"))?;
         assert!(
-            pull_request_trigger.contains("opened")
+            pull_request_trigger.contains("branches: [main]")
+                && pull_request_trigger.contains("opened")
                 && pull_request_trigger.contains("synchronize")
                 && pull_request_trigger.contains("reopened")
+                && pull_request_trigger.contains("ready_for_review")
+                && pull_request_trigger.contains("converted_to_draft")
                 && !pull_request_trigger.contains("paths:")
                 && !pull_request_trigger.contains("paths-ignore:")
                 && central_ci.contains(
-                    "contains(fromJSON('[\"opened\",\"synchronize\",\"reopened\"]'), github.event.action)",
+                    "contains(fromJSON('[\"opened\",\"synchronize\",\"reopened\",\"ready_for_review\",\"converted_to_draft\"]'), github.event.action)",
                 ),
             "central CI must route every authored PR tree to repository policy"
         );
@@ -78,7 +81,9 @@ impl SourceArchitectureScenario {
                 && !pr_route.contains("paths:")
                 && !pr_route.contains("paths-ignore:")
                 && pr_workflow.contains("VALIDATION_REQUESTED: ${{ inputs.validation_requested }}")
-                && pr_workflow.contains("*) validation=true ;;")
+                && pr_workflow.contains("*) product=true ;;")
+                && pr_workflow
+                    .contains("if [ \"$product\" = true ]; then\n            validation=true")
                 && pr_workflow.contains("if: needs.scope.outputs.validation == 'true'")
                 && pr_workflow.contains("run: task --silent ci:pr:verification:tooling\n")
                 && pr_workflow.contains("run: task --silent ci:pr:verification\n")
