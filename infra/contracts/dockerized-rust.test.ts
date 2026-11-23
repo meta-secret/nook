@@ -106,15 +106,15 @@ class DockerizedRustContract {
     ]);
     const browser = jobContract.parse(workflow.jobs.browser);
     const browserRequired =
-      "${{ needs.scope.outputs.validation == 'true' && (inputs.full_e2e_requested || needs.scope.outputs.research == 'true') }}";
+      "${{ needs.scope.outputs.validation == 'true' && (needs.scope.outputs.full_e2e == 'true' || needs.scope.outputs.research == 'true') }}";
     expect(browser.if).toBe(browserRequired);
     expect(browser.strategy?.matrix.suite).toBe(
-      '${{ fromJSON(inputs.full_e2e_requested && \'["web","extension-1","extension-2","extension-3"]\' || \'["web"]\') }}',
+      '${{ fromJSON(needs.scope.outputs.full_e2e == \'true\' && \'["web","extension-1","extension-2","extension-3"]\' || \'["web"]\') }}',
     );
     const fullSuite = stepContract.parse(
       browser.steps.find((step) => step.name === "Run isolated browser suite"),
     );
-    expect(fullSuite.if).toBe("inputs.full_e2e_requested");
+    expect(fullSuite.if).toBe("needs.scope.outputs.full_e2e == 'true'");
     const researchSuite = stepContract.parse(
       browser.steps.find((step) => step.name === "Run research browser tests"),
     );
