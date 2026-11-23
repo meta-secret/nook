@@ -176,9 +176,8 @@ export async function keepIdentityWithoutVault(
   return card
 }
 
-/** Name the identity when first run reaches its sync provider step; a
- * browser that already had an identity goes straight to its vault. */
-async function nameFirstIdentityIfAsked(
+/** Complete first run when needed and wait for the created vault before navigation. */
+async function waitForFirstVault(
   page: Page,
   vaultName: string,
   readySurface: Locator,
@@ -188,6 +187,9 @@ async function nameFirstIdentityIfAsked(
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   if (await syncStep.isVisible()) await nameFirstIdentityHere(page, vaultName)
+  await expect(readySurface).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
 }
 
 /** The first vault's setup ends on the identities: name the identity when
@@ -198,8 +200,7 @@ export async function expectFirstVaultOpen(
 ): Promise<void> {
   const vaultPanel = page.getByTestId('vault-panel')
   const ready = vaultPanel.or(openVaultRow(page)).first()
-  await nameFirstIdentityIfAsked(page, vaultName, ready)
-  await expect(ready).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await waitForFirstVault(page, vaultName, ready)
   // The e2e idle lock is 2.5 s: under load it can lock the new vault before
   // the identities page leads into it.
   await disableVaultIdleLock(page)
@@ -265,7 +266,7 @@ export async function createLocalVaultOnLogin(
   }
   if (await passkeyOverlay.isVisible()) await answerPasskeyPrompt(page)
 
-  await nameFirstIdentityIfAsked(
+  await waitForFirstVault(
     page,
     vaultName,
     readySurface.or(openVaultRow(page)).first(),
