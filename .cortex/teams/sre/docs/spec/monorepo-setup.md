@@ -142,14 +142,13 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Remote reads trusted compiler objects through the read-only SeaweedFS identity.
   - New commit dependency results persist in Zot.
   - Trusted Main and local writers populate SeaweedFS.
-  - `pr.yml` is one validation job with sequential verification, tests/coverage,
-    heavy checks and optional browser phases; independent tasks run concurrently.
+  - `pr.yml` joins verification, artifact preparation and applicable browser jobs into the final PR check.
   - Trusted runs use `nook-k0s-container` and one persistent node-local BuildKit
     connection. Fork/Dependabot runs remain hosted and secret-free.
   - PRs mount SeaweedFS sccache but disable registry layer-cache imports/exports
     and per-PR runnable-image publication.
-  - Modular Taskfiles and composite reporting/deploy actions retain one runner.
-  - `ci:full-e2e` enables full web and extension suites inside that job.
+  - Ready product PRs run full web and extension suites on every head.
+    Drafts can request the same suites early with `ci:full-e2e`.
   - Verification must finish before compiling expensive test binaries.
   - Docker-backed cold/warm/failure proof: `task infra:bake-cache:prove-pr`.
   - **`main.yml`** serializes the cache-writing native → WASM → web lanes.

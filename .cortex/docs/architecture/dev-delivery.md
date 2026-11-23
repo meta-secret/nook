@@ -64,7 +64,9 @@ follows the latest head and reruns the affected checks.
 ### Pull request
 
 1. Push the canonical feature branch.
-2. Create or update one pull request from that branch into `main`.
+2. Create or update one pull request from that branch into `main`. Publish
+   ongoing work as a draft. When the product change is ready, mark the same
+   PR ready for review to start full web and extension E2E.
 3. Run every required PR check for the current head.
 4. Wait until all required checks reach a terminal state.
 5. If any required job fails or is cancelled, collect the complete terminal
@@ -81,7 +83,8 @@ approval, or review count does not block the owning Prime.
 ### Merge and cleanup
 
 1. Re-fetch `origin/main` and the canonical feature branch.
-2. Require every required PR check to be green for the current feature head.
+2. Require every required PR check, including GitHub Actions' strict
+   `PR validation / Merge readiness`, to be green for the current feature head.
 3. If `origin/main` advanced, update the feature branch from the new main
    frontier without force-pushing.
 4. Rerun every invalidated required check.

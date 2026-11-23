@@ -926,7 +926,7 @@ void test(
 
     assert.match(
       step,
-      /^ {8}if: always\(\) && !inputs\.full_e2e_requested && needs\.scope\.outputs\.auth == 'true'$/m,
+      /^ {8}if: always\(\) && needs\.scope\.outputs\.full_e2e != 'true' && needs\.scope\.outputs\.auth == 'true'$/m,
     );
     assert.match(step, /^ {8}uses: actions\/upload-artifact@v7$/m);
     assert.match(

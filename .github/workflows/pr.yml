@@ -27,6 +27,7 @@ jobs:
     name: Select validation scope
     outputs:
       validation: ${{ steps.browser-scope.outputs.validation }}
+      full_e2e: ${{ steps.browser-scope.outputs.full_e2e }}
       auth: ${{ steps.browser-scope.outputs.auth }}
       research: ${{ steps.browser-scope.outputs.research }}
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest' }}
@@ -55,22 +56,37 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           VALIDATION_REQUESTED: ${{ inputs.validation_requested }}
+          FULL_E2E_REQUESTED: ${{ inputs.full_e2e_requested }}
+          DRAFT: ${{ github.event.pull_request.draft }}
         run: |
           set -euo pipefail
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           auth=false
+          product=false
           validation="$VALIDATION_REQUESTED"
+          full_e2e="$FULL_E2E_REQUESTED"
           research=false
+          # Include both sides of renames and classify only this PR's changes.
+          changed_paths="$RUNNER_TEMP/pr-changed-paths"
+          git diff --no-renames --name-only -z "$BASE_SHA...HEAD" > "$changed_paths"
           while IFS= read -r -d '' path; do
             case "$path" in
+              docs/privacy-policy.md|docs/terms-of-service.md) product=true ;;
+              *.md) continue ;;
               .cortex/*|.meta-cortex/*|.cursor/*|.vale.ini|.vale/*|.github/workflows/repository-policy.yml|.github/workflows/web-research.yml|agentic-ai/*|nook-app/nook-web/nook-web-research/*) ;;
-              *) validation=true ;;
+              *) product=true ;;
             esac
             case "$path" in
               nook-app/nook-web/nook-web-shared/src/extension/password-form*|nook-app/nook-web/nook-web-extension/src/content/autofill.ts|nook-app/nook-web/nook-web-extension/src/content/autofill/*|nook-app/nook-web/nook-web-extension/e2e/mock-auth-provider-scenarios.ts|nook-app/nook-web/nook-web-extension/e2e/mock-auth/src/pages/DetectionHiddenHeaderLogin.svelte|nook-app/nook-web/nook-web-extension/e2e/mock-auth-pilot-coverage.spec.ts|nook-app/nook-web/nook-web-extension/e2e/mock-auth-pilot-session-lifecycle.spec.ts) auth=true ;;
             esac
             case "$path" in .github/workflows/pr.yml|.github/workflows/web-research.yml|.github/scripts/web-research-deploy.sh|.github/scripts/web-research-verify-live.sh|.task/ci-workflows.yml|nook-app/ci/pr.yml|nook-app/ci/pr.docker-bake.hcl|nook-app/nook-web/nook-web-app/Dockerfile|nook-app/nook-web/nook-web-research/*) research=true; validation=true ;; esac
-          done < <(git diff --name-only -z "$BASE_SHA" HEAD)
+          done < "$changed_paths"
+          if [ "$product" = true ]; then
+            validation=true
+            if [ "$DRAFT" = false ]; then full_e2e=true; fi
+          fi
+          if [ "$full_e2e" = true ]; then validation=true; fi
+          echo "full_e2e=$full_e2e" >> "$GITHUB_OUTPUT"
           echo "auth=$auth" >> "$GITHUB_OUTPUT"
           echo "validation=$validation" >> "$GITHUB_OUTPUT"
           echo "research=$research" >> "$GITHUB_OUTPUT"
@@ -164,13 +180,13 @@ jobs:
       - name: Prepare artifacts and selected focused browser tests
         if: needs.scope.outputs.validation == 'true'
         env:
-          PR_FULL_E2E: ${{ inputs.full_e2e_requested }}
+          PR_FULL_E2E: ${{ needs.scope.outputs.full_e2e }}
           PR_BROWSER_JOBS: "true"
           PR_AUTH_E2E: ${{ needs.scope.outputs.auth }}
           PR_RESEARCH: ${{ needs.scope.outputs.research }}
         run: task --silent ci:pr:browser
       - name: Report failed extension browser context
-        if: failure() && !inputs.full_e2e_requested
+        if: failure() && needs.scope.outputs.full_e2e != 'true'
         run: |
           shopt -s globstar nullglob
           for context in "$PR_ARTIFACT_DIR"/runtime/nook-app/nook-web/nook-web-extension/test-results/**/error-context.md; do
@@ -178,7 +194,7 @@ jobs:
             cat "$context"
           done
       - name: Preserve failed extension Playwright diagnostics
-        if: always() && !inputs.full_e2e_requested && needs.scope.outputs.auth == 'true'
+        if: always() && needs.scope.outputs.full_e2e != 'true' && needs.scope.outputs.auth == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: pr-extension-playwright-${{ github.run_id }}-${{ github.run_attempt }}
@@ -301,11 +317,11 @@ jobs:
   browser:
     name: Browser tests (${{ matrix.suite }})
     needs: [scope, prepare]
-    if: ${{ needs.scope.outputs.validation == 'true' && (inputs.full_e2e_requested || needs.scope.outputs.research == 'true') }}
+    if: ${{ needs.scope.outputs.validation == 'true' && (needs.scope.outputs.full_e2e == 'true' || needs.scope.outputs.research == 'true') }}
     strategy:
       fail-fast: false
       matrix:
-        suite: ${{ fromJSON(inputs.full_e2e_requested && '["web","extension-1","extension-2","extension-3"]' || '["web"]') }}
+        suite: ${{ fromJSON(needs.scope.outputs.full_e2e == 'true' && '["web","extension-1","extension-2","extension-3"]' || '["web"]') }}
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser') || 'ubuntu-latest' }}
     container:
       image: ${{ vars.NOOK_PR_RUNNER_IMAGE }}
@@ -349,7 +365,7 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           task --silent ci:pr:browser:restore PR_ARTIFACT_DIR="$RUNNER_TEMP/nook-pr-artifacts"
       - name: Run isolated browser suite
-        if: inputs.full_e2e_requested
+        if: needs.scope.outputs.full_e2e == 'true'
         env:
           PR_BROWSER_SUITE: ${{ matrix.suite }}
         run: task --silent ci:pr:browser:suite
@@ -377,7 +393,8 @@ jobs:
           retention-days: 15
 
   validation:
-    name: Verify and preview
+    # A fast draft result must never satisfy the protected ready check.
+    name: ${{ github.event.pull_request.draft && 'Draft verification and preview' || 'Merge readiness' }}
     needs: [scope, prepare, verify, browser]
     if: ${{ always() }}
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest' }}
@@ -404,7 +421,7 @@ jobs:
           PREPARE_REQUIRED: ${{ needs.scope.outputs.validation == 'true' }}
           PREPARE_RESULT: ${{ needs.prepare.result }}
           BROWSER_RESULT: ${{ needs.browser.result }}
-          BROWSER_REQUIRED: ${{ needs.scope.outputs.validation == 'true' && (inputs.full_e2e_requested || needs.scope.outputs.research == 'true') }}
+          BROWSER_REQUIRED: ${{ needs.scope.outputs.validation == 'true' && (needs.scope.outputs.full_e2e == 'true' || needs.scope.outputs.research == 'true') }}
         run: |
           set -euo pipefail
           test "$SCOPE_RESULT" = success

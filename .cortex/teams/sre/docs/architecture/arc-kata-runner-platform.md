@@ -379,7 +379,7 @@ Credential rules are:
 
 Source changes do not apply live placement. Obtain approval for the scoped
 maintenance rollout before running the following steps.
-Keep the PR's `ci:full-e2e` label removed while preparing the new pool.
+Keep the rollout PR in draft with the `ci:full-e2e` label removed while preparing the new pool.
 `NOOK_BROWSER_RUNS_ON` is not an activation gate: the workflow's default
 already selects `nook-k0s-browser` when the variable is absent.
 
@@ -398,7 +398,7 @@ already selects `nook-k0s-browser` when the variable is absent.
    `NOOK_BROWSER_RUNS_ON` value after the new pool is ready.
 5. Use `task infra:arc:separation:status` for read-only configuration evidence.
    - Registration and configuration do not prove real job placement or latency.
-   - After the approved rollout, restore `ci:full-e2e` through PR Lifecycle.
+   - After the approved rollout, have PR Lifecycle mark the product PR ready or request an early draft run with `ci:full-e2e`.
      Validate actual browser/build placement and full hosted runs.
 
 These steps preserve active jobs, BuildKit daemons, all retained PVs, and the

@@ -180,7 +180,7 @@ Observed execution and cache-proof status are recorded in
 - `Web verification` depends on the WASM build producer through `needs`.
 - It downloads the clippy-clean WASM package with `actions/download-artifact`.
 - `WASM Node tests` can finish in parallel with web verification.
-- `Verify and preview` waits for Native Rust, web verification, and WASM Node tests.
+- The final PR check waits for Native Rust, web verification, and WASM Node tests.
 - It deploys from the exported host dist handoff.
 - Rust coverage floors run inside the native Docker/BuildKit verification solve.
 - No separate PR coverage handoff or reporting job is required.

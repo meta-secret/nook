@@ -44,8 +44,8 @@ impl<'a> PrProducerCacheContract<'a> {
         assert!(pr.contains("needs: [scope, prepare, verify, browser]"));
         assert!(pr.contains("if: ${{ always() }}"));
         assert!(pr.contains("fail-fast: false"));
-        assert!(pr.contains("suite: ${{ fromJSON(inputs.full_e2e_requested && '[\"web\",\"extension-1\",\"extension-2\",\"extension-3\"]' || '[\"web\"]') }}"));
-        assert!(pr.contains("needs.scope.outputs.validation == 'true' && (inputs.full_e2e_requested || needs.scope.outputs.research == 'true')"));
+        assert!(pr.contains("suite: ${{ fromJSON(needs.scope.outputs.full_e2e == 'true' && '[\"web\",\"extension-1\",\"extension-2\",\"extension-3\"]' || '[\"web\"]') }}"));
+        assert!(pr.contains("needs.scope.outputs.validation == 'true' && (needs.scope.outputs.full_e2e == 'true' || needs.scope.outputs.research == 'true')"));
         assert!(pr.contains("if: matrix.suite == 'web' && needs.scope.outputs.research == 'true'"));
         assert!(pr.contains("timeout-minutes: 10\n        run: task --silent web:research:e2e"));
         assert!(tasks.contains("if [ \"${PR_BROWSER_JOBS:-false}\" = true ]; then\n            task --silent web:research:source\n          else\n            task --silent web:research:verify"));

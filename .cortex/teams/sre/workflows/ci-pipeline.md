@@ -63,13 +63,14 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Full browser validation uses independent web and three extension-shard jobs.
 - Requested research E2E runs in the existing web job; research-only validation
   selects that job without the ordinary web or extension suites.
-- The final `PR validation / Verify and preview` job joins scope, both producers
-  and every selected browser result before preview.
+- The final job joins scope, the selected producers and every selected browser
+  result before preview. Its check name depends on the PR state. See
+  [browser validation before merge](#browser-validation-before-merge).
 - `nook-app/ci/pr.yml` and its Bake overlay define phases and internal concurrency.
 - Each verification target retains its own preparation and failure boundaries.
 - Labels `ci:validate` and `ci:full-e2e` persist across commits.
 - Product-path and research changes request product validation automatically.
-- Feature PRs with only policy paths require the authorized `ci:validate` or
+- Feature PRs with only documentation or policy paths require the authorized `ci:validate` or
   `ci:full-e2e` label mutation to select product validation; without one they
   run tooling verification, preflight, and Loom in the same job.
 - Pages preview uses the final job's composite action; coverage remains inside
@@ -314,7 +315,7 @@ Trusted PR producers use `nook-k0s-container`. Artifact preparation and
 verification retain the persistent node-local BuildKit shard on the build pool.
 Full browser suites use the browser-only
 scale set on Rise-S-2 without BuildKit access. The final
-`PR validation / Verify and preview` job stays on the mixed scale set and checks the
+validation job stays on the mixed scale set and checks the
 complete result join. Fork and Dependabot jobs remain secret-free on
 GitHub-hosted runners. Jobs may select different nodes; artifacts carry the
 same source revision across them.
@@ -470,17 +471,29 @@ The ARC S3 health probe is a separate uncached solve. It retries once only when
 the Dockerfile frontend vertex itself reports a transient authorization TLS
 timeout. Later build vertices and genuine S3 health failures fail closed.
 
-### Browser validation for Main-fix PRs
+### Browser validation before merge
 
-PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
+- Product drafts run product verification and preview. Authentication-sensitive
+  changes also run focused extension tests. Ready product PRs run product
+  verification, full web E2E and all three extension shards.
+- Research-only PRs run research verification and browser tests in both states.
+- Documentation-only and policy-only PRs run repository policy checks in both states.
 
-- **Label effect:** Runs the full web suite, including isolated application
-  servers, alongside three extension shards in separate jobs after the producer
-  succeeds. Job isolation separates their fixed ports and Chromium budgets.
-- Authentication-sensitive changes run the focused extension regression when
-  the full suite was not requested.
-- Research changes run their browser checks in the producer.
-- All requested suites must succeed before preview deployment.
+Marking a product PR ready starts full browser validation on its current head.
+Opening it ready and pushing a new commit while ready also run the full suites.
+Mixed changes follow all applicable scopes. The privacy policy and terms of
+service shipped with the app count as product changes. The `ci:full-e2e` label
+explicitly requests the full suites in any scope or PR state, including early
+testing on a draft.
+
+Drafts report `PR validation / Draft verification and preview`. Ready PRs
+report `PR validation / Merge readiness`. The strict required check on
+`main` must pass for a branch up to date with its base before merge.
+
+- The full web job includes isolated application servers. Three extension
+  shards run separately after artifact preparation.
+- Research E2E runs in the web browser job.
+- All selected suites must succeed before preview deployment.
 - Extension tests keep their automatically selected Xvfb display.
   Worker counts use Node's `availableParallelism()` for web and extension suites.
 
@@ -815,7 +828,7 @@ authenticator-domain to 90 percent.
 - Same-repository Remote tasks use that registry identity for git-commit
   exporters under `nook/remote-buildcache/**`.
 - General ARC pull requests remain registry-read-only and reuse Main plus
-- Release and label-gated browser e2e jobs remain BuildKit-read-only.
+- Release and PR browser E2E jobs remain BuildKit-read-only.
 - Fork pull requests do not receive credentials.
 - There is no host `:5000` listener and no `kubectl port-forward` for the registry.
 

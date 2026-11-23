@@ -228,7 +228,7 @@ class DockerizedRustBuildKitContract {
       "Preserve failed extension Playwright diagnostics",
     );
     expect(diagnosticsStep).toMatch(
-      /^ {8}if: always\(\) && !inputs\.full_e2e_requested && needs\.scope\.outputs\.auth == 'true'$/m,
+      /^ {8}if: always\(\) && needs\.scope\.outputs\.full_e2e != 'true' && needs\.scope\.outputs\.auth == 'true'$/m,
     );
     expect(diagnosticsStep).toMatch(/^ {8}uses: actions\/upload-artifact@v7$/m);
     const diagnosticPaths = diagnosticsStep.match(
@@ -248,7 +248,7 @@ class DockerizedRustBuildKitContract {
     expect(workflow).toContain("if: ${{ always() }}");
     expect(workflow).toContain("fail-fast: false");
     expect(workflow).toContain(
-      'suite: ${{ fromJSON(inputs.full_e2e_requested && \'["web","extension-1","extension-2","extension-3"]\' || \'["web"]\') }}',
+      'suite: ${{ fromJSON(needs.scope.outputs.full_e2e == \'true\' && \'["web","extension-1","extension-2","extension-3"]\' || \'["web"]\') }}',
     );
     expect(
       workflow.match(

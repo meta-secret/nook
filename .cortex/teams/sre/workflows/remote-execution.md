@@ -96,7 +96,7 @@ policy or readiness.
 - Invoke Rust validation remotely with `task remote TASK_NAME=rust:ci`.
 - Invoke Loom verification remotely with `task remote TASK_NAME=loom:verify`.
 - PR Lifecycle requests label-triggered validation with `task pr:validate PR=<number>`
-  (or `FULL_E2E=1` for a Main-fix browser gate). CI/CD owns only the resulting
+  (or `FULL_E2E=1` to run full browser validation early on a draft). CI/CD owns only the resulting
   workflow execution and observation; it does not mutate pull-request labels.
 - Single `preflight`, `rust:ci`, and `arc:runtime` selections may use
   `NOOK_RUNS_ON=nook-k0s`.

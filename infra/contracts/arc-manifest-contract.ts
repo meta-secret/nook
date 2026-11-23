@@ -544,7 +544,7 @@ class ArcManifestContract {
     );
     if (admittedContract27.isErr()) return err(admittedContract27.error);
     const centralRouting = ciWorkflow.requireAll([
-      "types: [opened, synchronize, reopened, labeled, edited, closed]",
+      "types: [opened, synchronize, reopened, ready_for_review, converted_to_draft, labeled, edited, closed]",
       "branches: [main]",
       ".vale.ini | .vale/*",
       "uses: ./.github/workflows/pr.yml",
@@ -599,7 +599,7 @@ class ArcManifestContract {
       "  validation:",
       "inputs.validation_requested",
       "inputs.full_e2e_requested",
-      "name: Verify and preview",
+      "name: ${{ github.event.pull_request.draft && 'Draft verification and preview' || 'Merge readiness' }}",
       "(vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest'",
       "(vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser') || 'ubuntu-latest'",
       "task --silent ci:pr:verification",
@@ -612,8 +612,8 @@ class ArcManifestContract {
       "needs: [scope, prepare, verify, browser]",
       "if: ${{ always() }}",
       "fail-fast: false",
-      'suite: ${{ fromJSON(inputs.full_e2e_requested && \'["web","extension-1","extension-2","extension-3"]\' || \'["web"]\') }}',
-      "needs.scope.outputs.validation == 'true' && (inputs.full_e2e_requested || needs.scope.outputs.research == 'true')",
+      'suite: ${{ fromJSON(needs.scope.outputs.full_e2e == \'true\' && \'["web","extension-1","extension-2","extension-3"]\' || \'["web"]\') }}',
+      "needs.scope.outputs.validation == 'true' && (needs.scope.outputs.full_e2e == 'true' || needs.scope.outputs.research == 'true')",
       "if: matrix.suite == 'web' && needs.scope.outputs.research == 'true'",
       "timeout-minutes: 10",
       "task --silent web:research:e2e",
