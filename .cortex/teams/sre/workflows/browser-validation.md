@@ -11,13 +11,17 @@ Runner placement, provider policy, and pipeline topology remain in
 The projects are defined in
 `nook-app/nook-web/nook-web-app/playwright.config.ts`.
 
+Full PR runs include `stable` and `unstable` on ready product PRs and on
+explicit `ci:full-e2e` requests. See the
+[pre-merge scope table](ci-pipeline.md#browser-validation-before-merge).
+
 - **`stable`**
   - Specs: IndexedDB-only specs.
-  - CI: `main.yml`, `ci:full-e2e` pull requests, and manual or debug
+  - CI: `main.yml`, full PR runs, and manual or debug
     `e2e-pr.yml` runs. Manual `e2e-windows.yml` also runs this group in Edge.
 - **`unstable`**
   - Specs: Local-provider and sync specs.
-  - CI: `main.yml`, `ci:full-e2e` pull requests, and manual `e2e-pr.yml`
+  - CI: `main.yml`, full PR runs, and manual `e2e-pr.yml`
     runs. Manual `e2e-windows.yml` also runs this group in Edge.
 - **`sync-live`**
   - Specs: `e2e/live/**/*.spec.ts`.

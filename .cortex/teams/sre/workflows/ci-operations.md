@@ -288,7 +288,7 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
 - Prime coordinators route those branches through the upstream integration agent and
   wait for its feature branch, integration outcome, and checks.
 - Prime coordinators request only the required PR-check capability.
-- The Prime alone requests the full slow feature pull request checks.
+- Prime authorizes publication and the transition to ready for review.
 - Missing build-only tooling is a visible runtime prerequisite.
 - Repairs return through the feature path and serialized feature pull-request delivery.
 
@@ -303,8 +303,8 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
 4. **Do** update this doc and
    [pull requests](../../../docs/spec/pull-requests.md) when workflow
    behavior changes.
-5. Explicitly labeled PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds.
-   - PR Lifecycle requests Main-fix validation with `task pr:validate PR=<number> FULL_E2E=1`; CI/CD executes and observes the resulting label-triggered run, which contains the Main-equivalent deterministic browser suites before merge.
+5. Product PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds.
+   - Ready product PRs, including Main fixes, automatically run full web and extension E2E. PR Lifecycle can request these checks early on a draft with `task pr:validate PR=<number> FULL_E2E=1`.
    - Main runs the same local-provider and extension **e2e**.
    - Reconcile every actionable unsuccessful Main run through the feature path.
      - Browser E2E failures are included.

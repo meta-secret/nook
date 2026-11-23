@@ -18,6 +18,13 @@ authorizes each operation.
 - **Preferred:** publish the assigned feature PR into `main`, return its evidence,
   and stop at the authorized outcome.
 
+Publish ongoing product work as a draft (`gh pr create --draft`). When the
+feature is ready to enter pre-merge validation, mark the same PR ready
+(`gh pr ready <number>`), or open it ready if implementation is complete.
+Observe the ready check for the latest head after any further pushes.
+The [pull-request policy](../../../../docs/spec/pull-requests.md) names the
+required check and the branch freshness requirement.
+
 PR Lifecycle also owns the `task pr:validate` label mutation that requests
 label-triggered PR validation. CI/CD executes and observes the resulting
 workflow; it does not edit pull-request labels.

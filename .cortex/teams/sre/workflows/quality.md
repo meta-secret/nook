@@ -417,7 +417,7 @@ Use this workflow for quality, CI, and deployment changes.
     - Main deploys `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`.
 
     #### PR workflow
-    - One `PR validation / Verify and preview` job owns the complete PR gate.
+    - The ready PR gate is `PR validation / Merge readiness`. Drafts have a separate check.
     - Trusted PRs use one ARC job Pod and node-local persistent BuildKit;
       fork/Dependabot PRs remain hosted and secret-free.
     - Verification precedes test compilation, then tests/coverage precede heavy
@@ -425,8 +425,9 @@ Use this workflow for quality, CI, and deployment changes.
     - No per-PR registry image or layer-cache transfer is used.
     - Policy-only PRs run tooling verification and policy tests in the same job.
     - A required step failure skips downstream work and fails the single check.
-    - Full browser suites run inside this job for `ci:full-e2e`; focused
-      authentication-sensitive extension regressions remain required.
+    - Full web and extension suites run for ready product PRs and explicit
+      `ci:full-e2e` requests. Drafts retain focused authentication checks.
+      See [browser validation before merge](ci-pipeline.md#browser-validation-before-merge).
     - Compiler-cache telemetry and its zero-hit gate remain enforced.
 
     #### Coverage enforcement

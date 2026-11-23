@@ -18,10 +18,13 @@ explicit handoff.
   validation, or local preflight; use the terminal GitHub Actions outcome as
   execution evidence.
 - Wait for the complete terminal check wave.
-- Preserve the exact required check `PR validation / Verify and preview`.
-  Its final result requires the producer and every selected browser job to pass
-  before preview. A skipped browser matrix is valid only when neither full
-  browser validation nor research E2E is selected.
+- Publish work in progress as a draft. Mark a product PR ready for review
+  to run full web and extension E2E. Every later push while ready reruns
+  the suites. Documentation-only PRs receive the policy checks.
+- Require GitHub Actions' `PR validation / Merge readiness` for an
+  up-to-date branch before merging to `main`. A draft reports its own
+  `PR validation / Draft verification and preview` check. See the
+  [scope rules](../../teams/sre/workflows/ci-pipeline.md#browser-validation-before-merge).
 - When changing Main aggregation, validate the
   [producer and consumer failure gates](../../teams/sre/workflows/ci-pipeline.md)
   in hosted CI. Removing a status-only job must preserve its required assertion.

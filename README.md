@@ -460,11 +460,12 @@ Feature Gizmo authorizes Delivery Pipeline to publish it and request the hosted
 **`build:compile`** task through **`task remote TASK_NAME=build:compile`**.
 Feature-stage execution is build-only. Full tests, coverage, preflight, e2e,
 and complete PR validation belong to the feature pull-request lifecycle. The
-Feature Gizmo authorizes PR Lifecycle Agent to apply the validation labels
-required for the selected branch and observe the resulting hosted checks.
-Ordinary validation does not contact Codex. Local Task mirrors below remain
-available for humans. Main-fix PRs use `ci:full-e2e` to request the
-Main-equivalent browser suites.
+Feature Gizmo authorizes PR Lifecycle Agent to publish ongoing work as a
+draft. Marking a product PR ready for review runs the full web and extension
+E2E suites. They also run when a product PR opens ready and on every later
+push while ready. Use `ci:full-e2e` for early feedback on a draft.
+Documentation-only PRs receive the lighter policy checks. See the
+[pre-merge scope table](.cortex/teams/sre/workflows/ci-pipeline.md#browser-validation-before-merge).
 
 Project-scoped module experts use stable semantic role names defined by the
 [Cortex registry](.cortex/teams/ai/docs/architecture/module-experts.md). Universal
@@ -649,10 +650,9 @@ with system Chromium, ffmpeg, Xvfb, Bun, Node, Task and the pinned SeaweedFS
 It is rebuilt only when the runtime tooling changes.
 Deploy the updated ARC container hook and
 BuildKit ingress policy. Job containers need the injected Docker client and
-node-local BuildKit access. Required-check settings should reference
-`PR validation / Verify and preview`; obsolete split-job checks must be
-removed by an administrator. Neither deployment nor settings changes are
-performed automatically by this feature.
+node-local BuildKit access. The strict rule for `main` requires the GitHub Actions check
+`PR validation / Merge readiness` to pass on a branch up to date with
+`main`. Drafts report `PR validation / Draft verification and preview`.
 
 `task infra:kubernetes-cache:prove` is the local portable Kubernetes integration
 proof. It creates three k3d agents and patches the production Zot, rootless
