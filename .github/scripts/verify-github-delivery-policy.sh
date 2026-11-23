@@ -24,7 +24,7 @@ verify_github_repository_delivery_policy() {
   local expected="$2"
   local actual
 
-  actual="$($gh_bin api "repos/${repository}" --jq "if .${setting} == null then \"missing\" else .${setting} end")"
+  actual="$("$gh_bin" api "repos/${repository}" --jq "if .${setting} == null then \"missing\" else .${setting} end")"
   if [[ "$actual" != "$expected" ]]; then
     echo "Repository delivery policy failed: ${setting}=${actual}; expected ${expected}" >&2
     return 1
@@ -40,7 +40,7 @@ verify_github_branch_protection_policy() {
   local expected="$3"
   local actual
 
-  if ! actual="$($gh_bin api "repos/${repository}/branches/${branch}/protection" --jq "if .${setting} == null then \"missing\" else .${setting} end")"; then
+  if ! actual="$("$gh_bin" api "repos/${repository}/branches/${branch}/protection" --jq "if .${setting} == null then \"missing\" else .${setting} end")"; then
     echo "Unable to read branch protection for ${branch}; an administrator token is required" >&2
     return 1
   fi

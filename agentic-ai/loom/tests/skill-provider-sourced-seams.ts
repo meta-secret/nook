@@ -128,8 +128,8 @@ export type AuditedRuntimeSourceRequest = {
 
 const AUDITED_DYNAMIC_EXECUTABLES = new Map([
   [
-    '.github/scripts/verify-github-delivery-policy.sh:$gh_bin',
-    'd41d7290b77f50ace0e99b8f28dc87b11f2c22cb8b0113965611b6faf03c6651',
+    '.github/scripts/verify-github-delivery-policy.sh:"$gh_bin"',
+    '53d0d4ddc12003ee87389f5a7d9b2cbcc5c81284462ad7ee104b40ff1c1fe0ef',
   ],
   [
     '.github/workflows/remote.yml:"$node_bin"',
@@ -146,7 +146,7 @@ const AUDITED_COMMAND_EXECUTING_FIND = new Map<string, string>();
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
     'infra/contracts/dockerized-rust-buildkit.test.ts',
-    '3fef583db656aa99309aab5500007d88e4629dce82d6c2142e0103f80671d461',
+    '720c56b864e325e969cdbfb8da6fc28d8fafbd4b276b33246522c93c58a77618',
   ],
   [
     'infra/contracts/trusted-buildkit-setup.fixture.ts',
@@ -182,7 +182,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/contracts/dockerized-rust.test.ts',
-    'b194ad452d7ca5527198a0615a640f76c43284f3b4f76bacc8309d0c3bcebf8d',
+    '59949f560bf2bb9fb0607621f249ceccd66d903be96aec4311facbacf87c123b',
   ],
   [
     'infra/contracts/dockerized-rust-cache-registry.test.ts',

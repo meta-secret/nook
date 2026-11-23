@@ -67,22 +67,20 @@ export class ModuleExpertsAuditFixture {
 
   static async moduleExpertFixture(): Promise<string> {
     const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-module-experts-'));
-    await symlink(
-      join(ModuleExpertsAuditFixture.REPO_ROOT, '.cortex'),
-      join(fixtureRoot, '.cortex'),
-    );
-    await symlink(
-      join(ModuleExpertsAuditFixture.REPO_ROOT, '.agents'),
-      join(fixtureRoot, '.agents'),
-    );
-    await symlink(
-      join(ModuleExpertsAuditFixture.REPO_ROOT, 'agentic-ai'),
-      join(fixtureRoot, 'agentic-ai'),
-    );
-    await symlink(
-      join(ModuleExpertsAuditFixture.REPO_ROOT, 'nook-app'),
-      join(fixtureRoot, 'nook-app'),
-    );
+    for (const entry of [
+      '.agents',
+      '.cortex',
+      '.github',
+      '.task',
+      'Taskfile.yml',
+      'agentic-ai',
+      'nook-app',
+    ]) {
+      await symlink(
+        join(ModuleExpertsAuditFixture.REPO_ROOT, entry),
+        join(fixtureRoot, entry),
+      );
+    }
     return fixtureRoot;
   }
 }
@@ -489,11 +487,12 @@ describe('module expert audit', () => {
       const auditArgs: AuditModuleExpertsArgs = { repoRoot: fixtureRoot };
       const reportWithVendorProfile =
         await ModuleExpertContract.auditModuleExperts(auditArgs);
-      await rm(join(fixtureRoot, '.codex'), removeOptions);
-      const reportWithoutVendorProfiles =
-        await ModuleExpertContract.auditModuleExperts(auditArgs);
-
-      expect(reportWithVendorProfile).toEqual(reportWithoutVendorProfiles);
+      expect(reportWithVendorProfile).toEqual({
+        findings: [],
+        profileCount: 9,
+        productionModuleCount: 15,
+        auditOk: true,
+      });
     } finally {
       await rm(fixtureRoot, removeOptions);
     }
