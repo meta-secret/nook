@@ -48,54 +48,26 @@ their obligations from the signature.
   a requested count fits within the available count, then return a value with
   private fields so callers can reuse that validated relationship.
 
-When a caller's policy determines the result type, express that relationship
-in the signature. In this illustrative Rust example, callers choose how a
-missing device label should be handled.
+When policy determines which result a caller may use, carry it in the result
+type. In this illustrative Rust interface, `SmallerIdWins` and `LargerIdWins`
+implement `TieBreak`. The log module constructs `MergedLog<P>` during merge.
 
 ```rust
-struct DeviceLabel(String);
-struct MissingDeviceLabel;
-
-trait LabelPolicy {
-    type Output;
-    fn resolve(label: Option<DeviceLabel>) -> Self::Output;
-}
-
-struct RequireLabel;
-impl LabelPolicy for RequireLabel {
-    type Output = Result<DeviceLabel, MissingDeviceLabel>;
-
-    fn resolve(label: Option<DeviceLabel>) -> Self::Output {
-        label.ok_or(MissingDeviceLabel)
-    }
-}
-
-struct AllowMissingLabel;
-impl LabelPolicy for AllowMissingLabel {
-    type Output = Option<DeviceLabel>;
-
-    fn resolve(label: Option<DeviceLabel>) -> Self::Output {
-        label
-    }
-}
-
-fn resolve_label<P: LabelPolicy>(label: Option<DeviceLabel>) -> P::Output {
-    P::resolve(label)
+trait LogApi {
+    fn merge<P: TieBreak>(left: &Log, right: &Log) -> MergedLog<P>;
+    fn publish(log: MergedLog<SmallerIdWins>);
 }
 ```
 
-- A caller of `resolve_label::<RequireLabel>` receives a `Result` and can
-  propagate `MissingDeviceLabel` with `?`. The optional policy returns an
-  `Option`. Rust rejects a caller that assigns the required result to an
-  `Option<DeviceLabel>`.
-- Validate wire values at ingress. A signature cannot establish that a
-  persisted label is well formed or that a device lookup succeeded. Preserve
-  those failures at the boundary where they occur.
-- Reviewers must identify what the compiler guarantees and what depends on
-  behavior. Test the remaining laws, such as preserving a present label, and
-  exercise actual external failures. Skip tests for states the public types
-  make impossible. A body change can violate a law while preserving the
-  signature, so run affected consumer contract tests when behavior changes.
+- Rust rejects passing a `MergedLog<LargerIdWins>` to `publish`. Skip tests
+  for calls that the types make impossible.
+- The type records the chosen policy. Reversing a private comparison can
+  still return the wrong winner with the same signature. Test a real tie
+  between two different event IDs. Assert the winning ID under each policy.
+  Check determinism by repeating the merge with identical inputs.
+- Validate incoming wire logs before constructing domain values. Exercise
+  malformed event IDs and actual storage failures at the boundary. Run
+  affected consumer contract tests when observable behavior changes.
 
 ## 4. Centralize Tooling behind a Single Command Surface
 
