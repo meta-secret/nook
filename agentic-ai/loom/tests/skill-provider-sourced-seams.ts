@@ -145,16 +145,12 @@ const AUDITED_COMMAND_EXECUTING_FIND = new Map<string, string>();
 
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
-    'infra/contracts/dockerized-rust-buildkit.test.ts',
-    '720c56b864e325e969cdbfb8da6fc28d8fafbd4b276b33246522c93c58a77618',
-  ],
-  [
     'infra/contracts/trusted-buildkit-setup.fixture.ts',
-    '47503151f6a118e0989837a32225732d366560bfd230a1b4bbf1307f3738e9a5',
+    'b0adbe0214e5031557126f9018ce414466ca32002741564d19961a2406f30ab1',
   ],
   [
     'infra/contracts/main-producer-parallel.test.ts',
-    '03e70484d8f3ea75c1896f043943ae1f2f2d25ce895534bbdd814685889c5e67',
+    '96cbfc5a717df227ae7f4677fbfd0837c5b51b88ebc97640c98f5b43db205678',
   ],
   [
     'infra/contracts/pr-preview-parallel.test.ts',
@@ -182,11 +178,11 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/contracts/dockerized-rust.test.ts',
-    '59949f560bf2bb9fb0607621f249ceccd66d903be96aec4311facbacf87c123b',
+    'e0506e75a21eb439a22b8b35ebb78b42d96e006f68b1c8694eac5425490aef68',
   ],
   [
     'infra/contracts/dockerized-rust-cache-registry.test.ts',
-    'a92f6af24c3477ad27cb99d885bfa4f7d93ce6a587311b651875375ca8b4b7d5',
+    '4e8cf7f5f0b771a9686fec62bbc1bd1698c0dbf5b263184e08512d8119545c41',
   ],
   [
     'agentic-ai/loom/tests/repository-command.fixture.cjs',

@@ -21,21 +21,9 @@ export interface ArcContractSources {
   tasks: TextContract;
   dockerSetup: TextContract;
   runtimeSmoke: TextContract;
-  ciWorkflow: TextContract;
-  mainWorkflow: TextContract;
-  prWorkflow: TextContract;
-  prTasks: TextContract;
-  authSensitiveJob: TextContract;
   repositoryPolicySource: string;
   repositoryPolicyWorkflow: TextContract;
-  webResearchWorkflow: TextContract;
-  nodeSetup: TextContract;
   webTasks: TextContract;
-  webDockerTasks: TextContract;
-  extensionTasks: TextContract;
-  wasmCacheProofSource: string;
-  wasmCacheProof: TextContract;
-  remoteWorkflow: TextContract;
 }
 export class ArcContractSourceInventory {
   constructor(private readonly root: string) {}
@@ -203,43 +191,6 @@ export class ArcContractSourceInventory {
       label: "ARC BuildKit smoke",
       source: readSource12.value,
     });
-    const ciSource = await new OperationalContractSource(
-      resolve(this.root, ".github/workflows/ci.yml"),
-    ).read();
-    if (ciSource.isErr()) return err(ciSource.error);
-    const ciWorkflow = new TextContract({
-      label: "Central CI workflow",
-      source: ciSource.value,
-    });
-    const readSource11 = await new OperationalContractSource(
-      resolve(this.root, ".github/workflows/main.yml"),
-    ).read();
-    if (readSource11.isErr()) return err(readSource11.error);
-    const mainWorkflow = new TextContract({
-      label: "Main workflow",
-      source: readSource11.value,
-    });
-    const readSource10 = await new OperationalContractSource(
-      resolve(this.root, ".github/workflows/pr.yml"),
-    ).read();
-    if (readSource10.isErr()) return err(readSource10.error);
-    const prWorkflowSource = readSource10.value;
-    const prWorkflow = new TextContract({
-      label: "PR workflow",
-      source: prWorkflowSource,
-    });
-    const readPrTasks = await new OperationalContractSource(
-      resolve(this.root, "nook-app/ci/pr.yml"),
-    ).read();
-    if (readPrTasks.isErr()) return err(readPrTasks.error);
-    const prTasks = new TextContract({
-      label: "PR task phases",
-      source: readPrTasks.value,
-    });
-    const authSensitiveJob = new TextContract({
-      label: "PR browser branch",
-      source: readPrTasks.value,
-    });
     const readSource8 = await new OperationalContractSource(
       resolve(this.root, ".github/workflows/repository-policy.yml"),
     ).read();
@@ -249,22 +200,6 @@ export class ArcContractSourceInventory {
       label: "repository policy workflow",
       source: repositoryPolicySource,
     });
-    const readSource7 = await new OperationalContractSource(
-      resolve(this.root, ".github/workflows/web-research.yml"),
-    ).read();
-    if (readSource7.isErr()) return err(readSource7.error);
-    const webResearchWorkflow = new TextContract({
-      label: "web research workflow",
-      source: readSource7.value,
-    });
-    const readSource6 = await new OperationalContractSource(
-      resolve(this.root, ".github/actions/nook-node-setup/action.yml"),
-    ).read();
-    if (readSource6.isErr()) return err(readSource6.error);
-    const nodeSetup = new TextContract({
-      label: "ARC shell Node setup",
-      source: readSource6.value,
-    });
     const readSource5 = await new OperationalContractSource(
       resolve(this.root, "nook-app/nook-web/Taskfile.yml"),
     ).read();
@@ -272,39 +207,6 @@ export class ArcContractSourceInventory {
     const webTasks = new TextContract({
       label: "web browser tasks",
       source: readSource5.value,
-    });
-    const readSource4 = await new OperationalContractSource(
-      resolve(this.root, "nook-app/nook-web/docker/Taskfile.yml"),
-    ).read();
-    if (readSource4.isErr()) return err(readSource4.error);
-    const webDockerTasks = new TextContract({
-      label: "web Docker browser tasks",
-      source: readSource4.value,
-    });
-    const readSource3 = await new OperationalContractSource(
-      resolve(this.root, "nook-app/nook-web/nook-web-extension/Taskfile.yml"),
-    ).read();
-    if (readSource3.isErr()) return err(readSource3.error);
-    const extensionTasks = new TextContract({
-      label: "extension browser tasks",
-      source: readSource3.value,
-    });
-    const readSource2 = await new OperationalContractSource(
-      resolve(this.root, ".github/scripts/verify-wasm-gha-cache.sh"),
-    ).read();
-    if (readSource2.isErr()) return err(readSource2.error);
-    const wasmCacheProofSource = readSource2.value;
-    const wasmCacheProof = new TextContract({
-      label: "portable WASM cache proof",
-      source: wasmCacheProofSource,
-    });
-    const readSource1 = await new OperationalContractSource(
-      resolve(this.root, ".github/workflows/remote.yml"),
-    ).read();
-    if (readSource1.isErr()) return err(readSource1.error);
-    const remoteWorkflow = new TextContract({
-      label: "Remote workflow",
-      source: readSource1.value,
     });
     return ok({
       runnersSource,
@@ -321,21 +223,9 @@ export class ArcContractSourceInventory {
       tasks,
       dockerSetup,
       runtimeSmoke,
-      ciWorkflow,
-      mainWorkflow,
-      prWorkflow,
-      prTasks,
-      authSensitiveJob,
       repositoryPolicySource,
       repositoryPolicyWorkflow,
-      webResearchWorkflow,
-      nodeSetup,
       webTasks,
-      webDockerTasks,
-      extensionTasks,
-      wasmCacheProofSource,
-      wasmCacheProof,
-      remoteWorkflow,
     });
   }
 }

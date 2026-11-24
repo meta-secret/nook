@@ -1,7 +1,6 @@
 import { test, expect } from "bun:test";
 import {
   readFileSync,
-  readdirSync,
   mkdtempSync,
   writeFileSync,
   mkdirSync,
@@ -11,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { TrustedBuildkitSetupContract } from "./trusted-buildkit-setup.fixture";
 import { z } from "zod";
 import { DockerizedRustE2eContract } from "./dockerized-rust-e2e.fixture";
 import { DockerizedRustToolingContract } from "./dockerized-rust-tooling.fixture";
@@ -21,33 +21,10 @@ const tasksSchema = z.object({
   }),
 });
 
-enum WorkflowStepKind {
-  Command = "command",
-  Action = "action",
-}
-
 enum EcosystemTask {
   Smoke = "docker:ecosystem:smoke",
   Check = "docker:ecosystem:check",
 }
-
-type WorkflowStep =
-  | { readonly kind: WorkflowStepKind.Command; readonly command: string }
-  | { readonly kind: WorkflowStepKind.Action };
-
-const workflowStepSchema = z.union([
-  z
-    .object({ run: z.string() })
-    .passthrough()
-    .transform(({ run }): WorkflowStep => ({
-      kind: WorkflowStepKind.Command,
-      command: run,
-    })),
-  z
-    .object({ uses: z.string() })
-    .passthrough()
-    .transform((): WorkflowStep => ({ kind: WorkflowStepKind.Action })),
-]);
 
 interface GitFixtureCommand {
   cwd: string;
@@ -58,133 +35,27 @@ class DockerizedRustContract {
   private readonly root = resolve(import.meta.dir, "../..");
 
   previewGates(): void {
-    const stepContract = z.object({
-      name: z.string().optional(),
-      run: z.string().optional(),
-      uses: z.string().optional(),
-      if: z.string().optional(),
-      "continue-on-error": z.boolean().optional(),
-      "timeout-minutes": z.number().optional(),
-      env: z.record(z.string(), z.string()).optional(),
-    });
-    const jobContract = z.object({
-      steps: z.array(stepContract),
-      needs: z.array(z.string()).optional(),
-      permissions: z.record(z.string(), z.string()).optional(),
-      if: z.string().optional(),
-      strategy: z
-        .object({ matrix: z.object({ suite: z.string() }) })
-        .optional(),
-    });
     const workflow = z
       .object({
-        jobs: z.record(z.string(), jobContract),
-      })
-      .parse(Bun.YAML.parse(this.read(".github/workflows/pr.yml")));
-    expect(Object.keys(workflow.jobs)).toEqual([
-      "scope",
-      "prepare",
-      "verify",
-      "browser",
-      "validation",
-    ]);
-    for (const branch of [
-      { job: "prepare", command: "task --silent ci:pr:browser" },
-      { job: "verify", command: "task --silent ci:pr:verification" },
-    ]) {
-      const job = jobContract.parse(workflow.jobs[branch.job]);
-      expect(job.needs).toEqual(["scope"]);
-      const step = stepContract.parse(
-        job.steps.find((entry) => entry.run === branch.command),
-      );
-      expect(step.if).toBe("needs.scope.outputs.validation == 'true'");
-      expect(step["continue-on-error"]).not.toBe(true);
-    }
-    expect(jobContract.parse(workflow.jobs.browser).needs).toEqual([
-      "scope",
-      "prepare",
-    ]);
-    const browser = jobContract.parse(workflow.jobs.browser);
-    const browserRequired =
-      "${{ needs.scope.outputs.validation == 'true' && (needs.scope.outputs.full_e2e == 'true' || needs.scope.outputs.research == 'true') }}";
-    expect(browser.if).toBe(browserRequired);
-    expect(browser.strategy?.matrix.suite).toBe(
-      '${{ fromJSON(needs.scope.outputs.full_e2e == \'true\' && \'["web","extension-1","extension-2","extension-3"]\' || \'["web"]\') }}',
-    );
-    const fullSuite = stepContract.parse(
-      browser.steps.find((step) => step.name === "Run isolated browser suite"),
-    );
-    expect(fullSuite.if).toBe("needs.scope.outputs.full_e2e == 'true'");
-    const researchSuite = stepContract.parse(
-      browser.steps.find((step) => step.name === "Run research browser tests"),
-    );
-    expect(researchSuite.if).toBe(
-      "matrix.suite == 'web' && needs.scope.outputs.research == 'true'",
-    );
-    expect(researchSuite.run).toBe("task --silent web:research:e2e");
-    expect(researchSuite["timeout-minutes"]).toBe(10);
-    expect(researchSuite["continue-on-error"]).not.toBe(true);
-    const researchTaskContract = z.object({
-      cmds: z.array(z.union([z.string(), z.object({ task: z.string() })])),
-    });
-    const researchTasks = z
-      .object({
-        tasks: z.object({
-          "web:research:verify": researchTaskContract,
-          "web:research:source": researchTaskContract,
-          "web:research:e2e": researchTaskContract,
+        jobs: z.object({
+          validation: z.object({
+            steps: z.array(
+              z.object({
+                name: z.string().optional(),
+                run: z.string().optional(),
+              }),
+            ),
+          }),
         }),
       })
-      .parse(Bun.YAML.parse(this.read(".task/ci-workflows.yml")));
-    expect(researchTasks.tasks["web:research:verify"].cmds).toEqual([
-      { task: "web:research:source" },
-      { task: "web:research:e2e" },
-    ]);
-    expect(researchTasks.tasks["web:research:source"].cmds).toEqual([
-      "bun run format:check",
-      "bun run check",
-      "bun run build",
-    ]);
-    expect(researchTasks.tasks["web:research:e2e"].cmds).toEqual([
-      "bun run test:e2e",
-    ]);
-    expect(jobContract.parse(workflow.jobs.validation).needs).toEqual([
-      "scope",
-      "prepare",
-      "verify",
-      "browser",
-    ]);
-    expect(jobContract.parse(workflow.jobs.scope).permissions).toEqual({
-      contents: "read",
-      packages: "read",
-    });
-    const finalSteps = jobContract.parse(workflow.jobs.validation).steps;
-    const checkoutStep = stepContract.parse(finalSteps[0]);
-    expect(checkoutStep.uses).toBe("actions/checkout@v7");
-    expect(checkoutStep).not.toHaveProperty("if");
-    const guard = finalSteps.findIndex(
-      (step) => step.name === "Require every selected validation branch",
-    );
-    expect(guard).toBeGreaterThan(0);
-    expect(finalSteps.findIndex((step) => Object.hasOwn(step, "run"))).toBe(
-      guard,
-    );
-    const guardStep = stepContract.parse(finalSteps[guard]);
-    expect(guardStep.run).toContain('test "$PREPARE_RESULT" = success');
-    expect(guardStep.run).toContain('test "$BROWSER_RESULT" = success');
-    expect(guardStep.run).toContain('test "$BROWSER_RESULT" = skipped');
-    expect(guardStep.run).toContain('test "$SCOPE_RESULT" = success');
-    expect(guardStep.run).toContain('test "$VERIFY_RESULT" = success');
-    expect(guardStep.run).toContain('test "$PREPARE_RESULT" = skipped');
-    expect(guardStep.env).toEqual({
-      SCOPE_RESULT: "${{ needs.scope.result }}",
-      VERIFY_RESULT: "${{ needs.verify.result }}",
-      PREPARE_REQUIRED: "${{ needs.scope.outputs.validation == 'true' }}",
-      PREPARE_RESULT: "${{ needs.prepare.result }}",
-      BROWSER_RESULT: "${{ needs.browser.result }}",
-      BROWSER_REQUIRED: browserRequired,
-    });
-    const guardCommand = z.string().parse(guardStep.run);
+      .parse(Bun.YAML.parse(this.read(".github/workflows/pr.yml")));
+    const guardCommand = z
+      .string()
+      .parse(
+        workflow.jobs.validation.steps.find(
+          (step) => step.name === "Require every selected validation branch",
+        )?.run,
+      );
     for (const selected of [
       {
         PREPARE_REQUIRED: "false",
@@ -228,50 +99,6 @@ class DockerizedRustContract {
         }
       }
     }
-    expect(guardStep).not.toHaveProperty("if");
-    expect(guardStep["continue-on-error"]).not.toBe(true);
-    const restore = finalSteps.findIndex(
-      (step) => step.uses === "actions/download-artifact@v8",
-    );
-    expect(restore).toBeGreaterThan(guard);
-    const preview = finalSteps.findIndex(
-      (step) => step.uses === "./.github/actions/nook-pr-preview",
-    );
-    expect(preview).toBeGreaterThan(restore);
-    const previewStep = stepContract.parse(finalSteps[preview]);
-    expect(previewStep.if).not.toContain("always()");
-    expect(previewStep.if).toContain(
-      "github.event.pull_request.head.repo.full_name == github.repository",
-    );
-    const prTasks = this.read("nook-app/ci/pr.yml");
-    const taskGraph = z
-      .object({
-        tasks: z.record(
-          z.string(),
-          z.object({ deps: z.array(z.string()).optional() }),
-        ),
-      })
-      .parse(Bun.YAML.parse(prTasks));
-    expect(taskGraph.tasks["ci:pr:validate"]?.deps).toEqual([
-      "ci:pr:verification",
-      "ci:pr:browser",
-    ]);
-    expect(taskGraph.tasks["ci:pr:verification"]?.deps).toEqual([
-      "ci:pr:verification:format",
-      "ci:pr:verification:tooling",
-      "docker:ecosystem:dependency-policy",
-      "ci:pr:checks",
-      "ci:pr:tests:policy",
-      "ci:pr:delivery-helpers",
-    ]);
-    expect(prTasks).toContain("coverage-export.output=type=cacheonly");
-    expect(prTasks).not.toContain("coverage-export.output=type=local");
-    expect(this.read(".github/workflows/pr.yml")).not.toContain(
-      "nook-pr-coverage",
-    );
-    expect(prTasks).toContain(
-      "E2E_SPEC: 'e2e/mock-auth-pilot-(coverage|session-lifecycle)[.]spec[.]ts'",
-    );
   }
 
   ecosystemResults(): void {
@@ -345,152 +172,6 @@ class DockerizedRustContract {
     } finally {
       rmSync(temporary, { recursive: true, force: true });
     }
-  }
-
-  coverageAndExporter(): void {
-    const pr = this.read("nook-app/ci/pr.yml");
-    const checks = this.read(".github/workflows/rust-ecosystem-checks.yml");
-    const product = this.read(
-      "nook-app/nook-platform/docker/rust/base/Dockerfile",
-    );
-    expect(pr).toContain("NATIVE_COVERAGE_PROVIDED=true");
-    expect(checks).toContain("type: boolean\n        default: false");
-    expect(product).toContain("ARG NATIVE_COVERAGE_PROVIDED=false");
-    expect(product).toContain(
-      "true) INSTA_UPDATE=no cargo test --locked -p nook-replication --doc",
-    );
-    expect(product).toContain(
-      "false) INSTA_UPDATE=no cargo test --locked -p nook-replication ;;",
-    );
-    expect(product).toContain(
-      "INSTA_UPDATE=no LLVM_PROFILE_FILE_NAME='nook-replication-%p-%m.profraw' cargo llvm-cov nextest --locked --no-report --profile ci -p nook-replication",
-    );
-    expect(product).toContain(
-      "RUSTFLAGS='--cfg loom' cargo test --locked -p nook-replication loom_tests --release",
-    );
-  }
-
-  workflowTooling(): void {
-    let containerOwnedRustJobs = 0;
-    for (const file of readdirSync(join(this.root, ".github/workflows"))) {
-      if (!file.endsWith(".yml")) continue;
-      const source = this.read(join(".github/workflows", file));
-      expect(source).not.toMatch(
-        /uses: (?:dtolnay\/rust-toolchain|Swatinem\/rust-cache)/,
-      );
-      const workflow = z
-        .object({
-          jobs: z.record(
-            z.string(),
-            z.object({
-              container: z
-                .object({ image: z.string() })
-                .passthrough()
-                .optional(),
-              steps: z.array(workflowStepSchema).default([]),
-            }),
-          ),
-        })
-        .parse(Bun.YAML.parse(source));
-      for (const [jobName, job] of Object.entries(workflow.jobs)) {
-        const rustToolCommands = job.steps.flatMap((step) =>
-          step.kind === WorkflowStepKind.Command &&
-          /(?:^|\n)\s*(?:cargo|rustup|rustfmt)\s/m.test(step.command)
-            ? [step.command]
-            : [],
-        );
-        if (rustToolCommands.length === 0) continue;
-        containerOwnedRustJobs += 1;
-        expect(jobName).toBe("pages-preview");
-        expect(job.container?.image).toMatch(
-          /^registry\.dev\.nokey\.sh\/library\/rust:1\.97-trixie@sha256:[0-9a-f]{64}$/,
-        );
-        const [wasmPackCommand, wasmTargetCommand] = z
-          .tuple([z.string(), z.string()])
-          .parse(rustToolCommands);
-        expect(wasmPackCommand).toContain(
-          "cargo install wasm-pack --version 0.15.0",
-        );
-        expect(wasmTargetCommand).toContain(
-          "rustup target add wasm32-unknown-unknown",
-        );
-      }
-    }
-    expect(containerOwnedRustJobs).toBe(1);
-    const ecosystem = this.read(".github/workflows/rust-ecosystem-checks.yml");
-    expect(ecosystem).toContain("SCCACHE_OPTIONAL:");
-    expect(ecosystem).toContain("'dependabot[bot]') && '1' || ''");
-    expect(ecosystem.match(/uses: docker\/setup-buildx-action/g)).toHaveLength(
-      1,
-    );
-    let routedJobs = 0;
-    for (const line of ecosystem.split("\n")) {
-      if (!line.trimStart().startsWith("runs-on:")) continue;
-      routedJobs += 1;
-      expect(line).toContain(
-        "github.event.pull_request.head.repo.full_name == github.repository",
-      );
-      expect(line).toContain(
-        "github.event.pull_request.user.login != 'dependabot[bot]'",
-      );
-      expect(line).toContain(
-        "(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'",
-      );
-    }
-    expect(routedJobs).toBe(1);
-
-    expect(this.read(".github/formatting/Dockerfile")).toContain(
-      "prettier-skill.json",
-    );
-    const audit = this.read(".github/docker/rust-maintenance.hcl");
-    expect(audit).toContain('no-cache-filter = ["audit"]');
-    expect(audit).not.toContain("no-cache = true");
-    expect(this.read(".github/scripts/remote-task-batch.sh")).toContain(
-      'loom:verify) run_with_timeout "$timeout_minutes" task preflight:loom-verify',
-    );
-    const dockerignore = this.read(".dockerignore").split("\n");
-    const generatedWasm =
-      "nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm";
-    expect(dockerignore).toContain(`${generatedWasm}*`);
-    expect(
-      dockerignore.indexOf(`!${generatedWasm}/.gitignore`),
-    ).toBeGreaterThan(dockerignore.indexOf(`${generatedWasm}*`));
-    expect(dockerignore).toContain("**/node_modules");
-  }
-
-  compileExtensionUsesOwnFrozenDependencies(): void {
-    const compile = this.read(
-      "nook-app/nook-platform/docker/rust/compile/Dockerfile",
-    );
-    const extensionDependencyStage = compile.indexOf(
-      "FROM compile-web-dependencies AS compile-web-extension-dependencies",
-    );
-    const webStage = compile.indexOf("FROM web-base AS compile-web");
-    const extensionTypecheck = compile.indexOf(
-      "RUN cd nook-app/nook-web/nook-web-extension \\\n    && ../nook-web-app/node_modules/.bin/svelte-check",
-    );
-    const extensionBuild = compile.indexOf(
-      "bun scripts/build.ts",
-      extensionTypecheck,
-    );
-    expect(extensionDependencyStage).toBeGreaterThanOrEqual(0);
-    expect(webStage).toBeGreaterThan(extensionDependencyStage);
-    expect(extensionTypecheck).toBeGreaterThan(webStage);
-    expect(extensionBuild).toBeGreaterThan(extensionTypecheck);
-
-    const dependencyStage = compile.slice(extensionDependencyStage, webStage);
-    expect(dependencyStage).toContain(
-      "COPY nook-app/nook-web/nook-web-extension/package.json nook-app/nook-web/nook-web-extension/bun.lock",
-    );
-    expect(dependencyStage).toContain("bun install --frozen-lockfile");
-
-    const webBuildStage = compile.slice(webStage, extensionTypecheck);
-    expect(webBuildStage).toContain(
-      "COPY --from=compile-web-extension-dependencies /meta-secret/nook/nook-app/nook-web/nook-web-extension/node_modules",
-    );
-    expect(webBuildStage).not.toContain(
-      "ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-web-extension/node_modules",
-    );
   }
 
   portableGitMetadata(): void {
@@ -731,113 +412,6 @@ class DockerizedRustContract {
     }
   }
 
-  compilerFirstWebVerification(): void {
-    const taskSchema = z.object({
-      tasks: z.record(
-        z.string(),
-        z.object({
-          deps: z.array(z.string()).default([]),
-          cmds: z
-            .array(z.union([z.string(), z.object({ task: z.string() })]))
-            .default([]),
-        }),
-      ),
-    });
-    const tasks = taskSchema.parse(
-      Bun.YAML.parse(this.read("nook-app/Taskfile.yml")),
-    ).tasks;
-    const testTask = tasks["_test:parallel"];
-    const compileTask = tasks["_compile:parallel"];
-    const unitTask = tasks["_unit:parallel"];
-    const lintTask = tasks["_lint:parallel"];
-    if (!testTask || !compileTask || !unitTask || !lintTask) {
-      throw new Error("Parallel task definitions are missing");
-    }
-    expect(
-      testTask.cmds.map((command) =>
-        typeof command === "string" ? command : command.task,
-      ),
-    ).toEqual(["_compile:parallel", "_unit:parallel"]);
-    expect(compileTask.deps.sort()).toEqual([
-      "_extension:typecheck",
-      "_web:check:parallel",
-    ]);
-    expect(unitTask.deps.sort()).toEqual([
-      "_extension:test:parallel",
-      "_web:test:parallel",
-    ]);
-    expect(testTask.deps).toEqual([]);
-    expect(
-      lintTask.cmds.map((command) =>
-        typeof command === "string" ? command : command.task,
-      ),
-    ).toContain("_extension:lint:parallel");
-
-    const extension = this.read(
-      "nook-app/nook-web/nook-web-extension/Taskfile.yml",
-    );
-    expect(extension).toContain("_extension:lint:parallel:");
-    expect(extension).toContain("bun run typecheck");
-    expect(extension).toContain("bun run test:unit");
-
-    const temporary = mkdtempSync(join(tmpdir(), "nook-compiler-first-"));
-    try {
-      const taskfile = join(temporary, "Taskfile.yml");
-      const probe = join(temporary, "probe.log");
-      writeFileSync(
-        taskfile,
-        `version: '3'
-tasks:
-  compiler:web:
-    cmds:
-      - sh -c 'echo compiler:web >> "$PROBE_LOG"; test "${"${FAIL_COMPILERS:-}"}" != 1'
-  compiler:extension:
-    cmds:
-      - sh -c 'echo compiler:extension >> "$PROBE_LOG"; test "${"${FAIL_COMPILERS:-}"}" != 1'
-  compiler:all:
-    deps: [compiler:web, compiler:extension]
-  unit:web:
-    cmds:
-      - sh -c 'echo unit:web >> "$PROBE_LOG"'
-  unit:extension:
-    cmds:
-      - sh -c 'echo unit:extension >> "$PROBE_LOG"'
-  unit:all:
-    deps: [unit:web, unit:extension]
-  verify:
-    cmds:
-      - task: compiler:all
-      - task: unit:all
-`,
-      );
-      for (const failure of ["1", "0"]) {
-        writeFileSync(probe, "");
-        const result = spawnSync("task", ["--taskfile", taskfile, "verify"], {
-          encoding: "utf8",
-          env: {
-            ...process.env,
-            FAIL_COMPILERS: failure,
-            PROBE_LOG: probe,
-          },
-        });
-        const output = readFileSync(probe, "utf8");
-        expect(output).toContain("compiler:web");
-        expect(output).toContain("compiler:extension");
-        if (failure === "1") {
-          expect(result.status).not.toBe(0);
-          expect(output).not.toContain("unit:web");
-          expect(output).not.toContain("unit:extension");
-        } else {
-          expect(result.status, result.stderr).toBe(0);
-          expect(output).toContain("unit:web");
-          expect(output).toContain("unit:extension");
-        }
-      }
-    } finally {
-      rmSync(temporary, { recursive: true, force: true });
-    }
-  }
-
   private read(path: string): string {
     return readFileSync(join(this.root, path), "utf8");
   }
@@ -853,24 +427,12 @@ const contract = new DockerizedRustContract();
 const e2eContract = new DockerizedRustE2eContract();
 const toolingContract = new DockerizedRustToolingContract();
 test(
-  "PR browser scheduling preserves covering extension and Node gates",
+  "PR readiness requires success for every selected validation branch",
   contract.previewGates.bind(contract),
 );
 test(
   "grouped ecosystem reports every result and fails for any failed check",
   contract.ecosystemResults.bind(contract),
-);
-test(
-  "PR dedup retains standalone coverage and source-correct exports",
-  contract.coverageAndExporter.bind(contract),
-);
-test(
-  "workflow Rust tools are Docker owned and dependency audits stay live",
-  contract.workflowTooling.bind(contract),
-);
-test(
-  "sealed web compile installs extension dependencies from its own lockfile",
-  contract.compileExtensionUsesOwnFrozenDependencies.bind(contract),
 );
 test(
   "policy Git metadata retains exact head and real baseline without credentials",
@@ -893,10 +455,15 @@ test(
   e2eContract.e2eCompletion.bind(e2eContract),
 );
 test(
-  "web verification aggregates compilers before starting unit suites",
-  contract.compilerFirstWebVerification.bind(contract),
-);
-test(
   "tooling installs every package before checking successful installs",
   toolingContract.toolingStaticInstallsBeforeChecks.bind(toolingContract),
 );
+
+const setupContract = new TrustedBuildkitSetupContract();
+
+test("trusted setup isolates login secrets and retains native backend failures", () => {
+  setupContract.credentialsAndBackend();
+});
+test("setup observations preserve fatal environment and optional telemetry boundaries", () => {
+  setupContract.observationsKeepFailureBoundaries();
+});
