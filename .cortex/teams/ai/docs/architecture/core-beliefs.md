@@ -38,10 +38,15 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 
 ### Type-driven public contracts
 
-Design each module's public interface from the caller's obligations. Give
-distinct domain values distinct types. Represent mutually exclusive states
-with an enum. Expose an operation only on the state that permits it. Keep
-fields private when constructing a valid value requires a check.
+Give distinct domain values distinct types so human and AI callers can read
+their obligations from the signature.
+
+- Put state-specific data on its enum variant, such as a rejection reason
+  on `Rejected`. Use Rust typestate for legal transitions. For example,
+  expose `submit(self)` only on `Request<Draft>` and return `Request<Submitted>`.
+- Check cross-field invariants at the boundary. A constructor can check that
+  a requested count fits within the available count, then return a value with
+  private fields so callers can reuse that validated relationship.
 
 When a caller's policy determines the result type, express that relationship
 in the signature. In this illustrative Rust example, callers choose how a
