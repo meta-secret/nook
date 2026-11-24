@@ -497,14 +497,29 @@ class DockerizedRustBuildKitContract {
       return body;
     };
     const shared = stage("compile-wasm-dependencies AS compile-wasm-shared-source");
-    const companion = stage("compile-wasm-shared-source AS compile-companion-wasm-source");
-    const vault = stage("compile-wasm-shared-source AS compile-wasm-source");
+    const companionDeps = stage(
+      "compile-wasm-shared-source AS compile-companion-dependency-artifacts",
+    );
+    const companion = stage(
+      "compile-companion-dependency-artifacts AS compile-companion-wasm-source",
+    );
+    const vaultShared = stage(
+      "compile-wasm-shared-source AS compile-vault-shared-artifacts",
+    );
+    const vaultDeps = stage(
+      "compile-vault-shared-artifacts AS compile-vault-dependency-artifacts",
+    );
+    const vault = stage("compile-vault-dependency-artifacts AS compile-wasm-source");
     expect(shared).toContain("nook-companion-core/");
     expect(shared).not.toContain("nook-core/");
-    expect(shared).not.toContain("wasm-pack build");
+    expect(companionDeps).toContain("--target wasm32-unknown-unknown -p nook-companion-wasm");
+    expect(companionDeps).not.toContain("COPY ");
     expect(companion).toContain("wasm-pack build nook-companion-wasm ");
     expect(companion).not.toContain("nook-core/");
-    expect(vault).toContain("nook-core/");
+    expect(vaultShared).toContain("--target wasm32-unknown-unknown -p nook-wasm");
+    expect(vaultDeps).toContain("nook-core/");
+    expect(vaultDeps).toContain("--target wasm32-unknown-unknown -p nook-wasm");
+    expect(vaultDeps).not.toContain("nook-wasm/");
     expect(vault).toContain("wasm-pack build nook-wasm ");
     expect(vault).not.toContain("nook-companion-wasm/");
     const web = stage("web-base AS compile-web");
