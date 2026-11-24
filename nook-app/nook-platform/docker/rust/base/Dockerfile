@@ -320,7 +320,7 @@ COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hc
 RUN find nook-replication -type f -name '*.rs' -exec touch {} +
 FROM builder-native-common-source AS builder-native-auth2-source
 COPY --from=builder-native-authenticator-source /meta-secret/nook/nook-app/nook-platform/nook-authenticator-domain/ nook-authenticator-domain/
-COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-auth2/ nook-auth2/
+COPY --exclude=tests --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-auth2/ nook-auth2/
 RUN find nook-authenticator-domain nook-auth2 -type f -name '*.rs' -exec touch {} +
 
 FROM builder-native-auth2-source AS builder-native-event-log-source
@@ -380,6 +380,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && find /opt/nook/native-test-artifacts/nook-replication/profiles /opt/nook/native-test-artifacts/nook-replication/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-replication/artifact-files.tsv
 
 FROM builder-native-auth2-source AS builder-native-auth2-test
+# Keep the manifest as a guaranteed match when the last integration test is removed.
+COPY --parents nook-app/nook-platform/./nook-auth2/Cargo.toml nook-app/nook-platform/./nook-auth2/test[s] ./
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo clippy --quiet --offline --locked --all-targets -p nook-auth2 -- -D warnings \
@@ -440,6 +442,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 # LLVM merges every leaf's real profiles and namespaced executable maps using
 # the same absolute sources/toolchain/flags, including downstream contributions.
 FROM builder-native-core-source AS builder-debug
+COPY --parents nook-app/nook-platform/./nook-auth2/Cargo.toml nook-app/nook-platform/./nook-auth2/test[s] ./
 COPY --from=builder-native-common-test /opt/nook/native-test-artifacts/nook-app-common/profiles/*.profraw target/llvm-cov-target/
 COPY --from=builder-native-common-test /opt/nook/native-test-artifacts/nook-app-common/objects/ target/llvm-cov-target/debug/native-tests/nook-app-common/
 COPY --from=builder-native-authenticator-test /opt/nook/native-test-artifacts/nook-authenticator-domain/profiles/*.profraw target/llvm-cov-target/
