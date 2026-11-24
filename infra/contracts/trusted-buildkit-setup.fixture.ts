@@ -28,44 +28,10 @@ export class TrustedBuildkitSetupContract {
       .object({ run: z.string() })
       .passthrough()
       .parse(setup.runs.steps.find((candidate) => candidate.name === name));
-    expect(Object.hasOwn(step, "continue-on-error")).toBe(false);
     return step.run;
   }
 
   credentialsAndBackend(): void {
-    const names = setup.runs.steps.map((step) => step.name);
-    const ordered = [
-      "Login to Nook OCI registry and connect ARC BuildKit",
-      "Preload hosted BuildKit from Zot",
-      "Setup hosted Buildx",
-      "Connect SeaweedFS compiler cache",
-      "Configure hosted BuildKit cache",
-      "Verify Docker cache refs and blobs",
-      "Set CI environment and start cache observations",
-    ].map((name) => names.indexOf(name));
-    expect(ordered.every((position) => position >= 0)).toBe(true);
-    expect(ordered).toEqual([...ordered].sort((left, right) => left - right));
-    for (const name of [
-      "Preload hosted BuildKit from Zot",
-      "Setup hosted Buildx",
-    ]) {
-      expect(setup.runs.steps.find((step) => step.name === name)?.if).toBe(
-        "${{ !startsWith(runner.name, 'nook-k0s-') }}",
-      );
-    }
-    const policy = this.command("Configure hosted BuildKit cache");
-    expect(policy).toContain('test -n "$NOOK_SELECTED_BUILDER"');
-    expect(policy).toContain('"${NOOK_SCCACHE_BACKEND:-}" != "remote"');
-    expect(
-      setup.runs.steps.find(
-        (step) => step.name === "Configure hosted BuildKit cache",
-      )?.env,
-    ).toEqual({
-      NOOK_REMOTE_TASK_SELECTION:
-        "${{ github.event.inputs.tasks || github.event.inputs.task }}",
-      NOOK_SELECTED_BUILDER:
-        "${{ steps.arc-buildx.outputs.name || steps.hosted-buildx.outputs.name }}",
-    });
     const script = this.command(
       "Login to Nook OCI registry and connect ARC BuildKit",
     )

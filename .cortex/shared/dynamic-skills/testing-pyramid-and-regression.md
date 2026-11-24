@@ -38,6 +38,10 @@ consistent.
 Do not mechanically translate Markdown sentences into tests. Choose scenarios
 through architectural ownership and risk.
 
+When writing tests, exercise the behavior and assert an observable result,
+such as a command's exit status or a built artifact's contents. Never add a
+test whose sole assertion is that source code or configuration contains
+particular text or has a particular structure.
 
 ### Mandatory regression coverage for bug fixes
 

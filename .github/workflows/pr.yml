@@ -27,6 +27,7 @@ jobs:
     name: Select validation scope
     outputs:
       validation: ${{ steps.browser-scope.outputs.validation }}
+      native_tests: ${{ steps.browser-scope.outputs.native_tests }}
       full_e2e: ${{ steps.browser-scope.outputs.full_e2e }}
       auth: ${{ steps.browser-scope.outputs.auth }}
       research: ${{ steps.browser-scope.outputs.research }}
@@ -63,6 +64,7 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           auth=false
           product=false
+          native_tests=false
           validation="$VALIDATION_REQUESTED"
           full_e2e="$FULL_E2E_REQUESTED"
           research=false
@@ -71,6 +73,7 @@ jobs:
           git diff --no-renames --name-only -z "$BASE_SHA...HEAD" > "$changed_paths"
           while IFS= read -r -d '' path; do
             case "$path" in
+              nook-app/nook-platform/nook-auth2/tests/*.rs|nook-app/nook-platform/nook-core/tests/*.rs) native_tests=true ;;
               docs/privacy-policy.md|docs/terms-of-service.md) product=true ;;
               *.md) continue ;;
               .cortex/*|.meta-cortex/*|.cursor/*|.vale.ini|.vale/*|.github/workflows/repository-policy.yml|.github/workflows/web-research.yml|agentic-ai/*|nook-app/nook-web/nook-web-research/*) ;;
@@ -81,11 +84,14 @@ jobs:
             esac
             case "$path" in .github/workflows/pr.yml|.github/workflows/web-research.yml|.github/scripts/web-research-deploy.sh|.github/scripts/web-research-verify-live.sh|.task/ci-workflows.yml|nook-app/ci/pr.yml|nook-app/ci/pr.docker-bake.hcl|nook-app/nook-web/nook-web-app/Dockerfile|nook-app/nook-web/nook-web-research/*) research=true; validation=true ;; esac
           done < "$changed_paths"
+          # Labels and mixed research/product changes keep their usual full validation.
+          if [ "$native_tests" = true ] && [ "$validation" = true ]; then product=true; fi
           if [ "$product" = true ]; then
             validation=true
             if [ "$DRAFT" = false ]; then full_e2e=true; fi
           fi
           if [ "$full_e2e" = true ]; then validation=true; fi
+          echo "native_tests=$native_tests" >> "$GITHUB_OUTPUT"
           echo "full_e2e=$full_e2e" >> "$GITHUB_OUTPUT"
           echo "auth=$auth" >> "$GITHUB_OUTPUT"
           echo "validation=$validation" >> "$GITHUB_OUTPUT"
@@ -307,10 +313,13 @@ jobs:
       - name: Verify product source and coverage
         if: needs.scope.outputs.validation == 'true'
         run: task --silent ci:pr:verification
-      - name: Verification — policy-only PR
+      - name: Verify native integration tests and coverage
+        if: needs.scope.outputs.native_tests == 'true' && needs.scope.outputs.validation != 'true'
+        run: task --silent ci:pr:verification:native-tests
+      - name: Verify repository policy
         if: needs.scope.outputs.validation != 'true'
         run: task --silent ci:pr:verification:tooling
-      - name: Tests — policy-only PR
+      - name: Run repository policy and delivery tests
         if: needs.scope.outputs.validation != 'true'
         run: task --silent ci:pr:tests:policy-with-delivery-helpers
 

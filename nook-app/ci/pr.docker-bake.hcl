@@ -10,6 +10,16 @@ target "pr-rust-verify" {
   output = ["type=cacheonly"]
 }
 
+target "pr-native-dylint" {
+  inherits = ["rust-dylint"]
+  target = "rust-dylint-native"
+  output = ["type=cacheonly"]
+}
+
+group "pr-native-tests" {
+  targets = ["coverage-export", "pr-native-dylint"]
+}
+
 target "pr-wasm-artifacts" {
   inherits = ["builder-wasm"]
   target = "pr-wasm-artifacts"

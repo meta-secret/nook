@@ -53,6 +53,14 @@ tasks:
       - task: ci:pr:bake
         vars: { PR_BAKE_TARGET: pr-checks }
 
+  ci:pr:verification:native-tests:
+    desc: Check native Rust integration tests with their lints and combined coverage floors.
+    deps:
+      - ci:pr:verification:format
+    cmds:
+      - task: ci:pr:bake
+        vars: { PR_BAKE_TARGET: pr-native-tests }
+
   ci:pr:verification:format:
     cmds:
       - '{{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --set "rust-format-check.output=type=cacheonly" rust-format-check'

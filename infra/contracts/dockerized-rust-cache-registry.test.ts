@@ -7,33 +7,8 @@ import { join, resolve } from "node:path";
 class DockerizedRustCacheRegistryContract {
   private readonly root = resolve(import.meta.dir, "../..");
 
-  preservesCompilerCacheSecretsAndRejectsRegistryFailures(): void {
-    const bake = this.read("nook-app/docker-bake.hcl");
-    const compile = this.read(".github/scripts/compile-remote.sh");
-    expect(bake).toContain('variable "SCCACHE_RUNTIME_MODE_FILE"');
-    expect(bake).toContain(
-      "id=sccache_runtime_mode,src=${SCCACHE_RUNTIME_MODE_FILE}",
-    );
-    expect(bake).toContain(
-      "sccache_secrets = concat(sccache_credentials, sccache_runtime_secrets)",
-    );
-    expect(compile).toContain(
-      "--var=SCCACHE_RUNTIME_MODE_FILE=${runtime_mode_file}",
-    );
-    expect(compile).toContain(
-      "--var=SCCACHE_S3_ACCESS_KEY_FILE=${access_key_file}",
-    );
-    expect(compile).toContain(
-      "--var=SCCACHE_S3_SECRET_KEY_FILE=${secret_key_file}",
-    );
-    expect(compile).not.toContain(
-      "--set=build-compile.secrets=id=sccache_runtime_mode",
-    );
-
+  registryAvailability(): void {
     const action = this.read(".github/actions/nook-docker-setup/action.yml");
-    expect(action).toContain(
-      'echo "NOOK_REMOTE_TASK_SELECTION=$NOOK_REMOTE_TASK_SELECTION" >> "$GITHUB_ENV"',
-    );
     const gateMarker = "    - name: Verify Docker cache refs and blobs";
     const gateStart = action.indexOf(gateMarker);
     expect(gateStart).toBeGreaterThanOrEqual(0);
@@ -50,12 +25,6 @@ class DockerizedRustCacheRegistryContract {
     expect(runStart).toBeGreaterThanOrEqual(0);
     const runEnd = gate.indexOf("\n        NODE", runStart + runMarker.length);
     expect(runEnd).toBeGreaterThan(runStart);
-    expect(
-      gate.indexOf('echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1"'),
-    ).toBeGreaterThan(runEnd);
-    expect(
-      gate.indexOf('echo "GHA_CACHE_EXACT_PROBE_FAILURE_CLASS=none"'),
-    ).toBeGreaterThan(runEnd);
     const registryGateScript = gate
       .slice(runStart + runMarker.length, runEnd)
       .split("\n")
@@ -65,18 +34,6 @@ class DockerizedRustCacheRegistryContract {
         return line.slice(8);
       })
       .join("\n");
-    for (const entry of [
-      "verifyRegistryAvailability",
-      'this.request(`https://${this.registryHost}/v2/`, "GET")',
-      '`https://${this.registryHost}/v2/${repository}/manifests/${reference}`',
-      "/blobs/",
-      'this.request(url, "HEAD")',
-      "method,",
-      "AbortSignal.timeout",
-    ]) {
-      expect(registryGateScript).toContain(entry);
-    }
-
     const rootManifest = JSON.stringify({
       schemaVersion: 2,
       manifests: [{ digest: `sha256:${"a".repeat(64)}` }],
@@ -275,21 +232,6 @@ class DockerizedRustCacheRegistryContract {
     }
   }
 
-  preservesTwoPhaseTimeoutBudgets(): void {
-    const batch = this.read(".github/scripts/remote-task-batch.sh");
-    const workflow = this.read(".github/workflows/remote.yml");
-    for (const entry of [
-      "timeout --kill-after=10s 240s task build:compile",
-      "timeout --kill-after=10s 280s task build:compile",
-      "build:compile) echo 5 ;;",
-    ]) {
-      expect(batch).toContain(entry);
-    }
-    expect(workflow).toContain(
-      "timeout-minutes: ${{ (inputs.tasks || inputs.task) == 'build:compile' && 5 || 360 }}",
-    );
-  }
-
   private read(path: string): string {
     return readFileSync(resolve(this.root, path), "utf8");
   }
@@ -297,12 +239,8 @@ class DockerizedRustCacheRegistryContract {
 
 const contract = new DockerizedRustCacheRegistryContract();
 test(
-  "remote compile preserves cache secrets and rejects registry access failures",
-  contract.preservesCompilerCacheSecretsAndRejectsRegistryFailures.bind(
+  "registry availability distinguishes missing cache refs from access failures",
+  contract.registryAvailability.bind(
     contract,
   ),
-);
-test(
-  "two-phase compile keeps its publish and read-only timeout budgets",
-  contract.preservesTwoPhaseTimeoutBudgets.bind(contract),
 );
