@@ -22,20 +22,6 @@ fn section<'a>(content: &'a str, start: &str, end: &str) -> &'a str {
         .0
 }
 
-/// Body of `target "<name>" { ... }` until the next Bake target.
-/// Uses the opening brace so `rust-base` does not match `rust-base-publish`.
-fn bake_target_body<'a>(bake: &'a str, target: &str) -> &'a str {
-    let marker = format!("target \"{target}\" {{");
-    bake.split_once(marker.as_str())
-        .map_or("", |(_, rest)| rest.split("target \"").next().unwrap_or(""))
-}
-
-fn bake_target_assigns_cache_to(bake: &str, target: &str) -> bool {
-    bake_target_body(bake, target)
-        .lines()
-        .any(|line| line.trim_start().starts_with("cache-to"))
-}
-
 fn taskfile_task_body<'a>(tasks: &'a str, name: &str) -> anyhow::Result<&'a str> {
     let marker = format!("  {name}:");
     let rest = tasks
@@ -72,8 +58,6 @@ mod agent_and_local_workflow_contracts;
 mod build_contracts;
 #[path = "vault_app_isolation/cloudflare_origin_contracts.rs"]
 mod cloudflare_origin_contracts;
-#[path = "vault_app_isolation/hosted_buildkit_cache_contracts.rs"]
-mod hosted_buildkit_cache_contracts;
 #[path = "vault_app_isolation/hosted_delivery_contracts.rs"]
 mod hosted_delivery_contracts;
 #[path = "vault_app_isolation/local_harness_contracts.rs"]

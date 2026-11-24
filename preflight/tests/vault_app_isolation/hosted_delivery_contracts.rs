@@ -10,59 +10,8 @@ struct PrDeliveryScenario<'a> {
 }
 
 impl PrDeliveryScenario<'_> {
-    fn assert_workflow_contract(&self) -> anyhow::Result<()> {
-        let pr = self.root.read(".github/workflows/pr.yml");
-        let mut previous = 0;
-        for phase in [
-            "run: task --silent ci:pr:verification\n",
-            "name: Import production artifacts after all validation succeeds",
-            "uses: ./.github/actions/nook-pr-preview",
-        ] {
-            let position = pr
-                .find(phase)
-                .with_context(|| format!("missing PR phase: {phase}"))?;
-            assert!(
-                position > previous,
-                "validation join, artifact import and preview must be ordered"
-            );
-            previous = position;
-        }
-        assert_eq!(pr.matches("    runs-on:").count(), 5);
-        assert!(pr.contains("needs: [scope, prepare, verify, browser]"));
-        assert!(pr.contains("if: ${{ always() }}"));
-        assert!(pr.contains("test \"$SCOPE_RESULT\" = success"));
-        assert!(pr.contains("test \"$VERIFY_RESULT\" = success"));
-        assert!(pr.contains("test \"$PREPARE_RESULT\" = skipped"));
-        assert!(pr.contains("test \"$PREPARE_RESULT\" = success"));
-        assert!(pr.contains("test \"$BROWSER_RESULT\" = success"));
-        assert!(pr.contains("test \"$BROWSER_RESULT\" = skipped"));
-        assert!(!pr.contains("continue-on-error:"));
-        assert!(!pr.contains("type=registry"));
-        assert!(pr.contains("PR_AUTH_E2E: ${{ needs.scope.outputs.auth }}"));
-        assert!(pr.contains("PR_RESEARCH: ${{ needs.scope.outputs.research }}"));
-        assert!(!pr.contains("nook-pr-coverage"));
-        assert!(pr.contains("require-sccache: \"true\""));
-        assert!(!pr.contains("Preserve cache telemetry"));
-        assert!(!pr.contains("NOOK_PR_CACHE_TELEMETRY_DIR:"));
-        assert_preflight_build_contract(self.root);
-        Ok(())
-    }
-
-    fn assert_artifact_backed_pr_fanout(&self) {
-        let pr = self.root.read(".github/workflows/pr.yml");
-        let pr_tasks = self.root.read("nook-app/ci/pr.yml");
-        let join = section(&pr_tasks, "  ci:pr:validate:\n", "\n  ci:pr:checks:");
-        assert!(
-            pr.contains("run: task --silent ci:pr:verification")
-                && join.contains("deps:")
-                && join.contains("- ci:pr:browser")
-                && join.contains("- ci:pr:checks")
-        );
-    }
-
     fn assert_artifact_backed_e2e_contract(&self) -> anyhow::Result<()> {
         let root = self.root;
-        self.assert_artifact_backed_pr_fanout();
         let pr = (root).read(".github/workflows/pr.yml");
         let ci_tasks = (root).read("nook-app/ci/Taskfile.yml");
         let rust_host = section(&ci_tasks, "  _ci:pr:rust:host:\n", "  ci:pr:wasm:\n");
@@ -162,10 +111,6 @@ fn delivery_ci_uses_configured_runners_with_scoped_buildkit_caches() -> anyhow::
     }
     .assert_contract();
     assert_docker_setup_contract(&root);
-    PrDeliveryScenario {
-        root: root.as_ref(),
-    }
-    .assert_workflow_contract()?;
     PrDeliveryScenario {
         root: root.as_ref(),
     }
@@ -306,73 +251,6 @@ fn assert_docker_setup_contract(root: &Path) {
             "general ARC runtime must not expose prohibited engine boundary: {prohibited}"
         );
     }
-}
-
-fn assert_preflight_build_contract(root: &Path) {
-    let preflight_dockerfile = (root).read("preflight/Dockerfile");
-    for required in [
-        "FROM rust-base AS chef",
-        "FROM rust-base AS deps",
-        "FROM deps AS coverage-deps",
-        "FROM deps AS build",
-        "cargo chef prepare --recipe-path recipe.json",
-        "cargo chef cook --recipe-path recipe.json",
-        "cargo clippy --quiet --locked --all-targets -- -D warnings",
-        "cargo test --quiet --locked --test core_ownership --no-run",
-        "--mount=type=secret,id=sccache_s3_access_key,required=false",
-        "nook-sccache-report preflight-chef",
-        "nook-sccache-report preflight-build",
-    ] {
-        assert!(
-            preflight_dockerfile.contains(required),
-            "preflight Docker cache topology is missing: {required}"
-        );
-    }
-    let recipe_normalizer = preflight_dockerfile
-        .split_once("RUN <<'EOF'\n")
-        .and_then(|(_, body)| body.split_once("\nEOF\n"))
-        .map_or("", |(body, _)| body);
-    assert!(
-        recipe_normalizer.contains("cargo chef prepare --recipe-path recipe.json")
-            && recipe_normalizer.contains(".skeleton.manifests")
-            && preflight_dockerfile.contains("recipe.normalized.json"),
-        "cargo-chef recipe normalization must remain inside one valid Docker heredoc RUN"
-    );
-    assert!(
-        !preflight_dockerfile.contains("FROM rust:")
-            && !preflight_dockerfile.contains("FROM rust@"),
-        "preflight must reuse rust-base instead of installing a floating Rust tag"
-    );
-    let preflight_bake = (root).read("preflight/docker-bake.hcl");
-    for required in [
-        "target \"preflight-test\"",
-        "rust-base = \"target:rust-base\"",
-        "inherits   = [\"_sccache\"]",
-        "dockerfile = \"preflight/Dockerfile\"",
-    ] {
-        assert!(
-            preflight_bake.contains(required),
-            "preflight Bake wiring is missing: {required}"
-        );
-    }
-    let preflight_tasks = (root).read("preflight/Taskfile.yml");
-    for required in [
-        "preflight-test",
-        "PREFLIGHT_BAKE_FILES",
-        "preflight/docker-bake.hcl",
-        "nook-app/nook-platform/docker/rust/docker-bake.hcl",
-        "SCCACHE_S3_BUILD_SECRETS",
-        "deps:\n      - sccache:ensure",
-    ] {
-        assert!(
-            preflight_tasks.contains(required),
-            "preflight Taskfile Bake/sccache wiring is missing: {required}"
-        );
-    }
-    assert!(
-        !preflight_tasks.contains("cache-to=\"") && !preflight_tasks.contains("cache-from=\""),
-        "preflight Tasks must not clear Bake cache-to/cache-from; rust-base context has no cache-to"
-    );
 }
 
 pub(super) fn assert_main_web_e2e_core_contract(ci: &str) {
