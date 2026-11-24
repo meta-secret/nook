@@ -36,6 +36,62 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - Then through `nook-core` (Rust logic) ➔ `nook-wasm` (bindgen) ➔ `nook-web` (UI).
 - Any cross-layer leakage is disallowed.
 
+### Type-driven public contracts
+
+Design each module's public interface from the caller's obligations. Give
+distinct domain values distinct types. Represent mutually exclusive states
+with an enum. Expose an operation only on the state that permits it. Keep
+fields private when constructing a valid value requires a check.
+
+When a caller's policy determines the result type, express that relationship
+in the signature. In this illustrative Rust example, callers choose how a
+missing device label should be handled.
+
+```rust
+struct DeviceLabel(String);
+struct MissingDeviceLabel;
+
+trait LabelPolicy {
+    type Output;
+    fn resolve(label: Option<DeviceLabel>) -> Self::Output;
+}
+
+struct RequireLabel;
+impl LabelPolicy for RequireLabel {
+    type Output = Result<DeviceLabel, MissingDeviceLabel>;
+
+    fn resolve(label: Option<DeviceLabel>) -> Self::Output {
+        label.ok_or(MissingDeviceLabel)
+    }
+}
+
+struct AllowMissingLabel;
+impl LabelPolicy for AllowMissingLabel {
+    type Output = Option<DeviceLabel>;
+
+    fn resolve(label: Option<DeviceLabel>) -> Self::Output {
+        label
+    }
+}
+
+fn resolve_label<P: LabelPolicy>(label: Option<DeviceLabel>) -> P::Output {
+    P::resolve(label)
+}
+```
+
+- A caller of `resolve_label::<RequireLabel>` receives a `Result` and can
+  propagate `MissingDeviceLabel` with `?`. The optional policy returns an
+  `Option`. Rust rejects a caller that assigns the required result to an
+  `Option<DeviceLabel>`.
+- Validate wire values at ingress. A signature cannot establish that a
+  persisted label is well formed or that a device lookup succeeded. Preserve
+  those failures at the boundary where they occur.
+- Reviewers must identify what the compiler guarantees and what depends on
+  behavior. Test the remaining laws, such as preserving a present label, and
+  exercise actual external failures. Skip tests for states the public types
+  make impossible. A body change can violate a law while preserving the
+  signature, so run affected consumer contract tests when behavior changes.
+
 ## 4. Centralize Tooling behind a Single Command Surface
 
 - **Task runner as the API:** We use Taskfile as the single interface for all development tasks.

@@ -17,6 +17,11 @@ stages and constraints below.
 
 ## Mandatory context selection
 
+Every Nook agent must read and apply
+[type-driven public contracts](teams/ai/docs/architecture/core-beliefs.md#type-driven-public-contracts)
+before selecting team-specific context. Include this rule in implementation
+and verification assignments.
+
 Follow Meta-Cortex's [project context](../.meta-cortex/AGENTS.md#project-context)
 and [assignment context](../.meta-cortex/teams/AGENTS.md#assignment-context)
 rules for generic context selection and coordination. Meta-Cortex owns
