@@ -36,6 +36,39 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - Then through `nook-core` (Rust logic) ➔ `nook-wasm` (bindgen) ➔ `nook-web` (UI).
 - Any cross-layer leakage is disallowed.
 
+### Type-driven public contracts
+
+Give distinct domain values distinct types so human and AI callers can read
+their obligations from the signature.
+
+- Put state-specific data on its enum variant, such as a rejection reason
+  on `Rejected`. Use Rust typestate for legal transitions. For example,
+  expose `submit(self)` only on `Request<Draft>` and return `Request<Submitted>`.
+- Check cross-field invariants at the boundary. A constructor can check that
+  a requested count fits within the available count, then return a value with
+  private fields so callers can reuse that validated relationship.
+
+When policy determines which result a caller may use, carry it in the result
+type. In this illustrative Rust interface, `SmallerIdWins` and `LargerIdWins`
+implement `TieBreak`. The log module constructs `MergedLog<P>` during merge.
+
+```rust
+trait LogApi {
+    fn merge<P: TieBreak>(left: &Log, right: &Log) -> MergedLog<P>;
+    fn publish(log: MergedLog<SmallerIdWins>);
+}
+```
+
+- Rust rejects passing a `MergedLog<LargerIdWins>` to `publish`. Skip tests
+  for calls that the types make impossible.
+- The type records the chosen policy. Reversing a private comparison can
+  still return the wrong winner with the same signature. Test a real tie
+  between two different event IDs. Assert the winning ID under each policy.
+  Check determinism by repeating the merge with identical inputs.
+- Validate incoming wire logs before constructing domain values. Exercise
+  malformed event IDs and actual storage failures at the boundary. Run
+  affected consumer contract tests when observable behavior changes.
+
 ## 4. Centralize Tooling behind a Single Command Surface
 
 - **Task runner as the API:** We use Taskfile as the single interface for all development tasks.
