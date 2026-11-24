@@ -795,6 +795,16 @@ fn wasm_compiler_cache_graphs_are_package_specific() {
         "the two WASM packages must have sibling source and package-build stages"
     );
 
+    let Some(shared_source) = dockerfile
+        .split_once("FROM builder-wasm-deps AS builder-wasm-source-base")
+        .and_then(|(_, rest)| rest.split_once("\nFROM ").map(|(stage, _)| stage))
+    else {
+        panic!("WASM packages need a shared source base");
+    };
+    assert!(
+        !shared_source.contains("COPY nook-app/nook-platform/nook-core "),
+        "the companion must reuse its compiler layer after a vault core edit"
+    );
     let Some(nook_source) = dockerfile
         .split_once("FROM builder-wasm-source-base AS builder-nook-wasm-source")
         .and_then(|(_, rest)| rest.split_once("\nFROM ").map(|(stage, _)| stage))
@@ -803,6 +813,7 @@ fn wasm_compiler_cache_graphs_are_package_specific() {
     };
     assert!(
         nook_source.contains("COPY nook-app/nook-platform/nook-wasm nook-wasm")
+            && nook_source.contains("COPY nook-app/nook-platform/nook-core nook-core")
             && nook_source.contains(
                 "cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm"
             )

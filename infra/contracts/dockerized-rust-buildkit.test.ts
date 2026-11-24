@@ -486,6 +486,47 @@ class DockerizedRustBuildKitContract {
     expect(dockerfile).not.toContain("type=cache");
   }
 
+  wasmCompileLeavesUseTheirOwnProductSources(): void {
+    const dockerfile = this.read(
+      "nook-app/nook-platform/docker/rust/compile/Dockerfile",
+    );
+    const stages = dockerfile.split(/^FROM /m);
+    const stage = (header: string): string => {
+      const body = stages.find((part) => part.startsWith(header + "\n"));
+      if (body === undefined) throw new Error("Missing compile stage " + header);
+      return body;
+    };
+    const shared = stage("compile-wasm-dependencies AS compile-wasm-shared-source");
+    const companionDeps = stage(
+      "compile-wasm-shared-source AS compile-companion-dependency-artifacts",
+    );
+    const companion = stage(
+      "compile-companion-dependency-artifacts AS compile-companion-wasm-source",
+    );
+    const vaultShared = stage(
+      "compile-wasm-shared-source AS compile-vault-shared-artifacts",
+    );
+    const vaultDeps = stage(
+      "compile-vault-shared-artifacts AS compile-vault-dependency-artifacts",
+    );
+    const vault = stage("compile-vault-dependency-artifacts AS compile-wasm-source");
+    expect(shared).toContain("nook-companion-core/");
+    expect(shared).not.toContain("nook-core/");
+    expect(companionDeps).toContain("--target wasm32-unknown-unknown -p nook-companion-wasm");
+    expect(companionDeps).not.toContain("COPY ");
+    expect(companion).toContain("wasm-pack build nook-companion-wasm ");
+    expect(companion).not.toContain("nook-core/");
+    expect(vaultShared).toContain("--target wasm32-unknown-unknown -p nook-wasm");
+    expect(vaultDeps).toContain("nook-core/");
+    expect(vaultDeps).toContain("--target wasm32-unknown-unknown -p nook-wasm");
+    expect(vaultDeps).not.toContain("nook-wasm/");
+    expect(vault).toContain("wasm-pack build nook-wasm ");
+    expect(vault).not.toContain("nook-companion-wasm/");
+    const web = stage("web-base AS compile-web");
+    expect(web).toContain("COPY --from=compile-companion-wasm-source /opt/nook/wasm-handoff/nook-companion-wasm/");
+    expect(web).toContain("COPY --from=compile-wasm-source /opt/nook/wasm-handoff/nook-wasm/");
+  }
+
   dylintWrapperContentInvalidatesBuildGraph(): void {
     const nightlyPath =
       "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile";
@@ -906,6 +947,10 @@ test(
 test(
   "remote compile publishes a rooted foundation before source-sensitive compile",
   contract.remoteCompileUsesTwoPhaseFoundation.bind(contract),
+);
+test(
+  "vault and companion compile only their WASM source closures",
+  contract.wasmCompileLeavesUseTheirOwnProductSources.bind(contract),
 );
 test(
   "Dylint compiler vertices consume the current wrapper content",
