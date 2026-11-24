@@ -68,6 +68,21 @@ CI/CD to remote execution with the SRE context and assigned feature scope.
   WASM, Loom, and web stages must never broadly copy the repository root; each
   stage copies only the source, lockfiles, manifests, generated inputs, and
   configuration that can affect its own compilation result.
+- In Phase B, add native library sources as their Cargo consumers need them.
+  Build `nook-auth2` with its common and authenticator dependencies, then
+  `nook-event-log` with replication. Share the compiled dependencies with
+  `nook-companion-core` and `nook-core`. A private function body can change a
+  linked binary or the behavior of a downstream test while preserving its
+  public signature. Cargo determines which consumers need recompilation or
+  relinking.
+- Package `nook-wasm` and `nook-companion-wasm` in separate stages.
+  For example, a source edit in `nook-core` affects `nook-wasm`, while the
+  companion package depends on `nook-companion-core` and can reuse its stage.
+  A production source edit in `nook-companion-core` reaches both packages.
+  Each package owns its generated WASM and JavaScript bindings. The web stage
+  imports both outputs. Top-level crate `tests/`, `examples/` and `.cortex/`
+  directories stay outside these compile-only source inputs. Manifests and
+  Cargo.lock remain shared inputs to dependency preparation.
 - Introduce per-head arguments only at the latest consumer boundary that needs
   them so commit identity cannot invalidate dependency vertices or sccache
   compiler keys.

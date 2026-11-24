@@ -23,10 +23,11 @@ branches, PRs, product validation, or recursive Main builds. See
 and manual ecosystem execution in one Actions run named `CI`.
 
 - Main's secret-free classifier reads changed paths without executing source.
-- PR policy runs inside the preparation job; Main keeps its policy workflow.
-- A validation label activates product checks for subsequent PR commits.
+- The PR verification job runs repository policy checks. Main runs its
+  repository policy workflow.
+- PR changed paths and validation labels select checks for each commit.
 - The router reads current labels to avoid stale event ordering.
-- Removing the validation label disables product checks on later pushes.
+- Removing a validation label restores path-based selection on later pushes.
 - Main product work retains its separate path selection.
 - PR replacement and close events use native concurrency.
 - PR base-branch changes revalidate; close events start no validation job.
@@ -188,7 +189,7 @@ Cancellation is scoped to work that a newer run actually supersedes:
 
 - PR validation uses `pr-<number>`. A push makes earlier exact-head evidence
   stale. Native concurrency cancels the older active run on synchronization
-  or a base-ref edit. Product validation stays label-gated.
+  or a base-ref edit.
 - Unrelated labels and non-base edits use isolated concurrency groups.
 - Rust specialist PR execution shares the central CI run.
 - Web research shares central CI cancellation.
@@ -477,6 +478,17 @@ timeout. Later build vertices and genuine S3 health failures fail closed.
   changes also run focused extension tests. Ready product PRs run product
   verification, full web E2E and all three extension shards.
 - Research-only PRs run research verification and browser tests in both states.
+- Rust integration tests under `nook-app/nook-platform/nook-auth2/tests/`
+  and `nook-app/nook-platform/nook-core/tests/` have a native validation scope.
+  A PR that changes only these `.rs` files runs this scope in both states.
+  Verification checks formatting, native
+  Dylint and coverage alongside the repository checks. Each crate's test stage
+  supplies profiles to the combined coverage report, including profiles from
+  unchanged stages that BuildKit can reuse. The report enforces each package's
+  floor. This scope skips browser preparation, E2E and preview deployment.
+  Production source or manifest changes select product verification.
+  The `ci:validate` label requests product verification and preview, including
+  full browser validation on a ready PR that changes these test files.
 - Documentation-only and policy-only PRs run repository policy checks in both states.
 
 Marking a product PR ready starts full browser validation on its current head.
