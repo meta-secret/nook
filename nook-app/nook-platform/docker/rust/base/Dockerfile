@@ -725,15 +725,15 @@ COPY nook-app/nook-platform/nook-auth2 nook-auth2
 COPY nook-app/nook-platform/nook-replication nook-replication
 COPY nook-app/nook-platform/nook-event-log nook-event-log
 COPY nook-app/nook-platform/nook-companion-core nook-companion-core
-COPY nook-app/nook-platform/nook-core nook-core
 
-# Clippy and release-test branches require both package roots, while package export leaves remain
-# independent below. Dummy roots inherited from builder-wasm-deps satisfy the other workspace member.
+# Only the vault package and the joint Clippy/test stages depend on nook-core.
 FROM builder-wasm-source-base AS builder-wasm-source
+COPY nook-app/nook-platform/nook-core nook-core
 COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
 COPY nook-app/nook-platform/nook-wasm nook-wasm
 
 FROM builder-wasm-source-base AS builder-nook-wasm-source
+COPY nook-app/nook-platform/nook-core nook-core
 COPY nook-app/nook-platform/nook-wasm nook-wasm
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \

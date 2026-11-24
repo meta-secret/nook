@@ -486,6 +486,32 @@ class DockerizedRustBuildKitContract {
     expect(dockerfile).not.toContain("type=cache");
   }
 
+  wasmCompileLeavesUseTheirOwnProductSources(): void {
+    const dockerfile = this.read(
+      "nook-app/nook-platform/docker/rust/compile/Dockerfile",
+    );
+    const stages = dockerfile.split(/^FROM /m);
+    const stage = (header: string): string => {
+      const body = stages.find((part) => part.startsWith(header + "\n"));
+      if (body === undefined) throw new Error("Missing compile stage " + header);
+      return body;
+    };
+    const shared = stage("compile-wasm-dependencies AS compile-wasm-shared-source");
+    const companion = stage("compile-wasm-shared-source AS compile-companion-wasm-source");
+    const vault = stage("compile-wasm-shared-source AS compile-wasm-source");
+    expect(shared).toContain("nook-companion-core/");
+    expect(shared).not.toContain("nook-core/");
+    expect(shared).not.toContain("wasm-pack build");
+    expect(companion).toContain("wasm-pack build nook-companion-wasm ");
+    expect(companion).not.toContain("nook-core/");
+    expect(vault).toContain("nook-core/");
+    expect(vault).toContain("wasm-pack build nook-wasm ");
+    expect(vault).not.toContain("nook-companion-wasm/");
+    const web = stage("web-base AS compile-web");
+    expect(web).toContain("COPY --from=compile-companion-wasm-source /opt/nook/wasm-handoff/nook-companion-wasm/");
+    expect(web).toContain("COPY --from=compile-wasm-source /opt/nook/wasm-handoff/nook-wasm/");
+  }
+
   dylintWrapperContentInvalidatesBuildGraph(): void {
     const nightlyPath =
       "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile";
@@ -906,6 +932,10 @@ test(
 test(
   "remote compile publishes a rooted foundation before source-sensitive compile",
   contract.remoteCompileUsesTwoPhaseFoundation.bind(contract),
+);
+test(
+  "vault and companion compile only their WASM source closures",
+  contract.wasmCompileLeavesUseTheirOwnProductSources.bind(contract),
 );
 test(
   "Dylint compiler vertices consume the current wrapper content",

@@ -55,7 +55,7 @@ RUN mkdir -p \
       nook-wasm-composition-tests/src/lib.rs
 # `cargo fetch` may query rustc for target metadata. It is not a compiler-cache
 # vertex, so bypass the inherited wrapper rather than requiring cache authority
-# outside the 16 explicitly secret-mounted compiler vertices below.
+# outside the explicitly secret-mounted compiler vertices below.
 RUN --network=default RUSTC_WRAPPER= cargo fetch --locked
 
 # These sibling stages warm only ordinary library dependencies. No validation
@@ -91,141 +91,83 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-wasm-dependencies
 
-# Copy in dependency order so an edit in a leaf package reuses earlier native
-# compile layers on the persistent ARC BuildKit worker.
-# The manifest stages create placeholder sources. Docker normalizes COPY mtimes,
-# so refresh real sources before each build or Cargo can reuse a placeholder
-# artifact instead of compiling the checked-out implementation.
+# Each native build first introduces the inputs of its Cargo dependency group.
+# Cargo builds independent dependencies together at their first consumer. The
+# manifest foundation contains placeholder libraries with newer mtimes than a
+# checkout, so refresh the real sources before asking Cargo to reuse artifacts.
 FROM compile-native-dependencies AS compile-native-source
 
-COPY nook-app/nook-platform/nook-app-common nook-app-common
+COPY --exclude=tests --exclude=examples --exclude=.cortex nook-app/nook-platform/nook-app-common/ nook-app-common/
+COPY --exclude=tests --exclude=examples --exclude=.cortex nook-app/nook-platform/nook-authenticator-domain/ nook-authenticator-domain/
+COPY --exclude=tests --exclude=examples --exclude=.cortex nook-app/nook-platform/nook-auth2/ nook-auth2/
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-app-common -type f -name '*.rs' -exec touch {} + \
-    && \
-    cargo build --locked -p nook-app-common
+    find nook-app-common nook-authenticator-domain nook-auth2 -type f -name '*.rs' -exec touch {} + \
+    && cargo build --locked -p nook-auth2
 
-COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
-COPY nook-app/nook-platform/nook-auth2 nook-auth2
+COPY --exclude=tests --exclude=examples --exclude=.cortex nook-app/nook-platform/nook-replication/ nook-replication/
+COPY --exclude=tests --exclude=examples --exclude=.cortex nook-app/nook-platform/nook-event-log/ nook-event-log/
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-authenticator-domain nook-auth2 -type f -name '*.rs' -exec touch {} + \
-    && \
-    cargo build --locked -p nook-authenticator-domain -p nook-auth2
+    find nook-replication nook-event-log -type f -name '*.rs' -exec touch {} + \
+    && cargo build --locked -p nook-event-log
 
-COPY nook-app/nook-platform/nook-replication nook-replication
-RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
-    --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-replication -type f -name '*.rs' -exec touch {} + \
-    && \
-    cargo build --locked -p nook-replication
-
-COPY nook-app/nook-platform/nook-event-log nook-event-log
-RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
-    --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-event-log -type f -name '*.rs' -exec touch {} + \
-    && \
-    cargo build --locked -p nook-event-log
-
-COPY nook-app/nook-platform/nook-companion-core nook-companion-core
+COPY --exclude=tests --exclude=examples --exclude=.cortex nook-app/nook-platform/nook-companion-core/ nook-companion-core/
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-companion-core -type f -name '*.rs' -exec touch {} + \
-    && \
-    cargo build --locked -p nook-companion-core
+    && cargo build --locked -p nook-companion-core
 
-COPY nook-app/nook-platform/nook-core nook-core
+COPY --exclude=tests --exclude=examples --exclude=.cortex nook-app/nook-platform/nook-core/ nook-core/
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-core -type f -name '*.rs' -exec touch {} + \
-    && \
-    cargo build --locked -p nook-core \
+    && cargo build --locked -p nook-core \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-native-passed
 
-FROM compile-wasm-dependencies AS compile-wasm-source
+# Both WASM entry points use companion-core and its transitive dependencies.
+# Keep vault-core and each entry point out of the other package's inputs.
+FROM compile-wasm-dependencies AS compile-wasm-shared-source
 
+COPY --exclude=tests --exclude=examples --exclude=.cortex nook-app/nook-platform/nook-app-common/ nook-app-common/
+COPY --exclude=tests --exclude=examples --exclude=.cortex nook-app/nook-platform/nook-authenticator-domain/ nook-authenticator-domain/
+COPY --exclude=tests --exclude=examples --exclude=.cortex nook-app/nook-platform/nook-auth2/ nook-auth2/
+COPY --exclude=tests --exclude=examples --exclude=.cortex nook-app/nook-platform/nook-replication/ nook-replication/
+COPY --exclude=tests --exclude=examples --exclude=.cortex nook-app/nook-platform/nook-event-log/ nook-event-log/
+COPY --exclude=tests --exclude=examples --exclude=.cortex nook-app/nook-platform/nook-companion-core/ nook-companion-core/
+RUN find nook-app-common nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core -type f -name '*.rs' -exec touch {} +
+
+FROM compile-wasm-shared-source AS compile-companion-wasm-source
+
+COPY --exclude=tests --exclude=examples --exclude=.cortex nook-app/nook-platform/nook-companion-wasm/ nook-companion-wasm/
 ARG WASM_BUILD_MODE=dev
-
-COPY nook-app/nook-platform/nook-app-common nook-app-common
-RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
-    --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-app-common -type f -name '*.rs' -exec touch {} + \
-    && \
-    cargo build --locked --release --target wasm32-unknown-unknown --lib \
-      -p nook-wasm -p nook-companion-wasm
-
-COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
-COPY nook-app/nook-platform/nook-auth2 nook-auth2
-RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
-    --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-authenticator-domain nook-auth2 -type f -name '*.rs' -exec touch {} + \
-    && \
-    cargo build --locked --release --target wasm32-unknown-unknown --lib \
-      -p nook-wasm -p nook-companion-wasm
-
-COPY nook-app/nook-platform/nook-replication nook-replication
-RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
-    --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-replication -type f -name '*.rs' -exec touch {} + \
-    && \
-    cargo build --locked --release --target wasm32-unknown-unknown --lib \
-      -p nook-wasm -p nook-companion-wasm
-
-COPY nook-app/nook-platform/nook-event-log nook-event-log
-RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
-    --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-event-log -type f -name '*.rs' -exec touch {} + \
-    && \
-    cargo build --locked --release --target wasm32-unknown-unknown --lib \
-      -p nook-wasm -p nook-companion-wasm
-
-COPY nook-app/nook-platform/nook-companion-core nook-companion-core
-RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
-    --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-companion-core -type f -name '*.rs' -exec touch {} + \
-    && \
-    cargo build --locked --release --target wasm32-unknown-unknown --lib \
-      -p nook-wasm -p nook-companion-wasm
-
-COPY nook-app/nook-platform/nook-core nook-core
-RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
-    --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-core -type f -name '*.rs' -exec touch {} + \
-    && \
-    cargo build --locked --release --target wasm32-unknown-unknown --lib \
-      -p nook-wasm -p nook-companion-wasm
-
-COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-companion-wasm -type f -name '*.rs' -exec touch {} + \
-    && \
-    cargo build --locked --release --target wasm32-unknown-unknown --lib \
-      -p nook-wasm -p nook-companion-wasm
+    && case "${WASM_BUILD_MODE}" in \
+         prod) wasm_opt_flag="" ;; \
+         dev) wasm_opt_flag="--no-opt" ;; \
+         *) echo "Unsupported WASM_BUILD_MODE=${WASM_BUILD_MODE}" >&2; exit 2 ;; \
+       esac \
+    && wasm-pack build nook-companion-wasm --target web \
+         --out-dir /opt/nook/wasm-handoff/nook-companion-wasm \
+         --out-name nook_companion_wasm $wasm_opt_flag -- --locked
 
-COPY nook-app/nook-platform/nook-wasm nook-wasm
+FROM compile-wasm-shared-source AS compile-wasm-source
+
+COPY --exclude=tests --exclude=examples --exclude=.cortex nook-app/nook-platform/nook-core/ nook-core/
+COPY --exclude=tests --exclude=examples --exclude=.cortex nook-app/nook-platform/nook-wasm/ nook-wasm/
+ARG WASM_BUILD_MODE=dev
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-wasm -type f -name '*.rs' -exec touch {} + \
-    && \
-    cargo build --locked --release --target wasm32-unknown-unknown --lib \
-      -p nook-wasm -p nook-companion-wasm \
-    && mkdir -p /opt/nook/wasm-handoff \
+    find nook-core nook-wasm -type f -name '*.rs' -exec touch {} + \
     && case "${WASM_BUILD_MODE}" in \
          prod) wasm_opt_flag=""; stamp_mode="optimized" ;; \
          dev) wasm_opt_flag="--no-opt"; stamp_mode="no-opt" ;; \
@@ -233,10 +175,7 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
        esac \
     && wasm-pack build nook-wasm --target web \
          --out-dir /opt/nook/wasm-handoff/nook-wasm \
-         --out-name nook_wasm $wasm_opt_flag \
-    && wasm-pack build nook-companion-wasm --target web \
-         --out-dir /opt/nook/wasm-handoff/nook-companion-wasm \
-         --out-name nook_companion_wasm $wasm_opt_flag \
+         --out-name nook_wasm $wasm_opt_flag -- --locked \
     && printf '%s\n' "$stamp_mode" > /opt/nook/wasm-handoff/nook-wasm/nook-wasm-build-mode \
     && touch /opt/nook/wasm-compile-passed
 
@@ -300,7 +239,8 @@ RUN mkdir -p \
 COPY nook-app/nook-web nook-app/nook-web
 COPY docs/privacy-policy.md docs/privacy-policy.md
 COPY docs/terms-of-service.md docs/terms-of-service.md
-COPY --from=compile-wasm-source /opt/nook/wasm-handoff /tmp/nook-wasm-handoff
+COPY --from=compile-wasm-source /opt/nook/wasm-handoff/nook-wasm/ /tmp/nook-wasm-handoff/nook-wasm/
+COPY --from=compile-companion-wasm-source /opt/nook/wasm-handoff/nook-companion-wasm/ /tmp/nook-wasm-handoff/nook-companion-wasm/
 RUN mkdir -p \
       nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm \
       nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm \
@@ -426,11 +366,8 @@ RUN bun install --frozen-lockfile --ignore-scripts \
     && mkdir -p /opt/nook \
     && touch /opt/nook/loom-compile-passed
 
-# The exact source cache is a single bounded mode=max export. Keep the
-# expensive, linear WASM compiler graph in the final target's ancestry so the
-# export retains its source/compiler records for the next immutable commit.
-# A scratch join makes only the copied marker reachable and obscures the
-# compiler lineage that this cache exists to preserve.
+# The final compile target requires native, both packaged WASM products, web
+# and tooling. Phase A owns the portable dependency cache export.
 FROM compile-wasm-source AS compile
 
 COPY --from=compile-native-source /opt/nook/compile-native-passed /compile/native
