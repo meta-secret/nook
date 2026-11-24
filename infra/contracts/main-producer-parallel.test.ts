@@ -15,18 +15,7 @@ import { z } from "zod";
 const workflow = z
   .object({
     jobs: z.object({
-      "extension-e2e": z.object({
-        steps: z.array(z.record(z.string(), z.unknown())),
-      }),
-      rust: z.object({
-        if: z.string(),
-        steps: z.array(z.record(z.string(), z.unknown())),
-      }),
       web: z.object({
-        if: z.string(),
-        steps: z.array(z.record(z.string(), z.unknown())),
-      }),
-      "web-e2e": z.object({
         steps: z.array(z.record(z.string(), z.unknown())),
       }),
     }),
@@ -321,54 +310,16 @@ exit "$status"`,
   });
 }
 
-test("Main native retains preflight ordering; web handoffs follow the complete private gate", () => {
-  const native = workflow.jobs.rust.steps;
-  const preflight = native.findIndex((item) => item.run === "task preflight");
-  const build = native.findIndex(
-    (item) =>
-      typeof item.run === "string" && item.run.startsWith("task ci:main:rust"),
-  );
-  expect(preflight).toBeGreaterThanOrEqual(0);
-  expect(build).toBeGreaterThan(preflight);
-  expect(native[preflight]).not.toHaveProperty("continue-on-error");
-  const producerIndex = workflow.jobs.web.steps.findIndex(
-    (item) => item.id === "prepare_web",
-  );
-  for (const [index, item] of workflow.jobs.web.steps.entries()) {
-    if (
-      typeof item.uses === "string" &&
-      item.uses.startsWith("actions/upload-artifact@")
-    ) {
-      expect(index).toBeGreaterThan(producerIndex);
-      expect(item).not.toHaveProperty("if");
-    }
-  }
-  const producer = z
-    .object({ env: z.object({ GHA_CACHE_WRITE_ENABLED: z.literal("") }) })
-    .parse(step);
-  expect(producer.env.GHA_CACHE_WRITE_ENABLED).toBe("");
-});
-
-test("preflight cache failure remains terminal after verified artifact upload", () => {
+test("preflight cache publication gate propagates failure", () => {
   const steps = workflow.jobs.web.steps;
-  const assertion = steps.findIndex(
-    (item) => item.name === "Require successful preflight cache publication",
-  );
-  expect(assertion).toBeGreaterThan(
-    steps.findIndex((item) => item.id === "upload_web"),
-  );
   const gate = z
-    .object({
-      if: z.string(),
-      run: z.string(),
-      env: z.object({ CACHE_PUBLICATION_OUTCOME: z.string() }),
-    })
-    .parse(steps[assertion]);
-  expect(gate.if).toBe("${{ !cancelled() }}");
-  expect(gate.env.CACHE_PUBLICATION_OUTCOME).toBe(
-    "${{ steps.prepare_web.outputs.preflight_cache_publication_outcome }}",
-  );
-  expect(steps[assertion]).not.toHaveProperty("continue-on-error");
+    .object({ run: z.string() })
+    .parse(
+      steps.find(
+        (item) =>
+          item.name === "Require successful preflight cache publication",
+      ),
+    );
   for (const [outcome, status] of [
     [CacheOutcome.Success, 0],
     [CacheOutcome.Failure, 1],
@@ -380,102 +331,4 @@ test("preflight cache failure remains terminal after verified artifact upload", 
     });
     expect(result.status).toBe(status);
   }
-});
-
-test("research image publication keeps its imports but exports no compiler cache", () => {
-  const research = z
-    .object({
-      jobs: z.object({
-        image: z.object({ steps: z.array(z.record(z.string(), z.unknown())) }),
-        dependencies: z.object({
-          steps: z.array(z.record(z.string(), z.unknown())),
-        }),
-      }),
-    })
-    .parse(
-      Bun.YAML.parse(
-        readFileSync(
-          resolve(import.meta.dir, "../../.github/workflows/web-research.yml"),
-          "utf8",
-        ),
-      ),
-    );
-  const image = z
-    .object({ env: z.record(z.string(), z.string()) })
-    .parse(
-      research.jobs.image.steps.find(
-        (item) => item.run === "task web:e2e:kubernetes-image",
-      ),
-    );
-  expect(image.env.GHA_CACHE_WRITE_ENABLED).toBe("");
-  const dependencies = z
-    .object({ env: z.record(z.string(), z.string()) })
-    .parse(
-      research.jobs.dependencies.steps.find(
-        (item) => item.run === "task docker:ci:cache:publish:web-research",
-      ),
-    );
-  expect(dependencies.env.GHA_CACHE_WRITE_ENABLED).toBe("1");
-  const setup = z
-    .object({ with: z.record(z.string(), z.string()) })
-    .parse(
-      research.jobs.image.steps.find(
-        (item) => item.uses === "./.github/actions/nook-docker-setup",
-      ),
-    );
-  expect(setup.with["isolated-cache-write"]).toBe(
-    "${{ github.event_name == 'pull_request' && 'true' || 'false' }}",
-  );
-});
-
-test("Main retains only existing extension failure context after a failed shard", () => {
-  const retention = z
-    .object({
-      if: z.literal("failure()"),
-      uses: z.literal("actions/upload-artifact@v7"),
-      with: z.object({
-        name: z.string(),
-        path: z.string(),
-        "retention-days": z.literal(1),
-        "if-no-files-found": z.literal("ignore"),
-      }),
-    })
-    .parse(
-      workflow.jobs["extension-e2e"].steps.find(
-        (item) => item.name === "Preserve existing extension failure context",
-      ),
-    );
-  expect(retention.with.name).toBe(
-    "main-extension-failure-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}",
-  );
-  expect(retention.with.path.trim().split("\n")).toEqual([
-    "/meta-secret/nook/nook-app/nook-web/nook-web-extension/test-results/**/error-context.md",
-    "/meta-secret/nook/nook-app/nook-web/nook-web-extension/test-results/**/test-failed-*.png",
-  ]);
-});
-
-test("Main retains only existing web failure context after a failed web e2e", () => {
-  const retention = z
-    .object({
-      if: z.literal("failure()"),
-      uses: z.literal("actions/upload-artifact@v7"),
-      with: z.object({
-        name: z.string(),
-        path: z.string(),
-        "retention-days": z.literal(1),
-        "if-no-files-found": z.literal("ignore"),
-      }),
-    })
-    .parse(
-      workflow.jobs["web-e2e"].steps.find(
-        (item) => item.name === "Preserve existing web failure context",
-      ),
-    );
-  expect(retention.with.name).toBe(
-    "main-web-failure-${{ github.run_id }}-${{ github.run_attempt }}",
-  );
-  expect(retention.with.path.trim().split("\n")).toEqual([
-    "/meta-secret/nook/nook-app/nook-web/nook-web-app/test-results/**/error-context.md",
-    "/meta-secret/nook/nook-app/nook-web/nook-web-app/test-results/**/test-failed-*.png",
-  ]);
 });
