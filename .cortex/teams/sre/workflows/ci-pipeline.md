@@ -23,7 +23,8 @@ branches, PRs, product validation, or recursive Main builds. See
 and manual ecosystem execution in one Actions run named `CI`.
 
 - Main's secret-free classifier reads changed paths without executing source.
-- PR policy runs inside the preparation job; Main keeps its policy workflow.
+- The PR verification job runs repository policy checks. Main runs its
+  repository policy workflow.
 - PR changed paths and validation labels select checks for each commit.
 - The router reads current labels to avoid stale event ordering.
 - Removing a validation label restores path-based selection on later pushes.
