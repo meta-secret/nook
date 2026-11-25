@@ -112,7 +112,6 @@
         </p>
         <Button
           type="button"
-          variant="ghost"
           class="welcome-setup"
           disabled={isBusy}
           data-testid="first-run-create-identity-btn"

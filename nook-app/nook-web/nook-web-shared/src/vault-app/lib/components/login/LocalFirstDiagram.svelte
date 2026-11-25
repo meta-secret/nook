@@ -9,6 +9,7 @@
   } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
+  import vaultMark from './nook-vault-mark.webp'
 
   let { vault }: { vault: VaultState } = $props()
 </script>
@@ -29,7 +30,7 @@
           <div class="chamber">
             <div class="reticle"></div>
             <img
-              src="/nook-vault-mark.webp"
+              src={vaultMark}
               class="vault-mark"
               alt=""
               width="422"
