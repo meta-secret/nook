@@ -204,8 +204,7 @@
   .welcome-utilities button:hover {
     color: var(--foreground);
   }
-  .welcome :global(button:focus-visible),
-  .welcome :global(summary:focus-visible) {
+  .welcome :global(button:focus-visible) {
     outline: 2px solid var(--welcome-accent);
     outline-offset: 4px;
   }

@@ -1339,14 +1339,9 @@ pub const FIRST_RUN_KEYRING_CHOSEN: &str = "first_run.keyring_chosen";
 pub const FIRST_RUN_KEYRING_EXPLANATION: &str = "first_run.keyring_explanation";
 pub const FIRST_RUN_KEYRING_READY: &str = "first_run.keyring_ready";
 pub const FIRST_RUN_LOCAL_FIRST_BROWSER: &str = "first_run.local_first.browser";
-pub const FIRST_RUN_LOCAL_FIRST_BROWSER_APP: &str = "first_run.local_first.browser_app";
 pub const FIRST_RUN_LOCAL_FIRST_DIAGRAM_DESCRIPTION: &str =
     "first_run.local_first.diagram_description";
-pub const FIRST_RUN_LOCAL_FIRST_HOSTING_DESCRIPTION: &str =
-    "first_run.local_first.hosting_description";
 pub const FIRST_RUN_LOCAL_FIRST_OPTIONAL_SYNC: &str = "first_run.local_first.optional_sync";
-pub const FIRST_RUN_LOCAL_FIRST_SELF_HOST: &str = "first_run.local_first.self_host";
-pub const FIRST_RUN_LOCAL_FIRST_SERVER: &str = "first_run.local_first.server";
 pub const FIRST_RUN_LOCAL_FIRST_STORAGE: &str = "first_run.local_first.storage";
 pub const FIRST_RUN_LOCAL_FIRST_VAULT: &str = "first_run.local_first.vault";
 pub const FIRST_RUN_LOCAL_NAME_VISIBILITY: &str = "first_run.local_name_visibility";

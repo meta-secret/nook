@@ -7,7 +7,7 @@ import FirstVaultStart from '$lib/components/login/FirstVaultStart.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 test.each([enLocale, ruLocale])(
-  'separates the vault data path from optional app hosting',
+  'shows the local vault and its optional cloud sync',
   async (locale) => {
     const vault = VaultStateTestFixture.create()
     vault.translations = JSON.stringify(locale)
@@ -36,16 +36,7 @@ test.each([enLocale, ruLocale])(
     expect(within(dataPath).getByText(labels.optional_sync)).toBeTruthy()
     expect(within(dataPath).getByText(labels.storage)).toBeTruthy()
 
-    const disclosure = view.getByText(labels.self_host)
-    const details = disclosure.closest('details')
-    expect(details?.open).toBe(false)
-    await fireEvent.click(disclosure)
-    expect(details?.open).toBe(true)
-    expect(within(dataPath).queryAllByText(labels.server)).toHaveLength(0)
-    expect(
-      view.getByRole('figure', { name: labels.hosting_description }),
-    ).toBeTruthy()
-    expect(view.queryAllByText(labels.hosting_description)).toHaveLength(0)
+    expect(view.getAllByRole('figure')).toEqual([dataPath])
     expect(onCreate).not.toHaveBeenCalled()
     expect(onConnectStorage).not.toHaveBeenCalled()
     await fireEvent.click(

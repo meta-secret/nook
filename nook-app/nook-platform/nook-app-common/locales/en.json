@@ -2202,11 +2202,7 @@
       "browser": "This browser",
       "vault": "Your vault",
       "optional_sync": "Optional sync",
-      "storage": "Your cloud",
-      "self_host": "Host Nook yourself",
-      "server": "Your server",
-      "browser_app": "Nook in your browser",
-      "hosting_description": "Your server delivers the app. Your passwords stay encrypted on your device."
+      "storage": "Your cloud"
     },
     "name_label": "Keyring name",
     "name_placeholder": "Personal",

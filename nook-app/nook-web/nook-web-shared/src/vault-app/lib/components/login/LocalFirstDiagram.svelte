@@ -1,12 +1,5 @@
 <script lang="ts">
-  import {
-    AppWindow,
-    ArrowRight,
-    ChevronDown,
-    Folder,
-    LockKeyhole,
-    Server,
-  } from '@lucide/svelte'
+  import { Folder, LockKeyhole } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
   import vaultMark from './nook-vault-mark.webp'
@@ -59,25 +52,6 @@
       </div>
     </div>
   </figure>
-
-  <details class="hosting">
-    <summary>
-      <Server class="size-4" strokeWidth={1.6} aria-hidden="true" />
-      {vault.t(I18N_KEYS.FirstRunLocalFirstSelfHost)}
-      <ChevronDown class="disclosure-chevron size-3.5" aria-hidden="true" />
-    </summary>
-    <figure
-      aria-label={vault.t(I18N_KEYS.FirstRunLocalFirstHostingDescription)}
-    >
-      <div aria-hidden="true">
-        <Server class="size-4" />
-        {vault.t(I18N_KEYS.FirstRunLocalFirstServer)}
-        <ArrowRight class="size-4" />
-        <AppWindow class="size-4" />
-        {vault.t(I18N_KEYS.FirstRunLocalFirstBrowserApp)}
-      </div>
-    </figure>
-  </details>
 </div>
 
 <style>
@@ -346,42 +320,6 @@
     font-size: clamp(0.75rem, 2.7cqw, 0.92rem);
     line-height: 1.25;
   }
-  .hosting {
-    margin: 0.25rem 0 0 3%;
-    color: var(--muted-foreground);
-  }
-  .hosting summary {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    width: fit-content;
-    min-height: 2.75rem;
-    cursor: pointer;
-    list-style: none;
-    font-size: 0.875rem;
-  }
-  .hosting summary::-webkit-details-marker {
-    display: none;
-  }
-  .hosting summary:hover {
-    color: var(--foreground);
-  }
-  .hosting[open] :global(.disclosure-chevron) {
-    transform: rotate(180deg);
-  }
-  .hosting figure {
-    margin: 0 0 0.5rem;
-    padding-left: 0.7rem;
-    border-left: 1px solid var(--trace);
-  }
-  .hosting figure div {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.5rem;
-    color: var(--foreground);
-    font-size: 0.8rem;
-  }
   @media (max-width: 47.99rem) {
     .architecture {
       width: 100%;
@@ -398,9 +336,6 @@
     .sync-path {
       left: 54%;
       width: 24%;
-    }
-    .hosting {
-      margin-top: 0;
     }
   }
 </style>
