@@ -2175,7 +2175,7 @@
     "progress_cloud": "Your cloud",
     "progress_invite": "Invite",
     "cloud_title": "Connect your cloud first",
-    "cloud_missing": "Your devices use your cloud to sync encrypted changes. Then you can invite this device.",
+    "cloud_missing": "Your devices use your cloud to sync encrypted changes. Then you can invite another device.",
     "cloud_action": "Connect your cloud",
     "invite_title": "Create a one-time invite",
     "passphrase_label": "Passphrase",
