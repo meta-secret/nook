@@ -1,11 +1,4 @@
-<!--
-The first screen of a browser with no vault: one button that creates the
-identity. Setup then makes its passkey, signs in to a sync provider, and
-settles the identity there before any vault exists. The other paths sit
-under it as equal rows: add this device to an identity, recover from a sync
-provider, check access. Opened from the extension, the connect route shows
-this same screen: the person creates or joins here, never in the extension.
--->
+<!-- First visit to Nook on this browser, including setup opened from the extension. -->
 <script lang="ts">
   import type { Component } from 'svelte'
   import { VaultWorkspaceActions } from '$lib/vault/ui'
@@ -13,12 +6,9 @@ this same screen: the person creates or joins here, never in the extension.
   import {
     ArrowRight,
     CloudDownload,
-    KeyRound,
     MonitorSmartphone,
     RefreshCw,
-    ShieldCheck,
   } from '@lucide/svelte'
-  import OptionDivider from '$lib/components/provider-vaults/OptionDivider.svelte'
   import { Button } from '$lib/components/ui/button'
   import JoinThisDevice from '$lib/components/join/JoinThisDevice.svelte'
   import type { EnrollmentCodeUnlock } from './login-create-vault-chooser-contract'
@@ -68,13 +58,6 @@ this same screen: the person creates or joins here, never in the extension.
     disabled: isBusy,
     onOpen: onConnectStorage,
   })
-  const check = $derived<StartPath>({
-    testId: 'login-access-check-link',
-    title: vault.t(I18N_KEYS.FirstRunPathCheck),
-    icon: ShieldCheck,
-    disabled: false,
-    onOpen: () => new VaultWorkspaceActions(vault).openAccessCheck(),
-  })
 
   /** The passkey comes next; the identity's name is asked only when setup
    * creates a new one. */
@@ -115,58 +98,69 @@ this same screen: the person creates or joins here, never in the extension.
   />
 {:else}
   <section
-    class="mx-auto grid w-full max-w-md gap-6 py-6 text-center sm:gap-7 sm:py-16"
+    class="mx-auto grid w-full max-w-lg gap-8 py-6 text-left sm:gap-10 sm:py-16"
     data-testid="first-vault-start"
   >
-    <h1
-      class="text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-foreground"
-    >
-      {vault.t(I18N_KEYS.FirstRunTitle)}
-    </h1>
-
-    <Button
-      type="button"
-      class="h-11 sm:h-10"
-      disabled={isBusy}
-      data-testid="first-run-create-identity-btn"
-      onclick={() => void create()}
-    >
-      {#if isBusy}
-        <RefreshCw class="size-4 animate-spin" />
-      {:else}
-        <KeyRound class="size-4" />
-      {/if}
-      {vault.t(I18N_KEYS.FirstRunCreate)}
-    </Button>
-
-    <OptionDivider {vault} />
-
-    <!-- The other paths, as equal rows: an icon, a short title, an arrow. -->
-    <div class="nk-frame divide-y divide-border text-left" data-testid="login-paths">
-      {#if onUseEnrollmentCode}
-        {@render path(addDevice)}
-      {/if}
-      {@render path(recover)}
-      {@render path(check)}
+    <div class="grid gap-5">
+      <header class="space-y-3">
+        <h1
+          class="text-3xl leading-tight font-semibold tracking-tight text-balance text-foreground sm:text-4xl"
+        >
+          {vault.t(I18N_KEYS.FirstRunTitle)}
+        </h1>
+        <p class="text-base leading-relaxed text-pretty text-muted-foreground">
+          {vault.t(I18N_KEYS.FirstRunIntro)}
+        </p>
+      </header>
+      <Button
+        type="button"
+        class="min-h-11 h-auto whitespace-normal sm:justify-self-start"
+        disabled={isBusy}
+        data-testid="first-run-create-identity-btn"
+        onclick={() => void create()}
+      >
+        {#if isBusy}
+          <RefreshCw class="size-4 animate-spin" aria-hidden="true" />
+        {/if}
+        {vault.t(I18N_KEYS.FirstRunCreate)}
+        {#if !isBusy}
+          <ArrowRight class="size-4" aria-hidden="true" />
+        {/if}
+      </Button>
     </div>
 
-    <!-- What Nook is, in one line; the details live in Help. -->
-    <p
-      class="flex flex-col items-center gap-1 font-mono text-[11px] tracking-[0.04em] text-muted-foreground sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-2"
-      data-testid="first-vault-facts"
-    >
-      <span>{vault.t(I18N_KEYS.FirstRunFactEncrypted)}</span>
-      <span class="hidden sm:inline" aria-hidden="true">·</span>
-      <span>{vault.t(I18N_KEYS.FirstRunFactNoServer)}</span>
-      <span class="hidden sm:inline" aria-hidden="true">·</span>
+    <section class="grid gap-3" aria-labelledby="returning-user-heading">
+      <h2
+        id="returning-user-heading"
+        class="text-base font-semibold text-foreground"
+      >
+        {vault.t(I18N_KEYS.FirstRunReturning)}
+      </h2>
+      <div class="nk-frame divide-y divide-border" data-testid="login-paths">
+        {#if onUseEnrollmentCode}
+          {@render path(addDevice)}
+        {/if}
+        {@render path(recover)}
+      </div>
+    </section>
+
+    <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
       <button
         type="button"
-        class="underline underline-offset-4 hover:text-foreground"
+        class="py-2 text-left underline underline-offset-4 hover:text-foreground"
         data-testid="first-vault-how-it-works"
         onclick={() => vault.openHelp()}
       >
         {vault.t(I18N_KEYS.FirstRunHowItWorks)}
       </button>
-    </p>
+      <button
+        type="button"
+        class="py-2 text-left underline underline-offset-4 hover:text-foreground"
+        data-testid="login-access-check-link"
+        onclick={() => new VaultWorkspaceActions(vault).openAccessCheck()}
+      >
+        {vault.t(I18N_KEYS.FirstRunPathCheck)}
+      </button>
+    </div>
   </section>
 {/if}

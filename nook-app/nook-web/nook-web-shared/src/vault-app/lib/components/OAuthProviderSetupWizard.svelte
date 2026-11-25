@@ -403,13 +403,13 @@
     <SetupWizardStep
       stepNumber={2}
       title={vault.t(
-        recoveringDrive
-          ? I18N_KEYS.FirstRunRestoreChooseVault
+        recoveringDrive && canConnect
+          ? I18N_KEYS.FirstRunSyncChooseTitle
           : I18N_KEYS.AuthStorageConnectAndSync,
       )}
       subtitle={canConnect
         ? recoveringDrive
-          ? vault.t(I18N_KEYS.FirstRunSyncChooseTitle)
+          ? vault.t(I18N_KEYS.FirstRunKeyringExplanation)
           : isICloud
             ? vault.t(I18N_KEYS.ProviderSetupIcloudSyncSubtitle)
             : vault.t(I18N_KEYS.ProviderSetupGoogleSyncSubtitle)

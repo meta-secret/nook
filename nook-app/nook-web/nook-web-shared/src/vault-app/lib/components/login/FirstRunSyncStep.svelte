@@ -264,11 +264,14 @@ its location lists, its keyrings show the same way.
       class="text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-foreground"
     >
       {vault.t(
-        connected ? I18N_KEYS.FirstRunSyncChooseTitle : I18N_KEYS.FirstRunSyncTitle,
+        connected
+          ? I18N_KEYS.FirstRunSyncChooseTitle
+          : I18N_KEYS.FirstRunSyncTitle,
       )}
     </h1>
     {#if connected}
       <p class="text-sm text-pretty text-muted-foreground">
+        {vault.t(I18N_KEYS.FirstRunKeyringExplanation)}
         {vault.t(I18N_KEYS.FirstRunSyncChooseBody)}
       </p>
     {/if}

@@ -170,6 +170,7 @@ nothing.
       {vault.t(I18N_KEYS.FirstRunRestoreChooseVault)}
     </p>
     <p class="text-sm text-pretty text-muted-foreground">
+      {vault.t(I18N_KEYS.FirstRunKeyringExplanation)}
       {vault.t(I18N_KEYS.FirstRunRestoreChooseVaultBody)}
     </p>
   </div>

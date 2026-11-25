@@ -73,6 +73,9 @@ A keyring kept on this browser asks next whether to create a first vault.
     >
       {vault.t(I18N_KEYS.FirstRunNameTitle)}
     </h1>
+    <p class="text-sm text-pretty text-muted-foreground">
+      {vault.t(I18N_KEYS.FirstRunKeyringExplanation)}
+    </p>
     <p
       id="first-run-keyring-name-visibility"
       class="text-sm text-pretty text-muted-foreground"
