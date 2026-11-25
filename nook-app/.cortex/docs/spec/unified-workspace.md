@@ -76,14 +76,14 @@ manager imports keep "identities" for their person and address items.
 ### First run
 
 In Simple and unified, a browser without an identity shows setup in place of
-the identities hub. Vault creation here uses the Simple architecture. Each screen presents the next
-decision and checks off only a completed action. Choosing a backup or creating
-a vault counts as its own milestone. The connection to cloud storage can still
-be pending or need a retry.
+the identities hub. Vault creation here uses the Simple architecture. Each
+screen presents the next decision and checks off only a completed action.
+Choosing to use multiple devices and creating a vault are separate milestones.
+The connection to cloud storage can still be pending or need a retry.
 
 - **Start.** “Your password manager” and “Encrypted on this device” introduce
-  **Set up Nook**. The diagram places the vault inside the browser and shows an
-  optional encrypted backup going to the user's cloud. **Host Nook yourself**
+  **Set up Nook**. The diagram places the encrypted vault inside the browser
+  and shows optional sync through the user's own cloud. **Host Nook yourself**
   expands a separate illustration of a server delivering the app to the browser.
   **Already use Nook?** groups **Use an invite link**, when available, with
   **Recover from a backup**. **How Nook works** and **Check a passkey** sit
@@ -91,14 +91,13 @@ be pending or need a retry.
 - **Protect this device.** Set up or unlock device protection. Back returns to
   Start. After the device key is ready, **Passkey ready** acknowledges passkey
   protection and **Device protection ready** covers other protection modes.
-- **Choose whether to back up.** Under “Back up your vault?”, **Keep it on
-  this device** goes straight to naming. **Add a cloud backup** opens the
-  destination picker and includes the cue “Add a second device later”.
-  Its screen reader description explains that the user chooses where to keep
-  an encrypted copy. Adding a second device is a separate step that gives the
-  user another way to open the vault if they lose the first device. Back from
-  the picker clears the provider draft and returns to the backup decision.
-- **Choose a backup destination.** “Where should Nook save your backup?”
+- **Choose where to use Nook.** “Where will you use Nook?” leads with **Across
+  my devices**. The phone and computer exchange encrypted changes through
+  **Your cloud**. The user chooses that storage and authorizes each additional
+  device separately. The action opens the cloud picker. **On this device**
+  goes straight to naming. Back from the picker clears the provider draft and
+  returns to the device choice.
+- **Choose a cloud.** “Which cloud will connect your devices?”
   offers Google Drive and S3-compatible storage. Drive signs in to list the
   identities in its Nook folder. S3 takes an endpoint, region, bucket, optional
   key prefix, access key ID, and secret access key. **Connect** lists identities
@@ -112,9 +111,9 @@ be pending or need a retry.
   Drive and the user starts a keyring there, setup keeps that sign-in and
   proceeds from device protection to naming.
 - **Name a keyring.** An empty field takes the suggested name. Anyone with
-  access to the backup folder can see the current and previous names. For a
-  device-only keyring, explain that this applies if the user adds a backup
-  later. Back returns to the backup decision on the local path or to the same
+  access to the cloud folder can see the current and previous names. For a
+  device-only keyring, explain that this applies if the user connects cloud
+  storage later. Back returns to the device choice on the local path or to the same
   provider on the cloud path. Creating a keyring on Drive or S3 creates its
   first vault with the same name and connects the selected destination using
   the staged sign-in or S3 connection.
