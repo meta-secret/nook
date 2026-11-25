@@ -14,7 +14,7 @@
   } from '$lib/app/route-state'
   import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
   import FirstRunProtectStep from '$lib/components/login/FirstRunProtectStep.svelte'
-  import FirstRunStorageStep from "$lib/components/login/FirstRunStorageStep.svelte"
+  import FirstRunStorageStep from '$lib/components/login/FirstRunStorageStep.svelte'
   import FirstRunSyncStep from '$lib/components/login/FirstRunSyncStep.svelte'
   import FirstRunNameStep from '$lib/components/login/FirstRunNameStep.svelte'
   import FirstRunVaultStep from '$lib/components/login/FirstRunVaultStep.svelte'

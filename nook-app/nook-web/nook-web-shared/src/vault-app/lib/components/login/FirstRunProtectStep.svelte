@@ -14,7 +14,6 @@
     /** Return to the first screen; nothing was made yet. */
     onBack: () => void;
   } = $props();
-
 </script>
 
 <section
@@ -22,11 +21,11 @@
   data-testid="first-run-protect-step"
 >
   <FirstRunBackLink
-      {vault}
-      testId="first-run-back"
-      disabled={vault.isVerifying}
-      {onBack}
-    />
+    {vault}
+    testId="first-run-back"
+    disabled={vault.isVerifying}
+    {onBack}
+  />
 
   <div class="space-y-2 text-center">
     <h1
@@ -35,7 +34,6 @@
       {vault.t(I18N_KEYS.FirstRunProtectTitle)}
     </h1>
   </div>
-
 
   <DeviceProtectionGate
     {vault}

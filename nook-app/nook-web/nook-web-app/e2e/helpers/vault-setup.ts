@@ -95,9 +95,7 @@ export async function answerPasskeyPrompt(page: Page): Promise<void> {
   }
 }
 
-/** A fresh browser makes its key the way a person does: Create identity,
- * then first run's passkey step. Setup then waits on its sync provider
- * step with the key ready. */
+/** Complete the passkey prompt and reach the storage choice on a fresh browser. */
 export async function createFirstRunKey(page: Page): Promise<void> {
   await startFirstRun(page)
   await expect(page.getByTestId('first-run-protect-step')).toBeVisible({
@@ -109,8 +107,7 @@ export async function createFirstRunKey(page: Page): Promise<void> {
   })
 }
 
-/** After the passkey, setup offers a sync provider: keep the new identity
- * on this browser instead and name it. */
+/** Choose device-only storage and name the new identity. */
 export async function nameFirstIdentityOnly(
   page: Page,
   identityName: string,
@@ -218,9 +215,8 @@ export async function createLocalVaultOnLogin(
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
 
-  // First run starts with Create identity: its passkey, then the sync
-  // provider step (kept on this browser here), then the name. A browser
-  // that already has an identity names its next vault at once.
+  // Fresh setup asks for protection and a storage choice before naming.
+  // A browser that already has an identity names its next vault immediately.
   const createIdentity = page.getByTestId('first-run-create-identity-btn')
   const nameInput = page.getByTestId('login-vault-name-input')
   await expect(createIdentity.or(nameInput).first()).toBeVisible({

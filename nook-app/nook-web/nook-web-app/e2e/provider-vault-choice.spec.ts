@@ -93,6 +93,7 @@ test.describe('an identity another browser keeps in the Nook folder', () => {
     await expect(deviceA.getByTestId('first-run-name-step')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await expect(deviceA.getByTestId('first-run-storage-step')).toHaveCount(0)
     await expect(deviceA.getByTestId('first-run-sync-step')).toHaveCount(0)
     await deviceA.getByTestId('first-run-identity-name-input').fill(createdName)
     await deviceA.getByTestId('first-run-identity-create-btn').click()
