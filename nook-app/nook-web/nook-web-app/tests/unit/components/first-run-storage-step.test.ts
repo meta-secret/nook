@@ -33,25 +33,20 @@ test.each([
 )
 
 test.each([en, ru])(
-  'explains backup and later device access before the choice',
+  'offers two storage actions and describes later device access on the cloud choice',
   (locale) => {
-    const vault = storageChoice(locale)
-    const view = render(FirstRunStorageStep, { vault })
+    const view = render(FirstRunStorageStep, { vault: storageChoice(locale) })
     const labels = locale.first_run
-    const benefits = view.getByRole('list')
-    const rows = within(benefits).getAllByRole('listitem')
-    expect(rows.map((row) => row.textContent?.trim())).toEqual([
-      labels.backup_benefit,
-      labels.device_access_benefit,
-    ])
-    for (const row of rows)
-      expect(row.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true')
-    const backup = view.getByRole('button', { name: labels.choose_sync })
     expect(
-      benefits.compareDocumentPosition(backup) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      view.getByRole('heading', { name: labels.storage_title }),
     ).toBeTruthy()
+    const cloud = view.getByRole('button', {
+      name: labels.choose_sync,
+      description: labels.cloud_action_description,
+    })
+    expect(within(cloud).getByText(labels.cloud_device_cue)).toBeTruthy()
     expect(view.getByRole('button', { name: labels.keep_local })).toBeTruthy()
+    expect(view.queryAllByRole('list')).toHaveLength(0)
   },
 )
 

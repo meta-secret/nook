@@ -1,17 +1,17 @@
 <script lang="ts">
-  import { Cloud, CloudUpload, KeyRound, MonitorSmartphone } from '@lucide/svelte'
-  import { DeviceProtectionStatus } from '$app-wasm'
-  import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import { Button } from '$lib/components/ui/button'
-  import type { VaultState } from '$lib/vault.svelte'
-  import { FirstRunActions } from '$lib/vault/first-run'
-  import { FirstRunPlace, FirstRunStage } from '$lib/vault/state/ui.svelte'
-  import FirstRunBackLink from './FirstRunBackLink.svelte'
-  import FirstRunMilestone from './FirstRunMilestone.svelte'
+  import { Cloud, LockKeyhole, Monitor } from "@lucide/svelte";
+  import { DeviceProtectionStatus } from "$app-wasm";
+  import { I18N_KEYS } from "../../../../generated/i18n-keys";
+  import { Button } from "$lib/components/ui/button";
+  import type { VaultState } from "$lib/vault.svelte";
+  import { FirstRunActions } from "$lib/vault/first-run";
+  import { FirstRunPlace, FirstRunStage } from "$lib/vault/state/ui.svelte";
+  import FirstRunBackLink from "./FirstRunBackLink.svelte";
+  import FirstRunMilestone from "./FirstRunMilestone.svelte";
 
-  let { vault }: { vault: VaultState } = $props()
+  let { vault }: { vault: VaultState } = $props();
 
-  const actions = $derived(new FirstRunActions(vault))
+  const actions = $derived(new FirstRunActions(vault));
 </script>
 
 <section
@@ -39,38 +39,70 @@
     >
       {vault.t(I18N_KEYS.FirstRunStorageTitle)}
     </h1>
-    <ul class="grid gap-2 text-sm leading-5 text-muted-foreground">
-      <li class="flex items-start gap-2.5">
-        <CloudUpload class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        <span>{vault.t(I18N_KEYS.FirstRunBackupBenefit)}</span>
-      </li>
-      <li class="flex items-start gap-2.5">
-        <KeyRound class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        <span>{vault.t(I18N_KEYS.FirstRunDeviceAccessBenefit)}</span>
-      </li>
-    </ul>
   </header>
   <div class="grid gap-3">
     <Button
       type="button"
-      class="min-h-11 h-auto whitespace-normal"
+      class="h-auto min-h-16 justify-start gap-4 px-4 py-3 text-left whitespace-normal"
       data-testid="first-run-keep-local"
       disabled={vault.isVerifying}
       onclick={() => actions.nameNew(FirstRunPlace.ThisBrowser)}
     >
-      <MonitorSmartphone class="size-4" aria-hidden="true" />
+      <span class="action-icon" aria-hidden="true">
+        <Monitor />
+        <LockKeyhole class="badge" />
+      </span>
       {vault.t(I18N_KEYS.FirstRunKeepLocal)}
     </Button>
     <Button
       type="button"
       variant="outline"
-      class="min-h-11 h-auto whitespace-normal"
+      class="h-auto min-h-16 justify-start gap-4 px-4 py-3 text-left whitespace-normal"
+      aria-labelledby="first-run-cloud-action"
+      aria-describedby="first-run-cloud-description"
       data-testid="first-run-choose-sync"
       disabled={vault.isVerifying}
       onclick={() => (vault.firstRun = FirstRunStage.Sync)}
     >
-      <Cloud class="size-4" aria-hidden="true" />
-      {vault.t(I18N_KEYS.FirstRunChooseSync)}
+      <span class="action-icon" aria-hidden="true">
+        <Cloud />
+        <LockKeyhole class="badge" />
+      </span>
+      <span class="grid min-w-0 gap-0.5">
+        <span id="first-run-cloud-action"
+          >{vault.t(I18N_KEYS.FirstRunChooseSync)}</span
+        >
+        <span class="text-xs text-muted-foreground"
+          >{vault.t(I18N_KEYS.FirstRunCloudDeviceCue)}</span
+        >
+      </span>
     </Button>
   </div>
+  <span id="first-run-cloud-description" class="sr-only">
+    {vault.t(I18N_KEYS.FirstRunCloudActionDescription)}
+  </span>
 </section>
+
+<style>
+  .action-icon {
+    position: relative;
+    display: grid;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex-shrink: 0;
+    place-items: center;
+  }
+  .action-icon :global(svg) {
+    width: 1.6rem;
+    height: 1.6rem;
+  }
+  .action-icon :global(svg.badge) {
+    position: absolute;
+    right: -0.15rem;
+    bottom: 0;
+    width: 0.85rem;
+    height: 0.85rem;
+    stroke-width: 2.25;
+    fill: var(--color-background);
+  }
+</style>

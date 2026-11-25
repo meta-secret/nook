@@ -2269,9 +2269,9 @@
     "restore_body": "Have your Nook passkey ready.",
     "restore_diagram_label": "How your passkey unlocks the keys in your backup",
     "restore_diagram_keeps": "keeps",
-    "storage_title": "Would you like a backup?",
+    "storage_title": "Back up your vault?",
     "keep_local": "Keep it on this device",
-    "choose_sync": "Also back up to my cloud",
+    "choose_sync": "Add a cloud backup",
     "passkey_ready": "Passkey ready",
     "protection_ready": "Device protection ready",
     "local_name_visibility": "If you add a backup later, anyone with access to its folder can see current and previous names.",
@@ -2280,8 +2280,8 @@
     "keyring_chosen": "Keyring selected",
     "join_request_sent": "Request sent",
     "sync_selected": "Cloud backup selected",
-    "backup_benefit": "Keep an encrypted copy in your cloud.",
-    "device_access_benefit": "Add a second device for access if you lose this one.",
+    "cloud_device_cue": "Add a second device later",
+    "cloud_action_description": "Keep an encrypted copy in the cloud you choose. Adding another device separately gives you a way to open your vault if you lose this one.",
     "restore_location": "Your backup"
   },
   "identity_health": {
