@@ -289,7 +289,7 @@
       class="nk-frame divide-y divide-border"
       data-testid="first-run-providers"
     >
-      <div class="flex flex-wrap items-center gap-3 px-4 py-3">
+      <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-4 py-3 min-[390px]:grid-cols-[auto_minmax(0,1fr)_auto]">
         <span class="nk-tile nk-tile-sm" aria-hidden="true">
           <GoogleDriveMark class="size-4" />
         </span>
@@ -299,6 +299,7 @@
         <Button
           type="button"
           size="sm"
+          class="col-start-2 justify-self-start min-[390px]:col-auto"
           data-testid="first-run-google-sign-in"
           disabled={vault.googleOAuthBusy || !originSupport.supported}
           onclick={() => void new VaultOAuthActions(vault).signInWithGoogle()}

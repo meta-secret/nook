@@ -2280,8 +2280,8 @@
     "keyring_chosen": "Keyring selected",
     "join_request_sent": "Request sent",
     "sync_selected": "Cloud backup selected",
-    "backup_benefit": "Keep an encrypted copy of your vault in a cloud you choose.",
-    "device_access_benefit": "Then you can add another device so you can still get in if you lose this one.",
+    "backup_benefit": "Keep an encrypted copy in your cloud.",
+    "device_access_benefit": "Add a second device for access if you lose this one.",
     "restore_location": "Your backup"
   },
   "identity_health": {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Cloud, MonitorSmartphone } from '@lucide/svelte'
+  import { Cloud, CloudUpload, KeyRound, MonitorSmartphone } from '@lucide/svelte'
   import { DeviceProtectionStatus } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
@@ -39,10 +39,16 @@
     >
       {vault.t(I18N_KEYS.FirstRunStorageTitle)}
     </h1>
-    <p class="text-sm text-pretty text-muted-foreground">
-      {vault.t(I18N_KEYS.FirstRunBackupBenefit)}
-      {vault.t(I18N_KEYS.FirstRunDeviceAccessBenefit)}
-    </p>
+    <ul class="grid gap-2 text-sm leading-5 text-muted-foreground">
+      <li class="flex items-start gap-2.5">
+        <CloudUpload class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        <span>{vault.t(I18N_KEYS.FirstRunBackupBenefit)}</span>
+      </li>
+      <li class="flex items-start gap-2.5">
+        <KeyRound class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        <span>{vault.t(I18N_KEYS.FirstRunDeviceAccessBenefit)}</span>
+      </li>
+    </ul>
   </header>
   <div class="grid gap-3">
     <Button

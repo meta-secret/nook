@@ -1,4 +1,4 @@
-import { fireEvent, render } from '@testing-library/svelte'
+import { fireEvent, render, within } from '@testing-library/svelte'
 import { expect, test, vi } from 'vitest'
 import { DeviceProtectionStatus } from '$app-wasm'
 import { FirstRunPlace, FirstRunStage } from '$lib/vault/state/ui.svelte'
@@ -38,8 +38,14 @@ test.each([en, ru])(
     const vault = storageChoice(locale)
     const view = render(FirstRunStorageStep, { vault })
     const labels = locale.first_run
-    const benefits = view.getByText(labels.backup_benefit, { exact: false })
-    expect(benefits.textContent).toContain(labels.device_access_benefit)
+    const benefits = view.getByRole('list')
+    const rows = within(benefits).getAllByRole('listitem')
+    expect(rows.map((row) => row.textContent?.trim())).toEqual([
+      labels.backup_benefit,
+      labels.device_access_benefit,
+    ])
+    for (const row of rows)
+      expect(row.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true')
     const backup = view.getByRole('button', { name: labels.choose_sync })
     expect(
       benefits.compareDocumentPosition(backup) &
