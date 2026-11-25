@@ -42,7 +42,7 @@
           </div>
         </div>
       </div>
-      <div class="backup-path">
+      <div class="sync-path">
         <span class="path-label"
           >{vault.t(I18N_KEYS.FirstRunLocalFirstOptionalSync)}</span
         >
@@ -250,7 +250,7 @@
     font-size: clamp(0.79rem, 2.8cqw, 1.05rem);
     font-weight: 580;
   }
-  .backup-path {
+  .sync-path {
     position: absolute;
     top: 52%;
     left: 56.5%;
@@ -272,16 +272,23 @@
     height: 1px;
     border-top: 1px dashed currentColor;
   }
+  .wire::before,
   .wire::after {
     position: absolute;
     content: '';
     top: -3px;
-    right: 0;
     width: 5px;
     height: 5px;
     transform: rotate(45deg);
     border-top: 1px solid;
     border-right: 1px solid;
+  }
+  .wire::before {
+    left: 0;
+    transform: rotate(-135deg);
+  }
+  .wire::after {
+    right: 0;
   }
   .wire :global(.wire-lock) {
     position: absolute;
@@ -388,7 +395,7 @@
       height: 88%;
       top: 4%;
     }
-    .backup-path {
+    .sync-path {
       left: 54%;
       width: 24%;
     }

@@ -1309,7 +1309,6 @@ pub const EXTENSION_SETUP_VAULT_PANEL_FAILED: &str = "extension_setup.vault_pane
 pub const FIRST_RUN_BACK: &str = "first_run.back";
 pub const FIRST_RUN_CHOOSE_SYNC: &str = "first_run.choose_sync";
 pub const FIRST_RUN_CLOUD_ACTION_DESCRIPTION: &str = "first_run.cloud_action_description";
-pub const FIRST_RUN_CLOUD_DEVICE_CUE: &str = "first_run.cloud_device_cue";
 pub const FIRST_RUN_CONNECT_RETRY: &str = "first_run.connect_retry";
 pub const FIRST_RUN_CONNECT_SKIP: &str = "first_run.connect_skip";
 pub const FIRST_RUN_CONNECT_TITLE: &str = "first_run.connect_title";
