@@ -101,7 +101,7 @@
     <ReturningVaultRoutes
       {vault}
       {isBusy}
-      onInvite={onUseEnrollmentCode ? showInvite : undefined}
+      {...onUseEnrollmentCode ? { onInvite: showInvite } : {}}
       onRecover={onConnectStorage}
     />
 

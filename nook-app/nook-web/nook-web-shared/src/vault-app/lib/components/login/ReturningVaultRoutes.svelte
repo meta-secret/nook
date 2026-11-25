@@ -10,7 +10,7 @@
   }: {
     vault: VaultState
     isBusy: boolean
-    onInvite: (() => void) | undefined
+    onInvite?: () => void
     onRecover: () => void
   } = $props()
 </script>

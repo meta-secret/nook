@@ -153,6 +153,9 @@ export class DeviceProtectionActions {
     Result<DeviceProtectionLockOutcome, StorageOperationFailure>
   > {
     const state = this.state;
+    // Fold the old panel once. A person can reopen it on the locked card
+    // while the engine finishes an operation and retries the native lock.
+    state.vaultPanelStoreId = "";
     this.publishLockedDevice();
     state.forgetDraftCredentials();
     if (state.localVaultPresent) state.useThisBrowser();
@@ -207,9 +210,6 @@ export class DeviceProtectionActions {
   private publishLockedDevice(): void {
     const state = this.state;
     state.deviceProtectionStatus = state.deviceProtectionLockedStatus;
-    // A locked card folds down to its header and vaults: no vault panel stays
-    // open beside it, and Unlock starts again from the card.
-    state.vaultPanelStoreId = "";
     state.deviceAuthorizationInProgress = false;
     state.deviceId = "";
     state.devicePublicKey = "";
