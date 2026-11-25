@@ -1,18 +1,17 @@
 <!-- First visit to Nook on this browser, including setup opened from the extension. -->
 <script lang="ts">
-  import type { Component } from 'svelte'
+  import { tick } from 'svelte'
   import { VaultWorkspaceActions } from '$lib/vault/ui'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
     ArrowRight,
-    CloudDownload,
-    MonitorSmartphone,
     ShieldCheck,
     BookOpen,
     ScanFace,
     RefreshCw,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
+  import ReturningVaultRoutes from './ReturningVaultRoutes.svelte'
   import LocalFirstDiagram from './LocalFirstDiagram.svelte'
   import JoinThisDevice from '$lib/components/join/JoinThisDevice.svelte'
   import type { EnrollmentCodeUnlock } from './login-create-vault-chooser-contract'
@@ -39,29 +38,17 @@
   /** Joining an identity this person already has replaces the screen. */
   let joining = $state(false)
 
-  /** One of the other paths: an icon, a short title, an arrow. */
-  type StartPath = {
-    readonly testId: string
-    readonly title: string
-    readonly icon: Component
-    readonly disabled: boolean
-    readonly onOpen: () => void
+  async function showInvite(): Promise<void> {
+    joining = true
+    await tick()
+    document.getElementById('join-route-heading')?.focus()
   }
 
-  const addDevice = $derived<StartPath>({
-    testId: 'login-join-identity-btn',
-    title: vault.t(I18N_KEYS.FirstRunPathAddDevice),
-    icon: MonitorSmartphone,
-    disabled: isBusy,
-    onOpen: () => (joining = true),
-  })
-  const recover = $derived<StartPath>({
-    testId: 'login-connect-storage-btn',
-    title: vault.t(I18N_KEYS.FirstRunPathRecover),
-    icon: CloudDownload,
-    disabled: isBusy,
-    onOpen: onConnectStorage,
-  })
+  async function returnFromInvite(): Promise<void> {
+    joining = false
+    await tick()
+    document.getElementById('welcome-invite-route')?.focus()
+  }
 
   /** The passkey comes next; the identity's name is asked only when setup
    * creates a new one. */
@@ -72,30 +59,12 @@
   }
 </script>
 
-{#snippet path(row: StartPath)}
-  <button
-    type="button"
-    class="return-action"
-    data-testid={row.testId}
-    disabled={row.disabled}
-    onclick={row.onOpen}
-  >
-    <row.icon
-      class="size-5 shrink-0 text-muted-foreground"
-      strokeWidth={1.6}
-      aria-hidden="true"
-    />
-    <span>{row.title}</span>
-    <ArrowRight class="return-arrow size-4 shrink-0" aria-hidden="true" />
-  </button>
-{/snippet}
-
 {#if joining && onUseEnrollmentCode}
   <JoinThisDevice
     {vault}
     {isVerifying}
     {onUseEnrollmentCode}
-    onBack={() => (joining = false)}
+    onBack={returnFromInvite}
   />
 {:else}
   <section class="welcome" data-testid="first-vault-start">
@@ -129,17 +98,12 @@
       <LocalFirstDiagram {vault} />
     </div>
 
-    <section class="returning" aria-labelledby="returning-user-heading">
-      <h2 id="returning-user-heading">
-        {vault.t(I18N_KEYS.FirstRunReturning)}
-      </h2>
-      <div class="return-actions" data-testid="login-paths">
-        {#if onUseEnrollmentCode}
-          {@render path(addDevice)}
-        {/if}
-        {@render path(recover)}
-      </div>
-    </section>
+    <ReturningVaultRoutes
+      {vault}
+      {isBusy}
+      onInvite={onUseEnrollmentCode ? showInvite : undefined}
+      onRecover={onConnectStorage}
+    />
 
     <div class="welcome-utilities">
       <button
@@ -223,44 +187,6 @@
     background: #b1f0d7;
   }
 
-  .returning {
-    display: grid;
-    grid-template-columns: minmax(0, 0.62fr) minmax(0, 1.38fr);
-    align-items: baseline;
-    gap: 1.5rem;
-    border-block: 1px solid var(--welcome-rule);
-    padding-block: 0.9rem;
-  }
-  .returning h2 {
-    font-size: 1.08rem;
-    font-weight: 600;
-  }
-  .return-actions {
-    display: flex;
-    gap: 1.5rem;
-  }
-  .return-action {
-    flex: 1;
-    min-width: 0;
-    min-height: 2.75rem;
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    padding: 0.5rem 0;
-    text-align: left;
-    font-size: 0.97rem;
-    font-weight: 500;
-  }
-  .return-action :global(.return-arrow) {
-    margin-left: auto;
-    color: var(--welcome-accent);
-  }
-  .return-action:hover {
-    color: var(--welcome-accent);
-  }
-  .return-action:disabled {
-    opacity: 0.55;
-  }
   .welcome-utilities {
     display: flex;
     flex-wrap: wrap;
@@ -302,18 +228,6 @@
     }
     .welcome-intro :global(.welcome-setup) {
       min-height: 2.75rem;
-    }
-    .returning {
-      grid-template-columns: minmax(0, 1fr);
-      gap: 0.2rem;
-      padding-block: 0.9rem 0.2rem;
-    }
-    .return-actions {
-      flex-direction: column;
-      gap: 0;
-    }
-    .return-action + .return-action {
-      border-top: 1px solid var(--border);
     }
     .welcome-utilities {
       column-gap: 1.25rem;

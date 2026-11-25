@@ -485,11 +485,15 @@ test.describe('vault architecture modes', () => {
     )
     await expect(start).toContainText('Encrypted on this device')
     await expect(start).not.toContainText(/keyring/i)
-    const returning = start.getByRole('region', { name: 'Already use Nook?' })
-    await expect(returning.getByRole('button')).toHaveText([
-      'Use an invite link',
-      'Recover from a backup',
-    ])
+    const returning = start.getByRole('region', {
+      name: 'Open your vault on this device',
+    })
+    await expect(
+      returning.getByRole('button', { name: 'I have an invite link' }),
+    ).toHaveAccessibleDescription('From another Nook device')
+    await expect(
+      returning.getByRole('button', { name: 'I have a backup' }),
+    ).toHaveAccessibleDescription('Unlock or request access')
     await expect(
       start.getByRole('button', { name: 'Check a passkey' }),
     ).toBeEnabled()
@@ -502,7 +506,9 @@ test.describe('vault architecture modes', () => {
       'Ваш менеджер паролей',
     )
     await expect(
-      start.getByRole('region', { name: 'Уже пользуетесь Nook?' }),
+      start.getByRole('region', {
+        name: 'Откройте свой сейф на этом устройстве',
+      }),
     ).toBeVisible()
     await expect(start).toContainText('Данные зашифрованы на этом устройстве')
     await expect(start).not.toContainText(/связк/i)

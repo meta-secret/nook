@@ -5,6 +5,7 @@ import {
   Laptop,
   KeyRound,
   MonitorSmartphone,
+  ShieldCheck,
   Vault,
 } from "@lucide/svelte";
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
@@ -177,9 +178,7 @@ export function firstRunSyncDiagram({
   };
 }
 
-/** Recovery: the sync provider, filled in, keeps the keyring, and the
- * keyring's passkey unlocks it. Providers keep keyrings, not vaults: the
- * vaults come with the keyring. */
+/** A backup holds the vault keys. Access depends on the methods available for that backup. */
 export function firstRunRecoveryDiagram(
   vault: VaultState,
 ): FirstRunDiagramView {
@@ -205,9 +204,9 @@ export function firstRunRecoveryDiagram(
         },
       },
       {
-        icons: [Fingerprint],
-        label: vault.t(I18N_KEYS.FirstRunDiagramPasskey),
-        testId: "first-run-recovery-diagram-passkey",
+        icons: [ShieldCheck],
+        label: vault.t(I18N_KEYS.FirstRunRestoreMethod),
+        testId: "first-run-recovery-diagram-method",
         current: false,
         arrow: {
           kind: FirstRunDiagramArrowKind.Back,

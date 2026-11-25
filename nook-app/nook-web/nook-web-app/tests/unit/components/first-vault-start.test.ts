@@ -20,6 +20,12 @@ test.each([enLocale, ruLocale])(
       onCreate,
       onConnectStorage,
     })
+    const returning = within(
+      view.getByRole('region', { name: locale.first_run.returning }),
+    )
+    expect(returning.getAllByRole('button')).toEqual([
+      returning.getByRole('button', { name: locale.first_run.path_recover }),
+    ])
     const labels = locale.first_run.local_first
     const dataPath = view.getByRole('figure', {
       name: labels.diagram_description,
@@ -51,5 +57,51 @@ test.each([enLocale, ruLocale])(
     )
     expect(onCreate).toHaveBeenCalledWith(locale.first_run.name_placeholder)
     expect(vault.firstRun).toBe(FirstRunStage.Protect)
+  },
+)
+
+test.each([enLocale, ruLocale])(
+  'opens the chosen return route and restores focus after leaving an invite',
+  async (locale) => {
+    const vault = VaultStateTestFixture.create()
+    vault.translations = JSON.stringify(locale)
+    const props = {
+      vault,
+      isBusy: false,
+      isVerifying: false,
+      onCreate: vi.fn(),
+      onUseEnrollmentCode: vi.fn(),
+      onConnectStorage: vi.fn(),
+    }
+    const view = render(FirstVaultStart, props)
+    const routes = () =>
+      within(view.getByRole('region', { name: locale.first_run.returning }))
+    const invite = () =>
+      routes().getByRole('button', {
+        name: locale.first_run.path_add_device,
+        description: locale.first_run.invite_source,
+      })
+    const backup = () =>
+      routes().getByRole('button', {
+        name: locale.first_run.path_recover,
+        description: locale.first_run.backup_access,
+      })
+
+    expect(routes().getAllByRole('button')).toEqual([invite(), backup()])
+    expect(props.onConnectStorage).not.toHaveBeenCalled()
+    await fireEvent.click(invite())
+    expect(view.getByRole('heading', { name: locale.join.title })).toBe(
+      document.activeElement,
+    )
+    expect(props.onUseEnrollmentCode).not.toHaveBeenCalled()
+    await fireEvent.click(view.getByTestId('join-back'))
+    expect(invite()).toBe(document.activeElement)
+    await fireEvent.click(backup())
+    expect(props.onConnectStorage).toHaveBeenCalledOnce()
+    expect(props.onCreate).not.toHaveBeenCalled()
+
+    await view.rerender({ ...props, isBusy: true })
+    expect(invite().matches(':disabled')).toBe(true)
+    expect(backup().matches(':disabled')).toBe(true)
   },
 )
