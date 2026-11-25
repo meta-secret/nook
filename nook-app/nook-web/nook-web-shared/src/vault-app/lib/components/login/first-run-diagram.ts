@@ -1,6 +1,7 @@
 import type { Component } from "svelte";
 import {
   Fingerprint,
+  Folder,
   Laptop,
   KeyRound,
   MonitorSmartphone,
@@ -101,9 +102,6 @@ export function firstRunKeyDiagram({
 
 /** Which sync provider the diagram's provider box stands for. */
 export enum FirstRunSyncDiagramProvider {
-  /** None is chosen yet: the box is captioned "Your cloud storage" and drawn
-   * with the marks of the services it can be. */
-  Any = "any",
   GoogleDrive = "google-drive",
   ICloud = "icloud",
 }
@@ -118,11 +116,6 @@ type ProviderBoxRequest = {
 
 function providerBox({ vault, provider }: ProviderBoxRequest): ProviderBox {
   switch (provider) {
-    case FirstRunSyncDiagramProvider.Any:
-      return {
-        icons: [GoogleDriveMark, ICloudMark],
-        label: vault.t(I18N_KEYS.FirstRunSyncDiagramCloud),
-      };
     case FirstRunSyncDiagramProvider.GoogleDrive:
       return {
         icons: [GoogleDriveMark],
@@ -190,16 +183,13 @@ export function firstRunSyncDiagram({
 export function firstRunRecoveryDiagram(
   vault: VaultState,
 ): FirstRunDiagramView {
-  const anyProvider: ProviderBoxRequest = {
-    vault,
-    provider: FirstRunSyncDiagramProvider.Any,
-  };
   return {
     label: vault.t(I18N_KEYS.FirstRunRestoreDiagramLabel),
     testId: "first-run-recovery-diagram",
     nodes: [
       {
-        ...providerBox(anyProvider),
+        icons: [Folder],
+        label: vault.t(I18N_KEYS.FirstRunRestoreLocation),
         testId: "first-run-recovery-diagram-provider",
         current: true,
         arrow: { kind: FirstRunDiagramArrowKind.Start },

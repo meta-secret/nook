@@ -488,7 +488,7 @@ test.describe('vault architecture modes', () => {
     const returning = start.getByRole('region', { name: 'Already use Nook?' })
     await expect(returning.getByRole('button')).toHaveText([
       'Use an invite link',
-      'Recover a synced copy',
+      'Recover from a backup',
     ])
     await expect(
       start.getByRole('button', { name: 'Check a passkey' }),

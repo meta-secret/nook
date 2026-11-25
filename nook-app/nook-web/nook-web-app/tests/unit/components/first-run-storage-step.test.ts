@@ -7,10 +7,11 @@ import FirstRunStorageStep from '$lib/components/login/FirstRunStorageStep.svelt
 import FirstRunSyncStep from '$lib/components/login/FirstRunSyncStep.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import en from '../../../../../nook-platform/nook-app-common/locales/en.json' with { type: 'json' }
+import ru from '../../../../../nook-platform/nook-app-common/locales/ru.json' with { type: 'json' }
 
-function storageChoice() {
+function storageChoice(locale = en) {
   const vault = VaultStateTestFixture.create()
-  vault.translations = JSON.stringify(en)
+  vault.translations = JSON.stringify(locale)
   vault.firstRun = FirstRunStage.Storage
   return vault
 }
@@ -28,6 +29,23 @@ test.each([
     expect(view.getByTestId('first-run-milestone').textContent?.trim()).toBe(
       expected,
     )
+  },
+)
+
+test.each([en, ru])(
+  'explains backup and later device access before the choice',
+  (locale) => {
+    const vault = storageChoice(locale)
+    const view = render(FirstRunStorageStep, { vault })
+    const labels = locale.first_run
+    const benefits = view.getByText(labels.backup_benefit, { exact: false })
+    expect(benefits.textContent).toContain(labels.device_access_benefit)
+    const backup = view.getByRole('button', { name: labels.choose_sync })
+    expect(
+      benefits.compareDocumentPosition(backup) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(view.getByRole('button', { name: labels.keep_local })).toBeTruthy()
   },
 )
 
@@ -64,7 +82,16 @@ test('sync reveals the providers on request, and Back clears the staged provider
   choice.unmount()
 
   const provider = render(FirstRunSyncStep, { vault })
-  expect(provider.getByTestId('first-run-providers')).toBeTruthy()
+  expect(
+    provider.getByRole('heading', { name: en.first_run.sync_title }),
+  ).toBeTruthy()
+  expect(provider.getByTestId('first-run-milestone').textContent?.trim()).toBe(
+    en.first_run.sync_selected,
+  )
+  expect(provider.getByText(en.provider_picker.google_drive)).toBeTruthy()
+  expect(
+    provider.getByRole('button', { name: en.provider_picker.s3 }),
+  ).toBeTruthy()
   expect(provider.getByTestId('first-run-google-sign-in')).toBeTruthy()
   await fireEvent.click(provider.getByTestId('first-run-s3-option'))
   expect(provider.getByTestId('first-run-s3-setup')).toBeTruthy()

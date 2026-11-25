@@ -39,6 +39,10 @@
     >
       {vault.t(I18N_KEYS.FirstRunStorageTitle)}
     </h1>
+    <p class="text-sm text-pretty text-muted-foreground">
+      {vault.t(I18N_KEYS.FirstRunBackupBenefit)}
+      {vault.t(I18N_KEYS.FirstRunDeviceAccessBenefit)}
+    </p>
   </header>
   <div class="grid gap-3">
     <Button
