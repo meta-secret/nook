@@ -8,11 +8,10 @@ joins the keyring and setup ends on it, as after an approved join.
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import RecoveryWordsForm from '$lib/components/recovery-passphrase/RecoveryWordsForm.svelte'
   import FirstRunBackLink from './FirstRunBackLink.svelte'
-  import FirstRunProgress from './FirstRunProgress.svelte'
+  import FirstRunMilestone from './FirstRunMilestone.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import { FirstRunActions } from '$lib/vault/first-run'
   import type { IdentityJoinIntent } from '$lib/vault/identity-join-wait'
-  import { FirstRunStage } from '$lib/vault/state/ui.svelte'
   import {
     RecoveryWordsLeaveKind,
     type RecoveryWordsLeave,
@@ -37,9 +36,9 @@ joins the keyring and setup ends on it, as after an approved join.
       {vault}
       testId="first-run-recover-back"
       disabled={busy}
-      onBack={() => actions.backToSync()}
+      onBack={() => actions.backFromKeyring()}
     />
-    <FirstRunProgress {vault} current={FirstRunStage.Joining} />
+    <FirstRunMilestone label={vault.t(I18N_KEYS.FirstRunKeyringChosen)} />
   </div>
 
   <div class="space-y-2">

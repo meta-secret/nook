@@ -568,7 +568,7 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('login-enrollment-toggle')).toHaveCount(0)
   })
 
-  test('creates the identity first and offers its sync provider next', async ({
+  test('sets up a passkey and keeps the vault on this device', async ({
     page,
   }) => {
     await continueToPathChooser(page)
@@ -588,17 +588,17 @@ test.describe('vault architecture modes', () => {
     await expect(protect).toBeVisible()
     await expect(protect).not.toContainText(/keyring/i)
     await answerPasskeyPrompt(page)
-    await expect(page.getByTestId('first-run-google-sign-in')).toBeVisible()
-    const sync = page.getByTestId('first-run-sync-step')
-    await expect(sync).not.toContainText(/keyring/i)
-    await expect(sync).toContainText(
-      'storage you choose, or keep it in this browser',
-    )
+    const storage = page.getByTestId('first-run-storage-step')
+    await expect(storage).toContainText('Passkey ready')
+    await expect(storage).not.toContainText(/keyring/i)
+    await expect(page.getByTestId('first-run-google-sign-in')).toHaveCount(0)
     await expect(page.getByTestId('vault-panel')).toHaveCount(0)
 
     // Kept on this browser, the identity is named (an empty name takes the
     // suggested one); its first vault is then the person's choice.
-    await page.getByTestId('first-run-sync-skip').click()
+    await storage
+      .getByRole('button', { name: 'Keep it on this device' })
+      .click()
     await expect(page.getByTestId('first-run-name-step')).toContainText(
       'Your passwords go in vaults. Your keyring holds the keys that open them.',
     )

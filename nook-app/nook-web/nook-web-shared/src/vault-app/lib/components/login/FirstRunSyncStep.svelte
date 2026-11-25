@@ -1,22 +1,8 @@
-<!--
-Second step of setup: this browser's key exists, and the sync provider shows
-the identities in its Nook folder. Before sign-in, one line and a small
-diagram say what the provider is for. Rust decides each one's single action from
-that key: a member continues and syncs, anyone else asks to join. A new
-identity can be created there instead, or kept on this browser only. S3 storage
-is the quiet second row: its form takes the place of the providers, and once
-its location lists, its keyrings show the same way.
--->
+<!-- Sync was chosen: select a provider, then a keyring in its storage. -->
 <script lang="ts">
   import { tick, untrack } from 'svelte'
   import { ok, type Result } from 'neverthrow'
-  import {
-    Archive,
-    ArrowRight,
-    MonitorSmartphone,
-    Plus,
-    RefreshCw,
-  } from '@lucide/svelte'
+  import { Archive, ArrowRight, Plus, RefreshCw } from '@lucide/svelte'
   import GoogleDriveMark from '$lib/components/provider-marks/GoogleDriveMark.svelte'
   import {
     provider_draft_label,
@@ -48,14 +34,8 @@ its location lists, its keyrings show the same way.
     type IdentityChoicesFailure,
     type IdentityChoicesRequest,
   } from '$lib/components/provider-vaults/identity-plan.svelte'
+  import FirstRunMilestone from './FirstRunMilestone.svelte'
   import FirstRunBackLink from './FirstRunBackLink.svelte'
-  import FirstRunDiagram from './FirstRunDiagram.svelte'
-  import {
-    firstRunSyncDiagram,
-    FirstRunSyncDiagramProvider,
-    type FirstRunSyncDiagramRequest,
-  } from './first-run-diagram'
-  import FirstRunProgress from './FirstRunProgress.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     FirstRunActions,
@@ -105,13 +85,6 @@ its location lists, its keyrings show the same way.
   const connected = $derived(
     connection.kind === FirstRunConnectionKind.Connected,
   )
-  const diagram = $derived.by(() => {
-    const request: FirstRunSyncDiagramRequest = {
-      vault,
-      provider: FirstRunSyncDiagramProvider.Any,
-    }
-    return firstRunSyncDiagram(request)
-  })
   const originSupport = resolveCurrentOAuthOriginSupport(
     BrowserOAuthProvider.GoogleDrive,
   )
@@ -241,7 +214,7 @@ its location lists, its keyrings show the same way.
 
   function leave(): void {
     vault.cancelProviderSetup()
-    vault.firstRun = FirstRunStage.Off
+    vault.firstRun = FirstRunStage.Storage
   }
 </script>
 
@@ -256,7 +229,7 @@ its location lists, its keyrings show the same way.
       disabled={busy}
       onBack={leave}
     />
-    <FirstRunProgress {vault} current={FirstRunStage.Sync} />
+    <FirstRunMilestone label={vault.t(I18N_KEYS.FirstRunSyncSelected)} />
   </div>
 
   <div class="space-y-2 text-center">
@@ -278,10 +251,6 @@ its location lists, its keyrings show the same way.
       {/if}
     </p>
   </div>
-
-  {#if !connected}
-    <FirstRunDiagram {diagram} />
-  {/if}
 
   {#if syncSource === FirstRunSyncSource.S3 && !connected}
     <div class="space-y-4" data-testid="first-run-s3-setup">
@@ -458,19 +427,4 @@ its location lists, its keyrings show the same way.
       {/if}
     {/if}
   {/if}
-
-  <div class="flex justify-center">
-    <Button
-      type="button"
-      class="min-w-44 bg-accent/50 text-foreground hover:bg-accent"
-      variant="ghost"
-      size="sm"
-      data-testid="first-run-sync-skip"
-      disabled={busy}
-      onclick={() => actions.nameNew(FirstRunPlace.ThisBrowser)}
-    >
-      <MonitorSmartphone class="size-4" aria-hidden="true" />
-      {vault.t(I18N_KEYS.FirstRunSyncSkip)}
-    </Button>
-  </div>
 </section>

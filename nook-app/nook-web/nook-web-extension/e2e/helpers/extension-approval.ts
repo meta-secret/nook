@@ -25,10 +25,10 @@ export async function createWebsiteIdentityForConnect(
     if (await createChoice.isVisible()) await createChoice.click()
     await vaultPage.getByTestId('device-protection-setup-btn').click()
   }
-  const syncStep = vaultPage.getByTestId('first-run-sync-step')
-  await expect(syncStep.or(consent).first()).toBeVisible({ timeout: 30_000 })
-  if (await syncStep.isVisible()) {
-    await vaultPage.getByTestId('first-run-sync-skip').click()
+  const storageStep = vaultPage.getByTestId('first-run-storage-step')
+  await expect(storageStep.or(consent).first()).toBeVisible({ timeout: 30_000 })
+  if (await storageStep.isVisible()) {
+    await vaultPage.getByTestId('first-run-keep-local').click()
     const nameInput = vaultPage.getByTestId('first-run-identity-name-input')
     await expect(nameInput).toBeEnabled({ timeout: 30_000 })
     await nameInput.fill(vaultName)
@@ -102,13 +102,13 @@ async function nameFirstIdentityHere(
   vaultPage: Page,
   vaultName: string,
 ): Promise<void> {
-  const syncStep = vaultPage.getByTestId('first-run-sync-step')
-  const settled = syncStep
+  const storageStep = vaultPage.getByTestId('first-run-storage-step')
+  const settled = storageStep
     .or(vaultPage.getByTestId('authenticated-shell'))
     .or(vaultPage.getByTestId('identities-workspace'))
   await expect(settled.first()).toBeVisible({ timeout: 30_000 })
-  if (!(await syncStep.isVisible())) return
-  await vaultPage.getByTestId('first-run-sync-skip').click()
+  if (!(await storageStep.isVisible())) return
+  await vaultPage.getByTestId('first-run-keep-local').click()
   await vaultPage.getByTestId('first-run-identity-name-input').fill(vaultName)
   await vaultPage.getByTestId('first-run-identity-create-btn').click()
   // A new identity asks about its first vault; one that already has a vault

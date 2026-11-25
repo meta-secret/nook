@@ -3,18 +3,14 @@ Setup names the new keyring and explains who can read that name if it syncs.
 A keyring kept on this browser asks next whether to create a first vault.
 -->
 <script lang="ts">
-  import { Archive, Cloud, MonitorSmartphone, RefreshCw } from '@lucide/svelte'
+  import { RefreshCw } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
   import FirstRunBackLink from './FirstRunBackLink.svelte'
-  import FirstRunProgress from './FirstRunProgress.svelte'
+  import FirstRunMilestone from './FirstRunMilestone.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import { FirstRunActions } from '$lib/vault/first-run'
-  import {
-    FirstRunPlace,
-    FirstRunStage,
-    FirstRunSyncSource,
-  } from '$lib/vault/state/ui.svelte'
+  import { FirstRunPlace, FirstRunSyncSource } from '$lib/vault/state/ui.svelte'
 
   let { vault }: { vault: VaultState } = $props()
 
@@ -62,9 +58,9 @@ A keyring kept on this browser asks next whether to create a first vault.
       {vault}
       testId="first-run-name-back"
       disabled={vault.isVerifying}
-      onBack={() => actions.backToSync()}
+      onBack={() => actions.backFromKeyring()}
     />
-    <FirstRunProgress {vault} current={FirstRunStage.Name} />
+    <FirstRunMilestone label={where} />
   </div>
 
   <div class="space-y-2 text-center">
@@ -80,7 +76,11 @@ A keyring kept on this browser asks next whether to create a first vault.
       id="first-run-keyring-name-visibility"
       class="text-sm text-pretty text-muted-foreground"
     >
-      {vault.t(I18N_KEYS.FirstRunNameBody)}
+      {vault.t(
+        onProvider
+          ? I18N_KEYS.FirstRunNameBody
+          : I18N_KEYS.FirstRunLocalNameVisibility,
+      )}
     </p>
   </div>
 
@@ -118,17 +118,4 @@ A keyring kept on this browser asks next whether to create a first vault.
       {vault.t(I18N_KEYS.FirstRunNameCreate)}
     </Button>
   </form>
-  <p
-    class="nk-spec flex items-center justify-center gap-2"
-    data-testid="first-run-name-place"
-  >
-    {#if onProvider && syncSource === FirstRunSyncSource.S3}
-      <Archive class="size-3.5" aria-hidden="true" />
-    {:else if onProvider}
-      <Cloud class="size-3.5" aria-hidden="true" />
-    {:else}
-      <MonitorSmartphone class="size-3.5" aria-hidden="true" />
-    {/if}
-    {where}
-  </p>
 </section>

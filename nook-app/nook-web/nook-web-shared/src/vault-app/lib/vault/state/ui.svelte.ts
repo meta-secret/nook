@@ -86,7 +86,9 @@ export enum FirstRunStage {
   Off = "off",
   /** The identity waits for this browser's passkey or PIN. */
   Protect = "protect",
-  /** The key exists: sign in to a sync provider and pick an identity on it. */
+  /** Choose this device or optional sync after device protection. */
+  Storage = "storage",
+  /** The user chose sync: connect storage and choose a keyring there. */
   Sync = "sync",
   /** A new identity is being named, on the sync provider or this browser. */
   Name = "name",

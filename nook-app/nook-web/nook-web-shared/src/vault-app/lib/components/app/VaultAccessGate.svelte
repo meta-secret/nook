@@ -14,6 +14,7 @@
   } from '$lib/app/route-state'
   import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
   import FirstRunProtectStep from '$lib/components/login/FirstRunProtectStep.svelte'
+  import FirstRunStorageStep from "$lib/components/login/FirstRunStorageStep.svelte"
   import FirstRunSyncStep from '$lib/components/login/FirstRunSyncStep.svelte'
   import FirstRunNameStep from '$lib/components/login/FirstRunNameStep.svelte'
   import FirstRunVaultStep from '$lib/components/login/FirstRunVaultStep.svelte'
@@ -111,7 +112,8 @@
    * open, so its steps show here. */
   const firstRunSetup = $derived(
     !vault.isAuthenticated &&
-      (vault.firstRun === FirstRunStage.Sync ||
+      (vault.firstRun === FirstRunStage.Storage ||
+        vault.firstRun === FirstRunStage.Sync ||
         vault.firstRun === FirstRunStage.Name ||
         vault.firstRun === FirstRunStage.Vault ||
         vault.firstRun === FirstRunStage.Joining),
@@ -137,7 +139,9 @@
     {#if firstRunProtect}
       <FirstRunProtectStep {vault} onBack={leaveFirstRunProtect} />
     {:else if firstRunSetup}
-      {#if vault.firstRun === FirstRunStage.Sync}
+      {#if vault.firstRun === FirstRunStage.Storage}
+        <FirstRunStorageStep {vault} />
+      {:else if vault.firstRun === FirstRunStage.Sync}
         <FirstRunSyncStep {vault} />
       {:else if vault.firstRun === FirstRunStage.Name}
         <FirstRunNameStep {vault} />

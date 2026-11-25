@@ -232,7 +232,7 @@ export class FirstRunActions {
   }
 
   /** The device key is ready. During first run it only makes the identity's
-   * key, and setup moves on to the sync provider; outside setup it creates
+   * key, and setup moves on to the storage choice; outside setup it creates
    * the vault as before. A key that becomes ready again while setup is past
    * it changes nothing: the vault waits for the identity. */
   async createWithDeviceKeys(label: string): Promise<void> {
@@ -242,6 +242,7 @@ export class FirstRunActions {
       case FirstRunStage.Connect:
         await vault.createLocalVaultWithDeviceKeys(label);
         return;
+      case FirstRunStage.Storage:
       case FirstRunStage.Sync:
       case FirstRunStage.Name:
       case FirstRunStage.Vault:
@@ -277,7 +278,7 @@ export class FirstRunActions {
       this.nameNew(FirstRunPlace.SyncProvider);
       return;
     }
-    vault.firstRun = FirstRunStage.Sync;
+    vault.firstRun = FirstRunStage.Storage;
   }
 
   /** Stage Google Drive, ready for its sign-in. */
@@ -426,12 +427,16 @@ export class FirstRunActions {
     vault.firstRun = FirstRunStage.Name;
   }
 
-  /** Back from naming or a join to the sync provider's identities. */
-  backToSync(): void {
+  /** Return to the storage decision for a local name, or to a staged provider. */
+  backFromKeyring(): void {
     const vault = this.vault;
     vault.firstRunEmptyDriveToken = "";
     vault.firstRunJoin = { kind: FirstRunJoinKind.None };
-    vault.firstRun = FirstRunStage.Sync;
+    vault.firstRun =
+      vault.firstRun === FirstRunStage.Name &&
+      vault.firstRunPlace === FirstRunPlace.ThisBrowser
+        ? FirstRunStage.Storage
+        : FirstRunStage.Sync;
   }
 
   /** Name the new identity. Kept on this browser, it then asks whether to

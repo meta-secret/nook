@@ -36,7 +36,10 @@ test.each([enLocale, ruLocale])(
     await fireEvent.click(disclosure)
     expect(details?.open).toBe(true)
     expect(within(dataPath).queryByText(labels.server)).toBeNull()
-    expect(view.getByText(labels.hosting_description)).toBeTruthy()
+    expect(
+      view.getByRole('figure', { name: labels.hosting_description }),
+    ).toBeTruthy()
+    expect(view.queryByText(labels.hosting_description)).toBeNull()
     expect(onCreate).not.toHaveBeenCalled()
     expect(onConnectStorage).not.toHaveBeenCalled()
     await fireEvent.click(

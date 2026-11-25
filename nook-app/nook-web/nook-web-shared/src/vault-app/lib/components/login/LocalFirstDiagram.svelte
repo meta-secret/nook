@@ -84,7 +84,10 @@
         aria-hidden="true"
       />
     </summary>
-    <div class="grid gap-2 border-l border-border pl-3">
+    <figure
+      aria-label={vault.t(I18N_KEYS.FirstRunLocalFirstHostingDescription)}
+      class="m-0 border-l border-border pl-3"
+    >
       <div
         class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-foreground"
         aria-hidden="true"
@@ -95,9 +98,6 @@
         <AppWindow class="size-4" />
         {vault.t(I18N_KEYS.FirstRunLocalFirstBrowserApp)}
       </div>
-      <p class="text-xs leading-relaxed text-muted-foreground">
-        {vault.t(I18N_KEYS.FirstRunLocalFirstHostingDescription)}
-      </p>
-    </div>
+    </figure>
   </details>
 </div>

@@ -9,11 +9,10 @@ here to compare. There is no polling: Check again reads the answer.
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
   import FirstRunBackLink from './FirstRunBackLink.svelte'
-  import FirstRunProgress from './FirstRunProgress.svelte'
+  import FirstRunMilestone from './FirstRunMilestone.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import { FirstRunActions } from '$lib/vault/first-run'
   import { FirstRunJoinKind } from '$lib/vault/identity-join-wait'
-  import { FirstRunStage } from '$lib/vault/state/ui.svelte'
 
   let { vault }: { vault: VaultState } = $props()
 
@@ -44,9 +43,11 @@ here to compare. There is no polling: Check again reads the answer.
       {vault}
       testId="first-run-join-back"
       disabled={checking || vault.isVerifying}
-      onBack={() => actions.backToSync()}
+      onBack={() => actions.backFromKeyring()}
     />
-    <FirstRunProgress {vault} current={FirstRunStage.Joining} />
+    {#if vault.firstRunJoin.kind === FirstRunJoinKind.Asked}
+      <FirstRunMilestone label={vault.t(I18N_KEYS.FirstRunJoinRequestSent)} />
+    {/if}
   </div>
 
   <div class="space-y-2">
@@ -71,7 +72,9 @@ here to compare. There is no polling: Check again reads the answer.
       >
         {identity}
       </p>
-      <span class="nk-tag">{vault.t(I18N_KEYS.AccessCheckIdentityRequested)}</span>
+      <span class="nk-tag"
+        >{vault.t(I18N_KEYS.AccessCheckIdentityRequested)}</span
+      >
     </div>
     <div class="space-y-1">
       <p class="nk-label">{vault.t(I18N_KEYS.FirstRunJoinCompare)}</p>

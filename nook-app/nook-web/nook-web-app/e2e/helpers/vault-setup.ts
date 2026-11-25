@@ -104,7 +104,7 @@ export async function createFirstRunKey(page: Page): Promise<void> {
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await answerPasskeyPrompt(page)
-  await expect(page.getByTestId('first-run-sync-step')).toBeVisible({
+  await expect(page.getByTestId('first-run-storage-step')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
 }
@@ -115,9 +115,9 @@ export async function nameFirstIdentityOnly(
   page: Page,
   identityName: string,
 ): Promise<void> {
-  const skip = page.getByTestId('first-run-sync-skip')
-  await expect(skip).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-  await skip.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  const keepLocal = page.getByTestId('first-run-keep-local')
+  await expect(keepLocal).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await keepLocal.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   const nameInput = page.getByTestId('first-run-identity-name-input')
   await expect(nameInput).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   await nameInput.fill(identityName, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
@@ -182,11 +182,11 @@ async function waitForFirstVault(
   vaultName: string,
   readySurface: Locator,
 ): Promise<void> {
-  const syncStep = page.getByTestId('first-run-sync-step')
-  await expect(syncStep.or(readySurface).first()).toBeVisible({
+  const storageStep = page.getByTestId('first-run-storage-step')
+  await expect(storageStep.or(readySurface).first()).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  if (await syncStep.isVisible()) await nameFirstIdentityHere(page, vaultName)
+  if (await storageStep.isVisible()) await nameFirstIdentityHere(page, vaultName)
   await expect(readySurface).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
@@ -247,14 +247,14 @@ export async function createLocalVaultOnLogin(
     .getByTestId('passkey-auth-overlay')
     .or(page.getByTestId('first-run-protect-step'))
   const readySurface = page.getByTestId(readyTestId)
-  const syncStep = page.getByTestId('first-run-sync-step')
+  const storageStep = page.getByTestId('first-run-storage-step')
   const vaultError = page.getByTestId('vault-error')
   await expect
     .poll(
       async () =>
         (await passkeyOverlay.isVisible()) ||
         (await readySurface.isVisible()) ||
-        (await syncStep.isVisible()) ||
+        (await storageStep.isVisible()) ||
         (await vaultError.isVisible()),
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )

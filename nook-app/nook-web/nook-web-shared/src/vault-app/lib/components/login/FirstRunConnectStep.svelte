@@ -9,10 +9,10 @@ can be tried again, or left for the Sync page.
   import { untrack } from 'svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
-  import FirstRunProgress from './FirstRunProgress.svelte'
+  import FirstRunMilestone from './FirstRunMilestone.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import { FirstRunActions } from '$lib/vault/first-run'
-  import { FirstRunStage, FirstRunSyncSource } from '$lib/vault/state/ui.svelte'
+  import { FirstRunSyncSource } from '$lib/vault/state/ui.svelte'
 
   let {
     vault,
@@ -50,7 +50,7 @@ can be tried again, or left for the Sync page.
   class="mx-auto grid w-full max-w-md gap-6 py-6 sm:py-10"
   data-testid="first-run-connect-step"
 >
-  <FirstRunProgress {vault} current={FirstRunStage.Connect} />
+  <FirstRunMilestone label={vault.t(I18N_KEYS.FirstRunVaultReady)} />
 
   <div class="space-y-2">
     <h1
@@ -58,9 +58,6 @@ can be tried again, or left for the Sync page.
     >
       {vault.t(title)}
     </h1>
-    <p class="text-sm text-pretty text-muted-foreground">
-      {vault.t(I18N_KEYS.FirstRunConnectBody)}
-    </p>
   </div>
 
   {#if connecting}
