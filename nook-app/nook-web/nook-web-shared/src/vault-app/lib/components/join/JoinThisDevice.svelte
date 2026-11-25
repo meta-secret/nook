@@ -87,6 +87,8 @@ for the iCloud sign-in only when the join reaches it.
 
   <header class="space-y-2 text-center">
     <h1
+      id="join-route-heading"
+      tabindex="-1"
       class="text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-foreground"
     >
       {vault.t(I18N_KEYS.JoinTitle)}
