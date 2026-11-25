@@ -91,12 +91,13 @@ be pending or need a retry.
 - **Protect this device.** Set up or unlock device protection. Back returns to
   Start. After the device key is ready, **Passkey ready** acknowledges passkey
   protection and **Device protection ready** covers other protection modes.
-- **Choose whether to back up.** Before either action, explain both outcomes.
-  The user can keep an encrypted copy in a cloud they choose and later add a
-  second device for access if they lose the first. **Keep it on this device**
-  goes straight to naming. **Also back up to my cloud** opens the destination
-  picker. Back from that picker clears the provider draft and returns to the
-  backup decision.
+- **Choose whether to back up.** Under “Back up your vault?”, **Keep it on
+  this device** goes straight to naming. **Add a cloud backup** opens the
+  destination picker and includes the cue “Add a second device later”.
+  Its screen reader description explains that the user chooses where to keep
+  an encrypted copy. Adding a second device is a separate step that gives the
+  user another way to open the vault if they lose the first device. Back from
+  the picker clears the provider draft and returns to the backup decision.
 - **Choose a backup destination.** “Where should Nook save your backup?”
   offers Google Drive and S3-compatible storage. Drive signs in to list the
   identities in its Nook folder. S3 takes an endpoint, region, bucket, optional
