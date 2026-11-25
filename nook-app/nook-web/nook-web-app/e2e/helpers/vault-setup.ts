@@ -183,7 +183,8 @@ async function waitForFirstVault(
   await expect(storageStep.or(readySurface).first()).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  if (await storageStep.isVisible()) await nameFirstIdentityHere(page, vaultName)
+  if (await storageStep.isVisible())
+    await nameFirstIdentityHere(page, vaultName)
   await expect(readySurface).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })

@@ -59,8 +59,8 @@ test('local storage goes straight to naming and Back returns to the undecided st
   const vault = storageChoice()
   const beginProvider = vi.spyOn(vault, 'beginProviderSetup')
   const choice = render(FirstRunStorageStep, { vault })
-  expect(choice.queryByTestId('first-run-milestone')).toBeNull()
-  expect(choice.queryByTestId('first-run-providers')).toBeNull()
+  expect(choice.queryAllByTestId('first-run-milestone')).toHaveLength(0)
+  expect(choice.queryAllByTestId('first-run-providers')).toHaveLength(0)
   await fireEvent.click(
     choice.getByRole('button', { name: en.first_run.keep_local }),
   )

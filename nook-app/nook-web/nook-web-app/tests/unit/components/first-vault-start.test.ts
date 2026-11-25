@@ -26,7 +26,7 @@ test.each([enLocale, ruLocale])(
     })
     const device = within(dataPath).getByTestId('local-vault-browser')
     expect(within(device).getByText(labels.vault)).toBeTruthy()
-    expect(within(device).queryByText(labels.storage)).toBeNull()
+    expect(within(device).queryAllByText(labels.storage)).toHaveLength(0)
     expect(within(dataPath).getByText(labels.optional_sync)).toBeTruthy()
     expect(within(dataPath).getByText(labels.storage)).toBeTruthy()
 
@@ -35,11 +35,11 @@ test.each([enLocale, ruLocale])(
     expect(details?.open).toBe(false)
     await fireEvent.click(disclosure)
     expect(details?.open).toBe(true)
-    expect(within(dataPath).queryByText(labels.server)).toBeNull()
+    expect(within(dataPath).queryAllByText(labels.server)).toHaveLength(0)
     expect(
       view.getByRole('figure', { name: labels.hosting_description }),
     ).toBeTruthy()
-    expect(view.queryByText(labels.hosting_description)).toBeNull()
+    expect(view.queryAllByText(labels.hosting_description)).toHaveLength(0)
     expect(onCreate).not.toHaveBeenCalled()
     expect(onConnectStorage).not.toHaveBeenCalled()
     await fireEvent.click(
