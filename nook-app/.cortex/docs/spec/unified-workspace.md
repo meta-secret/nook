@@ -83,8 +83,7 @@ The connection to cloud storage can still be pending or need a retry.
 
 - **Start.** “Your password manager” and “Encrypted on this device” introduce
   **Set up Nook**. The diagram places the encrypted vault inside the browser
-  and shows optional sync through the user's own cloud. **Host Nook yourself**
-  expands a separate illustration of a server delivering the app to the browser.
+  and shows optional sync through the user's own cloud.
   **Open your vault on this device** shows the available paths to **This
   device**. When joining is available, **I have an invite link** opens the
   invite flow for a link from another Nook device. **I have a backup** opens
