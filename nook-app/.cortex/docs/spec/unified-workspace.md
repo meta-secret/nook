@@ -88,9 +88,11 @@ The connection to cloud storage can still be pending or need a retry.
   **Open your vault on this device** shows the available paths to **This
   device**. When joining is available, **I have an invite link** opens the
   invite flow for a link from another Nook device. **I have a backup** opens
-  recovery from an encrypted backup with a passkey or approval from a device
-  that already has access. Each branch shows its access method and opens its
-  flow directly. **How Nook works** and **Check a passkey** sit below.
+  recovery from an encrypted backup. Its cue reads “Unlock or request access”.
+  On the recovery screen, the keyring and provider determine the available
+  methods. The user may use a passkey, enter saved recovery words, or request approval
+  from a device that already has access. Each branch opens its flow directly.
+  **How Nook works** and **Check a passkey** sit below.
 - **Protect this device.** Set up or unlock device protection. Back returns to
   Start. After the device key is ready, **Passkey ready** acknowledges passkey
   protection and **Device protection ready** covers other protection modes.
