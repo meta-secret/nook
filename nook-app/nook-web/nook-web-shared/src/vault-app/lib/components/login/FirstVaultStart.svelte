@@ -7,6 +7,9 @@
     ArrowRight,
     CloudDownload,
     MonitorSmartphone,
+    ShieldCheck,
+    BookOpen,
+    ScanFace,
     RefreshCw,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
@@ -72,21 +75,18 @@
 {#snippet path(row: StartPath)}
   <button
     type="button"
-    class="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-foreground/5 disabled:opacity-60"
+    class="return-action"
     data-testid={row.testId}
     disabled={row.disabled}
     onclick={row.onOpen}
   >
-    <span class="nk-tile nk-tile-sm" aria-hidden="true">
-      <row.icon class="size-4" />
-    </span>
-    <span class="min-w-0 flex-1 text-sm font-medium text-foreground">
-      {row.title}
-    </span>
-    <ArrowRight
-      class="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+    <row.icon
+      class="size-5 shrink-0 text-muted-foreground"
+      strokeWidth={1.6}
       aria-hidden="true"
     />
+    <span>{row.title}</span>
+    <ArrowRight class="return-arrow size-4 shrink-0" aria-hidden="true" />
   </button>
 {/snippet}
 
@@ -98,47 +98,42 @@
     onBack={() => (joining = false)}
   />
 {:else}
-  <section
-    class="mx-auto grid w-full max-w-md gap-6 py-4 text-left sm:gap-8 sm:py-10"
-    data-testid="first-vault-start"
-  >
-    <div class="grid gap-4">
-      <header class="space-y-2">
-        <h1
-          class="text-3xl leading-tight font-semibold tracking-tight text-balance text-foreground sm:text-4xl"
-        >
-          {vault.t(I18N_KEYS.FirstRunTitle)}
-        </h1>
-        <p class="text-base text-muted-foreground">
+  <section class="welcome" data-testid="first-vault-start">
+    <div class="welcome-hero">
+      <div class="welcome-intro">
+        <h1>{vault.t(I18N_KEYS.FirstRunTitle)}</h1>
+        <p class="welcome-promise">
+          <ShieldCheck
+            aria-hidden="true"
+            strokeWidth={1.65}
+            class="size-5 shrink-0"
+          />
           {vault.t(I18N_KEYS.FirstRunIntro)}
         </p>
-      </header>
+        <Button
+          type="button"
+          class="welcome-setup"
+          disabled={isBusy}
+          data-testid="first-run-create-identity-btn"
+          onclick={() => void create()}
+        >
+          {#if isBusy}
+            <RefreshCw class="size-4 animate-spin" aria-hidden="true" />
+          {/if}
+          {vault.t(I18N_KEYS.FirstRunCreate)}
+          {#if !isBusy}
+            <ArrowRight class="size-4" aria-hidden="true" />
+          {/if}
+        </Button>
+      </div>
       <LocalFirstDiagram {vault} />
-      <Button
-        type="button"
-        class="min-h-11 h-auto whitespace-normal sm:justify-self-start"
-        disabled={isBusy}
-        data-testid="first-run-create-identity-btn"
-        onclick={() => void create()}
-      >
-        {#if isBusy}
-          <RefreshCw class="size-4 animate-spin" aria-hidden="true" />
-        {/if}
-        {vault.t(I18N_KEYS.FirstRunCreate)}
-        {#if !isBusy}
-          <ArrowRight class="size-4" aria-hidden="true" />
-        {/if}
-      </Button>
     </div>
 
-    <section class="grid gap-3" aria-labelledby="returning-user-heading">
-      <h2
-        id="returning-user-heading"
-        class="text-base font-semibold text-foreground"
-      >
+    <section class="returning" aria-labelledby="returning-user-heading">
+      <h2 id="returning-user-heading">
         {vault.t(I18N_KEYS.FirstRunReturning)}
       </h2>
-      <div class="nk-frame divide-y divide-border" data-testid="login-paths">
+      <div class="return-actions" data-testid="login-paths">
         {#if onUseEnrollmentCode}
           {@render path(addDevice)}
         {/if}
@@ -146,23 +141,182 @@
       </div>
     </section>
 
-    <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
+    <div class="welcome-utilities">
       <button
         type="button"
-        class="py-2 text-left underline underline-offset-4 hover:text-foreground"
         data-testid="first-vault-how-it-works"
         onclick={() => vault.openHelp()}
       >
+        <BookOpen class="size-4" aria-hidden="true" />
         {vault.t(I18N_KEYS.FirstRunHowItWorks)}
       </button>
       <button
         type="button"
-        class="py-2 text-left underline underline-offset-4 hover:text-foreground"
         data-testid="login-access-check-link"
         onclick={() => new VaultWorkspaceActions(vault).openAccessCheck()}
       >
+        <ScanFace class="size-4" aria-hidden="true" />
         {vault.t(I18N_KEYS.FirstRunPathCheck)}
       </button>
     </div>
   </section>
 {/if}
+
+<style>
+  .welcome {
+    --welcome-accent: #086450;
+    --welcome-button: #99e7c8;
+    --welcome-rule: color-mix(in srgb, var(--foreground) 22%, transparent);
+    width: min(100%, 66rem);
+    margin-inline: auto;
+    padding-block: clamp(1rem, 3vw, 3rem);
+  }
+
+  :global(.dark) .welcome {
+    --welcome-accent: #8adab9;
+  }
+  .welcome-hero {
+    display: grid;
+    align-items: center;
+    gap: clamp(2rem, 5vw, 5rem);
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    padding-block: clamp(2rem, 5vw, 5rem);
+  }
+
+  .welcome-intro h1 {
+    margin: 0;
+    max-width: 15ch;
+    color: var(--foreground);
+    font-size: clamp(3rem, 4.65vw, 4.25rem);
+    font-weight: 610;
+    letter-spacing: -0.052em;
+    line-height: 1.015;
+    text-wrap: balance;
+  }
+
+  .welcome-promise {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-block: 1.3rem 1.9rem;
+    color: color-mix(in srgb, var(--foreground) 76%, var(--background));
+    font-size: clamp(1rem, 1.4vw, 1.17rem);
+  }
+  .welcome-promise :global(svg) {
+    color: var(--welcome-accent);
+  }
+
+  .welcome-intro :global(.welcome-setup) {
+    height: auto;
+    min-height: 2.95rem;
+    padding: 0.72rem 1.3rem;
+    gap: 1.2rem;
+    border: 1px solid color-mix(in srgb, var(--welcome-button) 58%, #25433c);
+    border-radius: var(--radius);
+    background: var(--welcome-button);
+    color: #092c23;
+    font-size: 1rem;
+    font-weight: 650;
+    white-space: normal;
+  }
+  .welcome-intro :global(.welcome-setup:hover) {
+    background: #b1f0d7;
+  }
+
+  .returning {
+    display: grid;
+    grid-template-columns: minmax(0, 0.62fr) minmax(0, 1.38fr);
+    align-items: baseline;
+    gap: 1.5rem;
+    border-block: 1px solid var(--welcome-rule);
+    padding-block: 0.9rem;
+  }
+  .returning h2 {
+    font-size: 1.08rem;
+    font-weight: 600;
+  }
+  .return-actions {
+    display: flex;
+    gap: 1.5rem;
+  }
+  .return-action {
+    flex: 1;
+    min-width: 0;
+    min-height: 2.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.5rem 0;
+    text-align: left;
+    font-size: 0.97rem;
+    font-weight: 500;
+  }
+  .return-action :global(.return-arrow) {
+    margin-left: auto;
+    color: var(--welcome-accent);
+  }
+  .return-action:hover {
+    color: var(--welcome-accent);
+  }
+  .return-action:disabled {
+    opacity: 0.55;
+  }
+  .welcome-utilities {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 1.75rem;
+    margin-top: 0.45rem;
+  }
+  .welcome-utilities button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+  }
+  .welcome-utilities button:hover {
+    color: var(--foreground);
+  }
+  .welcome :global(button:focus-visible),
+  .welcome :global(summary:focus-visible) {
+    outline: 2px solid var(--welcome-accent);
+    outline-offset: 4px;
+  }
+
+  @media (max-width: 47.99rem) {
+    .welcome {
+      max-width: 35rem;
+      padding-block: 0.2rem 0.8rem;
+    }
+    .welcome-hero {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 1.4rem;
+      padding-block: 1rem 1.25rem;
+    }
+    .welcome-intro h1 {
+      font-size: clamp(2.75rem, 9vw, 4.1rem);
+    }
+    .welcome-promise {
+      margin-block: 0.8rem 1.05rem;
+    }
+    .welcome-intro :global(.welcome-setup) {
+      min-height: 2.75rem;
+    }
+    .returning {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.2rem;
+      padding-block: 0.9rem 0.2rem;
+    }
+    .return-actions {
+      flex-direction: column;
+      gap: 0;
+    }
+    .return-action + .return-action {
+      border-top: 1px solid var(--border);
+    }
+    .welcome-utilities {
+      column-gap: 1.25rem;
+    }
+  }
+</style>
