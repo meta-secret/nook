@@ -98,17 +98,17 @@
   />
 {:else}
   <section
-    class="mx-auto grid w-full max-w-lg gap-8 py-6 text-left sm:gap-10 sm:py-16"
+    class="mx-auto grid w-full max-w-md gap-7 py-6 text-left sm:gap-8 sm:py-16"
     data-testid="first-vault-start"
   >
     <div class="grid gap-5">
-      <header class="space-y-3">
+      <header class="space-y-2">
         <h1
           class="text-3xl leading-tight font-semibold tracking-tight text-balance text-foreground sm:text-4xl"
         >
           {vault.t(I18N_KEYS.FirstRunTitle)}
         </h1>
-        <p class="text-base leading-relaxed text-pretty text-muted-foreground">
+        <p class="text-base text-muted-foreground">
           {vault.t(I18N_KEYS.FirstRunIntro)}
         </p>
       </header>

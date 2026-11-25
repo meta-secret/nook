@@ -481,19 +481,17 @@ test.describe('vault architecture modes', () => {
     // The first screen stands alone: no hub hero, no identity card yet.
     await expect(page.getByTestId('identities-hero')).toHaveCount(0)
     await expect(start.getByRole('heading', { level: 1 })).toHaveText(
-      'Your password manager, right on this device',
+      'Your password manager',
     )
-    await expect(start).toContainText(
-      /encrypts.*in this browser.*storage you choose/i,
-    )
+    await expect(start).toContainText('Encrypted on this device')
     await expect(start).not.toContainText(/keyring/i)
     const returning = start.getByRole('region', { name: 'Already use Nook?' })
     await expect(returning.getByRole('button')).toHaveText([
-      'Connect this device with an invite link',
-      'Recover from your synced copy',
+      'Use an invite link',
+      'Recover a synced copy',
     ])
     await expect(
-      start.getByRole('button', { name: 'Check what a passkey opens' }),
+      start.getByRole('button', { name: 'Check a passkey' }),
     ).toBeEnabled()
     await expect(start.getByText('How Nook works')).toBeVisible()
 
@@ -501,15 +499,16 @@ test.describe('vault architecture modes', () => {
     await page.getByTestId('header-language-option-ru').click()
 
     await expect(start.getByRole('heading', { level: 1 })).toHaveText(
-      'Ваш менеджер паролей на этом устройстве',
+      'Ваш менеджер паролей',
     )
     await expect(
       start.getByRole('region', { name: 'Уже пользуетесь Nook?' }),
     ).toBeVisible()
+    await expect(start).toContainText('Данные зашифрованы на этом устройстве')
     await expect(start).not.toContainText(/связк/i)
     await expect(
       page.getByTestId('first-run-create-identity-btn'),
-    ).toContainText('Настроить Nook на этом устройстве')
+    ).toContainText('Настроить Nook')
   })
 
   test('creates a simple personal vault and keeps secret values out of app logs', async ({
@@ -584,16 +583,16 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('first-vault-start')).toBeVisible()
 
     // The passkey makes the key; no vault exists until the identity is settled.
-    await page
-      .getByRole('button', { name: 'Set up Nook on this device' })
-      .click()
+    await page.getByRole('button', { name: 'Set up Nook' }).click()
     const protect = page.getByTestId('first-run-protect-step')
     await expect(protect).toBeVisible()
     await expect(protect).not.toContainText(/keyring/i)
     await answerPasskeyPrompt(page)
     await expect(page.getByTestId('first-run-google-sign-in')).toBeVisible()
-    await expect(page.getByTestId('first-run-sync-step')).not.toContainText(
-      /keyring/i,
+    const sync = page.getByTestId('first-run-sync-step')
+    await expect(sync).not.toContainText(/keyring/i)
+    await expect(sync).toContainText(
+      'storage you choose, or keep it in this browser',
     )
     await expect(page.getByTestId('vault-panel')).toHaveCount(0)
 

@@ -409,7 +409,7 @@
       )}
       subtitle={canConnect
         ? recoveringDrive
-          ? vault.t(I18N_KEYS.FirstRunKeyringExplanation)
+          ? vault.t(I18N_KEYS.ProviderPickerGoogleDrive)
           : isICloud
             ? vault.t(I18N_KEYS.ProviderSetupIcloudSyncSubtitle)
             : vault.t(I18N_KEYS.ProviderSetupGoogleSyncSubtitle)
@@ -428,6 +428,11 @@
       {:else if driveSignIn.kind === DraftDriveSignInKind.SignedIn}
         <!-- The listing offers recovery on each card, or setup for the
              keyring adding this Drive account. -->
+        {#if recoveringDrive}
+          <p class="text-sm text-pretty text-muted-foreground">
+            {vault.t(I18N_KEYS.FirstRunKeyringExplanation)}
+          </p>
+        {/if}
         <GoogleDriveVaultInventory
           {vault}
           accessToken={driveSignIn.access.authorization.accessToken}

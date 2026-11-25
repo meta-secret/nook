@@ -1150,6 +1150,7 @@ export const I18N_KEYS = {
   FirstRunSyncDiagramSyncs: 'first_run.sync_diagram_syncs',
   FirstRunSyncEmpty: 'first_run.sync_empty',
   FirstRunSyncEmptyS3: 'first_run.sync_empty_s3',
+  FirstRunSyncIntro: 'first_run.sync_intro',
   FirstRunSyncSkip: 'first_run.sync_skip',
   FirstRunSyncTitle: 'first_run.sync_title',
   FirstRunTitle: 'first_run.title',

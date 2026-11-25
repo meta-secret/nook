@@ -269,12 +269,14 @@ its location lists, its keyrings show the same way.
           : I18N_KEYS.FirstRunSyncTitle,
       )}
     </h1>
-    {#if connected}
-      <p class="text-sm text-pretty text-muted-foreground">
+    <p class="text-sm text-pretty text-muted-foreground">
+      {#if connected}
         {vault.t(I18N_KEYS.FirstRunKeyringExplanation)}
         {vault.t(I18N_KEYS.FirstRunSyncChooseBody)}
-      </p>
-    {/if}
+      {:else}
+        {vault.t(I18N_KEYS.FirstRunSyncIntro)}
+      {/if}
+    </p>
   </div>
 
   {#if !connected}

@@ -48,7 +48,7 @@ test('exposes only the project capability and rejects the opposite vault type', 
     await expect(page.getByTestId('get-started-path-chooser')).toHaveCount(0)
     await expect(page.getByTestId('get-started-path-sentinel')).toHaveCount(0)
     await expect(page.getByTestId('login-connect-storage-btn')).toContainText(
-      'Recover from your synced copy',
+      'Recover a synced copy',
     )
     await expect(page.getByTestId('sentinel-dashboard-choice')).toHaveCount(0)
     await expect(page.getByTestId('sibling-vault-app-link')).toHaveCount(0)

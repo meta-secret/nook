@@ -1370,6 +1370,7 @@ pub const FIRST_RUN_SYNC_DIAGRAM_LABEL: &str = "first_run.sync_diagram_label";
 pub const FIRST_RUN_SYNC_DIAGRAM_SYNCS: &str = "first_run.sync_diagram_syncs";
 pub const FIRST_RUN_SYNC_EMPTY: &str = "first_run.sync_empty";
 pub const FIRST_RUN_SYNC_EMPTY_S3: &str = "first_run.sync_empty_s3";
+pub const FIRST_RUN_SYNC_INTRO: &str = "first_run.sync_intro";
 pub const FIRST_RUN_SYNC_SKIP: &str = "first_run.sync_skip";
 pub const FIRST_RUN_SYNC_TITLE: &str = "first_run.sync_title";
 pub const FIRST_RUN_TITLE: &str = "first_run.title";
