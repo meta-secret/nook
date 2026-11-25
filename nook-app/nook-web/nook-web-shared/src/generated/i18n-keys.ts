@@ -1089,7 +1089,6 @@ export const I18N_KEYS = {
   FirstRunBack: 'first_run.back',
   FirstRunChooseSync: 'first_run.choose_sync',
   FirstRunCloudActionDescription: 'first_run.cloud_action_description',
-  FirstRunCloudDeviceCue: 'first_run.cloud_device_cue',
   FirstRunConnectRetry: 'first_run.connect_retry',
   FirstRunConnectSkip: 'first_run.connect_skip',
   FirstRunConnectTitle: 'first_run.connect_title',

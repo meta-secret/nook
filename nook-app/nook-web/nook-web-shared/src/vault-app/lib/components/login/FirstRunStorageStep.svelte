@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Cloud, LockKeyhole, Monitor } from "@lucide/svelte";
+  import { ArrowLeftRight, ArrowRight, Cloud, Laptop, LockKeyhole, Monitor, Smartphone } from "@lucide/svelte";
   import { DeviceProtectionStatus } from "$app-wasm";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { Button } from "$lib/components/ui/button";
@@ -40,42 +40,41 @@
       {vault.t(I18N_KEYS.FirstRunStorageTitle)}
     </h1>
   </header>
-  <div class="grid gap-3">
+  <div class="routes grid gap-3">
     <Button
       type="button"
-      class="h-auto min-h-16 justify-start gap-4 px-4 py-3 text-left whitespace-normal"
-      data-testid="first-run-keep-local"
-      disabled={vault.isVerifying}
-      onclick={() => actions.nameNew(FirstRunPlace.ThisBrowser)}
-    >
-      <span class="action-icon" aria-hidden="true">
-        <Monitor />
-        <LockKeyhole class="badge" />
-      </span>
-      {vault.t(I18N_KEYS.FirstRunKeepLocal)}
-    </Button>
-    <Button
-      type="button"
-      variant="outline"
-      class="h-auto min-h-16 justify-start gap-4 px-4 py-3 text-left whitespace-normal"
+      class="device-sync"
       aria-labelledby="first-run-cloud-action"
       aria-describedby="first-run-cloud-description"
       data-testid="first-run-choose-sync"
       disabled={vault.isVerifying}
       onclick={() => (vault.firstRun = FirstRunStage.Sync)}
     >
-      <span class="action-icon" aria-hidden="true">
-        <Cloud />
-        <LockKeyhole class="badge" />
+      <span class="flex w-full items-center justify-between gap-3">
+        <span id="first-run-cloud-action">{vault.t(I18N_KEYS.FirstRunChooseSync)}</span>
+        <ArrowRight aria-hidden="true" />
       </span>
-      <span class="grid min-w-0 gap-0.5">
-        <span id="first-run-cloud-action"
-          >{vault.t(I18N_KEYS.FirstRunChooseSync)}</span
-        >
-        <span class="text-xs text-muted-foreground"
-          >{vault.t(I18N_KEYS.FirstRunCloudDeviceCue)}</span
-        >
+      <span aria-hidden="true" class="connection">
+        <Smartphone class="device" />
+        <ArrowLeftRight class="link" />
+        <span class="cloud">
+          <span class="cloud-icon"><Cloud /><LockKeyhole class="lock" /></span>
+          <span>{vault.t(I18N_KEYS.FirstRunLocalFirstStorage)}</span>
+        </span>
+        <ArrowLeftRight class="link" />
+        <Laptop class="device" />
       </span>
+    </Button>
+    <Button
+      type="button"
+      variant="outline"
+      class="min-h-12 h-auto justify-start gap-3 px-4 py-3 text-left whitespace-normal"
+      data-testid="first-run-keep-local"
+      disabled={vault.isVerifying}
+      onclick={() => actions.nameNew(FirstRunPlace.ThisBrowser)}
+    >
+      <Monitor aria-hidden="true" />
+      {vault.t(I18N_KEYS.FirstRunKeepLocal)}
     </Button>
   </div>
   <span id="first-run-cloud-description" class="sr-only">
@@ -84,25 +83,62 @@
 </section>
 
 <style>
-  .action-icon {
-    position: relative;
+  .routes :global(.device-sync) {
     display: grid;
-    width: 1.75rem;
-    height: 1.75rem;
-    flex-shrink: 0;
-    place-items: center;
+    height: auto;
+    justify-content: stretch;
+    gap: 0.8rem;
+    padding: 0.95rem 1.1rem;
+    border: 1px solid #74af99;
+    background: #99e7c8;
+    color: #092c23;
+    text-align: left;
+    font-size: 1.05rem;
+    font-weight: 650;
+    white-space: normal;
   }
-  .action-icon :global(svg) {
-    width: 1.6rem;
-    height: 1.6rem;
+  .routes :global(.device-sync:hover) {
+    background: #b1f0d7;
   }
-  .action-icon :global(svg.badge) {
+  .connection {
+    display: grid;
+    grid-template-columns: auto minmax(1rem, 2.75rem) auto minmax(1rem, 2.75rem) auto;
+    align-items: start;
+    justify-content: center;
+    gap: clamp(0.45rem, 2.5vw, 1rem);
+    border-top: 1px solid #38685455;
+    padding-top: 0.7rem;
+  }
+  .connection :global(svg.device),
+  .cloud-icon :global(svg) {
+    width: 1.7rem;
+    height: 1.7rem;
+  }
+  .connection :global(svg.link) {
+    align-self: start;
+    justify-self: center;
+    width: 1.15rem;
+    height: 1.7rem;
+    color: #235d49;
+  }
+  .cloud {
+    display: grid;
+    justify-items: center;
+    gap: 0.25rem;
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 550;
+    line-height: 1.2;
+  }
+  .cloud-icon {
+    position: relative;
+  }
+  .cloud-icon :global(svg.lock) {
     position: absolute;
-    right: -0.15rem;
     bottom: 0;
+    right: -0.2rem;
     width: 0.85rem;
     height: 0.85rem;
-    stroke-width: 2.25;
-    fill: var(--color-background);
+    fill: #99e7c8;
   }
 </style>

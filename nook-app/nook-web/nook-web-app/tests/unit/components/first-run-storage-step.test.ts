@@ -33,9 +33,11 @@ test.each([
 )
 
 test.each([en, ru])(
-  'offers two storage actions and describes later device access on the cloud choice',
+  'offers multi-device first without connecting until a choice is made',
   (locale) => {
-    const view = render(FirstRunStorageStep, { vault: storageChoice(locale) })
+    const vault = storageChoice(locale)
+    const beginProvider = vi.spyOn(vault, 'beginProviderSetup')
+    const view = render(FirstRunStorageStep, { vault })
     const labels = locale.first_run
     expect(
       view.getByRole('heading', { name: labels.storage_title }),
@@ -44,8 +46,15 @@ test.each([en, ru])(
       name: labels.choose_sync,
       description: labels.cloud_action_description,
     })
-    expect(within(cloud).getByText(labels.cloud_device_cue)).toBeTruthy()
-    expect(view.getByRole('button', { name: labels.keep_local })).toBeTruthy()
+    expect(within(cloud).getByText(labels.local_first.storage)).toBeTruthy()
+    const local = view.getByRole('button', { name: labels.keep_local })
+    expect(
+      cloud.compareDocumentPosition(local) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(view.queryAllByTestId('first-run-providers')).toHaveLength(0)
+    expect(vault.firstRun).toBe(FirstRunStage.Storage)
+    expect(vault.providerDraft.type).toBe('local')
+    expect(beginProvider).not.toHaveBeenCalled()
     expect(view.queryAllByRole('list')).toHaveLength(0)
   },
 )

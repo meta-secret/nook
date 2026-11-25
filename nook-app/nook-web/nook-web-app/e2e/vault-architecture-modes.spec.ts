@@ -596,9 +596,7 @@ test.describe('vault architecture modes', () => {
 
     // Kept on this browser, the identity is named (an empty name takes the
     // suggested one); its first vault is then the person's choice.
-    await storage
-      .getByRole('button', { name: 'Keep it on this device' })
-      .click()
+    await storage.getByRole('button', { name: 'On this device' }).click()
     await expect(page.getByTestId('first-run-name-step')).toContainText(
       'Your passwords go in vaults. Your keyring holds the keys that open them.',
     )
