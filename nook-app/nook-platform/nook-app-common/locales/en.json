@@ -2215,7 +2215,7 @@
     "path_add_device": "I have an invite link",
     "invite_source": "From another Nook device",
     "path_recover": "I have a backup",
-    "backup_access": "Use a passkey or device approval",
+    "backup_access": "Unlock or request access",
     "path_check": "Check a passkey",
     "back": "Back",
     "protect_title": "Protect your passwords on this device",
@@ -2266,10 +2266,10 @@
     "restore_title": "Recover from a backup",
     "restore_pick": "Where did you save your backup?",
     "restore_choose_vault": "Keyrings in this backup",
-    "restore_choose_vault_body": "Recover yours with its passkey, or ask one of its devices to let this browser join.",
+    "restore_choose_vault_body": "Choose your keyring to see its recovery options.",
     "restore_vault_item": "Vault {id}",
-    "restore_body": "Use your passkey or ask another device to approve access.",
-    "restore_diagram_label": "How your passkey unlocks the keys in your backup",
+    "restore_body": "Depending on your backup, use a passkey, recovery words or approval from another device.",
+    "restore_diagram_label": "How a recovery method opens the keys in your backup",
     "restore_diagram_keeps": "keeps",
     "storage_title": "Where will you use Nook?",
     "keep_local": "On this device",
@@ -2283,7 +2283,8 @@
     "join_request_sent": "Request sent",
     "sync_selected": "Multi-device access selected",
     "cloud_action_description": "Choose your own cloud to sync encrypted changes between devices you add.",
-    "restore_location": "Your backup"
+    "restore_location": "Your backup",
+    "restore_method": "Your recovery method"
   },
   "identity_health": {
     "label": "Keyring health",

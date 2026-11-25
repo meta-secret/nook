@@ -1372,6 +1372,7 @@ pub const FIRST_RUN_RESTORE_CHOOSE_VAULT_BODY: &str = "first_run.restore_choose_
 pub const FIRST_RUN_RESTORE_DIAGRAM_KEEPS: &str = "first_run.restore_diagram_keeps";
 pub const FIRST_RUN_RESTORE_DIAGRAM_LABEL: &str = "first_run.restore_diagram_label";
 pub const FIRST_RUN_RESTORE_LOCATION: &str = "first_run.restore_location";
+pub const FIRST_RUN_RESTORE_METHOD: &str = "first_run.restore_method";
 pub const FIRST_RUN_RESTORE_PICK: &str = "first_run.restore_pick";
 pub const FIRST_RUN_RESTORE_TITLE: &str = "first_run.restore_title";
 pub const FIRST_RUN_RESTORE_VAULT_ITEM: &str = "first_run.restore_vault_item";

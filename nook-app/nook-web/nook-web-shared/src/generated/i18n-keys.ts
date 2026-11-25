@@ -1150,6 +1150,7 @@ export const I18N_KEYS = {
   FirstRunRestoreDiagramKeeps: 'first_run.restore_diagram_keeps',
   FirstRunRestoreDiagramLabel: 'first_run.restore_diagram_label',
   FirstRunRestoreLocation: 'first_run.restore_location',
+  FirstRunRestoreMethod: 'first_run.restore_method',
   FirstRunRestorePick: 'first_run.restore_pick',
   FirstRunRestoreTitle: 'first_run.restore_title',
   FirstRunRestoreVaultItem: 'first_run.restore_vault_item',

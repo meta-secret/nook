@@ -493,7 +493,7 @@ test.describe('vault architecture modes', () => {
     ).toHaveAccessibleDescription('From another Nook device')
     await expect(
       returning.getByRole('button', { name: 'I have a backup' }),
-    ).toHaveAccessibleDescription('Use a passkey or device approval')
+    ).toHaveAccessibleDescription('Unlock or request access')
     await expect(
       start.getByRole('button', { name: 'Check a passkey' }),
     ).toBeEnabled()

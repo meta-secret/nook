@@ -17,9 +17,10 @@ beforeAll(async () => {
 })
 
 describe('first-run diagrams', () => {
-  test('recovery can start from a backup in a folder or the cloud', () => {
-    const destination = firstRunRecoveryDiagram(VaultStateTestFixture.create())
-      .nodes[0]
+  test('a backup opens with its available recovery method', () => {
+    const { nodes } = firstRunRecoveryDiagram(VaultStateTestFixture.create())
+    const [destination, , method] = nodes
+    expect(method?.label).toBe('Your recovery method')
     expect(destination?.label).toBe('Your backup')
     expect(destination?.icons).toEqual([Folder])
   })
