@@ -249,7 +249,7 @@ async function createAndApproveVault(context, popupPage) {
   // A delivered approval closes the consent; an undelivered one keeps it
   // open with its approved notice and Done action. A first run then offers
   // a sync provider: declining it keeps the identity here and names it.
-  const firstRunSync = simplePage.getByTestId('first-run-sync-step')
+  const firstRunStorage = simplePage.getByTestId('first-run-storage-step')
   await consent
     .locator(':scope:not(:has([data-testid="extension-connect-approved"]))')
     .waitFor({ state: 'hidden', timeout: TIMEOUT_MS })
@@ -257,12 +257,12 @@ async function createAndApproveVault(context, popupPage) {
     await simplePage.getByRole('button', { name: 'Done' }).click()
   }
   await authenticated
-    .or(firstRunSync)
+    .or(firstRunStorage)
     .or(simplePage.getByTestId('identities-hub'))
     .first()
     .waitFor({ state: 'visible', timeout: TIMEOUT_MS })
-  if (await firstRunSync.isVisible().catch(() => false)) {
-    await simplePage.getByTestId('first-run-sync-skip').click()
+  if (await firstRunStorage.isVisible().catch(() => false)) {
+    await simplePage.getByTestId('first-run-keep-local').click()
     await simplePage
       .getByTestId('first-run-identity-name-input')
       .fill(vaultName)

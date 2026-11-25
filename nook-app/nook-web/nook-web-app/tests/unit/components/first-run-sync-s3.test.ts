@@ -11,6 +11,7 @@ import {
   DraftS3ConnectionKind,
   S3DraftReads,
 } from '$lib/vault/provider-draft-reads'
+import { FirstRunActions } from '$lib/vault/first-run'
 import { FirstRunStage } from '$lib/vault/state/ui.svelte'
 import FirstRunSyncStep from '../../../../nook-web-shared/src/vault-app/lib/components/login/FirstRunSyncStep.svelte'
 import { S3ConnectionFixture } from '../s3-connection-fixture'
@@ -144,7 +145,7 @@ describe('first-run Sync step on S3 storage', () => {
     expect(view.getByTestId('first-run-create-new-identity')).toBeTruthy()
   })
 
-  test('an empty location leads with creating the keyring', async () => {
+  test('an empty location offers a new keyring and survives returning from naming', async () => {
     wasm.listS3Vaults.mockResolvedValue(listing([]))
     const fixture = new SyncStepFixture()
     const view = fixture.render()
@@ -158,6 +159,20 @@ describe('first-run Sync step on S3 storage', () => {
     const create = view.getByTestId('first-run-create-new-identity')
     expect(create.tagName).toBe('BUTTON')
     expect(create.textContent?.trim()).toBe(I18N_KEYS.FirstRunSyncCreateTitle)
+    await fireEvent.click(create)
+    expect(fixture.vault.firstRun).toBe(FirstRunStage.Name)
+    view.unmount()
+
+    new FirstRunActions(fixture.vault).backFromKeyring()
+    expect(fixture.vault.firstRun).toBe(FirstRunStage.Sync)
+    const resumed = fixture.render()
+    await vi.waitFor(() =>
+      expect(resumed.getByTestId('first-run-identities-empty')).toBeTruthy(),
+    )
+    expect(resumed.getByTestId('first-run-s3-location').textContent).toContain(
+      'S3 · nook-dev/e2e',
+    )
+    expect(resumed.queryAllByTestId('first-run-providers')).toHaveLength(0)
   })
 
   test('a refused key stays on the form and says what to check', async () => {

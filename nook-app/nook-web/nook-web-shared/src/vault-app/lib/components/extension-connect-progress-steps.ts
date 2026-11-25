@@ -183,6 +183,7 @@ export class ExtensionConnectPageSteps {
       case FirstRunStage.Off:
         return ExtensionConnectVaultCreation.None;
       case FirstRunStage.Protect:
+      case FirstRunStage.Storage:
       case FirstRunStage.Sync:
       case FirstRunStage.Name:
       case FirstRunStage.Vault:

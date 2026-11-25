@@ -1,9 +1,11 @@
 import type { Component } from "svelte";
 import {
   Fingerprint,
+  Folder,
   Laptop,
   KeyRound,
   MonitorSmartphone,
+  ShieldCheck,
   Vault,
 } from "@lucide/svelte";
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
@@ -101,9 +103,6 @@ export function firstRunKeyDiagram({
 
 /** Which sync provider the diagram's provider box stands for. */
 export enum FirstRunSyncDiagramProvider {
-  /** None is chosen yet: the box is captioned "Your cloud storage" and drawn
-   * with the marks of the services it can be. */
-  Any = "any",
   GoogleDrive = "google-drive",
   ICloud = "icloud",
 }
@@ -118,11 +117,6 @@ type ProviderBoxRequest = {
 
 function providerBox({ vault, provider }: ProviderBoxRequest): ProviderBox {
   switch (provider) {
-    case FirstRunSyncDiagramProvider.Any:
-      return {
-        icons: [GoogleDriveMark, ICloudMark],
-        label: vault.t(I18N_KEYS.FirstRunSyncDiagramCloud),
-      };
     case FirstRunSyncDiagramProvider.GoogleDrive:
       return {
         icons: [GoogleDriveMark],
@@ -184,22 +178,17 @@ export function firstRunSyncDiagram({
   };
 }
 
-/** Recovery: the sync provider, filled in, keeps the keyring, and the
- * keyring's passkey unlocks it. Providers keep keyrings, not vaults: the
- * vaults come with the keyring. */
+/** A backup holds the vault keys. Access depends on the methods available for that backup. */
 export function firstRunRecoveryDiagram(
   vault: VaultState,
 ): FirstRunDiagramView {
-  const anyProvider: ProviderBoxRequest = {
-    vault,
-    provider: FirstRunSyncDiagramProvider.Any,
-  };
   return {
     label: vault.t(I18N_KEYS.FirstRunRestoreDiagramLabel),
     testId: "first-run-recovery-diagram",
     nodes: [
       {
-        ...providerBox(anyProvider),
+        icons: [Folder],
+        label: vault.t(I18N_KEYS.FirstRunRestoreLocation),
         testId: "first-run-recovery-diagram-provider",
         current: true,
         arrow: { kind: FirstRunDiagramArrowKind.Start },
@@ -215,9 +204,9 @@ export function firstRunRecoveryDiagram(
         },
       },
       {
-        icons: [Fingerprint],
-        label: vault.t(I18N_KEYS.FirstRunDiagramPasskey),
-        testId: "first-run-recovery-diagram-passkey",
+        icons: [ShieldCheck],
+        label: vault.t(I18N_KEYS.FirstRunRestoreMethod),
+        testId: "first-run-recovery-diagram-method",
         current: false,
         arrow: {
           kind: FirstRunDiagramArrowKind.Back,

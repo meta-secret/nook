@@ -6,12 +6,11 @@ the identity without a vault, and its card offers New vault later.
 <script lang="ts">
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
-  import FirstRunProgress from './FirstRunProgress.svelte'
+  import FirstRunMilestone from './FirstRunMilestone.svelte'
   import LoginVaultNameForm from './LoginVaultNameForm.svelte'
   import { VaultNameHint } from './login-vault-name-form'
   import type { VaultState } from '$lib/vault.svelte'
   import { FirstRunActions } from '$lib/vault/first-run'
-  import { FirstRunStage } from '$lib/vault/state/ui.svelte'
 
   let { vault }: { vault: VaultState } = $props()
 
@@ -22,7 +21,7 @@ the identity without a vault, and its card offers New vault later.
   class="mx-auto grid w-full max-w-md gap-6 py-6 sm:py-10"
   data-testid="first-run-vault-step"
 >
-  <FirstRunProgress {vault} current={FirstRunStage.Vault} />
+  <FirstRunMilestone label={vault.t(I18N_KEYS.FirstRunKeyringReady)} />
 
   <div class="space-y-2 text-center">
     <h1

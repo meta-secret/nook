@@ -200,7 +200,7 @@ export async function startVaultWithPin(browser: DevBrowser): Promise<Page> {
   await startFirstRun(vault)
   await expect(vault.getByTestId('first-run-protect-step')).toBeVisible()
   await protectWithPin(vault)
-  await expect(vault.getByTestId('first-run-sync-step')).toBeVisible()
+  await expect(vault.getByTestId('first-run-storage-step')).toBeVisible()
   return vault
 }
 

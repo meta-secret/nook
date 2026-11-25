@@ -63,6 +63,9 @@ describe('the first-run Connect step on S3', () => {
     const retry = await vi.waitFor(() =>
       view.getByTestId('first-run-connect-retry'),
     )
+    expect(view.getByTestId('first-run-milestone').textContent?.trim()).toBe(
+      I18N_KEYS.FirstRunVaultReady,
+    )
     const heading = view.getByRole('heading', { level: 1 })
     expect(heading.textContent?.trim()).toBe(I18N_KEYS.FirstRunConnectTitleS3)
 

@@ -142,6 +142,23 @@ async function setLegacyReplicationForProviderTest(
   }, mode)
 }
 
+async function checkSharedReplicationProviders(page: Page) {
+  await setLegacyReplicationForProviderTest(page, ReplicationType.Shared)
+  await openLoginProviderSetup(page)
+
+  await expect(page.getByTestId('provider-picker-list')).toBeVisible()
+  const github = page.getByTestId('provider-option-github')
+  await expect(github).toBeDisabled()
+  await expect(github).toContainText('selected replication mode')
+  await expect(page.getByTestId('provider-option-oauth-file')).toBeEnabled()
+  await expect(page.getByTestId('provider-option-icloud')).toBeEnabled()
+  await assertGroupsDoNotOverlap(page, [
+    'provider-option-github',
+    'provider-option-oauth-file',
+    'provider-option-icloud',
+  ])
+}
+
 test.describe('vault architecture modes', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/app/')
@@ -480,21 +497,41 @@ test.describe('vault architecture modes', () => {
     await continueToPathChooser(page)
     // The first screen stands alone: no hub hero, no identity card yet.
     await expect(page.getByTestId('identities-hero')).toHaveCount(0)
-    await expect(start).toContainText('Create your keyring')
-    await expect(page.getByTestId('login-join-identity-btn')).toContainText(
-      'Join with an invite link',
+    await expect(start.getByRole('heading', { level: 1 })).toHaveText(
+      'Your password manager',
     )
-    await expect(page.getByTestId('login-connect-storage-btn')).toContainText(
-      'Recover from a sync provider',
-    )
+    await expect(start).toContainText('Encrypted on this device')
+    await expect(start).not.toContainText(/keyring/i)
+    const returning = start.getByRole('region', {
+      name: 'Open your vault on this device',
+    })
+    await expect(
+      returning.getByRole('button', { name: 'I have an invite link' }),
+    ).toHaveAccessibleDescription('From another Nook device')
+    await expect(
+      returning.getByRole('button', { name: 'I have a backup' }),
+    ).toHaveAccessibleDescription('Unlock or request access')
+    await expect(
+      start.getByRole('button', { name: 'Check a passkey' }),
+    ).toBeEnabled()
+    await expect(start.getByText('How Nook works')).toBeVisible()
 
     await page.getByTestId('header-language-select').click()
     await page.getByTestId('header-language-option-ru').click()
 
-    await expect(start).toContainText('Создайте свою связку ключей')
+    await expect(start.getByRole('heading', { level: 1 })).toHaveText(
+      'Ваш менеджер паролей',
+    )
+    await expect(
+      start.getByRole('region', {
+        name: 'Откройте свой сейф на этом устройстве',
+      }),
+    ).toBeVisible()
+    await expect(start).toContainText('Данные зашифрованы на этом устройстве')
+    await expect(start).not.toContainText(/связк/i)
     await expect(
       page.getByTestId('first-run-create-identity-btn'),
-    ).toContainText('Создать связку ключей')
+    ).toContainText('Настроить Nook')
   })
 
   test('creates a simple personal vault and keeps secret values out of app logs', async ({
@@ -554,26 +591,38 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('login-enrollment-toggle')).toHaveCount(0)
   })
 
-  test('creates the identity first and offers its sync provider next', async ({
+  test('sets up a passkey and keeps the vault on this device', async ({
     page,
   }) => {
     await continueToPathChooser(page)
     // Joining is its own screen; Back returns to creating the identity.
     await page.getByTestId('login-join-identity-btn').click()
     await expect(page.getByTestId('join-this-device')).toBeVisible()
+    await expect(page.getByTestId('join-this-device')).not.toContainText(
+      /keyring/i,
+    )
     await expect(page.getByTestId('enrollment-code-input')).toBeVisible()
     await page.getByTestId('join-back').click()
     await expect(page.getByTestId('first-vault-start')).toBeVisible()
 
     // The passkey makes the key; no vault exists until the identity is settled.
-    await createFirstRunKey(page)
-    await expect(page.getByTestId('first-run-google-sign-in')).toBeVisible()
+    await page.getByRole('button', { name: 'Set up Nook' }).click()
+    const protect = page.getByTestId('first-run-protect-step')
+    await expect(protect).toBeVisible()
+    await expect(protect).not.toContainText(/keyring/i)
+    await answerPasskeyPrompt(page)
+    const storage = page.getByTestId('first-run-storage-step')
+    await expect(storage).toContainText('Passkey ready')
+    await expect(storage).not.toContainText(/keyring/i)
+    await expect(page.getByTestId('first-run-google-sign-in')).toHaveCount(0)
     await expect(page.getByTestId('vault-panel')).toHaveCount(0)
 
     // Kept on this browser, the identity is named (an empty name takes the
     // suggested one); its first vault is then the person's choice.
-    await page.getByTestId('first-run-sync-skip').click()
-    await expect(page.getByTestId('first-run-name-step')).toBeVisible()
+    await storage.getByRole('button', { name: 'On this device' }).click()
+    await expect(page.getByTestId('first-run-name-step')).toContainText(
+      'Your passwords go in vaults. Your keyring holds the keys that open them.',
+    )
     await page.getByTestId('first-run-identity-create-btn').click()
     const vaultStep = page.getByTestId('first-run-vault-step')
     await expect(vaultStep).toBeVisible({
@@ -667,20 +716,7 @@ test.describe('vault architecture modes', () => {
   test('disables providers that cannot satisfy shared replication', async ({
     page,
   }) => {
-    await setLegacyReplicationForProviderTest(page, ReplicationType.Shared)
-    await openLoginProviderSetup(page)
-
-    await expect(page.getByTestId('provider-picker-list')).toBeVisible()
-    const github = page.getByTestId('provider-option-github')
-    await expect(github).toBeDisabled()
-    await expect(github).toContainText('selected replication mode')
-    await expect(page.getByTestId('provider-option-oauth-file')).toBeEnabled()
-    await expect(page.getByTestId('provider-option-icloud')).toBeEnabled()
-    await assertGroupsDoNotOverlap(page, [
-      'provider-option-github',
-      'provider-option-oauth-file',
-      'provider-option-icloud',
-    ])
+    await checkSharedReplicationProviders(page)
   })
 
   test('authorizes the joiner on the vault folder, issues a credential-free invite, and redeems it in a second browser', async ({
@@ -954,16 +990,7 @@ test.describe('vault architecture modes', () => {
       await expect(
         page.getByTestId('mode-group-provider-capability'),
       ).toHaveCount(0)
-      await setLegacyReplicationForProviderTest(page, ReplicationType.Shared)
-      await openLoginProviderSetup(page)
-      await expect(page.getByTestId('provider-picker-list')).toBeVisible()
-      await expect(page.getByTestId('provider-option-github')).toBeDisabled()
-      await expect(page.getByTestId('provider-option-oauth-file')).toBeEnabled()
-      await assertGroupsDoNotOverlap(page, [
-        'provider-option-github',
-        'provider-option-oauth-file',
-        'provider-option-icloud',
-      ])
+      await checkSharedReplicationProviders(page)
     })
   })
 })

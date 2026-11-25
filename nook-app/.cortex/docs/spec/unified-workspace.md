@@ -75,62 +75,62 @@ manager imports keep "identities" for their person and address items.
 
 ### First run
 
-A browser without an identity shows one flow in place of the hub, in the
-Simple and unified apps. Sentinel is never offered.
+In Simple and unified, a browser without an identity shows setup in place of
+the identities hub. Vault creation here uses the Simple architecture. Each
+screen presents the next decision and checks off only a completed action.
+Choosing to use multiple devices and creating a vault are separate milestones.
+The connection to cloud storage can still be pending or need a retry.
 
-The identity is settled before any vault exists. The step bar counts
-Passkey, Sync provider, Identity, and Vault. Each step is one centred column
-with a short title. A diagram appears once per new idea, in place of a
-paragraph: Your passkey —unlocks→ Your identity —opens→ Your vaults on the
-Passkey step, This device —syncs→ Sync provider ←syncs— Your other devices on
-the Sync step. A short verb on each arrow says what one box does to the next.
-A line of text stays only for a requirement, a consequence, or a promise.
-
-- **Start**: "Create your identity" and one Create identity button, with no
-  subtitle: the Passkey step explains the passkey. Under an "or", the other paths are equal rows, each an
-  icon, a short title, and an arrow: **Join with an invite link** opens
-  the join screen, **Recover from a sync provider** opens recovery,
-  and **Check a passkey** opens Check access. One fact
-  line closes the screen.
-- **Recovery**: the provider's identities are listed as identity cards,
-  each with one decision (recover it with its passkey, or ask to join) and
-  one Apply button, as the
-  [identity decisions](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md)
-  record describes. A link below checks which passkey opens what, before
-  anything is recovered.
-- **Passkey** ("One passkey opens it all"): the diagram says
-  what it is for. A new passkey, or one made for Nook before, makes this
-  browser's key. Back returns to Start.
-- **Sync provider**: before sign-in, no line of text: a small diagram (This
-  device —syncs→ Your cloud storage ←syncs— Your other devices, the cloud box
-  drawn with the Google Drive and iCloud marks) says what it is for. Google
-  Drive signs in, and Nook lists the identities in its Nook folder. Each card has the one action Rust decides from this
-  browser's key ([setup action](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md#setup-action)):
-  - **Continue** when the key is a member: the identity is added here and
-    its provider connects and syncs; setup ends on its vault.
-  - **Request to join** when it is not: the Join step follows.
-  - **Check again** for a request asked earlier.
-  - **Create a new identity** in that Drive, or **Keep it on this browser
-    only**, leads to Name.
-  - **S3-compatible storage** is a quiet second row under the Drive sign-in.
-    It opens the connection form: endpoint, region, bucket, an optional key
-    prefix, an access key ID, and a secret access key. **Connect** reads the
-    location with this browser's key and lists its identities with the same
-    cards and actions. An empty location leads with **Create a new identity**
-    as the primary button. A second browser with its own key finds the
-    identity there and asks to join it.
-- **Name**: "Name your identity", one field (empty takes the suggested
-  name). Only members see the name. On the Drive path, its first vault is
-  created under the same name and the signed-in Drive connects next without
-  another sign-in. The S3 path does the same with the connection just entered.
-- **Vault** (kept on this browser): "Create your first vault?" with the
-  vault's name, or **Not now**. Not now ends setup with the identity and no
-  vault: the identities page shows its card with New vault, never the Start
-  screen again. Managing an identity opens one of its vaults, so a card with
-  none offers New vault and Lock only.
-- **Join**: "Request sent" with this browser's device id, the value the
-  approving device shows. Check again reads the answer; there is no polling.
-  Back returns to the identities.
+- **Start.** “Your password manager” and “Encrypted on this device” introduce
+  **Set up Nook**. The diagram places the encrypted vault inside the browser
+  and shows optional sync through the user's own cloud.
+  **Open your vault on this device** shows the available paths to **This
+  device**. When joining is available, **I have an invite link** opens the
+  invite flow for a link from another Nook device. **I have a backup** opens
+  recovery from an encrypted backup. Its cue reads “Unlock or request access”.
+  On the recovery screen, the keyring and provider determine the available
+  methods. The user may use a passkey, enter saved recovery words, or request approval
+  from a device that already has access. Each branch opens its flow directly.
+  **How Nook works** and **Check a passkey** sit below.
+- **Protect this device.** Set up or unlock device protection. Back returns to
+  Start. After the device key is ready, **Passkey ready** acknowledges passkey
+  protection and **Device protection ready** covers other protection modes.
+- **Choose where to use Nook.** “Where will you use Nook?” leads with **Across
+  my devices**. The phone and computer exchange encrypted changes through
+  **Your cloud**. The user chooses that storage and authorizes each additional
+  device separately. The action opens the cloud picker. **On this device**
+  goes straight to naming. Back from the picker clears the provider draft and
+  returns to the device choice.
+- **Choose a cloud.** “Which cloud will connect your devices?”
+  offers Google Drive and S3-compatible storage. Drive signs in to list the
+  identities in its Nook folder. S3 takes an endpoint, region, bucket, optional
+  key prefix, access key ID, and secret access key. **Connect** lists identities
+  at that location. When the user first chooses or names a keyring, explain
+  that vaults contain passwords and a keyring holds the keys that open them.
+- **Choose a keyring.** Rust selects each existing identity's
+  [setup action](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md#setup-action).
+  Members can continue to their vault. Other devices can request to join or
+  check an earlier request. **Create a new keyring** leads to naming and is
+  the primary action for an empty S3 location. If recovery finds an empty
+  Drive and the user starts a keyring there, setup keeps that sign-in and
+  proceeds from device protection to naming.
+- **Name a keyring.** An empty field takes the suggested name. Anyone with
+  access to the cloud folder can see the current and previous names. For a
+  device-only keyring, explain that this applies if the user connects cloud
+  storage later. Back returns to the device choice on the local path or to the same
+  provider on the cloud path. Creating a keyring on Drive or S3 creates its
+  first vault with the same name and connects the selected destination using
+  the staged sign-in or S3 connection.
+- **First local vault.** **Keyring created** acknowledges the completed local
+  setup. **Create your first vault?** offers vault creation or **Not now**.
+  Skipping opens the hub with the keyring's card, where the user can create
+  a vault later or lock the keyring.
+- **Join and recover.** The [identity decisions](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md)
+  govern the recovery cards. Each offers a decision and an Apply button.
+  A separate check can identify which passkey opens a keyring before recovery.
+  After a join request, **Request sent** accompanies the device identifier shown
+  to the approving member. **Check again** reads the result on demand. Back
+  returns to the provider's identity list.
 
 ### Join (add this device)
 

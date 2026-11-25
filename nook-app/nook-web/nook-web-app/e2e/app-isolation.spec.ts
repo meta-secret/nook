@@ -43,12 +43,12 @@ test('exposes only the project capability and rejects the opposite vault type', 
     .toBe(expectedKind)
 
   if (isSimple) {
-    // Simple opens on the one-field first screen; there is nothing to choose.
+    // Simple introduces the local password manager before setup.
     await expect(page.getByTestId('first-vault-start')).toBeVisible()
     await expect(page.getByTestId('get-started-path-chooser')).toHaveCount(0)
     await expect(page.getByTestId('get-started-path-sentinel')).toHaveCount(0)
     await expect(page.getByTestId('login-connect-storage-btn')).toContainText(
-      'Recover from a sync provider',
+      'I have a backup',
     )
     await expect(page.getByTestId('sentinel-dashboard-choice')).toHaveCount(0)
     await expect(page.getByTestId('sibling-vault-app-link')).toHaveCount(0)

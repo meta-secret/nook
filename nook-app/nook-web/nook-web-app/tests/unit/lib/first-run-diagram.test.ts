@@ -1,22 +1,30 @@
+import { Folder } from '@lucide/svelte'
 import { beforeAll, describe, expect, test } from 'vitest'
 import initNookWasm from '$app-wasm'
 import {
   FirstRunDiagramArrowKind,
   FirstRunSyncDiagramProvider,
   firstRunKeyDiagram,
+  firstRunRecoveryDiagram,
   firstRunSyncDiagram,
   type FirstRunKeyDiagramRequest,
   type FirstRunSyncDiagramRequest,
 } from '$lib/components/login/first-run-diagram'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
-import GoogleDriveMark from '$lib/components/provider-marks/GoogleDriveMark.svelte'
-import ICloudMark from '$lib/components/provider-marks/ICloudMark.svelte'
 
 beforeAll(async () => {
   await initNookWasm()
 })
 
 describe('first-run diagrams', () => {
+  test('a backup opens with its available recovery method', () => {
+    const { nodes } = firstRunRecoveryDiagram(VaultStateTestFixture.create())
+    const [destination, , method] = nodes
+    expect(method?.label).toBe('Your recovery method')
+    expect(destination?.label).toBe('Your backup')
+    expect(destination?.icons).toEqual([Folder])
+  })
+
   test('both devices sync with the sync provider between them', () => {
     const request: FirstRunSyncDiagramRequest = {
       vault: VaultStateTestFixture.create(),
@@ -44,17 +52,6 @@ describe('first-run diagrams', () => {
       ],
     ])
     expect(nodes.map((node) => node.label)).toContain('Google Drive')
-  })
-
-  test('before a provider is chosen, its box is your cloud storage, drawn with the services it can be', () => {
-    const request: FirstRunSyncDiagramRequest = {
-      vault: VaultStateTestFixture.create(),
-      provider: FirstRunSyncDiagramProvider.Any,
-    }
-    const provider = firstRunSyncDiagram(request).nodes[1]
-
-    expect(provider?.label).toBe('Your cloud storage')
-    expect(provider?.icons).toEqual([GoogleDriveMark, ICloudMark])
   })
 
   test('the passkey unlocks the identity, by name, which opens its vaults', () => {

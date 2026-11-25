@@ -283,6 +283,7 @@ describe('device protection actions', () => {
 describe('locking the device identity', () => {
   test('locks once engine work in flight settles', async () => {
     const state = VaultStateTestFixture.create()
+    state.vaultPanelStoreId = 'store-before-lock'
     const manager = new NookVaultManager()
     state.openManager(manager)
     let attempts = 0
@@ -295,6 +296,11 @@ describe('locking the device identity', () => {
     const settled = vi
       .spyOn(state, 'waitForStorageChain')
       .mockImplementation(async () => {
+        expect(state.vaultPanelStoreId).toBe('')
+        expect(state.deviceProtectionStatus).toBe(
+          state.deviceProtectionLockedStatus,
+        )
+        state.vaultPanelStoreId = 'store-opened-while-locked'
         state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
         state.deviceId = 'opening-device'
         state.devicePublicKey = 'opening-key'
@@ -306,6 +312,7 @@ describe('locking the device identity', () => {
 
     expect(settled).toHaveBeenCalledOnce()
     expect(attempts).toBe(2)
+    expect(state.vaultPanelStoreId).toBe('store-opened-while-locked')
     expect(state.deviceProtectionStatus).toBe(
       state.deviceProtectionLockedStatus,
     )

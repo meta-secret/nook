@@ -19,7 +19,7 @@ async function unlockWhilePromptIsOpen(page: Page): Promise<void> {
   })
   await unlock.click()
   // A real prompt waits for Touch ID; the sheet must not open meanwhile.
-  await page.waitForTimeout(1_000)
+  await expect(page.getByTestId('vault-panel-getting-access')).toBeVisible()
   await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
   await page.evaluate(() => {
     localStorage.removeItem('nook_e2e_passkey_mode')
@@ -44,14 +44,17 @@ test.describe('unlocking a vault from its card', () => {
   test('keeps the passkey prompt on the card after a lock', async ({
     page,
   }) => {
-    await page.getByTestId('identity-lock').click()
+    const card = page.getByTestId('identity-card').first()
+    await card.getByTestId('identity-lock').click()
+    await expect(card).toHaveAttribute('data-status', 'locked')
     // Locking folds the card to its header and vaults: the vault's own row
     // opens its panel, which asks for the passkey.
-    const row = page.getByTestId('identity-vault-row').first()
+    const row = card.getByTestId('identity-vault-row').first()
     await expect(row).toHaveAttribute('aria-expanded', 'false', {
       timeout: UI_TIMEOUT_MS,
     })
     await row.click()
+    await expect(row).toHaveAttribute('aria-expanded', 'true')
     await unlockWhilePromptIsOpen(page)
   })
 

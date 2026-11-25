@@ -73,9 +73,12 @@ test('before sign-in, shows the recovery step without a connect action', () => {
     ProviderDraftFixture.googleDriveAwaitingSignIn(),
   )
 
-  expect(view.getByTestId('google-setup-sync-step').textContent).toContain(
-    enLocale.first_run.restore_choose_vault,
+  const step = view.getByTestId('google-setup-sync-step')
+  expect(step.textContent).toContain(enLocale.auth_storage.connect_and_sync)
+  expect(step.textContent).toContain(
+    enLocale.login_wizard.available_after_connect,
   )
+  expect(step.textContent).not.toMatch(/keyring/i)
   expect(view.queryAllByTestId('connect-provider-btn')).toHaveLength(0)
   expect(list).not.toHaveBeenCalled()
 })
@@ -163,6 +166,9 @@ test('keeps recovery when an older keyring is represented by its vault listing',
   const { view, onConnect } = renderRecovery()
 
   const card = await view.findByTestId('provider-identity')
+  const step = view.getByTestId('google-setup-sync-step')
+  expect(step.textContent).toContain(enLocale.first_run.sync_choose_title)
+  expect(step.textContent).toContain(enLocale.first_run.keyring_explanation)
   expect(view.queryAllByTestId(CREATE)).toHaveLength(0)
   expect(view.queryAllByTestId('connect-provider-btn')).toHaveLength(0)
   const open = card.querySelector('[data-decision="addToBrowser"]')

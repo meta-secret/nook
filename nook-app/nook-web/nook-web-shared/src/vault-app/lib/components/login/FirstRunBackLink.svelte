@@ -1,6 +1,6 @@
 <!--
 "Back" for the first-run steps: the app's square Back button on its own
-line above the step progress, aligned with the content below it.
+line before the step content, aligned with the content below it.
 -->
 <script lang="ts">
   import { I18N_KEYS } from "../../../../generated/i18n-keys";

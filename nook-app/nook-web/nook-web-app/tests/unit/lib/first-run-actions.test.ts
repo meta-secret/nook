@@ -176,12 +176,12 @@ function ask(): FirstRunIdentityRun {
 }
 
 describe('first-run setup settles the identity before any vault', () => {
-  test('during setup the passkey only makes the key, and the sync provider comes next', async () => {
+  test('during setup the passkey only makes the key, and the storage choice comes next', async () => {
     const setup = new Setup().at(FirstRunStage.Protect)
 
     await new FirstRunActions(setup.vault).createWithDeviceKeys('Personal')
 
-    expect(setup.vault.firstRun).toBe(FirstRunStage.Sync)
+    expect(setup.vault.firstRun).toBe(FirstRunStage.Storage)
     expect(setup.created).toEqual([])
   })
 
@@ -270,7 +270,7 @@ describe('first-run setup settles the identity before any vault', () => {
     await actions.createWithDeviceKeys('Personal')
     await actions.createWithDeviceKeys('Personal')
 
-    expect(setup.vault.firstRun).toBe(FirstRunStage.Sync)
+    expect(setup.vault.firstRun).toBe(FirstRunStage.Storage)
     expect(setup.created).toEqual([])
   })
 
@@ -318,14 +318,14 @@ describe('first-run setup settles the identity before any vault', () => {
     const actions = new FirstRunActions(setup.vault)
     await actions.runOn(ask())
 
-    actions.backToSync()
+    actions.backFromKeyring()
 
     expect(setup.vault.firstRun).toBe(FirstRunStage.Sync)
     expect(setup.vault.firstRunJoin).toEqual({ kind: FirstRunJoinKind.None })
   })
 
   test('a new identity kept on this browser is named next', () => {
-    const setup = new Setup().at(FirstRunStage.Sync)
+    const setup = new Setup().at(FirstRunStage.Storage)
 
     new FirstRunActions(setup.vault).nameNew(FirstRunPlace.ThisBrowser)
 

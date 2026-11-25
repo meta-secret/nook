@@ -37,7 +37,7 @@ test.describe('identity onboarding provider picker', () => {
     const addDevice = page.getByTestId('identity-action-add-device')
     await expect(addDevice).toBeDisabled()
     await expect(page.getByTestId('identity-panel-devices')).toContainText(
-      'Add a cloud sync provider first',
+      'Connect your cloud first',
     )
 
     // The flow itself, reached by its route, starts at the same step.

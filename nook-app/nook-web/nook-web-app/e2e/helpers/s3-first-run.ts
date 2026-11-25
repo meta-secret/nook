@@ -53,6 +53,7 @@ export async function connectS3InFirstRun(
   page: Page,
   location: E2eS3Location,
 ): Promise<void> {
+  await page.getByTestId('first-run-choose-sync').click()
   await page.getByTestId('first-run-s3-option').click()
   await expect(page.getByTestId('first-run-s3-setup')).toBeVisible()
   await fillS3Connection(page, location)

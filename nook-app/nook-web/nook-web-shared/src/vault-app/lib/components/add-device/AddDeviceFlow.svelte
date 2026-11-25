@@ -202,9 +202,6 @@ Every place that offers "Add a device" opens this.
               <p class="max-w-[56ch] text-sm text-pretty text-muted-foreground">
                 {vault.t(I18N_KEYS.AddDeviceCloudMissing)}
               </p>
-              <p class="font-mono text-xs tracking-wide text-muted-foreground">
-                {vault.t(I18N_KEYS.AddDeviceCloudExamples)}
-              </p>
             </div>
           </div>
           <Button

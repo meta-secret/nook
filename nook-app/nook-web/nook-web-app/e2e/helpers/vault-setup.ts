@@ -95,29 +95,26 @@ export async function answerPasskeyPrompt(page: Page): Promise<void> {
   }
 }
 
-/** A fresh browser makes its key the way a person does: Create identity,
- * then first run's passkey step. Setup then waits on its sync provider
- * step with the key ready. */
+/** Complete the passkey prompt and reach the storage choice on a fresh browser. */
 export async function createFirstRunKey(page: Page): Promise<void> {
   await startFirstRun(page)
   await expect(page.getByTestId('first-run-protect-step')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await answerPasskeyPrompt(page)
-  await expect(page.getByTestId('first-run-sync-step')).toBeVisible({
+  await expect(page.getByTestId('first-run-storage-step')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
 }
 
-/** After the passkey, setup offers a sync provider: keep the new identity
- * on this browser instead and name it. */
+/** Choose device-only storage and name the new identity. */
 export async function nameFirstIdentityOnly(
   page: Page,
   identityName: string,
 ): Promise<void> {
-  const skip = page.getByTestId('first-run-sync-skip')
-  await expect(skip).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-  await skip.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  const keepLocal = page.getByTestId('first-run-keep-local')
+  await expect(keepLocal).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await keepLocal.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   const nameInput = page.getByTestId('first-run-identity-name-input')
   await expect(nameInput).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   await nameInput.fill(identityName, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
@@ -182,11 +179,12 @@ async function waitForFirstVault(
   vaultName: string,
   readySurface: Locator,
 ): Promise<void> {
-  const syncStep = page.getByTestId('first-run-sync-step')
-  await expect(syncStep.or(readySurface).first()).toBeVisible({
+  const storageStep = page.getByTestId('first-run-storage-step')
+  await expect(storageStep.or(readySurface).first()).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  if (await syncStep.isVisible()) await nameFirstIdentityHere(page, vaultName)
+  if (await storageStep.isVisible())
+    await nameFirstIdentityHere(page, vaultName)
   await expect(readySurface).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
@@ -218,9 +216,8 @@ export async function createLocalVaultOnLogin(
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
 
-  // First run starts with Create identity: its passkey, then the sync
-  // provider step (kept on this browser here), then the name. A browser
-  // that already has an identity names its next vault at once.
+  // Fresh setup asks for protection and a storage choice before naming.
+  // A browser that already has an identity names its next vault immediately.
   const createIdentity = page.getByTestId('first-run-create-identity-btn')
   const nameInput = page.getByTestId('login-vault-name-input')
   await expect(createIdentity.or(nameInput).first()).toBeVisible({
@@ -247,14 +244,14 @@ export async function createLocalVaultOnLogin(
     .getByTestId('passkey-auth-overlay')
     .or(page.getByTestId('first-run-protect-step'))
   const readySurface = page.getByTestId(readyTestId)
-  const syncStep = page.getByTestId('first-run-sync-step')
+  const storageStep = page.getByTestId('first-run-storage-step')
   const vaultError = page.getByTestId('vault-error')
   await expect
     .poll(
       async () =>
         (await passkeyOverlay.isVisible()) ||
         (await readySurface.isVisible()) ||
-        (await syncStep.isVisible()) ||
+        (await storageStep.isVisible()) ||
         (await vaultError.isVisible()),
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )

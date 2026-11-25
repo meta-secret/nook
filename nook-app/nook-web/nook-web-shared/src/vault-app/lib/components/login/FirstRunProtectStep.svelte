@@ -1,22 +1,10 @@
-<!--
-First step of setup: a new passkey, or one made for Nook before, makes this
-browser's key. A small diagram says what it is for: the passkey
-opens the identity, which holds the vaults. No vault exists yet; the sync
-provider comes next and shows the identities that key belongs to.
--->
+<!-- Set up or unlock protection before choosing storage. -->
 <script lang="ts">
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import DeviceProtectionGate from "$lib/components/DeviceProtectionGate.svelte";
   import { DeviceProtectionGateFrame } from "$lib/components/device-protection-gate-state";
   import FirstRunBackLink from "./FirstRunBackLink.svelte";
-  import FirstRunDiagram from "./FirstRunDiagram.svelte";
-  import {
-    firstRunKeyDiagram,
-    type FirstRunKeyDiagramRequest,
-  } from "./first-run-diagram";
-  import FirstRunProgress from "./FirstRunProgress.svelte";
   import type { VaultState } from "$lib/vault.svelte";
-  import { FirstRunStage } from "$lib/vault/state/ui.svelte";
 
   let {
     vault,
@@ -26,26 +14,18 @@ provider comes next and shows the identities that key belongs to.
     /** Return to the first screen; nothing was made yet. */
     onBack: () => void;
   } = $props();
-
-  const diagram = $derived.by(() => {
-    const request: FirstRunKeyDiagramRequest = { vault, identity: "" };
-    return firstRunKeyDiagram(request);
-  });
 </script>
 
 <section
   class="mx-auto grid w-full max-w-md gap-6 py-6 sm:py-10"
   data-testid="first-run-protect-step"
 >
-  <div class="grid gap-4">
-    <FirstRunBackLink
-      {vault}
-      testId="first-run-back"
-      disabled={vault.isVerifying}
-      {onBack}
-    />
-    <FirstRunProgress {vault} current={FirstRunStage.Protect} />
-  </div>
+  <FirstRunBackLink
+    {vault}
+    testId="first-run-back"
+    disabled={vault.isVerifying}
+    {onBack}
+  />
 
   <div class="space-y-2 text-center">
     <h1
@@ -54,8 +34,6 @@ provider comes next and shows the identities that key belongs to.
       {vault.t(I18N_KEYS.FirstRunProtectTitle)}
     </h1>
   </div>
-
-  <FirstRunDiagram {diagram} />
 
   <DeviceProtectionGate
     {vault}
