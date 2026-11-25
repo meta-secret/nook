@@ -2198,6 +2198,17 @@
     "drive_sign_in_changed": "Google Drive sign-in is no longer current. Reopen Google Drive recovery to continue.",
     "title": "Your password manager",
     "intro": "Encrypted on this device",
+    "local_first": {
+      "diagram_description": "Your encrypted vault lives in this browser. If you turn on sync, an encrypted copy goes directly to storage you choose, without a central Nook vault server.",
+      "browser": "This browser",
+      "vault": "Your vault",
+      "optional_sync": "Optional sync",
+      "storage": "Your storage",
+      "self_host": "Host Nook yourself",
+      "server": "Your server",
+      "browser_app": "Nook in your browser",
+      "hosting_description": "Your server delivers the app. Your passwords stay encrypted on your device."
+    },
     "name_label": "Keyring name",
     "name_placeholder": "Personal",
     "create": "Set up Nook",

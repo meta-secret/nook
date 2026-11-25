@@ -1332,6 +1332,17 @@ pub const FIRST_RUN_JOIN_CHECK: &str = "first_run.join_check";
 pub const FIRST_RUN_JOIN_COMPARE: &str = "first_run.join_compare";
 pub const FIRST_RUN_JOIN_TITLE: &str = "first_run.join_title";
 pub const FIRST_RUN_KEYRING_EXPLANATION: &str = "first_run.keyring_explanation";
+pub const FIRST_RUN_LOCAL_FIRST_BROWSER: &str = "first_run.local_first.browser";
+pub const FIRST_RUN_LOCAL_FIRST_BROWSER_APP: &str = "first_run.local_first.browser_app";
+pub const FIRST_RUN_LOCAL_FIRST_DIAGRAM_DESCRIPTION: &str =
+    "first_run.local_first.diagram_description";
+pub const FIRST_RUN_LOCAL_FIRST_HOSTING_DESCRIPTION: &str =
+    "first_run.local_first.hosting_description";
+pub const FIRST_RUN_LOCAL_FIRST_OPTIONAL_SYNC: &str = "first_run.local_first.optional_sync";
+pub const FIRST_RUN_LOCAL_FIRST_SELF_HOST: &str = "first_run.local_first.self_host";
+pub const FIRST_RUN_LOCAL_FIRST_SERVER: &str = "first_run.local_first.server";
+pub const FIRST_RUN_LOCAL_FIRST_STORAGE: &str = "first_run.local_first.storage";
+pub const FIRST_RUN_LOCAL_FIRST_VAULT: &str = "first_run.local_first.vault";
 pub const FIRST_RUN_NAME_BODY: &str = "first_run.name_body";
 pub const FIRST_RUN_NAME_CREATE: &str = "first_run.name_create";
 pub const FIRST_RUN_NAME_FAILED: &str = "first_run.name_failed";

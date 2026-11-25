@@ -10,6 +10,7 @@
     RefreshCw,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
+  import LocalFirstDiagram from './LocalFirstDiagram.svelte'
   import JoinThisDevice from '$lib/components/join/JoinThisDevice.svelte'
   import type { EnrollmentCodeUnlock } from './login-create-vault-chooser-contract'
   import type { VaultState } from '$lib/vault.svelte'
@@ -98,10 +99,10 @@
   />
 {:else}
   <section
-    class="mx-auto grid w-full max-w-md gap-7 py-6 text-left sm:gap-8 sm:py-16"
+    class="mx-auto grid w-full max-w-md gap-6 py-4 text-left sm:gap-8 sm:py-10"
     data-testid="first-vault-start"
   >
-    <div class="grid gap-5">
+    <div class="grid gap-4">
       <header class="space-y-2">
         <h1
           class="text-3xl leading-tight font-semibold tracking-tight text-balance text-foreground sm:text-4xl"
@@ -112,6 +113,7 @@
           {vault.t(I18N_KEYS.FirstRunIntro)}
         </p>
       </header>
+      <LocalFirstDiagram {vault} />
       <Button
         type="button"
         class="min-h-11 h-auto whitespace-normal sm:justify-self-start"
