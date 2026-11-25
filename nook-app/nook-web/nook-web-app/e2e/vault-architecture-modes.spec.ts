@@ -142,6 +142,23 @@ async function setLegacyReplicationForProviderTest(
   }, mode)
 }
 
+async function checkSharedReplicationProviders(page: Page) {
+  await setLegacyReplicationForProviderTest(page, ReplicationType.Shared)
+  await openLoginProviderSetup(page)
+
+  await expect(page.getByTestId('provider-picker-list')).toBeVisible()
+  const github = page.getByTestId('provider-option-github')
+  await expect(github).toBeDisabled()
+  await expect(github).toContainText('selected replication mode')
+  await expect(page.getByTestId('provider-option-oauth-file')).toBeEnabled()
+  await expect(page.getByTestId('provider-option-icloud')).toBeEnabled()
+  await assertGroupsDoNotOverlap(page, [
+    'provider-option-github',
+    'provider-option-oauth-file',
+    'provider-option-icloud',
+  ])
+}
+
 test.describe('vault architecture modes', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/app/')
@@ -699,20 +716,7 @@ test.describe('vault architecture modes', () => {
   test('disables providers that cannot satisfy shared replication', async ({
     page,
   }) => {
-    await setLegacyReplicationForProviderTest(page, ReplicationType.Shared)
-    await openLoginProviderSetup(page)
-
-    await expect(page.getByTestId('provider-picker-list')).toBeVisible()
-    const github = page.getByTestId('provider-option-github')
-    await expect(github).toBeDisabled()
-    await expect(github).toContainText('selected replication mode')
-    await expect(page.getByTestId('provider-option-oauth-file')).toBeEnabled()
-    await expect(page.getByTestId('provider-option-icloud')).toBeEnabled()
-    await assertGroupsDoNotOverlap(page, [
-      'provider-option-github',
-      'provider-option-oauth-file',
-      'provider-option-icloud',
-    ])
+    await checkSharedReplicationProviders(page)
   })
 
   test('authorizes the joiner on the vault folder, issues a credential-free invite, and redeems it in a second browser', async ({
@@ -986,16 +990,7 @@ test.describe('vault architecture modes', () => {
       await expect(
         page.getByTestId('mode-group-provider-capability'),
       ).toHaveCount(0)
-      await setLegacyReplicationForProviderTest(page, ReplicationType.Shared)
-      await openLoginProviderSetup(page)
-      await expect(page.getByTestId('provider-picker-list')).toBeVisible()
-      await expect(page.getByTestId('provider-option-github')).toBeDisabled()
-      await expect(page.getByTestId('provider-option-oauth-file')).toBeEnabled()
-      await assertGroupsDoNotOverlap(page, [
-        'provider-option-github',
-        'provider-option-oauth-file',
-        'provider-option-icloud',
-      ])
+      await checkSharedReplicationProviders(page)
     })
   })
 })
