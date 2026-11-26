@@ -85,37 +85,39 @@ A keyring kept on this browser asks next whether to create a first vault.
   </div>
 
   <form
-    class="flex flex-col gap-2 sm:flex-row"
+    class="grid gap-1.5"
     onsubmit={(event) => {
       event.preventDefault()
       void actions.createNamed(label)
     }}
   >
-    <label class="sr-only" for="first-vault-name">
+    <label class="nk-field-label" for="first-vault-name">
       {vault.t(I18N_KEYS.FirstRunNameLabel)}
     </label>
-    <input
-      id="first-vault-name"
-      type="text"
-      class="h-11 min-w-0 border border-border bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-foreground/50 focus-visible:ring-2 focus-visible:ring-ring sm:h-10 sm:flex-1"
-      placeholder={vault.t(I18N_KEYS.FirstRunNamePlaceholder)}
-      maxlength="64"
-      autocomplete="off"
-      aria-describedby="first-run-keyring-name-visibility"
-      data-testid="first-run-identity-name-input"
-      bind:value={name}
-      disabled={vault.isVerifying}
-    />
-    <Button
-      type="submit"
-      class="h-11 shrink-0 sm:h-10"
-      disabled={vault.isVerifying}
-      data-testid="first-run-identity-create-btn"
-    >
-      {#if vault.isVerifying}
-        <RefreshCw class="size-4 animate-spin" />
-      {/if}
-      {vault.t(I18N_KEYS.FirstRunNameCreate)}
-    </Button>
+    <div class="flex flex-col gap-2 sm:flex-row">
+      <input
+        id="first-vault-name"
+        type="text"
+        class="h-11 min-w-0 border border-border bg-card px-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-foreground/50 focus-visible:ring-2 focus-visible:ring-ring sm:h-10 sm:flex-1 sm:text-sm"
+        placeholder={vault.t(I18N_KEYS.FirstRunNamePlaceholder)}
+        maxlength="64"
+        autocomplete="off"
+        aria-describedby="first-run-keyring-name-visibility"
+        data-testid="first-run-identity-name-input"
+        bind:value={name}
+        disabled={vault.isVerifying}
+      />
+      <Button
+        type="submit"
+        class="h-11 shrink-0 sm:h-10"
+        disabled={vault.isVerifying}
+        data-testid="first-run-identity-create-btn"
+      >
+        {#if vault.isVerifying}
+          <RefreshCw class="size-4 animate-spin" aria-hidden="true" />
+        {/if}
+        {vault.t(I18N_KEYS.FirstRunNameCreate)}
+      </Button>
+    </div>
   </form>
 </section>

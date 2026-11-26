@@ -39,9 +39,13 @@ test.each([en, ru])(
     const beginProvider = vi.spyOn(vault, 'beginProviderSetup')
     const view = render(FirstRunStorageStep, { vault })
     const labels = locale.first_run
+    const step = view.getByTestId('first-run-storage-step')
+    expect(step.textContent).not.toMatch(/keyring/i)
+    expect(step.textContent).not.toMatch(/связк/i)
     expect(
       view.getByRole('heading', { name: labels.storage_title }),
     ).toBeTruthy()
+    expect(view.getByText(labels.storage_body)).toBeTruthy()
     const cloud = view.getByRole('button', {
       name: labels.choose_sync,
       description: labels.cloud_action_description,
@@ -76,6 +80,14 @@ test('local storage goes straight to naming and Back returns to the undecided st
   expect(naming.getByTestId('first-run-milestone').textContent?.trim()).toBe(
     en.first_run.name_on_browser,
   )
+  expect(naming.getByText(en.first_run.keyring_explanation)).toBeTruthy()
+  const nameField = naming.getByLabelText(en.first_run.name_label)
+  expect(nameField.id).toBe('first-vault-name')
+  expect(
+    naming.container
+      .querySelector('label[for="first-vault-name"]')
+      ?.classList.contains('sr-only'),
+  ).toBe(false)
   await fireEvent.click(naming.getByTestId('first-run-name-back'))
   expect(vault.firstRun).toBe(FirstRunStage.Storage)
   expect(vault.providerDraft.type).toBe('local')

@@ -81,32 +81,47 @@ screen presents the next decision and checks off only a completed action.
 Choosing to use multiple devices and creating a vault are separate milestones.
 The connection to cloud storage can still be pending or need a retry.
 
-- **Start.** “Your password manager” and “Encrypted on this device” introduce
-  **Set up Nook**. The diagram places the encrypted vault inside the browser
-  and shows optional sync through the user's own cloud.
-  **Open your vault on this device** shows the available paths to **This
-  device**. When joining is available, **I have an invite link** opens the
-  invite flow for a link from another Nook device. **I have a backup** opens
-  recovery from an encrypted backup. Its cue reads “Unlock or request access”.
-  On the recovery screen, the keyring and provider determine the available
-  methods. The user may use a passkey, enter saved recovery words, or request approval
-  from a device that already has access. Each branch opens its flow directly.
-  **How Nook works** and **Check a passkey** sit below.
-- **Protect this device.** Set up or unlock device protection. Back returns to
-  Start. After the device key is ready, **Passkey ready** acknowledges passkey
-  protection and **Device protection ready** covers other protection modes.
-- **Choose where to use Nook.** “Where will you use Nook?” leads with **Across
-  my devices**. The phone and computer exchange encrypted changes through
-  **Your cloud**. The user chooses that storage and authorizes each additional
-  device separately. The action opens the cloud picker. **On this device**
-  goes straight to naming. Back from the picker clears the provider draft and
-  returns to the device choice.
+- **Start.** **Local-first password & secret manager** introduces the outcome
+  headline “Keep your passwords in a vault that belongs to you”.
+  - The ownership statement reads “Runs locally on this device — no Nook
+    account, no master password, and no central server.”
+  - **Create your private vault** is the primary action. A quiet passkey cue
+    explains that the vault unlocks with Face ID, Touch ID, or a security key
+    with nothing to memorize.
+  - The three-stage local-first relationship diagram traces vault ownership:
+    - **Your passkey** (*No master password*) unlocks the vault locally.
+    - **Your encrypted vault** sits inside **This browser** (*Yours alone ·
+      Offline-ready*, *Encrypted locally · Zero Nook servers*). It holds
+      passwords & passkeys, 2FA codes, and API keys & notes.
+    - Optional encrypted sync connects that vault to **Your cloud** (*Google
+      Drive, iCloud, or S3 — only if you add devices*).
+  - **Already use Nook? Open your vault here** shows the returning routes into
+    **This device**. Each branch opens its flow directly:
+    - When joining is available, **I have an invite link** (*From another Nook
+      device*) opens the invite flow.
+    - **I have a backup** (*Restore from your cloud with a passkey or recovery
+      words*) opens recovery. On the recovery screen, the keyring and provider
+      determine the available methods. The user may use a passkey, enter saved
+      recovery words, or request approval from a device that already has access.
+  - **How Nook works** and **Check a passkey** remain below.
+- **Protect this device.** “Unlock your vault with this device’s passkey”
+  explains why before prompting to set up or unlock protection. The passkey
+  encrypts the vault locally so there is no master password to memorize or
+  leak. Back returns to Start. After the device key is ready, **Passkey ready**
+  acknowledges passkey protection and **Device protection ready** covers other
+  protection modes.
+- **Choose where to use Nook.** “Where will you use Nook?” explains that the
+  vault always runs locally here first and asks whether to sync encrypted
+  copies to other devices. **Across my devices** leads the choice, exchanging
+  encrypted changes through **Your cloud**. The user chooses that storage and
+  authorizes each additional device separately. Selecting it opens the cloud
+  picker. **On this device** sits below it and goes straight to naming. Back
+  from the picker clears the provider draft and returns to the device choice.
 - **Choose a cloud.** “Which cloud will connect your devices?”
   offers Google Drive and S3-compatible storage. Drive signs in to list the
   identities in its Nook folder. S3 takes an endpoint, region, bucket, optional
   key prefix, access key ID, and secret access key. **Connect** lists identities
-  at that location. When the user first chooses or names a keyring, explain
-  that vaults contain passwords and a keyring holds the keys that open them.
+  at that location.
 - **Choose a keyring.** Rust selects each existing identity's
   [setup action](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md#setup-action).
   Members can continue to their vault. Other devices can request to join or
@@ -114,13 +129,15 @@ The connection to cloud storage can still be pending or need a retry.
   the primary action for an empty S3 location. If recovery finds an empty
   Drive and the user starts a keyring there, setup keeps that sign-in and
   proceeds from device protection to naming.
-- **Name a keyring.** An empty field takes the suggested name. Anyone with
-  access to the cloud folder can see the current and previous names. For a
-  device-only keyring, explain that this applies if the user connects cloud
-  storage later. Back returns to the device choice on the local path or to the same
-  provider on the cloud path. Creating a keyring on Drive or S3 creates its
-  first vault with the same name and connects the selected destination using
-  the staged sign-in or S3 connection.
+- **Name a keyring.** When the user first chooses or names a keyring, explain
+  the outcome. One keyring lets the passkey open multiple vaults — such as
+  Personal and Work — and share them across the user's devices. An empty field
+  takes the suggested name. Anyone with access to the cloud folder can see the
+  current and previous names. For a device-only keyring, explain that this
+  applies if the user connects cloud storage later. Back returns to the device
+  choice on the local path or to the same provider on the cloud path. Creating a
+  keyring on Drive or S3 creates its first vault with the same name and connects
+  the selected destination using the staged sign-in or S3 connection.
 - **First local vault.** **Keyring created** acknowledges the completed local
   setup. **Create your first vault?** offers vault creation or **Not now**.
   Skipping opens the hub with the keyring's card, where the user can create

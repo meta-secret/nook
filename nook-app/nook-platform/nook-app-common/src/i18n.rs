@@ -832,4 +832,83 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn first_run_onboarding_keys_resolve_distinct_locales_without_keyring_jargon() {
+        let en_catalog = AppLocale::get_translation_catalog("en");
+        let ru_catalog = AppLocale::get_translation_catalog("ru");
+        let pre_naming_keys = [
+            i18n_keys::FIRST_RUN_EYEBROW,
+            i18n_keys::FIRST_RUN_TITLE,
+            i18n_keys::FIRST_RUN_INTRO,
+            i18n_keys::FIRST_RUN_CREATE,
+            i18n_keys::FIRST_RUN_CREATE_HINT,
+            i18n_keys::FIRST_RUN_RETURNING,
+            i18n_keys::FIRST_RUN_BACKUP_ACCESS,
+            i18n_keys::FIRST_RUN_PROTECT_TITLE,
+            i18n_keys::FIRST_RUN_PROTECT_BODY,
+            i18n_keys::FIRST_RUN_STORAGE_TITLE,
+            i18n_keys::FIRST_RUN_STORAGE_BODY,
+            i18n_keys::FIRST_RUN_LOCAL_FIRST_BROWSER,
+            i18n_keys::FIRST_RUN_LOCAL_FIRST_DIAGRAM_DESCRIPTION,
+            i18n_keys::FIRST_RUN_LOCAL_FIRST_ITEMS_PASSWORDS,
+            i18n_keys::FIRST_RUN_LOCAL_FIRST_ITEMS_SECRETS,
+            i18n_keys::FIRST_RUN_LOCAL_FIRST_ITEMS_TOTP,
+            i18n_keys::FIRST_RUN_LOCAL_FIRST_OPTIONAL_SYNC,
+            i18n_keys::FIRST_RUN_LOCAL_FIRST_OWNERSHIP_TAG,
+            i18n_keys::FIRST_RUN_LOCAL_FIRST_PASSKEY,
+            i18n_keys::FIRST_RUN_LOCAL_FIRST_PASSKEY_DETAIL,
+            i18n_keys::FIRST_RUN_LOCAL_FIRST_STORAGE,
+            i18n_keys::FIRST_RUN_LOCAL_FIRST_STORAGE_DETAIL,
+            i18n_keys::FIRST_RUN_LOCAL_FIRST_UNLOCKS,
+            i18n_keys::FIRST_RUN_LOCAL_FIRST_VAULT,
+            i18n_keys::FIRST_RUN_LOCAL_FIRST_ZERO_SERVER,
+        ];
+
+        for key in pre_naming_keys {
+            let en_lookup = TranslationCatalog::lookup_translation(LookupTranslationRequest {
+                catalog_json: en_catalog,
+                key,
+            });
+            let ru_lookup = TranslationCatalog::lookup_translation(LookupTranslationRequest {
+                catalog_json: ru_catalog,
+                key,
+            });
+            let TranslationLookup::Found(en_text) = en_lookup else {
+                panic!("expected Found English translation for {key}, got {en_lookup:?}");
+            };
+            let TranslationLookup::Found(ru_text) = ru_lookup else {
+                panic!("expected Found Russian translation for {key}, got {ru_lookup:?}");
+            };
+            assert!(!en_text.trim().is_empty(), "empty English text for {key}");
+            assert!(!ru_text.trim().is_empty(), "empty Russian text for {key}");
+            assert_ne!(en_text, ru_text, "expected distinct locales for {key}");
+            assert!(
+                !en_text.to_lowercase().contains("keyring"),
+                "English pre-naming key {key} leaked keyring jargon: {en_text}"
+            );
+            assert!(
+                !ru_text.to_lowercase().contains("связк"),
+                "Russian pre-naming key {key} leaked keyring jargon: {ru_text}"
+            );
+        }
+
+        let en_keyring = TranslationCatalog::lookup_translation(LookupTranslationRequest {
+            catalog_json: en_catalog,
+            key: i18n_keys::FIRST_RUN_KEYRING_EXPLANATION,
+        });
+        let ru_keyring = TranslationCatalog::lookup_translation(LookupTranslationRequest {
+            catalog_json: ru_catalog,
+            key: i18n_keys::FIRST_RUN_KEYRING_EXPLANATION,
+        });
+        let TranslationLookup::Found(en_keyring_text) = en_keyring else {
+            panic!("expected English keyring explanation, got {en_keyring:?}");
+        };
+        let TranslationLookup::Found(ru_keyring_text) = ru_keyring else {
+            panic!("expected Russian keyring explanation, got {ru_keyring:?}");
+        };
+        assert!(!en_keyring_text.trim().is_empty());
+        assert!(!ru_keyring_text.trim().is_empty());
+        assert_ne!(en_keyring_text, ru_keyring_text);
+    }
 }

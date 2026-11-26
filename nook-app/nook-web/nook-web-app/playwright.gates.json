@@ -15,6 +15,7 @@
     "local-vault-keepassxc-import.spec.ts",
     "local-vault.spec.ts",
     "login-unlock-flow.spec.ts",
+    "first-run-onboarding.spec.ts",
     "vault-architecture-modes.spec.ts",
     "idle-session-lock.spec.ts",
     "local-folder-backup.spec.ts",
