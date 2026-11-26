@@ -497,20 +497,33 @@ test.describe('vault architecture modes', () => {
     await continueToPathChooser(page)
     // The first screen stands alone: no hub hero, no identity card yet.
     await expect(page.getByTestId('identities-hero')).toHaveCount(0)
+    await expect(start).toContainText('Local-first password & secret manager')
     await expect(start.getByRole('heading', { level: 1 })).toHaveText(
-      'Your password manager',
+      'Keep your passwords in a vault that belongs to you',
     )
-    await expect(start).toContainText('Encrypted on this device')
+    await expect(start).toContainText(
+      'Runs locally on this device — no Nook account, no master password, and no central server.',
+    )
+    await expect(
+      start.getByTestId('first-run-create-identity-btn'),
+    ).toContainText('Create your private vault')
+    await expect(
+      start.getByTestId('first-run-create-identity-btn'),
+    ).toHaveAccessibleDescription(
+      'Unlocks with Face ID, Touch ID, or a security key — nothing to memorize',
+    )
     await expect(start).not.toContainText(/keyring/i)
     const returning = start.getByRole('region', {
-      name: 'Open your vault on this device',
+      name: 'Already use Nook? Open your vault here',
     })
     await expect(
       returning.getByRole('button', { name: 'I have an invite link' }),
     ).toHaveAccessibleDescription('From another Nook device')
     await expect(
       returning.getByRole('button', { name: 'I have a backup' }),
-    ).toHaveAccessibleDescription('Unlock or request access')
+    ).toHaveAccessibleDescription(
+      'Restore from your cloud with a passkey or recovery words',
+    )
     await expect(
       start.getByRole('button', { name: 'Check a passkey' }),
     ).toBeEnabled()
@@ -520,18 +533,20 @@ test.describe('vault architecture modes', () => {
     await page.getByTestId('header-language-option-ru').click()
 
     await expect(start.getByRole('heading', { level: 1 })).toHaveText(
-      'Ваш менеджер паролей',
+      'Храните пароли в сейфе, который принадлежит только вам',
     )
     await expect(
       start.getByRole('region', {
-        name: 'Откройте свой сейф на этом устройстве',
+        name: 'Уже пользуетесь Nook? Откройте свой сейф здесь',
       }),
     ).toBeVisible()
-    await expect(start).toContainText('Данные зашифрованы на этом устройстве')
+    await expect(start).toContainText(
+      'Работает локально на этом устройстве — без аккаунта Nook, мастер-пароля и центрального сервера.',
+    )
     await expect(start).not.toContainText(/связк/i)
     await expect(
       page.getByTestId('first-run-create-identity-btn'),
-    ).toContainText('Настроить Nook')
+    ).toContainText('Создать личный сейф')
   })
 
   test('creates a simple personal vault and keeps secret values out of app logs', async ({
@@ -606,13 +621,21 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('first-vault-start')).toBeVisible()
 
     // The passkey makes the key; no vault exists until the identity is settled.
-    await page.getByRole('button', { name: 'Set up Nook' }).click()
+    await page
+      .getByRole('button', { name: 'Create your private vault' })
+      .click()
     const protect = page.getByTestId('first-run-protect-step')
     await expect(protect).toBeVisible()
+    await expect(protect).toContainText(
+      'Unlock your vault with this device’s passkey',
+    )
     await expect(protect).not.toContainText(/keyring/i)
     await answerPasskeyPrompt(page)
     const storage = page.getByTestId('first-run-storage-step')
     await expect(storage).toContainText('Passkey ready')
+    await expect(storage).toContainText(
+      'Your vault always runs locally here first. Choose whether to sync encrypted copies to your other devices.',
+    )
     await expect(storage).not.toContainText(/keyring/i)
     await expect(page.getByTestId('first-run-google-sign-in')).toHaveCount(0)
     await expect(page.getByTestId('vault-panel')).toHaveCount(0)
@@ -621,7 +644,7 @@ test.describe('vault architecture modes', () => {
     // suggested one); its first vault is then the person's choice.
     await storage.getByRole('button', { name: 'On this device' }).click()
     await expect(page.getByTestId('first-run-name-step')).toContainText(
-      'Your passwords go in vaults. Your keyring holds the keys that open them.',
+      'One keyring lets your passkey open multiple vaults — like Personal and Work — and share them across your devices.',
     )
     await page.getByTestId('first-run-identity-create-btn').click()
     const vaultStep = page.getByTestId('first-run-vault-step')
