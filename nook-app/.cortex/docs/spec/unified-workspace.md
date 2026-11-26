@@ -121,8 +121,7 @@ The connection to cloud storage can still be pending or need a retry.
   offers Google Drive and S3-compatible storage. Drive signs in to list the
   identities in its Nook folder. S3 takes an endpoint, region, bucket, optional
   key prefix, access key ID, and secret access key. **Connect** lists identities
-  at that location. When the user first chooses or names a keyring, explain
-  that vaults contain passwords and a keyring holds the keys that open them.
+  at that location.
 - **Choose a keyring.** Rust selects each existing identity's
   [setup action](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md#setup-action).
   Members can continue to their vault. Other devices can request to join or
@@ -130,15 +129,15 @@ The connection to cloud storage can still be pending or need a retry.
   the primary action for an empty S3 location. If recovery finds an empty
   Drive and the user starts a keyring there, setup keeps that sign-in and
   proceeds from device protection to naming.
-- **Name a keyring.** When the user first names a keyring, explain the outcome.
-  One keyring lets the passkey open multiple vaults — such as Personal and
-  Work — and share them across the user's devices. An empty field takes the
-  suggested name. Anyone with access to the cloud folder can see the current
-  and previous names. For a device-only keyring, explain that this applies if
-  the user connects cloud storage later. Back returns to the device choice on
-  the local path or to the same provider on the cloud path. Creating a keyring
-  on Drive or S3 creates its first vault with the same name and connects the
-  selected destination using the staged sign-in or S3 connection.
+- **Name a keyring.** When the user first chooses or names a keyring, explain
+  the outcome. One keyring lets the passkey open multiple vaults — such as
+  Personal and Work — and share them across the user's devices. An empty field
+  takes the suggested name. Anyone with access to the cloud folder can see the
+  current and previous names. For a device-only keyring, explain that this
+  applies if the user connects cloud storage later. Back returns to the device
+  choice on the local path or to the same provider on the cloud path. Creating a
+  keyring on Drive or S3 creates its first vault with the same name and connects
+  the selected destination using the staged sign-in or S3 connection.
 - **First local vault.** **Keyring created** acknowledges the completed local
   setup. **Create your first vault?** offers vault creation or **Not now**.
   Skipping opens the hub with the keyring's card, where the user can create
