@@ -41,8 +41,8 @@ for the implemented/target boundary.
 They are independent applications and browser origins, not modes in one app.
 The browser extension pairs only with Simple Vault.
 
-After you pick a product, the first-device screen offers two intents: create a
-new vault, or connect a sync provider for an existing compatible vault.
+On a new browser, Simple Vault leads with creating a private local vault with a
+passkey, alongside returning paths for an invite link or cloud backup.
 
 ## Why Nook?
 
